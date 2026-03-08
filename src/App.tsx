@@ -14,6 +14,7 @@ import FeedingPage from "./pages/dashboard/FeedingPage";
 
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
 import FinancialPage from "./pages/dashboard/FinancialPage";
+import ProfilePage from "./pages/dashboard/ProfilePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
               <Route path="milestones" element={<MilestonesPage />} />
               <Route path="financial" element={<FinancialPage />} />
+              <Route path="profile" element={<ProfilePage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

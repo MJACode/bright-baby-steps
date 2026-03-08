@@ -1,12 +1,12 @@
 import { Navigate, Outlet, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
-import { Sprout, LogOut, Home } from "lucide-react";
+import { Sprout, Home, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export default function DashboardLayout() {
-  const { session, loading, signOut } = useAuth();
+  const { session, loading } = useAuth();
   const location = useLocation();
   const isHome = location.pathname === "/dashboard";
 
@@ -40,13 +40,10 @@ export default function DashboardLayout() {
                 </Link>
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={signOut}
-              className="touch-target text-muted-foreground"
-            >
-              <LogOut className="w-5 h-5" />
+            <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+              <Link to="/dashboard/profile">
+                <UserCircle className="w-5 h-5" />
+              </Link>
             </Button>
           </div>
         </div>
