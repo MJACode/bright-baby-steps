@@ -11,7 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import SleepPage from "./pages/dashboard/SleepPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
-import AllergensPage from "./pages/dashboard/AllergensPage";
+
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
 import FinancialPage from "./pages/dashboard/FinancialPage";
 import NotFound from "./pages/NotFound";
