@@ -14,7 +14,844 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      allergen_exposure_logs: {
+        Row: {
+          allergen_id: string
+          allergen_introduction_id: string
+          amount_description: string | null
+          child_id: string
+          created_at: string
+          exposure_number: number
+          food_form: string | null
+          id: string
+          logged_at: string
+          notes: string | null
+          observation_window_ends_at: string | null
+          parent_id: string
+          reaction_observed: boolean | null
+        }
+        Insert: {
+          allergen_id: string
+          allergen_introduction_id: string
+          amount_description?: string | null
+          child_id: string
+          created_at?: string
+          exposure_number: number
+          food_form?: string | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          observation_window_ends_at?: string | null
+          parent_id: string
+          reaction_observed?: boolean | null
+        }
+        Update: {
+          allergen_id?: string
+          allergen_introduction_id?: string
+          amount_description?: string | null
+          child_id?: string
+          created_at?: string
+          exposure_number?: number
+          food_form?: string | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          observation_window_ends_at?: string | null
+          parent_id?: string
+          reaction_observed?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allergen_exposure_logs_allergen_id_fkey"
+            columns: ["allergen_id"]
+            isOneToOne: false
+            referencedRelation: "allergens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_exposure_logs_allergen_introduction_id_fkey"
+            columns: ["allergen_introduction_id"]
+            isOneToOne: false
+            referencedRelation: "allergen_introductions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_exposure_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_exposure_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      allergen_introductions: {
+        Row: {
+          allergen_id: string
+          child_id: string
+          completed_at: string | null
+          created_at: string
+          first_introduced_at: string | null
+          high_risk_reason: string | null
+          id: string
+          is_high_risk: boolean | null
+          notes: string | null
+          parent_id: string
+          pediatrician_cleared: boolean | null
+          scheduled_introduction_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          allergen_id: string
+          child_id: string
+          completed_at?: string | null
+          created_at?: string
+          first_introduced_at?: string | null
+          high_risk_reason?: string | null
+          id?: string
+          is_high_risk?: boolean | null
+          notes?: string | null
+          parent_id: string
+          pediatrician_cleared?: boolean | null
+          scheduled_introduction_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          allergen_id?: string
+          child_id?: string
+          completed_at?: string | null
+          created_at?: string
+          first_introduced_at?: string | null
+          high_risk_reason?: string | null
+          id?: string
+          is_high_risk?: boolean | null
+          notes?: string | null
+          parent_id?: string
+          pediatrician_cleared?: boolean | null
+          scheduled_introduction_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allergen_introductions_allergen_id_fkey"
+            columns: ["allergen_id"]
+            isOneToOne: false
+            referencedRelation: "allergens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_introductions_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_introductions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      allergen_reactions: {
+        Row: {
+          child_id: string
+          created_at: string
+          emergency_services_called: boolean | null
+          epinephrine_used: boolean | null
+          exposure_log_id: string
+          id: string
+          medical_attention_sought: boolean | null
+          observed_at: string
+          parent_description: string
+          parent_id: string
+          resolved_at: string | null
+          severity: string
+          symptoms: string[]
+          treatment_given: string | null
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          emergency_services_called?: boolean | null
+          epinephrine_used?: boolean | null
+          exposure_log_id: string
+          id?: string
+          medical_attention_sought?: boolean | null
+          observed_at?: string
+          parent_description: string
+          parent_id: string
+          resolved_at?: string | null
+          severity: string
+          symptoms: string[]
+          treatment_given?: string | null
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          emergency_services_called?: boolean | null
+          epinephrine_used?: boolean | null
+          exposure_log_id?: string
+          id?: string
+          medical_attention_sought?: boolean | null
+          observed_at?: string
+          parent_description?: string
+          parent_id?: string
+          resolved_at?: string | null
+          severity?: string
+          symptoms?: string[]
+          treatment_given?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "allergen_reactions_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_reactions_exposure_log_id_fkey"
+            columns: ["exposure_log_id"]
+            isOneToOne: false
+            referencedRelation: "allergen_exposure_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "allergen_reactions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      allergens: {
+        Row: {
+          category: string
+          clinical_guidance: string
+          clinical_last_reviewed_at: string | null
+          clinical_source: string
+          clinical_source_url: string | null
+          common_forms: string[] | null
+          created_at: string
+          early_introduction_note: string | null
+          id: string
+          introduction_age_weeks_max: number | null
+          introduction_age_weeks_min: number
+          name: string
+          slug: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          clinical_guidance: string
+          clinical_last_reviewed_at?: string | null
+          clinical_source: string
+          clinical_source_url?: string | null
+          common_forms?: string[] | null
+          created_at?: string
+          early_introduction_note?: string | null
+          id?: string
+          introduction_age_weeks_max?: number | null
+          introduction_age_weeks_min: number
+          name: string
+          slug: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          clinical_guidance?: string
+          clinical_last_reviewed_at?: string | null
+          clinical_source?: string
+          clinical_source_url?: string | null
+          common_forms?: string[] | null
+          created_at?: string
+          early_introduction_note?: string | null
+          id?: string
+          introduction_age_weeks_max?: number | null
+          introduction_age_weeks_min?: number
+          name?: string
+          slug?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      child_milestones: {
+        Row: {
+          achieved_at: string | null
+          child_id: string
+          created_at: string
+          flagged_at: string | null
+          id: string
+          milestone_id: string
+          notes: string | null
+          parent_id: string
+          pediatrician_notified: boolean | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          achieved_at?: string | null
+          child_id: string
+          created_at?: string
+          flagged_at?: string | null
+          id?: string
+          milestone_id: string
+          notes?: string | null
+          parent_id: string
+          pediatrician_notified?: boolean | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          achieved_at?: string | null
+          child_id?: string
+          created_at?: string
+          flagged_at?: string | null
+          id?: string
+          milestone_id?: string
+          notes?: string | null
+          parent_id?: string
+          pediatrician_notified?: boolean | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_milestones_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "child_milestones_milestone_id_fkey"
+            columns: ["milestone_id"]
+            isOneToOne: false
+            referencedRelation: "milestones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "child_milestones_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      children: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          date_of_birth: string
+          due_date: string | null
+          gender: string | null
+          id: string
+          is_premature: boolean | null
+          name: string
+          parent_id: string
+          photo_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          date_of_birth: string
+          due_date?: string | null
+          gender?: string | null
+          id?: string
+          is_premature?: boolean | null
+          name: string
+          parent_id: string
+          photo_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          date_of_birth?: string
+          due_date?: string | null
+          gender?: string | null
+          id?: string
+          is_premature?: boolean | null
+          name?: string
+          parent_id?: string
+          photo_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "children_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diaper_logs: {
+        Row: {
+          child_id: string
+          color: string | null
+          consistency: string | null
+          created_at: string
+          diaper_type: string
+          flag_for_attention: boolean | null
+          id: string
+          logged_at: string
+          notes: string | null
+          parent_id: string
+        }
+        Insert: {
+          child_id: string
+          color?: string | null
+          consistency?: string | null
+          created_at?: string
+          diaper_type: string
+          flag_for_attention?: boolean | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          parent_id: string
+        }
+        Update: {
+          child_id?: string
+          color?: string | null
+          consistency?: string | null
+          created_at?: string
+          diaper_type?: string
+          flag_for_attention?: boolean | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          parent_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diaper_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diaper_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feeding_logs: {
+        Row: {
+          amount_oz: number | null
+          child_id: string
+          created_at: string
+          duration_minutes: number | null
+          feeding_type: string
+          food_description: string | null
+          id: string
+          logged_at: string
+          notes: string | null
+          parent_id: string
+          side: string | null
+        }
+        Insert: {
+          amount_oz?: number | null
+          child_id: string
+          created_at?: string
+          duration_minutes?: number | null
+          feeding_type: string
+          food_description?: string | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          parent_id: string
+          side?: string | null
+        }
+        Update: {
+          amount_oz?: number | null
+          child_id?: string
+          created_at?: string
+          duration_minutes?: number | null
+          feeding_type?: string
+          food_description?: string | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          parent_id?: string
+          side?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feeding_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feeding_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_checklist_items: {
+        Row: {
+          annual_limit_note: string | null
+          category: string
+          created_at: string
+          description: string
+          disclaimer: string | null
+          external_resource_url: string | null
+          id: string
+          recommended_timing: string | null
+          sort_order: number | null
+          title: string
+          updated_at: string
+          why_it_matters: string | null
+        }
+        Insert: {
+          annual_limit_note?: string | null
+          category: string
+          created_at?: string
+          description: string
+          disclaimer?: string | null
+          external_resource_url?: string | null
+          id?: string
+          recommended_timing?: string | null
+          sort_order?: number | null
+          title: string
+          updated_at?: string
+          why_it_matters?: string | null
+        }
+        Update: {
+          annual_limit_note?: string | null
+          category?: string
+          created_at?: string
+          description?: string
+          disclaimer?: string | null
+          external_resource_url?: string | null
+          id?: string
+          recommended_timing?: string | null
+          sort_order?: number | null
+          title?: string
+          updated_at?: string
+          why_it_matters?: string | null
+        }
+        Relationships: []
+      }
+      milestone_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon_name: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number | null
+        }
+        Relationships: []
+      }
+      milestones: {
+        Row: {
+          age_months_concern_flag: number | null
+          age_months_typical_end: number
+          age_months_typical_start: number
+          category_id: string
+          clinical_last_reviewed_at: string | null
+          clinical_source: string
+          clinical_source_url: string | null
+          concern_flag_language: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          age_months_concern_flag?: number | null
+          age_months_typical_end: number
+          age_months_typical_start: number
+          category_id: string
+          clinical_last_reviewed_at?: string | null
+          clinical_source: string
+          clinical_source_url?: string | null
+          concern_flag_language?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          age_months_concern_flag?: number | null
+          age_months_typical_end?: number
+          age_months_typical_start?: number
+          category_id?: string
+          clinical_last_reviewed_at?: string | null
+          clinical_source?: string
+          clinical_source_url?: string | null
+          concern_flag_language?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "milestones_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "milestone_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parent_financial_checklist: {
+        Row: {
+          checklist_item_id: string
+          child_id: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          parent_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          checklist_item_id: string
+          child_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          parent_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          checklist_item_id?: string
+          child_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          parent_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_financial_checklist_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "financial_checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_financial_checklist_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "parent_financial_checklist_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pediatrician_exports: {
+        Row: {
+          child_id: string
+          created_at: string
+          date_range_end: string | null
+          date_range_start: string | null
+          export_type: string
+          file_path: string | null
+          id: string
+          parent_id: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          export_type: string
+          file_path?: string | null
+          id?: string
+          parent_id: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          date_range_end?: string | null
+          date_range_start?: string | null
+          export_type?: string
+          file_path?: string | null
+          id?: string
+          parent_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pediatrician_exports_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pediatrician_exports_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          data_consent_given_at: string | null
+          data_consent_version: string | null
+          email: string
+          full_name: string | null
+          id: string
+          onboarding_completed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          data_consent_given_at?: string | null
+          data_consent_version?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          onboarding_completed_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          data_consent_given_at?: string | null
+          data_consent_version?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          onboarding_completed_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sleep_logs: {
+        Row: {
+          child_id: string
+          created_at: string
+          duration_minutes: number | null
+          ended_at: string | null
+          id: string
+          notes: string | null
+          parent_id: string
+          quality: string | null
+          sleep_type: string
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          duration_minutes?: number | null
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          parent_id: string
+          quality?: string | null
+          sleep_type: string
+          started_at: string
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          duration_minutes?: number | null
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          parent_id?: string
+          quality?: string | null
+          sleep_type?: string
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sleep_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sleep_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
