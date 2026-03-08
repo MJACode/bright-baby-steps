@@ -1,14 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, ExternalLink, CheckCircle2, BookOpen } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DollarSign, ExternalLink, CheckCircle2, BookOpen, ChevronDown } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const lessonCards = [
   { title: "Why 529 Plans Matter", desc: "Tax-advantaged savings for education. Start early for compound growth.", icon: "🎓" },
@@ -78,6 +79,10 @@ export default function FinancialPage() {
   const completedCount = parentChecklist?.filter((pc) => pc.status === "completed").length ?? 0;
   const progressPct = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
 
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const isSectionOpen = (key: string) => openSections[key] !== false;
+  const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <div className="space-y-5">
       <div>
@@ -102,66 +107,83 @@ export default function FinancialPage() {
       </Card>
 
       {/* Lesson cards */}
-      <div className="space-y-2">
-        <h2 className="font-display font-bold text-sm flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-finance" /> Learn
-        </h2>
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
-          {lessonCards.map((card) => (
-            <Card key={card.title} className="border-0 bg-finance-bg min-w-[240px] snap-start shrink-0">
-              <CardContent className="p-4">
-                <p className="text-2xl mb-2">{card.icon}</p>
-                <p className="font-bold text-sm">{card.title}</p>
-                <p className="text-xs text-muted-foreground mt-1">{card.desc}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+      <Collapsible open={isSectionOpen("learn")} onOpenChange={() => toggleSection("learn")}>
+        <CollapsibleTrigger className="flex items-center justify-between w-full touch-target py-1">
+          <h2 className="font-display font-bold text-sm flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-finance" /> Learn
+          </h2>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", isSectionOpen("learn") && "rotate-180")} />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
+            {lessonCards.map((card) => (
+              <Card key={card.title} className="border-0 bg-finance-bg min-w-[240px] snap-start shrink-0">
+                <CardContent className="p-4">
+                  <p className="text-2xl mb-2">{card.icon}</p>
+                  <p className="font-bold text-sm">{card.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{card.desc}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Checklist */}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading checklist...</p>
       ) : (
-        <div className="space-y-5">
-          {groupedByCategory && Object.entries(groupedByCategory).map(([category, categoryItems]) => (
-            <div key={category} className="space-y-2">
-              <h2 className="font-display font-bold text-base">{category}</h2>
-              {categoryItems?.map((item) => {
-                const completed = isCompleted(item.id);
-                return (
-                  <Card key={item.id} className={cn("border-0 transition-all", completed ? "bg-finance-bg/50" : "bg-finance-bg")}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <Checkbox
-                          checked={completed}
-                          onCheckedChange={() => toggleItem.mutate(item.id)}
-                          className="mt-0.5 touch-target"
-                          aria-label={`Mark ${item.title} as ${completed ? "incomplete" : "complete"}`}
-                        />
-                        <div className="flex-1 space-y-1">
-                          <p className={cn("text-sm font-semibold", completed && "line-through text-muted-foreground")}>{item.title}</p>
-                          {item.recommended_timing && (
-                            <Badge variant="secondary" className="text-xs">{item.recommended_timing}</Badge>
-                          )}
-                          <p className="text-xs text-muted-foreground">{item.description}</p>
-                          {item.why_it_matters && (
-                            <p className="text-xs text-muted-foreground"><strong>Why:</strong> {item.why_it_matters}</p>
-                          )}
-                          {item.external_resource_url && (
-                            <a href={item.external_resource_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline touch-target">
-                              <ExternalLink className="w-3 h-3" /> Learn more
-                            </a>
-                          )}
-                        </div>
-                        {completed && <CheckCircle2 className="w-5 h-5 text-success shrink-0" />}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          ))}
+        <div className="space-y-4">
+          {groupedByCategory && Object.entries(groupedByCategory).map(([category, categoryItems]) => {
+            const catCompleted = categoryItems?.filter((i) => isCompleted(i.id)).length ?? 0;
+            const catTotal = categoryItems?.length ?? 0;
+            return (
+              <Collapsible key={category} open={isSectionOpen(category)} onOpenChange={() => toggleSection(category)}>
+                <CollapsibleTrigger className="flex items-center justify-between w-full touch-target py-1">
+                  <h2 className="font-display font-bold text-base">{category}</h2>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">{catCompleted}/{catTotal}</Badge>
+                    <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", isSectionOpen(category) && "rotate-180")} />
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2 space-y-2">
+                  {categoryItems?.map((item) => {
+                    const completed = isCompleted(item.id);
+                    return (
+                      <Card key={item.id} className={cn("border-0 transition-all", completed ? "bg-finance-bg/50" : "bg-finance-bg")}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={completed}
+                              onCheckedChange={() => toggleItem.mutate(item.id)}
+                              className="mt-0.5 touch-target"
+                              aria-label={`Mark ${item.title} as ${completed ? "incomplete" : "complete"}`}
+                            />
+                            <div className="flex-1 space-y-1">
+                              <p className={cn("text-sm font-semibold", completed && "line-through text-muted-foreground")}>{item.title}</p>
+                              {item.recommended_timing && (
+                                <Badge variant="secondary" className="text-xs">{item.recommended_timing}</Badge>
+                              )}
+                              <p className="text-xs text-muted-foreground">{item.description}</p>
+                              {item.why_it_matters && (
+                                <p className="text-xs text-muted-foreground"><strong>Why:</strong> {item.why_it_matters}</p>
+                              )}
+                              {item.external_resource_url && (
+                                <a href={item.external_resource_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline touch-target">
+                                  <ExternalLink className="w-3 h-3" /> Learn more
+                                </a>
+                              )}
+                            </div>
+                            {completed && <CheckCircle2 className="w-5 h-5 text-success shrink-0" />}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
         </div>
       )}
     </div>
