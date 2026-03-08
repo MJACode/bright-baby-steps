@@ -1,21 +1,72 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DollarSign, ExternalLink, CheckCircle2, BookOpen } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+
+const lessonCards = [
+  { title: "Why 529 Plans Matter", desc: "Tax-advantaged savings for education. Start early for compound growth.", icon: "🎓" },
+  { title: "UTMA/UGMA Basics", desc: "Custodial accounts for investing in your child's name.", icon: "📈" },
+  { title: "Insurance for New Parents", desc: "Life, health, and disability coverage every parent needs.", icon: "🛡️" },
+  { title: "The Power of Starting Early", desc: "Even $25/month adds up significantly over 18 years.", icon: "💰" },
+];
 
 export default function FinancialPage() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
   const { data: items, isLoading } = useQuery({
     queryKey: ["financial-checklist-items"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("financial_checklist_items")
-        .select("*")
-        .order("sort_order");
+      const { data, error } = await supabase.from("financial_checklist_items").select("*").order("sort_order");
       if (error) throw error;
       return data;
     },
   });
+
+  const { data: parentChecklist } = useQuery({
+    queryKey: ["parent-financial-checklist"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("parent_financial_checklist").select("*").eq("parent_id", user!.id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const toggleItem = useMutation({
+    mutationFn: async (itemId: string) => {
+      const existing = parentChecklist?.find((pc) => pc.checklist_item_id === itemId);
+      if (existing) {
+        const newStatus = existing.status === "completed" ? "not_started" : "completed";
+        const { error } = await supabase.from("parent_financial_checklist").update({
+          status: newStatus,
+          completed_at: newStatus === "completed" ? new Date().toISOString() : null,
+        }).eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("parent_financial_checklist").insert({
+          checklist_item_id: itemId,
+          parent_id: user!.id,
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["parent-financial-checklist"] });
+      toast({ title: "Progress saved! 💰" });
+    },
+  });
+
+  const isCompleted = (itemId: string) => parentChecklist?.find((pc) => pc.checklist_item_id === itemId)?.status === "completed";
 
   const groupedByCategory = items?.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = [];
@@ -23,62 +74,94 @@ export default function FinancialPage() {
     return acc;
   }, {} as Record<string, typeof items>);
 
+  const totalItems = items?.length ?? 0;
+  const completedCount = parentChecklist?.filter((pc) => pc.status === "completed").length ?? 0;
+  const progressPct = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
           <DollarSign className="w-7 h-7 text-finance" /> Finance
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Key financial steps for new parents.
-        </p>
+        <p className="text-muted-foreground text-sm mt-1">Financial steps for new parents.</p>
         <p className="text-xs text-muted-foreground mt-2 italic">
-          ⚠️ General guidance only. Consult a financial advisor for your situation.
+          ⚠️ General guidance only — not personalized financial advice.
         </p>
       </div>
 
+      {/* Progress */}
+      <Card className="border-0 bg-finance-bg">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="font-bold text-sm">{completedCount} of {totalItems} completed</p>
+            <Badge variant="secondary">{progressPct}%</Badge>
+          </div>
+          <Progress value={progressPct} className="h-2" />
+        </CardContent>
+      </Card>
+
+      {/* Lesson cards */}
+      <div className="space-y-2">
+        <h2 className="font-display font-bold text-sm flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-finance" /> Learn
+        </h2>
+        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
+          {lessonCards.map((card) => (
+            <Card key={card.title} className="border-0 bg-finance-bg min-w-[240px] snap-start shrink-0">
+              <CardContent className="p-4">
+                <p className="text-2xl mb-2">{card.icon}</p>
+                <p className="font-bold text-sm">{card.title}</p>
+                <p className="text-xs text-muted-foreground mt-1">{card.desc}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Checklist */}
       {isLoading ? (
-        <div className="text-muted-foreground text-sm">Loading checklist...</div>
+        <p className="text-sm text-muted-foreground">Loading checklist...</p>
       ) : (
         <div className="space-y-5">
-          {groupedByCategory &&
-            Object.entries(groupedByCategory).map(([category, categoryItems]) => (
-              <div key={category} className="space-y-3">
-                <h2 className="font-display font-bold text-base">{category}</h2>
-                <div className="space-y-3">
-                  {categoryItems?.map((item) => (
-                    <Card key={item.id} className="border-0 bg-finance-bg">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">{item.title}</CardTitle>
-                        {item.recommended_timing && (
-                          <Badge variant="secondary" className="text-xs w-fit">
-                            {item.recommended_timing}
-                          </Badge>
-                        )}
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <CardDescription className="text-xs">{item.description}</CardDescription>
-                        {item.why_it_matters && (
-                          <p className="text-xs text-muted-foreground">
-                            <strong>Why:</strong> {item.why_it_matters}
-                          </p>
-                        )}
-                        {item.external_resource_url && (
-                          <a
-                            href={item.external_resource_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary flex items-center gap-1 hover:underline touch-target"
-                          >
-                            <ExternalLink className="w-3 h-3" /> Official source
-                          </a>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            ))}
+          {groupedByCategory && Object.entries(groupedByCategory).map(([category, categoryItems]) => (
+            <div key={category} className="space-y-2">
+              <h2 className="font-display font-bold text-base">{category}</h2>
+              {categoryItems?.map((item) => {
+                const completed = isCompleted(item.id);
+                return (
+                  <Card key={item.id} className={cn("border-0 transition-all", completed ? "bg-finance-bg/50" : "bg-finance-bg")}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={completed}
+                          onCheckedChange={() => toggleItem.mutate(item.id)}
+                          className="mt-0.5 touch-target"
+                          aria-label={`Mark ${item.title} as ${completed ? "incomplete" : "complete"}`}
+                        />
+                        <div className="flex-1 space-y-1">
+                          <p className={cn("text-sm font-semibold", completed && "line-through text-muted-foreground")}>{item.title}</p>
+                          {item.recommended_timing && (
+                            <Badge variant="secondary" className="text-xs">{item.recommended_timing}</Badge>
+                          )}
+                          <p className="text-xs text-muted-foreground">{item.description}</p>
+                          {item.why_it_matters && (
+                            <p className="text-xs text-muted-foreground"><strong>Why:</strong> {item.why_it_matters}</p>
+                          )}
+                          {item.external_resource_url && (
+                            <a href={item.external_resource_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline touch-target">
+                              <ExternalLink className="w-3 h-3" /> Learn more
+                            </a>
+                          )}
+                        </div>
+                        {completed && <CheckCircle2 className="w-5 h-5 text-success shrink-0" />}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
