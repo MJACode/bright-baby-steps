@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export default function DashboardLayout() {
-  const { session, loading, signOut } = useAuth();
+  const { session, loading } = useAuth();
   const location = useLocation();
   const isHome = location.pathname === "/dashboard";
 
