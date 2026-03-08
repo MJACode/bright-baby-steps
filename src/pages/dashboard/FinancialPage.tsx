@@ -27,28 +27,27 @@ export default function FinancialPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <DollarSign className="w-6 h-6 text-emerald-500" /> Financial Planning
+          <DollarSign className="w-7 h-7 text-finance" /> Finance
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Key financial steps for new parents — checklists and guidance only.
+        <p className="text-muted-foreground text-sm mt-1">
+          Key financial steps for new parents.
         </p>
         <p className="text-xs text-muted-foreground mt-2 italic">
-          ⚠️ This is general guidance, not personalized financial advice. Contribution limits and
-          tax rules change annually. Consult a financial advisor for your specific situation.
+          ⚠️ General guidance only. Consult a financial advisor for your situation.
         </p>
       </div>
 
       {isLoading ? (
-        <div className="text-muted-foreground">Loading checklist...</div>
+        <div className="text-muted-foreground text-sm">Loading checklist...</div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {groupedByCategory &&
             Object.entries(groupedByCategory).map(([category, categoryItems]) => (
               <div key={category} className="space-y-3">
-                <h2 className="font-display text-lg font-semibold">{category}</h2>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <h2 className="font-display font-bold text-base">{category}</h2>
+                <div className="space-y-3">
                   {categoryItems?.map((item) => (
-                    <Card key={item.id}>
+                    <Card key={item.id} className="border-0 bg-finance-bg">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm">{item.title}</CardTitle>
                         {item.recommended_timing && (
@@ -61,12 +60,7 @@ export default function FinancialPage() {
                         <CardDescription className="text-xs">{item.description}</CardDescription>
                         {item.why_it_matters && (
                           <p className="text-xs text-muted-foreground">
-                            <strong>Why it matters:</strong> {item.why_it_matters}
-                          </p>
-                        )}
-                        {item.annual_limit_note && (
-                          <p className="text-xs text-muted-foreground italic">
-                            {item.annual_limit_note}
+                            <strong>Why:</strong> {item.why_it_matters}
                           </p>
                         )}
                         {item.external_resource_url && (
@@ -74,15 +68,10 @@ export default function FinancialPage() {
                             href={item.external_resource_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-primary flex items-center gap-1 hover:underline"
+                            className="text-xs text-primary flex items-center gap-1 hover:underline touch-target"
                           >
                             <ExternalLink className="w-3 h-3" /> Official source
                           </a>
-                        )}
-                        {item.disclaimer && (
-                          <p className="text-xs text-muted-foreground italic mt-1">
-                            {item.disclaimer}
-                          </p>
                         )}
                       </CardContent>
                     </Card>

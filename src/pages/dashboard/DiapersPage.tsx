@@ -6,13 +6,13 @@ export default function DiapersPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Droplets className="w-6 h-6 text-amber-500" /> Diaper Tracking
+          <Droplets className="w-7 h-7 text-diapers" /> Diapers
         </h1>
-        <p className="text-muted-foreground mt-1">Quick, frictionless logging with early health warning pattern detection.</p>
+        <p className="text-muted-foreground text-sm mt-1">Quick, frictionless logging with health pattern detection.</p>
       </div>
-      <Card>
+      <Card className="border-0 bg-diapers-bg">
         <CardHeader>
-          <CardTitle>Diaper Logs</CardTitle>
+          <CardTitle className="text-base">Diaper Logs</CardTitle>
           <CardDescription>No diaper logs yet. Add a child profile to start tracking.</CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,15 +1,20 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { BottomTabBar } from "@/components/BottomTabBar";
+import { Sprout, LogOut, Home } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout() {
-  const { session, loading } = useAuth();
+  const { session, loading, signOut } = useAuth();
+  const location = useLocation();
+  const isHome = location.pathname === "/dashboard";
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+        <Sprout className="w-10 h-10 text-primary animate-pulse" />
+        <p className="text-muted-foreground font-medium">Loading...</p>
       </div>
     );
   }
@@ -19,18 +24,41 @@ export default function DashboardLayout() {
   }
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <header className="h-14 flex items-center border-b px-4">
-            <SidebarTrigger />
-          </header>
-          <main className="flex-1 p-6">
-            <Outlet />
-          </main>
+    <div className="min-h-screen flex flex-col bg-background">
+      {/* Top header */}
+      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
+        <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
+          <Link to="/dashboard" className="flex items-center gap-2">
+            <Sprout className="w-6 h-6 text-primary" />
+            <span className="font-display font-bold text-lg">Tiny Sprout</span>
+          </Link>
+          <div className="flex items-center gap-1">
+            {!isHome && (
+              <Button variant="ghost" size="icon" asChild className="touch-target">
+                <Link to="/dashboard">
+                  <Home className="w-5 h-5" />
+                </Link>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={signOut}
+              className="touch-target text-muted-foreground"
+            >
+              <LogOut className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </header>
+
+      {/* Main content */}
+      <main className={cn("flex-1 px-4 py-5 max-w-lg mx-auto w-full pb-tab-bar")}>
+        <Outlet />
+      </main>
+
+      {/* Bottom tabs */}
+      <BottomTabBar />
+    </div>
   );
 }

@@ -7,15 +7,15 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: "1rem",
       screens: {
         "2xl": "1400px",
       },
     },
     extend: {
       fontFamily: {
-        sans: ['"DM Sans"', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['"Outfit"', 'system-ui', 'sans-serif'],
+        sans: ['"Nunito"', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['"Quicksand"', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -69,11 +69,34 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        // Module-specific semantic colors
+        sleep: {
+          DEFAULT: "hsl(var(--sleep))",
+          bg: "hsl(var(--sleep-bg))",
+        },
+        feeding: {
+          DEFAULT: "hsl(var(--feeding))",
+          bg: "hsl(var(--feeding-bg))",
+        },
+        diapers: {
+          DEFAULT: "hsl(var(--diapers))",
+          bg: "hsl(var(--diapers-bg))",
+        },
+        milestones: {
+          DEFAULT: "hsl(var(--milestones))",
+          bg: "hsl(var(--milestones-bg))",
+        },
+        finance: {
+          DEFAULT: "hsl(var(--finance))",
+          bg: "hsl(var(--finance-bg))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
       },
       keyframes: {
         "accordion-down": {
@@ -84,10 +107,15 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "fab-pulse": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.05)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fab-pulse": "fab-pulse 2s ease-in-out infinite",
       },
     },
   },
