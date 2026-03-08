@@ -40,13 +40,10 @@ export default function DashboardLayout() {
                 </Link>
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={signOut}
-              className="touch-target text-muted-foreground"
-            >
-              <LogOut className="w-5 h-5" />
+            <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+              <Link to="/dashboard/profile">
+                <UserCircle className="w-5 h-5" />
+              </Link>
             </Button>
           </div>
         </div>

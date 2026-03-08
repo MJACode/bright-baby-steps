@@ -38,6 +38,7 @@ const App = () => (
               <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
               <Route path="milestones" element={<MilestonesPage />} />
               <Route path="financial" element={<FinancialPage />} />
+              <Route path="profile" element={<ProfilePage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
