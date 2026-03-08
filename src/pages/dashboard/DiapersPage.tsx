@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Droplets, AlertTriangle, ChevronDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Droplets, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInHours, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -22,11 +23,12 @@ export default function DiapersPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
   const [flag, setFlag] = useState(false);
+  const [logTime, setLogTime] = useState("");
 
   const { data: logs } = useQuery({
     queryKey: ["diaper-logs", activeChild?.id],
