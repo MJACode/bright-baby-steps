@@ -105,77 +105,90 @@ export default function DiapersPage() {
         <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
       </div>
 
-      {/* Log card with inline optional details */}
-      <Card className="border-0 bg-diapers-bg">
-        <CardContent className="p-4 space-y-4">
-          {/* Optional color */}
-          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-            <CollapsibleTrigger className="flex items-center w-full touch-target text-sm text-muted-foreground gap-1">
-              <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", detailsOpen && "rotate-180")} />
-              Add details (optional)
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-3 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">Color</Label>
-                <div className="flex gap-2 flex-wrap">
-                  {colors.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
-                      className={cn(
-                        "w-10 h-10 rounded-full border-2 touch-target transition-all",
-                        selectedColor === c ? "border-foreground scale-110 ring-2 ring-foreground/20" : "border-transparent",
-                        c === "yellow" && "bg-yellow-300",
-                        c === "green" && "bg-green-500",
-                        c === "brown" && "bg-amber-700",
-                        c === "dark-brown" && "bg-amber-900",
-                        c === "black" && "bg-gray-900",
-                        c === "red" && "bg-red-500",
-                      )}
-                      aria-label={`Color: ${c}`}
-                    />
-                  ))}
-                </div>
-                {selectedColor && <p className="text-xs text-muted-foreground capitalize">Selected: {selectedColor}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold">Consistency</Label>
-                <div className="flex gap-2 flex-wrap">
-                  {consistencies.map((c) => (
-                    <Button
-                      key={c}
-                      variant={selectedConsistency === c ? "default" : "outline"}
-                      size="sm"
-                      className="capitalize touch-target"
-                      onClick={() => setSelectedConsistency(selectedConsistency === c ? "" : c)}
-                    >
-                      {c}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Notes</Label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any concerns..." />
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant={flag ? "destructive" : "outline"} size="sm" className="touch-target" onClick={() => setFlag(!flag)}>
-                  <AlertTriangle className="w-4 h-4 mr-1" /> {flag ? "Flagged" : "Flag for attention"}
-                </Button>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+      {/* Log button */}
+      <Button
+        onClick={() => setModalOpen(true)}
+        className="w-full h-16 text-lg font-bold rounded-2xl touch-target bg-diapers hover:bg-diapers/90 text-white"
+      >
+        💩 Log Dirty Diaper
+      </Button>
 
-          {/* Single log button */}
-          <Button
-            onClick={() => addLog.mutate()}
-            disabled={addLog.isPending}
-            className="w-full h-16 text-lg font-bold rounded-2xl touch-target bg-diapers hover:bg-diapers/90 text-white"
-          >
-            {addLog.isPending ? "Saving..." : "💩 Log Dirty Diaper"}
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Log modal */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Log Dirty Diaper</DialogTitle>
+            <DialogDescription>Add details about the diaper. All fields are optional.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Time</Label>
+              <Input
+                type="datetime-local"
+                value={logTime}
+                onChange={(e) => setLogTime(e.target.value)}
+                max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+              />
+              <p className="text-[10px] text-muted-foreground">Leave blank to use current time</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Color</Label>
+              <div className="flex gap-2 flex-wrap">
+                {colors.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
+                    className={cn(
+                      "w-10 h-10 rounded-full border-2 touch-target transition-all",
+                      selectedColor === c ? "border-foreground scale-110 ring-2 ring-foreground/20" : "border-transparent",
+                      c === "yellow" && "bg-yellow-300",
+                      c === "green" && "bg-green-500",
+                      c === "brown" && "bg-amber-700",
+                      c === "dark-brown" && "bg-amber-900",
+                      c === "black" && "bg-gray-900",
+                      c === "red" && "bg-red-500",
+                    )}
+                    aria-label={`Color: ${c}`}
+                  />
+                ))}
+              </div>
+              {selectedColor && <p className="text-xs text-muted-foreground capitalize">Selected: {selectedColor}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Consistency</Label>
+              <div className="flex gap-2 flex-wrap">
+                {consistencies.map((c) => (
+                  <Button
+                    key={c}
+                    variant={selectedConsistency === c ? "default" : "outline"}
+                    size="sm"
+                    className="capitalize touch-target"
+                    onClick={() => setSelectedConsistency(selectedConsistency === c ? "" : c)}
+                  >
+                    {c}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Notes</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any concerns..." />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant={flag ? "destructive" : "outline"} size="sm" className="touch-target" onClick={() => setFlag(!flag)}>
+                <AlertTriangle className="w-4 h-4 mr-1" /> {flag ? "Flagged" : "Flag for attention"}
+              </Button>
+            </div>
+            <Button
+              onClick={() => addLog.mutate()}
+              disabled={addLog.isPending}
+              className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
+            >
+              {addLog.isPending ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
