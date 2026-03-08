@@ -100,25 +100,16 @@ export default function DiapersPage() {
         <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
       </div>
 
-      {/* Quick log button */}
-      <Button
-        onClick={() => addLog.mutate()}
-        disabled={addLog.isPending}
-        className="w-full h-20 text-xl font-bold rounded-2xl touch-target border-0 bg-diapers-bg text-diapers hover:bg-diapers/20"
-        variant="ghost"
-      >
-        💩 Log Dirty Diaper
-      </Button>
-
-      {/* Optional details */}
-      <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <CollapsibleTrigger className="flex items-center justify-center w-full touch-target text-sm text-muted-foreground gap-1">
-          Add details (optional)
-          <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", detailsOpen && "rotate-180")} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="mt-3">
-          <Card className="border-0 bg-diapers-bg">
-            <CardContent className="p-4 space-y-4">
+      {/* Log card with inline optional details */}
+      <Card className="border-0 bg-diapers-bg">
+        <CardContent className="p-4 space-y-4">
+          {/* Optional color */}
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <CollapsibleTrigger className="flex items-center w-full touch-target text-sm text-muted-foreground gap-1">
+              <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", detailsOpen && "rotate-180")} />
+              Add details (optional)
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-4">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold">Color</Label>
                 <div className="flex gap-2 flex-wrap">
@@ -167,17 +158,19 @@ export default function DiapersPage() {
                   <AlertTriangle className="w-4 h-4 mr-1" /> {flag ? "Flagged" : "Flag for attention"}
                 </Button>
               </div>
-              <Button
-                onClick={() => addLog.mutate()}
-                disabled={addLog.isPending}
-                className="w-full touch-target bg-diapers hover:bg-diapers/90 text-white font-bold"
-              >
-                {addLog.isPending ? "Saving..." : "Log with Details"}
-              </Button>
-            </CardContent>
-          </Card>
-        </CollapsibleContent>
-      </Collapsible>
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Single log button */}
+          <Button
+            onClick={() => addLog.mutate()}
+            disabled={addLog.isPending}
+            className="w-full h-16 text-lg font-bold rounded-2xl touch-target bg-diapers hover:bg-diapers/90 text-white"
+          >
+            {addLog.isPending ? "Saving..." : "💩 Log Dirty Diaper"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
