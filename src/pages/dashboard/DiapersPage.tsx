@@ -47,6 +47,7 @@ export default function DiapersPage() {
 
   const addLog = useMutation({
     mutationFn: async () => {
+      const logged_at = logTime ? new Date(logTime).toISOString() : new Date().toISOString();
       const { error } = await supabase.from("diaper_logs").insert({
         child_id: activeChild!.id,
         parent_id: user!.id,
@@ -55,13 +56,15 @@ export default function DiapersPage() {
         consistency: selectedConsistency || null,
         notes: notes || null,
         flag_for_attention: flag,
+        logged_at,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-      setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false);
+      setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime("");
+      setModalOpen(false);
       toast({ title: "Diaper logged! 🧷" });
     },
   });
