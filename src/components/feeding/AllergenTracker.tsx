@@ -467,7 +467,7 @@ export default function AllergenTracker() {
               <Card key={rx.id} className="border-0 bg-destructive/5">
                 <CardContent className="p-3 space-y-1">
                   <div className="flex items-center justify-between">
-                    <Badge className={cn("text-xs", severityConfig[rx.severity as Severity]?.className ?? "bg-muted")}>
+                    <Badge className={cn("text-xs", severityConfig[rx.severity as Severity]?.color ?? "bg-muted")}>
                       {severityConfig[rx.severity as Severity]?.emoji} {rx.severity}
                     </Badge>
                     <p className="text-[10px] text-muted-foreground">{format(new Date(rx.observed_at), "MMM d, h:mm a")}</p>
