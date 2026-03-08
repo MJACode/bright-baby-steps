@@ -11,7 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import SleepPage from "./pages/dashboard/SleepPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
-import AllergensPage from "./pages/dashboard/AllergensPage";
+
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
 import FinancialPage from "./pages/dashboard/FinancialPage";
 import NotFound from "./pages/NotFound";
@@ -34,7 +34,7 @@ const App = () => (
               <Route path="sleep" element={<SleepPage />} />
               <Route path="diapers" element={<DiapersPage />} />
               <Route path="feeding" element={<FeedingPage />} />
-              <Route path="allergens" element={<AllergensPage />} />
+              <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
               <Route path="milestones" element={<MilestonesPage />} />
               <Route path="financial" element={<FinancialPage />} />
             </Route>
