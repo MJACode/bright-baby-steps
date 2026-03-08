@@ -80,7 +80,7 @@ export default function FinancialPage() {
   const progressPct = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
-  const isSectionOpen = (key: string) => openSections[key] !== false;
+  const isSectionOpen = (key: string) => openSections[key] === true;
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
