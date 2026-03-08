@@ -4,88 +4,113 @@
 
 @layer base {
   :root {
-    --background: 40 33% 98%;
-    --foreground: 220 20% 14%;
+    --background: 30 40% 98%;
+    --foreground: 240 10% 20%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 14%;
+    --card-foreground: 240 10% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 14%;
+    --popover-foreground: 240 10% 20%;
 
-    --primary: 262 52% 47%;
+    --primary: 152 45% 48%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 40 45% 94%;
-    --secondary-foreground: 220 20% 14%;
+    --secondary: 30 50% 95%;
+    --secondary-foreground: 240 10% 20%;
 
-    --muted: 40 20% 94%;
-    --muted-foreground: 220 10% 46%;
+    --muted: 30 25% 93%;
+    --muted-foreground: 240 8% 46%;
 
-    --accent: 172 50% 40%;
+    --accent: 30 70% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 40 15% 88%;
-    --input: 40 15% 88%;
-    --ring: 262 52% 47%;
+    --border: 30 20% 90%;
+    --input: 30 20% 88%;
+    --ring: 152 45% 48%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
-    --sidebar-background: 262 30% 12%;
-    --sidebar-foreground: 262 10% 85%;
-    --sidebar-primary: 262 52% 60%;
+    /* Module colors */
+    --sleep: 230 65% 62%;
+    --sleep-bg: 230 65% 95%;
+    --feeding: 152 50% 48%;
+    --feeding-bg: 152 50% 94%;
+    --diapers: 35 85% 58%;
+    --diapers-bg: 35 85% 94%;
+    --milestones: 280 55% 60%;
+    --milestones-bg: 280 55% 95%;
+    --finance: 172 50% 42%;
+    --finance-bg: 172 50% 94%;
+
+    --sidebar-background: 30 40% 98%;
+    --sidebar-foreground: 240 10% 20%;
+    --sidebar-primary: 152 45% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 262 20% 20%;
-    --sidebar-accent-foreground: 262 10% 90%;
-    --sidebar-border: 262 15% 22%;
-    --sidebar-ring: 262 52% 60%;
+    --sidebar-accent: 30 50% 95%;
+    --sidebar-accent-foreground: 240 10% 20%;
+    --sidebar-border: 30 20% 90%;
+    --sidebar-ring: 152 45% 48%;
 
     --success: 152 55% 42%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+
+    --tab-bar-height: 5rem;
   }
 
   .dark {
-    --background: 220 20% 8%;
-    --foreground: 40 20% 94%;
+    --background: 240 12% 8%;
+    --foreground: 30 20% 92%;
 
-    --card: 220 18% 12%;
-    --card-foreground: 40 20% 94%;
+    --card: 240 10% 12%;
+    --card-foreground: 30 20% 92%;
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 40 20% 94%;
+    --popover: 240 10% 12%;
+    --popover-foreground: 30 20% 92%;
 
-    --primary: 262 52% 60%;
+    --primary: 152 45% 52%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 40 20% 94%;
+    --secondary: 240 10% 16%;
+    --secondary-foreground: 30 20% 92%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 240 10% 16%;
+    --muted-foreground: 240 8% 55%;
 
-    --accent: 172 50% 45%;
+    --accent: 30 70% 55%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62% 30%;
+    --destructive: 0 62% 35%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 262 52% 60%;
+    --border: 240 10% 18%;
+    --input: 240 10% 18%;
+    --ring: 152 45% 52%;
 
-    --sidebar-background: 220 20% 6%;
-    --sidebar-foreground: 262 10% 85%;
-    --sidebar-primary: 262 52% 60%;
+    --sleep: 230 65% 68%;
+    --sleep-bg: 230 30% 16%;
+    --feeding: 152 50% 52%;
+    --feeding-bg: 152 25% 14%;
+    --diapers: 35 85% 62%;
+    --diapers-bg: 35 40% 14%;
+    --milestones: 280 55% 65%;
+    --milestones-bg: 280 30% 14%;
+    --finance: 172 50% 48%;
+    --finance-bg: 172 25% 14%;
+
+    --sidebar-background: 240 12% 6%;
+    --sidebar-foreground: 30 20% 92%;
+    --sidebar-primary: 152 45% 52%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 14%;
-    --sidebar-accent-foreground: 262 10% 90%;
-    --sidebar-border: 220 15% 14%;
-    --sidebar-ring: 262 52% 60%;
+    --sidebar-accent: 240 10% 14%;
+    --sidebar-accent-foreground: 30 20% 92%;
+    --sidebar-border: 240 10% 14%;
+    --sidebar-ring: 152 45% 52%;
 
     --success: 152 55% 42%;
     --success-foreground: 0 0% 100%;
@@ -101,6 +126,18 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Safe area for bottom tab bar */
+  .pb-tab-bar {
+    padding-bottom: var(--tab-bar-height);
+  }
+}
+
+@layer utilities {
+  .touch-target {
+    @apply min-h-[48px] min-w-[48px];
   }
 }

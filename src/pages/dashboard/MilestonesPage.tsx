@@ -32,33 +32,32 @@ export default function MilestonesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Brain className="w-6 h-6 text-purple-500" /> Developmental Milestones
+          <Brain className="w-7 h-7 text-milestones" /> Milestones
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Evidence-based milestone tracking for early identification of developmental patterns.
+        <p className="text-muted-foreground text-sm mt-1">
+          Evidence-based developmental tracking.
         </p>
         <p className="text-xs text-muted-foreground mt-2 italic">
-          ⚠️ Every child develops at their own pace. These benchmarks are for reference only.
-          Consult your pediatrician with any concerns.
+          ⚠️ Every child develops at their own pace. Consult your pediatrician with concerns.
         </p>
       </div>
 
       {isLoading ? (
-        <div className="text-muted-foreground">Loading milestones...</div>
+        <div className="text-muted-foreground text-sm">Loading milestones...</div>
       ) : (
         <Accordion type="multiple" className="space-y-2">
           {categories?.map((cat) => (
-            <AccordionItem key={cat.id} value={cat.id} className="border rounded-lg px-4">
-              <AccordionTrigger className="hover:no-underline">
+            <AccordionItem key={cat.id} value={cat.id} className="border rounded-xl px-4 bg-milestones-bg border-0">
+              <AccordionTrigger className="hover:no-underline touch-target">
                 <div className="flex items-center gap-3">
-                  <span className="font-display font-semibold">{cat.name}</span>
-                  <Badge variant="secondary">{cat.milestones.length} milestones</Badge>
+                  <span className="font-display font-bold">{cat.name}</span>
+                  <Badge variant="secondary" className="text-xs">{cat.milestones.length}</Badge>
                 </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-3 pb-2">
                   {cat.milestones.map((m) => (
-                    <Card key={m.id} className="bg-muted/30">
+                    <Card key={m.id} className="border-0 bg-card/60">
                       <CardHeader className="pb-1 pt-3 px-4">
                         <CardTitle className="text-sm">{m.name}</CardTitle>
                         <CardDescription className="text-xs">

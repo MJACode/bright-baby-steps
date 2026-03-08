@@ -6,14 +6,14 @@ export default function SleepPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Moon className="w-6 h-6 text-blue-500" /> Sleep Tracking
+          <Moon className="w-7 h-7 text-sleep" /> Sleep
         </h1>
-        <p className="text-muted-foreground mt-1">Log and analyze your baby's sleep patterns against developmental norms.</p>
+        <p className="text-muted-foreground text-sm mt-1">Log and analyze sleep patterns.</p>
       </div>
-      <Card>
+      <Card className="border-0 bg-sleep-bg">
         <CardHeader>
-          <CardTitle>Sleep Logs</CardTitle>
-          <CardDescription>No sleep logs yet. Add a child profile first, then start logging sleep sessions.</CardDescription>
+          <CardTitle className="text-base">Sleep Logs</CardTitle>
+          <CardDescription>No sleep logs yet. Add a child profile to start tracking.</CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">

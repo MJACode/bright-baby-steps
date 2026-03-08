@@ -6,13 +6,13 @@ export default function FeedingPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <UtensilsCrossed className="w-6 h-6 text-green-500" /> Feeding Tracking
+          <UtensilsCrossed className="w-7 h-7 text-feeding" /> Feeding
         </h1>
-        <p className="text-muted-foreground mt-1">Track breast, bottle, and solid food feeds with detailed logging.</p>
+        <p className="text-muted-foreground text-sm mt-1">Track breast, bottle, and solid food feeds.</p>
       </div>
-      <Card>
+      <Card className="border-0 bg-feeding-bg">
         <CardHeader>
-          <CardTitle>Feeding Logs</CardTitle>
+          <CardTitle className="text-base">Feeding Logs</CardTitle>
           <CardDescription>No feeding logs yet. Add a child profile to start tracking.</CardDescription>
         </CardHeader>
         <CardContent>
