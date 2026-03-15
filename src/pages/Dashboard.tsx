@@ -53,7 +53,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data } = await supabase.from("child_milestones").select("status")
         .eq("child_id", activeChild!.id);
-      const observed = data?.filter(m => m.status === "observed").length ?? 0;
+      const observed = data?.filter(m => m.status === "achieved").length ?? 0;
       return { observed, total: data?.length ?? 0 };
     },
     enabled: !!activeChild,
