@@ -83,7 +83,7 @@ export default function MilestonesPage() {
   });
 
   const getMilestoneStatus = (milestoneId: string) => {
-    return childMilestones?.find((cm) => cm.milestone_id === milestoneId)?.status ?? "not_yet";
+    return childMilestones?.find((cm) => cm.milestone_id === milestoneId)?.status as string ?? "not_yet";
   };
 
   if (!activeChild) {
