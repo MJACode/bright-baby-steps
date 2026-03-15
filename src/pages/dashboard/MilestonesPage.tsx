@@ -5,7 +5,7 @@ import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, Check, HelpCircle, Clock, PartyPopper } from "lucide-react";
+import { MessageCircle, Check, HelpCircle, Clock, PartyPopper, Flag } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
