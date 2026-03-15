@@ -196,7 +196,7 @@ export default function MilestonesPage() {
                                     key={opt.value}
                                     variant={status === opt.value ? "default" : "outline"}
                                     size="sm"
-                                    className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "observed" && "bg-success hover:bg-success/90")}
+                                    className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "achieved" && "bg-success hover:bg-success/90")}
                                     onClick={() => updateMilestone.mutate({ milestoneId: m.id, status: opt.value })}
                                     disabled={updateMilestone.isPending}
                                   >
