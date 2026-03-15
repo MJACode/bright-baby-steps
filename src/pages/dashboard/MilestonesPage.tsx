@@ -101,7 +101,7 @@ export default function MilestonesPage() {
   }
 
   const totalMilestones = categories?.reduce((s, c) => s + c.milestones.length, 0) ?? 0;
-  const achievedCount = childMilestones?.filter((cm) => cm.status === "observed").length ?? 0;
+  const achievedCount = childMilestones?.filter((cm) => cm.status === "achieved").length ?? 0;
   const progressPct = totalMilestones > 0 ? Math.round((achievedCount / totalMilestones) * 100) : 0;
 
   // Filter milestones relevant to age
