@@ -58,7 +58,7 @@ export default function MilestonesPage() {
       if (existing) {
         const { error } = await supabase.from("child_milestones").update({
           status,
-          achieved_at: status === "observed" ? new Date().toISOString().split("T")[0] : null,
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
@@ -67,7 +67,7 @@ export default function MilestonesPage() {
           parent_id: user!.id,
           milestone_id: milestoneId,
           status,
-          achieved_at: status === "observed" ? new Date().toISOString().split("T")[0] : null,
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
         });
         if (error) throw error;
       }

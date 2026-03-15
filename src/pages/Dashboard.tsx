@@ -106,7 +106,7 @@ export default function Dashboard() {
     { title: "Sleep", icon: Moon, href: "/dashboard/sleep", color: "text-sleep", bgColor: "bg-sleep-bg", stat: activeChild ? formatMin(todaySleep ?? 0) : "—", sub: activeChild ? "today" : "Add child" },
     { title: "Feeding", icon: UtensilsCrossed, href: "/dashboard/feeding", color: "text-feeding", bgColor: "bg-feeding-bg", stat: activeChild ? String(todayFeeds ?? 0) : "—", sub: activeChild ? "feeds today" : "Add child" },
     { title: "Diapers", icon: Droplets, href: "/dashboard/diapers", color: "text-diapers", bgColor: "bg-diapers-bg", stat: activeChild ? String(todayDiapers ?? 0) : "—", sub: activeChild ? "changes today" : "Add child" },
-    { title: "Milestones", icon: Brain, href: "/dashboard/milestones", color: "text-milestones", bgColor: "bg-milestones-bg", stat: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", sub: activeChild ? "observed" : "Add child" },
+    { title: "Milestones", icon: MessageCircle, href: "/dashboard/milestones", color: "text-milestones", bgColor: "bg-milestones-bg", stat: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", sub: activeChild ? "observed" : "Add child" },
   ];
 
   return (
