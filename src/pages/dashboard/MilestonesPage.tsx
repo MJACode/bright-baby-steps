@@ -74,7 +74,7 @@ export default function MilestonesPage() {
     },
     onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["child-milestones"] });
-      if (status === "observed") {
+      if (status === "achieved") {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 2000);
         toast({ title: "🎉 Milestone achieved!" });
