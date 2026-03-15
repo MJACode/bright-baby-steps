@@ -3,7 +3,7 @@ import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, Brain, DollarSign, Baby, Flame, Sprout, Plus } from "lucide-react";
+import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame, Sprout, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
