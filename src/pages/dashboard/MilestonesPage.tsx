@@ -14,9 +14,10 @@ import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
 
 const statusOptions = [
-  { value: "observed", label: "✅ Observed", icon: Check },
+  { value: "achieved", label: "✅ Achieved", icon: Check },
+  { value: "emerging", label: "🌱 Emerging", icon: HelpCircle },
   { value: "not_yet", label: "⏳ Not Yet", icon: Clock },
-  { value: "unsure", label: "❓ Unsure", icon: HelpCircle },
+  { value: "concern_flagged", label: "🚩 Concern", icon: Flag },
 ];
 
 export default function MilestonesPage() {
