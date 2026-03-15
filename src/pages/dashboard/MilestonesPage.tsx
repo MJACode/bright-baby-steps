@@ -14,11 +14,11 @@ import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
 
 const statusOptions = [
-  { value: "achieved", label: "✅ Achieved", icon: Check },
-  { value: "emerging", label: "🌱 Emerging", icon: HelpCircle },
-  { value: "not_yet", label: "⏳ Not Yet", icon: Clock },
-  { value: "concern_flagged", label: "🚩 Concern", icon: Flag },
-];
+{ value: "achieved", label: "✅ Achieved", icon: Check },
+{ value: "emerging", label: "🌱 Emerging", icon: HelpCircle },
+{ value: "not_yet", label: "⏳ Not Yet", icon: Clock },
+{ value: "concern_flagged", label: "🚩 Concern", icon: Flag }];
+
 
 export default function MilestonesPage() {
   const { user } = useAuth();
@@ -37,9 +37,9 @@ export default function MilestonesPage() {
       if (msError) throw msError;
       return cats.map((cat) => ({
         ...cat,
-        milestones: milestones.filter((m) => m.category_id === cat.id),
+        milestones: milestones.filter((m) => m.category_id === cat.id)
       }));
-    },
+    }
   });
 
   const { data: childMilestones } = useQuery({
@@ -49,16 +49,16 @@ export default function MilestonesPage() {
       if (error) throw error;
       return data;
     },
-    enabled: !!activeChild,
+    enabled: !!activeChild
   });
 
   const updateMilestone = useMutation({
-    mutationFn: async ({ milestoneId, status }: { milestoneId: string; status: string }) => {
+    mutationFn: async ({ milestoneId, status }: {milestoneId: string;status: string;}) => {
       const existing = childMilestones?.find((cm) => cm.milestone_id === milestoneId);
       if (existing) {
         const { error } = await supabase.from("child_milestones").update({
           status,
-          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
@@ -67,7 +67,7 @@ export default function MilestonesPage() {
           parent_id: user!.id,
           milestone_id: milestoneId,
           status,
-          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null
         });
         if (error) throw error;
       }
@@ -79,7 +79,7 @@ export default function MilestonesPage() {
         setTimeout(() => setShowConfetti(false), 2000);
         toast({ title: "🎉 Milestone achieved!" });
       }
-    },
+    }
   });
 
   const getMilestoneStatus = (milestoneId: string) => {
@@ -96,13 +96,13 @@ export default function MilestonesPage() {
           <p className="text-muted-foreground text-sm mt-1">Add a child to track milestones.</p>
         </div>
         <AddChildDialog />
-      </div>
-    );
+      </div>);
+
   }
 
   const totalMilestones = categories?.reduce((s, c) => s + c.milestones.length, 0) ?? 0;
   const achievedCount = childMilestones?.filter((cm) => cm.status === "achieved").length ?? 0;
-  const progressPct = totalMilestones > 0 ? Math.round((achievedCount / totalMilestones) * 100) : 0;
+  const progressPct = totalMilestones > 0 ? Math.round(achievedCount / totalMilestones * 100) : 0;
 
   // Filter milestones relevant to age
   const relevantAge = ageMonths + 3; // show a bit ahead
@@ -110,14 +110,14 @@ export default function MilestonesPage() {
   return (
     <div className="space-y-5">
       {/* Confetti overlay */}
-      {showConfetti && (
-        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+      {showConfetti &&
+      <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
           <PartyPopper className="w-24 h-24 text-milestones animate-bounce" />
         </div>
-      )}
+      }
 
       <div>
-        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+        <h1 className="font-display text-2xl font-bold flex items-center gap-2">Speech
           <MessageCircle className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
@@ -150,16 +150,16 @@ export default function MilestonesPage() {
       </Card>
 
       {/* Categories */}
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading milestones...</p>
-      ) : (
-        <Accordion type="multiple" className="space-y-2">
-          {categories?.map((cat) => {
-            const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "achieved").length;
-            const catPct = cat.milestones.length > 0 ? Math.round((catAchieved / cat.milestones.length) * 100) : 0;
+      {isLoading ?
+      <p className="text-sm text-muted-foreground">Loading milestones...</p> :
 
-            return (
-              <AccordionItem key={cat.id} value={cat.id} className="border rounded-xl px-4 bg-milestones-bg border-0">
+      <Accordion type="multiple" className="space-y-2">
+          {categories?.map((cat) => {
+          const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "achieved").length;
+          const catPct = cat.milestones.length > 0 ? Math.round(catAchieved / cat.milestones.length * 100) : 0;
+
+          return (
+            <AccordionItem key={cat.id} value={cat.id} className="border rounded-xl px-4 bg-milestones-bg border-0">
                 <AccordionTrigger className="hover:no-underline touch-target">
                   <div className="flex items-center gap-3 w-full">
                     <span className="font-display font-bold">{cat.name}</span>
@@ -172,12 +172,12 @@ export default function MilestonesPage() {
                 <AccordionContent>
                   <div className="space-y-3 pb-2">
                     {cat.milestones.map((m: any) => {
-                      const status = getMilestoneStatus(m.id);
-                      const isRelevant = m.age_months_typical_start <= relevantAge;
-                      const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "achieved";
+                    const status = getMilestoneStatus(m.id);
+                    const isRelevant = m.age_months_typical_start <= relevantAge;
+                    const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "achieved";
 
-                      return (
-                        <Card key={m.id} className={cn("border-0 bg-card/60", isConcern && "ring-2 ring-destructive/30")}>
+                    return (
+                      <Card key={m.id} className={cn("border-0 bg-card/60", isConcern && "ring-2 ring-destructive/30")}>
                           <CardHeader className="pb-1 pt-3 px-4">
                             <div className="flex items-center justify-between">
                               <CardTitle className="text-sm">{m.name}</CardTitle>
@@ -189,33 +189,33 @@ export default function MilestonesPage() {
                           </CardHeader>
                           <CardContent className="px-4 pb-3 pt-1">
                             {m.description && <p className="text-xs text-muted-foreground mb-2">{m.description}</p>}
-                            {activeChild && (
-                              <div className="flex gap-1">
-                                {statusOptions.map((opt) => (
-                                  <Button
-                                    key={opt.value}
-                                    variant={status === opt.value ? "default" : "outline"}
-                                    size="sm"
-                                    className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "achieved" && "bg-success hover:bg-success/90")}
-                                    onClick={() => updateMilestone.mutate({ milestoneId: m.id, status: opt.value })}
-                                    disabled={updateMilestone.isPending}
-                                  >
+                            {activeChild &&
+                          <div className="flex gap-1">
+                                {statusOptions.map((opt) =>
+                            <Button
+                              key={opt.value}
+                              variant={status === opt.value ? "default" : "outline"}
+                              size="sm"
+                              className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "achieved" && "bg-success hover:bg-success/90")}
+                              onClick={() => updateMilestone.mutate({ milestoneId: m.id, status: opt.value })}
+                              disabled={updateMilestone.isPending}>
+                              
                                     {opt.label}
                                   </Button>
-                                ))}
-                              </div>
                             )}
+                              </div>
+                          }
                           </CardContent>
-                        </Card>
-                      );
-                    })}
+                        </Card>);
+
+                  })}
                   </div>
                 </AccordionContent>
-              </AccordionItem>
-            );
-          })}
+              </AccordionItem>);
+
+        })}
         </Accordion>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 }
