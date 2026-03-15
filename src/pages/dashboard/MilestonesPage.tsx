@@ -5,7 +5,7 @@ import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, Check, HelpCircle, Clock, PartyPopper } from "lucide-react";
+import { MessageCircle, Check, HelpCircle, Clock, PartyPopper, Flag } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -14,9 +14,10 @@ import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
 
 const statusOptions = [
-  { value: "observed", label: "✅ Observed", icon: Check },
+  { value: "achieved", label: "✅ Achieved", icon: Check },
+  { value: "emerging", label: "🌱 Emerging", icon: HelpCircle },
   { value: "not_yet", label: "⏳ Not Yet", icon: Clock },
-  { value: "unsure", label: "❓ Unsure", icon: HelpCircle },
+  { value: "concern_flagged", label: "🚩 Concern", icon: Flag },
 ];
 
 export default function MilestonesPage() {
@@ -57,7 +58,7 @@ export default function MilestonesPage() {
       if (existing) {
         const { error } = await supabase.from("child_milestones").update({
           status,
-          achieved_at: status === "observed" ? new Date().toISOString().split("T")[0] : null,
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
@@ -66,14 +67,14 @@ export default function MilestonesPage() {
           parent_id: user!.id,
           milestone_id: milestoneId,
           status,
-          achieved_at: status === "observed" ? new Date().toISOString().split("T")[0] : null,
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
         });
         if (error) throw error;
       }
     },
     onSuccess: (_, { status }) => {
       queryClient.invalidateQueries({ queryKey: ["child-milestones"] });
-      if (status === "observed") {
+      if (status === "achieved") {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 2000);
         toast({ title: "🎉 Milestone achieved!" });
@@ -82,7 +83,7 @@ export default function MilestonesPage() {
   });
 
   const getMilestoneStatus = (milestoneId: string) => {
-    return childMilestones?.find((cm) => cm.milestone_id === milestoneId)?.status ?? "not_yet";
+    return childMilestones?.find((cm) => cm.milestone_id === milestoneId)?.status as string ?? "not_yet";
   };
 
   if (!activeChild) {
@@ -90,7 +91,7 @@ export default function MilestonesPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Brain className="w-7 h-7 text-milestones" /> Milestones
+            <MessageCircle className="w-7 h-7 text-milestones" /> Milestones
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Add a child to track milestones.</p>
         </div>
@@ -100,7 +101,7 @@ export default function MilestonesPage() {
   }
 
   const totalMilestones = categories?.reduce((s, c) => s + c.milestones.length, 0) ?? 0;
-  const achievedCount = childMilestones?.filter((cm) => cm.status === "observed").length ?? 0;
+  const achievedCount = childMilestones?.filter((cm) => cm.status === "achieved").length ?? 0;
   const progressPct = totalMilestones > 0 ? Math.round((achievedCount / totalMilestones) * 100) : 0;
 
   // Filter milestones relevant to age
@@ -117,7 +118,7 @@ export default function MilestonesPage() {
 
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Brain className="w-7 h-7 text-milestones" /> Milestones
+          <MessageCircle className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {activeChild.name} • {ageMonths}mo {activeChild.is_premature ? "(adjusted)" : ""}
@@ -154,7 +155,7 @@ export default function MilestonesPage() {
       ) : (
         <Accordion type="multiple" className="space-y-2">
           {categories?.map((cat) => {
-            const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "observed").length;
+            const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "achieved").length;
             const catPct = cat.milestones.length > 0 ? Math.round((catAchieved / cat.milestones.length) * 100) : 0;
 
             return (
@@ -173,7 +174,7 @@ export default function MilestonesPage() {
                     {cat.milestones.map((m: any) => {
                       const status = getMilestoneStatus(m.id);
                       const isRelevant = m.age_months_typical_start <= relevantAge;
-                      const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "observed";
+                      const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "achieved";
 
                       return (
                         <Card key={m.id} className={cn("border-0 bg-card/60", isConcern && "ring-2 ring-destructive/30")}>
@@ -195,7 +196,7 @@ export default function MilestonesPage() {
                                     key={opt.value}
                                     variant={status === opt.value ? "default" : "outline"}
                                     size="sm"
-                                    className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "observed" && "bg-success hover:bg-success/90")}
+                                    className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "achieved" && "bg-success hover:bg-success/90")}
                                     onClick={() => updateMilestone.mutate({ milestoneId: m.id, status: opt.value })}
                                     disabled={updateMilestone.isPending}
                                   >

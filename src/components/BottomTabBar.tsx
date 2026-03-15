@@ -1,4 +1,4 @@
-import { Moon, UtensilsCrossed, Droplets, Brain, DollarSign } from "lucide-react";
+import { Moon, UtensilsCrossed, Droplets, MessageCircle, DollarSign } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -6,7 +6,7 @@ const tabs = [
   { label: "Sleep", path: "/dashboard/sleep", icon: Moon, colorClass: "text-sleep" },
   { label: "Food", path: "/dashboard/feeding", icon: UtensilsCrossed, colorClass: "text-feeding" },
   { label: "Diapers", path: "/dashboard/diapers", icon: Droplets, colorClass: "text-diapers" },
-  { label: "Milestones", path: "/dashboard/milestones", icon: Brain, colorClass: "text-milestones" },
+  { label: "Milestones", path: "/dashboard/milestones", icon: MessageCircle, colorClass: "text-milestones" },
   { label: "Finance", path: "/dashboard/financial", icon: DollarSign, colorClass: "text-finance" },
 ];
 

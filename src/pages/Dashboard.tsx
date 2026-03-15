@@ -3,7 +3,7 @@ import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, Brain, DollarSign, Baby, Flame, Sprout, Plus } from "lucide-react";
+import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame, Sprout, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -53,7 +53,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const { data } = await supabase.from("child_milestones").select("status")
         .eq("child_id", activeChild!.id);
-      const observed = data?.filter(m => m.status === "observed").length ?? 0;
+      const observed = data?.filter(m => m.status === "achieved").length ?? 0;
       return { observed, total: data?.length ?? 0 };
     },
     enabled: !!activeChild,
@@ -106,7 +106,7 @@ export default function Dashboard() {
     { title: "Sleep", icon: Moon, href: "/dashboard/sleep", color: "text-sleep", bgColor: "bg-sleep-bg", stat: activeChild ? formatMin(todaySleep ?? 0) : "—", sub: activeChild ? "today" : "Add child" },
     { title: "Feeding", icon: UtensilsCrossed, href: "/dashboard/feeding", color: "text-feeding", bgColor: "bg-feeding-bg", stat: activeChild ? String(todayFeeds ?? 0) : "—", sub: activeChild ? "feeds today" : "Add child" },
     { title: "Diapers", icon: Droplets, href: "/dashboard/diapers", color: "text-diapers", bgColor: "bg-diapers-bg", stat: activeChild ? String(todayDiapers ?? 0) : "—", sub: activeChild ? "changes today" : "Add child" },
-    { title: "Milestones", icon: Brain, href: "/dashboard/milestones", color: "text-milestones", bgColor: "bg-milestones-bg", stat: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", sub: activeChild ? "observed" : "Add child" },
+    { title: "Milestones", icon: MessageCircle, href: "/dashboard/milestones", color: "text-milestones", bgColor: "bg-milestones-bg", stat: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", sub: activeChild ? "observed" : "Add child" },
   ];
 
   return (
