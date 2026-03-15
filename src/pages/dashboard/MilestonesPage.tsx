@@ -118,7 +118,7 @@ export default function MilestonesPage() {
 
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Brain className="w-7 h-7 text-milestones" /> Milestones
+          <MessageCircle className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {activeChild.name} • {ageMonths}mo {activeChild.is_premature ? "(adjusted)" : ""}
