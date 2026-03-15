@@ -174,7 +174,7 @@ export default function MilestonesPage() {
                     {cat.milestones.map((m: any) => {
                       const status = getMilestoneStatus(m.id);
                       const isRelevant = m.age_months_typical_start <= relevantAge;
-                      const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "observed";
+                      const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "achieved";
 
                       return (
                         <Card key={m.id} className={cn("border-0 bg-card/60", isConcern && "ring-2 ring-destructive/30")}>
