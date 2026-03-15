@@ -155,7 +155,7 @@ export default function MilestonesPage() {
       ) : (
         <Accordion type="multiple" className="space-y-2">
           {categories?.map((cat) => {
-            const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "observed").length;
+            const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "achieved").length;
             const catPct = cat.milestones.length > 0 ? Math.round((catAchieved / cat.milestones.length) * 100) : 0;
 
             return (
