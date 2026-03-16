@@ -45,7 +45,7 @@ export default function MilestonesPage() {
   const { data: childMilestones } = useQuery({
     queryKey: ["child-milestones", activeChild?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("child_milestones").select("*").eq("child_id", activeChild!.id);
+      const { data, error } = await supabase.from("child_speech").select("*").eq("child_id", activeChild!.id);
       if (error) throw error;
       return data;
     },
