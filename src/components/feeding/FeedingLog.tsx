@@ -19,6 +19,7 @@ import { toast } from "@/hooks/use-toast";
 const feedingTypes = [
   { value: "breast", label: "🤱 Breast" },
   { value: "bottle", label: "🍼 Bottle" },
+  { value: "pump", label: "🧴 Pump" },
   { value: "solid", label: "🥣 Solid" },
 ];
 
