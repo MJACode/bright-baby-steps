@@ -346,7 +346,7 @@ export type Database = {
             foreignKeyName: "child_milestones_milestone_id_fkey"
             columns: ["milestone_id"]
             isOneToOne: false
-            referencedRelation: "milestones"
+            referencedRelation: "speech"
             referencedColumns: ["id"]
           },
           {
@@ -564,95 +564,6 @@ export type Database = {
         }
         Relationships: []
       }
-      milestone_categories: {
-        Row: {
-          created_at: string
-          description: string | null
-          icon_name: string | null
-          id: string
-          name: string
-          slug: string
-          sort_order: number | null
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          icon_name?: string | null
-          id?: string
-          name: string
-          slug: string
-          sort_order?: number | null
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          icon_name?: string | null
-          id?: string
-          name?: string
-          slug?: string
-          sort_order?: number | null
-        }
-        Relationships: []
-      }
-      milestones: {
-        Row: {
-          age_months_concern_flag: number | null
-          age_months_typical_end: number
-          age_months_typical_start: number
-          category_id: string
-          clinical_last_reviewed_at: string | null
-          clinical_source: string
-          clinical_source_url: string | null
-          concern_flag_language: string | null
-          created_at: string
-          description: string | null
-          id: string
-          name: string
-          sort_order: number | null
-          updated_at: string
-        }
-        Insert: {
-          age_months_concern_flag?: number | null
-          age_months_typical_end: number
-          age_months_typical_start: number
-          category_id: string
-          clinical_last_reviewed_at?: string | null
-          clinical_source: string
-          clinical_source_url?: string | null
-          concern_flag_language?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          name: string
-          sort_order?: number | null
-          updated_at?: string
-        }
-        Update: {
-          age_months_concern_flag?: number | null
-          age_months_typical_end?: number
-          age_months_typical_start?: number
-          category_id?: string
-          clinical_last_reviewed_at?: string | null
-          clinical_source?: string
-          clinical_source_url?: string | null
-          concern_flag_language?: string | null
-          created_at?: string
-          description?: string | null
-          id?: string
-          name?: string
-          sort_order?: number | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "milestones_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "milestone_categories"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       parent_financial_checklist: {
         Row: {
           checklist_item_id: string
@@ -851,6 +762,95 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      speech: {
+        Row: {
+          age_months_concern_flag: number | null
+          age_months_typical_end: number
+          age_months_typical_start: number
+          category_id: string
+          clinical_last_reviewed_at: string | null
+          clinical_source: string
+          clinical_source_url: string | null
+          concern_flag_language: string | null
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          age_months_concern_flag?: number | null
+          age_months_typical_end: number
+          age_months_typical_start: number
+          category_id: string
+          clinical_last_reviewed_at?: string | null
+          clinical_source: string
+          clinical_source_url?: string | null
+          concern_flag_language?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          age_months_concern_flag?: number | null
+          age_months_typical_end?: number
+          age_months_typical_start?: number
+          category_id?: string
+          clinical_last_reviewed_at?: string | null
+          clinical_source?: string
+          clinical_source_url?: string | null
+          concern_flag_language?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "milestones_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "speech_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      speech_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          icon_name: string | null
+          id: string
+          name: string
+          slug: string
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          icon_name?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number | null
+        }
+        Relationships: []
       }
     }
     Views: {
