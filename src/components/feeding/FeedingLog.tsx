@@ -58,9 +58,13 @@ export default function FeedingLog() {
         child_id: activeChild!.id,
         parent_id: user!.id,
         feeding_type: feedType,
-        side: feedType === "breast" ? side || null : null,
+        side: (feedType === "breast" || feedType === "pump") ? side || null : null,
         duration_minutes: durationMin ? Number(durationMin) : null,
-        amount_oz: amountOz ? Number(amountOz) : null,
+        amount_oz: feedType === "pump"
+          ? ((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)) || null
+          : amountOz ? Number(amountOz) : null,
+        amount_oz_left: feedType === "pump" && amountOzLeft ? Number(amountOzLeft) : null,
+        amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
         food_description: feedType === "solid" ? foodDesc || null : null,
         notes: notes || null,
       });
