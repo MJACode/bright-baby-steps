@@ -32,6 +32,8 @@ export default function FeedingLog() {
   const [side, setSide] = useState<string>("");
   const [durationMin, setDurationMin] = useState("");
   const [amountOz, setAmountOz] = useState("");
+  const [amountOzLeft, setAmountOzLeft] = useState("");
+  const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
   const [notes, setNotes] = useState("");
 
