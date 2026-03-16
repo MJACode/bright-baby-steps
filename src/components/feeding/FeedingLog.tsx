@@ -80,7 +80,7 @@ export default function FeedingLog() {
   });
 
   const resetForm = () => {
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setFoodDesc(""); setNotes("");
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes("");
   };
 
   if (!activeChild) {
