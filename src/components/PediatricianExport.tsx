@@ -88,8 +88,8 @@ export default function PediatricianExport() {
             : Promise.resolve({ data: [] }),
           sections.has("speech")
             ? supabase
-                .from("child_milestones")
-                .select("*, milestones:speech(name, category_id)")
+                .from("child_speech")
+                .select("*, speech:milestone_id(name, category_id)")
                 .eq("child_id", exportChild)
             : Promise.resolve({ data: [] }),
           sections.has("allergens")
