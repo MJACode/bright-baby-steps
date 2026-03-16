@@ -56,7 +56,7 @@ export default function MilestonesPage() {
     mutationFn: async ({ milestoneId, status }: {milestoneId: string;status: string;}) => {
       const existing = childMilestones?.find((cm) => cm.milestone_id === milestoneId);
       if (existing) {
-        const { error } = await supabase.from("child_milestones").update({
+        const { error } = await supabase.from("child_speech").update({
           status,
           achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null
         }).eq("id", existing.id);
