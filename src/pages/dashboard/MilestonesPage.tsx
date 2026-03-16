@@ -77,7 +77,7 @@ export default function MilestonesPage() {
       if (status === "achieved") {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 2000);
-        toast({ title: "🎉 Milestone achieved!" });
+        toast({ title: "🎉 Speech milestone achieved!" });
       }
     }
   });

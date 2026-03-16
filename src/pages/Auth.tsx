@@ -71,7 +71,7 @@ export default function Auth() {
           <CardDescription>
             {isLogin
               ? "Sign in to access your baby tracking dashboard"
-              : "Start tracking your baby's growth and milestones"}
+              : "Start tracking your baby's growth and speech development"}
           </CardDescription>
         </CardHeader>
         <CardContent>
