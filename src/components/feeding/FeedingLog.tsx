@@ -19,6 +19,7 @@ import { toast } from "@/hooks/use-toast";
 const feedingTypes = [
   { value: "breast", label: "🤱 Breast" },
   { value: "bottle", label: "🍼 Bottle" },
+  { value: "pump", label: "🧴 Pump" },
   { value: "solid", label: "🥣 Solid" },
 ];
 
@@ -31,6 +32,8 @@ export default function FeedingLog() {
   const [side, setSide] = useState<string>("");
   const [durationMin, setDurationMin] = useState("");
   const [amountOz, setAmountOz] = useState("");
+  const [amountOzLeft, setAmountOzLeft] = useState("");
+  const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -55,9 +58,13 @@ export default function FeedingLog() {
         child_id: activeChild!.id,
         parent_id: user!.id,
         feeding_type: feedType,
-        side: feedType === "breast" ? side || null : null,
+        side: (feedType === "breast" || feedType === "pump") ? side || null : null,
         duration_minutes: durationMin ? Number(durationMin) : null,
-        amount_oz: amountOz ? Number(amountOz) : null,
+        amount_oz: feedType === "pump"
+          ? ((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)) || null
+          : amountOz ? Number(amountOz) : null,
+        amount_oz_left: feedType === "pump" && amountOzLeft ? Number(amountOzLeft) : null,
+        amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
         food_description: feedType === "solid" ? foodDesc || null : null,
         notes: notes || null,
       });
@@ -73,7 +80,7 @@ export default function FeedingLog() {
   });
 
   const resetForm = () => {
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setFoodDesc(""); setNotes("");
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes("");
   };
 
   if (!activeChild) {
@@ -112,15 +119,15 @@ export default function FeedingLog() {
               <DialogTitle className="font-display">Log a Feed</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
-                  <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-sm">
+                  <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
                     {ft.label}
                   </Button>
                 ))}
               </div>
 
-              {feedType === "breast" && (
+              {(feedType === "breast" || feedType === "pump") && (
                 <div className="space-y-2">
                   <Label>Side</Label>
                   <div className="flex gap-2">
@@ -129,6 +136,30 @@ export default function FeedingLog() {
                         {s}
                       </Button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {feedType === "pump" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Left Breast (oz)</Label>
+                      <Input type="number" step="0.5" value={amountOzLeft} onChange={(e) => setAmountOzLeft(e.target.value)} placeholder="0" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Right Breast (oz)</Label>
+                      <Input type="number" step="0.5" value={amountOzRight} onChange={(e) => setAmountOzRight(e.target.value)} placeholder="0" />
+                    </div>
+                  </div>
+                  {(amountOzLeft || amountOzRight) && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Total: {((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)).toFixed(1)} oz
+                    </p>
+                  )}
+                  <div className="space-y-1">
+                    <Label>Duration (min)</Label>
+                    <Input type="number" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="20" />
                   </div>
                 </div>
               )}
@@ -200,11 +231,14 @@ export default function FeedingLog() {
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Badge variant="secondary" className="text-xs">
-                  {log.feeding_type === "breast" ? "🤱" : log.feeding_type === "bottle" ? "🍼" : "🥣"} {log.feeding_type}
+                  {log.feeding_type === "breast" ? "🤱" : log.feeding_type === "bottle" ? "🍼" : log.feeding_type === "pump" ? "🧴" : "🥣"} {log.feeding_type}
                 </Badge>
                 <div>
                   <p className="text-sm font-semibold">
-                    {log.amount_oz ? `${log.amount_oz} oz` : ""} {log.duration_minutes ? `${log.duration_minutes} min` : ""}
+                    {log.feeding_type === "pump" && (log.amount_oz_left || log.amount_oz_right)
+                      ? `L: ${log.amount_oz_left ?? 0}oz R: ${log.amount_oz_right ?? 0}oz (${log.amount_oz ?? 0}oz total)`
+                      : log.amount_oz ? `${log.amount_oz} oz` : ""
+                    } {log.duration_minutes ? `${log.duration_minutes} min` : ""}
                     {log.food_description ? log.food_description : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>

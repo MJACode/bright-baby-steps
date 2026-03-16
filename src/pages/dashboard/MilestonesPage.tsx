@@ -45,7 +45,7 @@ export default function MilestonesPage() {
   const { data: childMilestones } = useQuery({
     queryKey: ["child-milestones", activeChild?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("child_milestones").select("*").eq("child_id", activeChild!.id);
+      const { data, error } = await supabase.from("child_speech").select("*").eq("child_id", activeChild!.id);
       if (error) throw error;
       return data;
     },
@@ -56,13 +56,13 @@ export default function MilestonesPage() {
     mutationFn: async ({ milestoneId, status }: {milestoneId: string;status: string;}) => {
       const existing = childMilestones?.find((cm) => cm.milestone_id === milestoneId);
       if (existing) {
-        const { error } = await supabase.from("child_milestones").update({
+        const { error } = await supabase.from("child_speech").update({
           status,
           achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("child_milestones").insert({
+        const { error } = await supabase.from("child_speech").insert({
           child_id: activeChild!.id,
           parent_id: user!.id,
           milestone_id: milestoneId,

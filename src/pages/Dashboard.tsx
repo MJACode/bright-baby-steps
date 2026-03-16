@@ -51,7 +51,7 @@ export default function Dashboard() {
   const { data: milestoneStats } = useQuery({
     queryKey: ["milestone-stats", activeChild?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("child_milestones").select("status")
+      const { data } = await supabase.from("child_speech").select("status")
         .eq("child_id", activeChild!.id);
       const observed = data?.filter(m => m.status === "achieved").length ?? 0;
       return { observed, total: data?.length ?? 0 };
@@ -70,7 +70,7 @@ export default function Dashboard() {
       ]);
       const items = [
         ...(sleepRes.data?.map(s => ({ type: "sleep" as const, time: s.started_at, desc: `${s.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"} — ${s.duration_minutes || 0}min`, icon: Moon, color: "text-sleep" })) ?? []),
-        ...(feedRes.data?.map(f => ({ type: "feed" as const, time: f.logged_at, desc: `${f.feeding_type === "breast" ? "🤱" : f.feeding_type === "bottle" ? "🍼" : "🥣"} ${f.feeding_type}${f.amount_oz ? ` — ${f.amount_oz}oz` : ""}`, icon: UtensilsCrossed, color: "text-feeding" })) ?? []),
+        ...(feedRes.data?.map(f => ({ type: "feed" as const, time: f.logged_at, desc: `${f.feeding_type === "breast" ? "🤱" : f.feeding_type === "bottle" ? "🍼" : f.feeding_type === "pump" ? "🧴" : "🥣"} ${f.feeding_type}${f.amount_oz ? ` — ${f.amount_oz}oz` : ""}`, icon: UtensilsCrossed, color: "text-feeding" })) ?? []),
         ...(diaperRes.data?.map(d => ({ type: "diaper" as const, time: d.logged_at, desc: `${d.diaper_type === "wet" ? "💧" : d.diaper_type === "dirty" ? "💩" : d.diaper_type === "both" ? "💧💩" : "✨"} ${d.diaper_type} diaper`, icon: Droplets, color: "text-diapers" })) ?? []),
       ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 10);
       return items;

@@ -88,8 +88,8 @@ export default function PediatricianExport() {
             : Promise.resolve({ data: [] }),
           sections.has("speech")
             ? supabase
-                .from("child_milestones")
-                .select("*, milestones:speech(name, category_id)")
+                .from("child_speech")
+                .select("*, speech:milestone_id(name, category_id)")
                 .eq("child_id", exportChild)
             : Promise.resolve({ data: [] }),
           sections.has("allergens")
@@ -176,13 +176,13 @@ export default function PediatricianExport() {
         if (achieved.length) {
           subheading("Achieved");
           achieved.forEach((m) => {
-            bodyText(`✓ ${m.milestones?.name ?? "Unknown"}${m.achieved_at ? ` — ${format(new Date(m.achieved_at), "MMM d, yyyy")}` : ""}`, 4);
+            bodyText(`✓ ${m.speech?.name ?? "Unknown"}${m.achieved_at ? ` — ${format(new Date(m.achieved_at), "MMM d, yyyy")}` : ""}`, 4);
           });
         }
         if (flagged.length) {
           subheading("Flagged for Concern");
           flagged.forEach((m) => {
-            bodyText(`⚠ ${m.milestones?.name ?? "Unknown"}${m.notes ? ` — ${m.notes}` : ""}`, 4);
+            bodyText(`⚠ ${m.speech?.name ?? "Unknown"}${m.notes ? ` — ${m.notes}` : ""}`, 4);
           });
         }
         y += 4;
