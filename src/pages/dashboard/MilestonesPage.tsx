@@ -31,9 +31,9 @@ export default function MilestonesPage() {
   const { data: categories, isLoading } = useQuery({
     queryKey: ["milestone-categories-with-milestones"],
     queryFn: async () => {
-      const { data: cats, error: catError } = await supabase.from("milestone_categories").select("*").order("sort_order");
+      const { data: cats, error: catError } = await supabase.from("speech_categories").select("*").order("sort_order");
       if (catError) throw catError;
-      const { data: milestones, error: msError } = await supabase.from("milestones").select("*").order("age_months_typical_start, sort_order");
+      const { data: milestones, error: msError } = await supabase.from("speech").select("*").order("age_months_typical_start, sort_order");
       if (msError) throw msError;
       return cats.map((cat) => ({
         ...cat,
