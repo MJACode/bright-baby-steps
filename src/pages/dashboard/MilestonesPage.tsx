@@ -77,7 +77,7 @@ export default function MilestonesPage() {
       if (status === "achieved") {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 2000);
-        toast({ title: "🎉 Milestone achieved!" });
+        toast({ title: "🎉 Speech milestone achieved!" });
       }
     }
   });
@@ -91,9 +91,9 @@ export default function MilestonesPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <MessageCircle className="w-7 h-7 text-milestones" /> Milestones
+            <MessageCircle className="w-7 h-7 text-milestones" /> Speech
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Add a child to track milestones.</p>
+          <p className="text-muted-foreground text-sm mt-1">Add a child to track speech milestones.</p>
         </div>
         <AddChildDialog />
       </div>);
@@ -117,8 +117,8 @@ export default function MilestonesPage() {
       }
 
       <div>
-        <h1 className="font-display text-2xl font-bold flex items-center gap-2">Speech
-          <MessageCircle className="w-7 h-7 text-milestones" /> Milestones
+        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+          <MessageCircle className="w-7 h-7 text-milestones" /> Speech
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {activeChild.name} • {ageMonths}mo {activeChild.is_premature ? "(adjusted)" : ""}
