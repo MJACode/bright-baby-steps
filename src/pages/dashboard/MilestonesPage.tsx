@@ -62,7 +62,7 @@ export default function MilestonesPage() {
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("child_milestones").insert({
+        const { error } = await supabase.from("child_speech").insert({
           child_id: activeChild!.id,
           parent_id: user!.id,
           milestone_id: milestoneId,

@@ -51,7 +51,7 @@ export default function Dashboard() {
   const { data: milestoneStats } = useQuery({
     queryKey: ["milestone-stats", activeChild?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("child_milestones").select("status")
+      const { data } = await supabase.from("child_speech").select("status")
         .eq("child_id", activeChild!.id);
       const observed = data?.filter(m => m.status === "achieved").length ?? 0;
       return { observed, total: data?.length ?? 0 };
