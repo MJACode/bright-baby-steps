@@ -465,6 +465,8 @@ export type Database = {
       feeding_logs: {
         Row: {
           amount_oz: number | null
+          amount_oz_left: number | null
+          amount_oz_right: number | null
           child_id: string
           created_at: string
           duration_minutes: number | null
@@ -478,6 +480,8 @@ export type Database = {
         }
         Insert: {
           amount_oz?: number | null
+          amount_oz_left?: number | null
+          amount_oz_right?: number | null
           child_id: string
           created_at?: string
           duration_minutes?: number | null
@@ -491,6 +495,8 @@ export type Database = {
         }
         Update: {
           amount_oz?: number | null
+          amount_oz_left?: number | null
+          amount_oz_right?: number | null
           child_id?: string
           created_at?: string
           duration_minutes?: number | null
