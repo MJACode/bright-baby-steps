@@ -294,7 +294,7 @@ export type Database = {
         }
         Relationships: []
       }
-      child_milestones: {
+      child_speech: {
         Row: {
           achieved_at: string | null
           child_id: string
