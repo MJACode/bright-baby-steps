@@ -176,7 +176,7 @@ export default function PediatricianExport() {
         if (achieved.length) {
           subheading("Achieved");
           achieved.forEach((m) => {
-            bodyText(`✓ ${m.milestones?.name ?? "Unknown"}${m.achieved_at ? ` — ${format(new Date(m.achieved_at), "MMM d, yyyy")}` : ""}`, 4);
+            bodyText(`✓ ${m.speech?.name ?? "Unknown"}${m.achieved_at ? ` — ${format(new Date(m.achieved_at), "MMM d, yyyy")}` : ""}`, 4);
           });
         }
         if (flagged.length) {
