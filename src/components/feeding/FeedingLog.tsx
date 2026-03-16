@@ -119,15 +119,15 @@ export default function FeedingLog() {
               <DialogTitle className="font-display">Log a Feed</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
-                  <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-sm">
+                  <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
                     {ft.label}
                   </Button>
                 ))}
               </div>
 
-              {feedType === "breast" && (
+              {(feedType === "breast" || feedType === "pump") && (
                 <div className="space-y-2">
                   <Label>Side</Label>
                   <div className="flex gap-2">
@@ -136,6 +136,30 @@ export default function FeedingLog() {
                         {s}
                       </Button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {feedType === "pump" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Left Breast (oz)</Label>
+                      <Input type="number" step="0.5" value={amountOzLeft} onChange={(e) => setAmountOzLeft(e.target.value)} placeholder="0" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Right Breast (oz)</Label>
+                      <Input type="number" step="0.5" value={amountOzRight} onChange={(e) => setAmountOzRight(e.target.value)} placeholder="0" />
+                    </div>
+                  </div>
+                  {(amountOzLeft || amountOzRight) && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Total: {((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)).toFixed(1)} oz
+                    </p>
+                  )}
+                  <div className="space-y-1">
+                    <Label>Duration (min)</Label>
+                    <Input type="number" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="20" />
                   </div>
                 </div>
               )}
