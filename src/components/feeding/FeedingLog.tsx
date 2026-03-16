@@ -231,11 +231,14 @@ export default function FeedingLog() {
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Badge variant="secondary" className="text-xs">
-                  {log.feeding_type === "breast" ? "🤱" : log.feeding_type === "bottle" ? "🍼" : "🥣"} {log.feeding_type}
+                  {log.feeding_type === "breast" ? "🤱" : log.feeding_type === "bottle" ? "🍼" : log.feeding_type === "pump" ? "🧴" : "🥣"} {log.feeding_type}
                 </Badge>
                 <div>
                   <p className="text-sm font-semibold">
-                    {log.amount_oz ? `${log.amount_oz} oz` : ""} {log.duration_minutes ? `${log.duration_minutes} min` : ""}
+                    {log.feeding_type === "pump" && (log.amount_oz_left || log.amount_oz_right)
+                      ? `L: ${log.amount_oz_left ?? 0}oz R: ${log.amount_oz_right ?? 0}oz (${log.amount_oz ?? 0}oz total)`
+                      : log.amount_oz ? `${log.amount_oz} oz` : ""
+                    } {log.duration_minutes ? `${log.duration_minutes} min` : ""}
                     {log.food_description ? log.food_description : ""}
                   </p>
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
