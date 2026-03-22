@@ -24,7 +24,7 @@ const trackingItems = [
   { title: "Diapers", url: "/dashboard/diapers", icon: Droplets },
   { title: "Feeding", url: "/dashboard/feeding", icon: UtensilsCrossed },
   { title: "Allergens", url: "/dashboard/allergens", icon: UtensilsCrossed },
-  { title: "Speech", url: "/dashboard/milestones", icon: Brain },
+  { title: "Milestones", url: "/dashboard/milestones", icon: Brain },
   { title: "Financial", url: "/dashboard/financial", icon: DollarSign },
 ];
 
