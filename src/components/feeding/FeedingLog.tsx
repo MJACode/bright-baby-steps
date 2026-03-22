@@ -84,6 +84,7 @@ export default function FeedingLog() {
     amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
     food_description: feedType === "solid" ? foodDesc || null : null,
     notes: notes || null,
+    logged_at: new Date(loggedAt).toISOString(),
   });
 
   const saveMutation = useMutation({
