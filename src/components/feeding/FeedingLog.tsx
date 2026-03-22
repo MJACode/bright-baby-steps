@@ -281,6 +281,12 @@ export default function FeedingLog() {
         )) : (
           <p className="text-sm text-muted-foreground">No feeding logs yet. Tap + to log a feed.</p>
         )}
+        </div>
+        {logs && logs.length > 5 && (
+          <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
+            {showAll ? "Show less" : `View all ${logs.length} feeds`}
+          </Button>
+        )}
       </div>
     </div>
   );
