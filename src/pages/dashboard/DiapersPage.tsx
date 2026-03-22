@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Droplets, AlertTriangle, Pencil } from "lucide-react";
+import { Droplets, AlertTriangle, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInHours, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
