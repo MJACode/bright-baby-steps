@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { User, LogOut, Baby, StickyNote, Plus, Trash2 } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
+import PartnerManagement from "@/components/PartnerManagement";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -137,6 +138,10 @@ export default function ProfilePage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pediatrician Export */}
+      {/* Partner Management */}
+      <PartnerManagement />
 
       {/* Pediatrician Export */}
       <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />

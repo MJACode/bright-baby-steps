@@ -26,6 +26,11 @@ export default function Auth() {
   }
 
   if (session) {
+    const pendingInvite = sessionStorage.getItem("pending_invite");
+    if (pendingInvite) {
+      sessionStorage.removeItem("pending_invite");
+      return <Navigate to={`/invite/${pendingInvite}`} replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 
