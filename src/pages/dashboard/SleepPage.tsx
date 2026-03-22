@@ -227,46 +227,6 @@ export default function SleepPage() {
         </Button>
       </div>
 
-      {/* Sleep Timer */}
-      <Card className="border-0 bg-sleep-bg">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex gap-2">
-            <Button variant={sleepType === "nap" ? "default" : "outline"} onClick={() => setSleepType("nap")} className="flex-1 touch-target gap-2">
-              <Sun className="w-5 h-5" /> Nap
-            </Button>
-            <Button variant={sleepType === "night" ? "default" : "outline"} onClick={() => setSleepType("night")} className="flex-1 touch-target gap-2">
-              <Moon className="w-5 h-5" /> Night
-            </Button>
-          </div>
-
-          {isTracking && (
-            <div className="text-center py-4">
-              <p className="text-5xl font-bold font-display text-sleep">{formatElapsed(elapsed)}</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Started {format(startTime!, "h:mm a")}
-              </p>
-            </div>
-          )}
-
-          <Button
-            onClick={isTracking ? handleStop : handleStart}
-            className={cn(
-              "w-full h-20 text-xl font-bold rounded-2xl touch-target transition-all",
-              isTracking
-                ? "bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                : "bg-sleep hover:bg-sleep/90 text-white"
-            )}
-            disabled={addLog.isPending}
-          >
-            {isTracking ? (
-              <><Square className="w-7 h-7 mr-2" /> Stop</>
-            ) : (
-              <><Play className="w-7 h-7 mr-2" /> Start Sleep</>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3">
         <Card className="border-0 bg-sleep-bg">
