@@ -162,6 +162,89 @@ export default function SleepPage() {
     return { day: format(day, "EEE"), total: totalMin, naps: dayLogs.filter(l => l.sleep_type === "nap").length };
   });
 
+  // Compute sleep analytics
+  const computeStats = () => {
+    if (!logs || logs.length === 0) return null;
+
+    const nightLogs = logs.filter(l => l.sleep_type === "night");
+    const napLogs = logs.filter(l => l.sleep_type === "nap");
+
+    // Group logs by day
+    const logsByDay = new Map<string, typeof logs>();
+    logs.forEach(l => {
+      const dayKey = format(new Date(l.started_at), "yyyy-MM-dd");
+      if (!logsByDay.has(dayKey)) logsByDay.set(dayKey, []);
+      logsByDay.get(dayKey)!.push(l);
+    });
+
+    const daysWithData = logsByDay.size || 1;
+
+    // Overnight stats
+    const avgBedtime = nightLogs.length > 0
+      ? (() => {
+          const totalMins = nightLogs.reduce((s, l) => {
+            const d = new Date(l.started_at);
+            let mins = d.getHours() * 60 + d.getMinutes();
+            if (mins < 720) mins += 1440; // after midnight → treat as late evening
+            return s + mins;
+          }, 0);
+          let avgMins = Math.round(totalMins / nightLogs.length) % 1440;
+          const h = Math.floor(avgMins / 60) % 24;
+          const m = avgMins % 60;
+          return format(new Date(2000, 0, 1, h, m), "h:mm a");
+        })()
+      : "—";
+
+    const avgWakeTime = nightLogs.filter(l => l.ended_at).length > 0
+      ? (() => {
+          const ended = nightLogs.filter(l => l.ended_at);
+          const totalMins = ended.reduce((s, l) => {
+            const d = new Date(l.ended_at!);
+            return s + d.getHours() * 60 + d.getMinutes();
+          }, 0);
+          const avgMins = Math.round(totalMins / ended.length);
+          const h = Math.floor(avgMins / 60) % 24;
+          const m = avgMins % 60;
+          return format(new Date(2000, 0, 1, h, m), "h:mm a");
+        })()
+      : "—";
+
+    const avgOvernightMin = nightLogs.length > 0
+      ? Math.round(nightLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0) / nightLogs.length)
+      : 0;
+
+    // Nap stats
+    const avgNapsPerDay = daysWithData > 0
+      ? (napLogs.length / daysWithData).toFixed(1)
+      : "0";
+
+    const avgNapDurationMin = napLogs.length > 0
+      ? Math.round(napLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0) / daysWithData)
+      : 0;
+
+    // Total sleep per day
+    const totalSleepMin = logs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
+    const avgTotalPerDay = Math.round(totalSleepMin / daysWithData);
+
+    // Last 7 days comparison
+    const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+    const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenDaysAgo);
+    const recentDays = new Set(recentLogs.map(l => format(new Date(l.started_at), "yyyy-MM-dd"))).size || 1;
+    const recentTotalMin = recentLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
+    const recentAvgPerDay = Math.round(recentTotalMin / recentDays);
+
+    return {
+      avgBedtime,
+      avgWakeTime,
+      avgOvernightMin,
+      avgNapsPerDay,
+      avgNapDurationMin,
+      avgTotalPerDay,
+      recentAvgPerDay,
+    };
+  };
+
+  const stats = computeStats();
   const todayTotal = weekData[weekDays.findIndex(d => format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"))]?.total ?? 0;
   const lastSleep = logs?.[0];
 
