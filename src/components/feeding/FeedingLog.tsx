@@ -251,7 +251,8 @@ export default function FeedingLog() {
       {/* Recent logs */}
       <div className="space-y-2">
         <h3 className="font-display font-bold text-sm">Recent Feeds</h3>
-        {logs && logs.length > 0 ? logs.slice(0, 15).map((log) => (
+        <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
+        {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
           <Card key={log.id} className="border-0 bg-feeding-bg">
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
