@@ -121,19 +121,21 @@ export default function DiapersPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Droplets className="w-7 h-7 text-diapers" /> Diapers
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+            <Droplets className="w-7 h-7 text-diapers" /> Diapers
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
+        </div>
+        <Button
+          size="icon"
+          onClick={() => { resetForm(); setModalOpen(true); }}
+          className="rounded-full bg-diapers hover:bg-diapers/90 text-white touch-target w-12 h-12"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
       </div>
-
-      <Button
-        onClick={() => { resetForm(); setModalOpen(true); }}
-        className="w-full h-16 text-lg font-bold rounded-2xl touch-target bg-diapers hover:bg-diapers/90 text-white"
-      >
-        💩 Log Dirty Diaper
-      </Button>
 
       <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-md">
@@ -260,12 +262,10 @@ export default function DiapersPage() {
               <div className="flex items-center gap-3">
                 <Badge variant="secondary" className="text-xs">💩 dirty</Badge>
                 <div>
+                  <p className="text-sm font-semibold">
+                    {[log.color, log.consistency].filter(Boolean).join(" · ") || "Dirty diaper"}
+                  </p>
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
-                  {(log.color || log.consistency) && (
-                    <p className="text-[10px] text-muted-foreground capitalize">
-                      {[log.color, log.consistency].filter(Boolean).join(" · ")}
-                    </p>
-                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -277,7 +277,7 @@ export default function DiapersPage() {
             </CardContent>
           </Card>
         )) : (
-          <p className="text-sm text-muted-foreground">No diaper logs yet.</p>
+          <p className="text-sm text-muted-foreground">No diaper logs yet. Tap + to log a diaper.</p>
         )}
         </div>
         {logs && logs.length > 5 && (
