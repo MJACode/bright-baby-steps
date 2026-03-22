@@ -177,30 +177,45 @@ export default function SleepPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Moon className="w-7 h-7 text-sleep" /> Sleep
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s sleep tracker</p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+              <Moon className="w-7 h-7 text-sleep" /> Sleep
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s sleep tracker</p>
+          </div>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-sleep">
+                  <Info className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[220px] p-3">
+                <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
+                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep Guide ({ageGroup})
+                </p>
+                <div className="space-y-1 text-xs">
+                  <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{rec.total}</span></p>
+                  <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{rec.naps}</span></p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-sleep">
-                <Info className="w-5 h-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[220px] p-3">
-              <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
-                <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep Guide ({ageGroup})
-              </p>
-              <div className="space-y-1 text-xs">
-                <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{rec.total}</span></p>
-                <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{rec.naps}</span></p>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button
+          size="icon"
+          onClick={() => {
+            setEditingId(null);
+            setEditSleepType("nap");
+            setEditStartedAt("");
+            setEditEndedAt("");
+            setEditDialogOpen(true);
+          }}
+          className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
       </div>
 
       {/* Sleep Timer */}
