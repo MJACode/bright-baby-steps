@@ -923,6 +923,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_partner_invitation: {
+        Args: { _invite_code: string }
+        Returns: undefined
+      }
       can_access_child: {
         Args: { _child_id: string; _user_id: string }
         Returns: boolean

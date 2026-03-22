@@ -56,24 +56,12 @@ export default function AcceptInvite() {
     setAccepting(true);
 
     try {
-      // Create the partner access record
-      const { error: accessError } = await supabase
-        .from("partner_access")
-        .insert({
-          owner_id: invite.owner_id,
-          partner_id: user.id,
-          status: "active",
-        });
+      // Use secure RPC to accept invitation atomically
+      const { error } = await supabase.rpc("accept_partner_invitation", {
+        _invite_code: code!,
+      });
 
-      if (accessError) throw accessError;
-
-      // Mark invite as accepted
-      const { error: updateError } = await supabase
-        .from("partner_invitations")
-        .update({ status: "accepted", accepted_by: user.id, updated_at: new Date().toISOString() })
-        .eq("id", invite.id);
-
-      if (updateError) throw updateError;
+      if (error) throw error;
 
       setStatus("accepted");
       toast({ title: "You're now connected as a partner! 🎉" });
