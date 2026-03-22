@@ -377,29 +377,8 @@ export default function SleepPage() {
         </CardContent>
       </Card>
 
-      {/* Weekly Chart */}
-      <Card className="border-0 bg-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">This Week</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end justify-between gap-1 h-32">
-            {weekData.map((d) => {
-              const maxH = 120;
-              const barH = Math.min((d.total / 840) * maxH, maxH);
-              return (
-                <div key={d.day} className="flex flex-col items-center flex-1 gap-1">
-                  <span className="text-[10px] font-bold text-sleep">{d.total > 0 ? formatElapsed(d.total) : ""}</span>
-                  <div className="w-full rounded-t-lg bg-sleep/20 relative" style={{ height: maxH }}>
-                    <div className="absolute bottom-0 w-full rounded-t-lg bg-sleep transition-all" style={{ height: barH }} />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground">{d.day}</span>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+
+
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
