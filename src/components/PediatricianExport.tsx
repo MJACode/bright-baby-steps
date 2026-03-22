@@ -295,6 +295,13 @@ export default function PediatricianExport({ pediatricianNotes = "" }: { pediatr
         }
       }
 
+      // Parent notes / reminders
+      if (pediatricianNotes.trim()) {
+        heading("Parent Notes & Reminders");
+        bodyText(pediatricianNotes.trim());
+        y += 4;
+      }
+
       // Footer
       checkPage(20);
       doc.setDrawColor(180);
