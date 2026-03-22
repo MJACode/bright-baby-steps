@@ -152,7 +152,7 @@ export default function DiapersPage() {
                 onChange={(e) => setLogTime(e.target.value)}
                 max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
               />
-              <p className="text-[10px] text-muted-foreground">Leave blank to use current time</p>
+              <p className="text-[10px] text-muted-foreground">Defaults to now — change if logging a past diaper</p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">Color</Label>
