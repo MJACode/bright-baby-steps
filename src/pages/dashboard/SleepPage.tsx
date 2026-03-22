@@ -86,17 +86,26 @@ export default function SleepPage() {
 
   const updateLog = useMutation({
     mutationFn: async () => {
-      if (!editingId) return;
       const startDate = new Date(editStartedAt);
       const endDate = new Date(editEndedAt);
       const duration = differenceInMinutes(endDate, startDate);
-      const { error } = await supabase.from("sleep_logs").update({
+      const payload = {
         sleep_type: editSleepType,
         started_at: startDate.toISOString(),
         ended_at: endDate.toISOString(),
         duration_minutes: duration,
-      }).eq("id", editingId);
-      if (error) throw error;
+      };
+      if (editingId) {
+        const { error } = await supabase.from("sleep_logs").update(payload).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("sleep_logs").insert({
+          ...payload,
+          child_id: activeChild!.id,
+          parent_id: user!.id,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
