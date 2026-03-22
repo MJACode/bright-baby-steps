@@ -5,7 +5,7 @@ import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Check, HelpCircle, Clock, PartyPopper, Flag } from "lucide-react";
+import { Brain, Check, HelpCircle, Clock, PartyPopper, Flag } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -91,9 +91,9 @@ export default function MilestonesPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <MessageCircle className="w-7 h-7 text-milestones" /> Speech
+            <Brain className="w-7 h-7 text-milestones" /> Milestones
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">Add a child to track speech milestones.</p>
+          <p className="text-muted-foreground text-sm mt-1">Add a child to track milestones.</p>
         </div>
         <AddChildDialog />
       </div>);
@@ -118,7 +118,7 @@ export default function MilestonesPage() {
 
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <MessageCircle className="w-7 h-7 text-milestones" /> Speech
+          <Brain className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {activeChild.name} • {ageMonths}mo {activeChild.is_premature ? "(adjusted)" : ""}
