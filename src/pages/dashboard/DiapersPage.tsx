@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Droplets, AlertTriangle } from "lucide-react";
+import { Droplets, AlertTriangle, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInHours, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -24,6 +24,7 @@ export default function DiapersPage() {
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
@@ -45,27 +46,49 @@ export default function DiapersPage() {
     enabled: !!activeChild,
   });
 
-  const addLog = useMutation({
+  const resetForm = () => {
+    setEditingId(null);
+    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime("");
+  };
+
+  const openEdit = (log: NonNullable<typeof logs>[0]) => {
+    setEditingId(log.id);
+    setSelectedColor(log.color || "");
+    setSelectedConsistency(log.consistency || "");
+    setNotes(log.notes || "");
+    setFlag(log.flag_for_attention || false);
+    setLogTime(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
+    setModalOpen(true);
+  };
+
+  const saveMutation = useMutation({
     mutationFn: async () => {
-      const logged_at = logTime ? new Date(logTime).toISOString() : new Date().toISOString();
-      const { error } = await supabase.from("diaper_logs").insert({
-        child_id: activeChild!.id,
-        parent_id: user!.id,
-        diaper_type: "dirty",
+      const payload = {
         color: selectedColor || null,
         consistency: selectedConsistency || null,
         notes: notes || null,
         flag_for_attention: flag,
-        logged_at,
-      });
-      if (error) throw error;
+        logged_at: logTime ? new Date(logTime).toISOString() : new Date().toISOString(),
+      };
+      if (editingId) {
+        const { error } = await supabase.from("diaper_logs").update(payload).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("diaper_logs").insert({
+          ...payload,
+          child_id: activeChild!.id,
+          parent_id: user!.id,
+          diaper_type: "dirty",
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-      setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime("");
+      resetForm();
       setModalOpen(false);
-      toast({ title: "Diaper logged! 🧷" });
+      toast({ title: editingId ? "Diaper updated! ✏️" : "Diaper logged! 🧷" });
     },
   });
 
@@ -87,7 +110,6 @@ export default function DiapersPage() {
   const lastLog = logs?.[0];
   const hoursSinceLast = lastLog ? differenceInHours(new Date(), new Date(lastLog.logged_at)) : null;
 
-  // Weekly chart
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekData = weekDays.map((day) => {
@@ -105,19 +127,17 @@ export default function DiapersPage() {
         <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
       </div>
 
-      {/* Log button */}
       <Button
-        onClick={() => setModalOpen(true)}
+        onClick={() => { resetForm(); setModalOpen(true); }}
         className="w-full h-16 text-lg font-bold rounded-2xl touch-target bg-diapers hover:bg-diapers/90 text-white"
       >
         💩 Log Dirty Diaper
       </Button>
 
-      {/* Log modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Log Dirty Diaper</DialogTitle>
+            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Dirty Diaper"}</DialogTitle>
             <DialogDescription>Add details about the diaper. All fields are optional.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -180,11 +200,11 @@ export default function DiapersPage() {
               </Button>
             </div>
             <Button
-              onClick={() => addLog.mutate()}
-              disabled={addLog.isPending}
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
               className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
             >
-              {addLog.isPending ? "Saving..." : "Save"}
+              {saveMutation.isPending ? "Saving..." : editingId ? "Update" : "Save"}
             </Button>
           </div>
         </DialogContent>
@@ -246,7 +266,12 @@ export default function DiapersPage() {
                   )}
                 </div>
               </div>
-              {log.flag_for_attention && <AlertTriangle className="w-4 h-4 text-destructive" />}
+              <div className="flex items-center gap-2">
+                {log.flag_for_attention && <AlertTriangle className="w-4 h-4 text-destructive" />}
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-diapers" onClick={() => openEdit(log)} aria-label="Edit diaper log">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )) : (

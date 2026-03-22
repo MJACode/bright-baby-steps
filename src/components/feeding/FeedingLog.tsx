@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UtensilsCrossed, Plus } from "lucide-react";
+import { UtensilsCrossed, Plus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -28,6 +28,7 @@ export default function FeedingLog() {
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [feedType, setFeedType] = useState("breast");
   const [side, setSide] = useState<string>("");
   const [durationMin, setDurationMin] = useState("");
@@ -52,36 +53,59 @@ export default function FeedingLog() {
     enabled: !!activeChild,
   });
 
-  const addLog = useMutation({
+  const resetForm = () => {
+    setEditingId(null);
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes("");
+  };
+
+  const openEdit = (log: NonNullable<typeof logs>[0]) => {
+    setEditingId(log.id);
+    setFeedType(log.feeding_type);
+    setSide(log.side || "");
+    setDurationMin(log.duration_minutes ? String(log.duration_minutes) : "");
+    setAmountOz(log.amount_oz ? String(log.amount_oz) : "");
+    setAmountOzLeft(log.amount_oz_left ? String(log.amount_oz_left) : "");
+    setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
+    setFoodDesc(log.food_description || "");
+    setNotes(log.notes || "");
+    setDialogOpen(true);
+  };
+
+  const getPayload = () => ({
+    feeding_type: feedType,
+    side: (feedType === "breast" || feedType === "pump") ? side || null : null,
+    duration_minutes: durationMin ? Number(durationMin) : null,
+    amount_oz: feedType === "pump"
+      ? ((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)) || null
+      : amountOz ? Number(amountOz) : null,
+    amount_oz_left: feedType === "pump" && amountOzLeft ? Number(amountOzLeft) : null,
+    amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
+    food_description: feedType === "solid" ? foodDesc || null : null,
+    notes: notes || null,
+  });
+
+  const saveMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("feeding_logs").insert({
-        child_id: activeChild!.id,
-        parent_id: user!.id,
-        feeding_type: feedType,
-        side: (feedType === "breast" || feedType === "pump") ? side || null : null,
-        duration_minutes: durationMin ? Number(durationMin) : null,
-        amount_oz: feedType === "pump"
-          ? ((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)) || null
-          : amountOz ? Number(amountOz) : null,
-        amount_oz_left: feedType === "pump" && amountOzLeft ? Number(amountOzLeft) : null,
-        amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
-        food_description: feedType === "solid" ? foodDesc || null : null,
-        notes: notes || null,
-      });
-      if (error) throw error;
+      if (editingId) {
+        const { error } = await supabase.from("feeding_logs").update(getPayload()).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("feeding_logs").insert({
+          ...getPayload(),
+          child_id: activeChild!.id,
+          parent_id: user!.id,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
       setDialogOpen(false);
       resetForm();
-      toast({ title: "Feed logged! 🍼" });
+      toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼" });
     },
   });
-
-  const resetForm = () => {
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes("");
-  };
 
   if (!activeChild) {
     return (
@@ -108,7 +132,7 @@ export default function FeedingLog() {
           </h2>
           <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s feeding log</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
             <Button size="icon" className="rounded-full bg-feeding hover:bg-feeding/90 text-white touch-target w-12 h-12">
               <Plus className="w-6 h-6" />
@@ -116,7 +140,7 @@ export default function FeedingLog() {
           </DialogTrigger>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle className="font-display">Log a Feed</DialogTitle>
+              <DialogTitle className="font-display">{editingId ? "Edit Feed" : "Log a Feed"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-4 gap-2">
@@ -189,8 +213,8 @@ export default function FeedingLog() {
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
               </div>
 
-              <Button onClick={() => addLog.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={addLog.isPending}>
-                {addLog.isPending ? "Saving..." : "Save Feed"}
+              <Button onClick={() => saveMutation.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
               </Button>
             </div>
           </DialogContent>
@@ -244,7 +268,12 @@ export default function FeedingLog() {
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
                 </div>
               </div>
-              {log.side && <Badge variant="outline" className="text-xs capitalize">{log.side}</Badge>}
+              <div className="flex items-center gap-2">
+                {log.side && <Badge variant="outline" className="text-xs capitalize">{log.side}</Badge>}
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-feeding" onClick={() => openEdit(log)} aria-label="Edit feed">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )) : (
