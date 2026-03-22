@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval } from "date-fns";
+import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 
 const sleepRecommendations: Record<string, { total: string; naps: string }> = {
@@ -162,6 +162,89 @@ export default function SleepPage() {
     return { day: format(day, "EEE"), total: totalMin, naps: dayLogs.filter(l => l.sleep_type === "nap").length };
   });
 
+  // Compute sleep analytics
+  const computeStats = () => {
+    if (!logs || logs.length === 0) return null;
+
+    const nightLogs = logs.filter(l => l.sleep_type === "night");
+    const napLogs = logs.filter(l => l.sleep_type === "nap");
+
+    // Group logs by day
+    const logsByDay = new Map<string, typeof logs>();
+    logs.forEach(l => {
+      const dayKey = format(new Date(l.started_at), "yyyy-MM-dd");
+      if (!logsByDay.has(dayKey)) logsByDay.set(dayKey, []);
+      logsByDay.get(dayKey)!.push(l);
+    });
+
+    const daysWithData = logsByDay.size || 1;
+
+    // Overnight stats
+    const avgBedtime = nightLogs.length > 0
+      ? (() => {
+          const totalMins = nightLogs.reduce((s, l) => {
+            const d = new Date(l.started_at);
+            let mins = d.getHours() * 60 + d.getMinutes();
+            if (mins < 720) mins += 1440; // after midnight → treat as late evening
+            return s + mins;
+          }, 0);
+          let avgMins = Math.round(totalMins / nightLogs.length) % 1440;
+          const h = Math.floor(avgMins / 60) % 24;
+          const m = avgMins % 60;
+          return format(new Date(2000, 0, 1, h, m), "h:mm a");
+        })()
+      : "—";
+
+    const avgWakeTime = nightLogs.filter(l => l.ended_at).length > 0
+      ? (() => {
+          const ended = nightLogs.filter(l => l.ended_at);
+          const totalMins = ended.reduce((s, l) => {
+            const d = new Date(l.ended_at!);
+            return s + d.getHours() * 60 + d.getMinutes();
+          }, 0);
+          const avgMins = Math.round(totalMins / ended.length);
+          const h = Math.floor(avgMins / 60) % 24;
+          const m = avgMins % 60;
+          return format(new Date(2000, 0, 1, h, m), "h:mm a");
+        })()
+      : "—";
+
+    const avgOvernightMin = nightLogs.length > 0
+      ? Math.round(nightLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0) / nightLogs.length)
+      : 0;
+
+    // Nap stats
+    const avgNapsPerDay = daysWithData > 0
+      ? (napLogs.length / daysWithData).toFixed(1)
+      : "0";
+
+    const avgNapDurationMin = napLogs.length > 0
+      ? Math.round(napLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0) / daysWithData)
+      : 0;
+
+    // Total sleep per day
+    const totalSleepMin = logs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
+    const avgTotalPerDay = Math.round(totalSleepMin / daysWithData);
+
+    // Last 7 days comparison
+    const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+    const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenDaysAgo);
+    const recentDays = new Set(recentLogs.map(l => format(new Date(l.started_at), "yyyy-MM-dd"))).size || 1;
+    const recentTotalMin = recentLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
+    const recentAvgPerDay = Math.round(recentTotalMin / recentDays);
+
+    return {
+      avgBedtime,
+      avgWakeTime,
+      avgOvernightMin,
+      avgNapsPerDay,
+      avgNapDurationMin,
+      avgTotalPerDay,
+      recentAvgPerDay,
+    };
+  };
+
+  const stats = computeStats();
   const todayTotal = weekData[weekDays.findIndex(d => format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"))]?.total ?? 0;
   const lastSleep = logs?.[0];
 
@@ -227,24 +310,72 @@ export default function SleepPage() {
         </Button>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="border-0 bg-sleep-bg">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Today's Total</p>
-            <p className="text-2xl font-bold text-sleep">{formatElapsed(todayTotal)}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 bg-sleep-bg">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Last Sleep</p>
-            <p className="text-2xl font-bold text-sleep">
-              {lastSleep ? formatElapsed(lastSleep.duration_minutes || 0) : "—"}
-            </p>
-            {lastSleep && <p className="text-xs text-muted-foreground">{format(new Date(lastSleep.started_at), "h:mm a")}</p>}
-          </CardContent>
-        </Card>
-      </div>
+      {/* Overnight Sleep */}
+      <Card className="border-0 bg-sleep-bg">
+        <CardHeader className="pb-1 pt-3 px-4">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <Moon className="w-3.5 h-3.5 text-sleep" /> Overnight Sleep
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats?.avgBedtime ?? "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg Bedtime</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats?.avgWakeTime ?? "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg Wake Time</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.avgOvernightMin) : "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg Overnight</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Naps */}
+      <Card className="border-0 bg-sleep-bg">
+        <CardHeader className="pb-1 pt-3 px-4">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <Sun className="w-3.5 h-3.5 text-sleep" /> Naps
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats?.avgNapsPerDay ?? "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg Naps / Day</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.avgNapDurationMin) : "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg Total Nap Duration</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Total Sleep */}
+      <Card className="border-0 bg-sleep-bg">
+        <CardHeader className="pb-1 pt-3 px-4">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-sleep" /> Total Sleep
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.recentAvgPerDay) : "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg / Day (Last 7 Days)</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.avgTotalPerDay) : "—"}</p>
+              <p className="text-[10px] text-muted-foreground">Avg / Day (All Time)</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Weekly Chart */}
       <Card className="border-0 bg-card">
