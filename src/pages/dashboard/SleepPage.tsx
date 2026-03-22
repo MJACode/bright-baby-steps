@@ -6,7 +6,10 @@ import { useChildren } from "@/hooks/useChildren";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Moon, Sun, Play, Square, Star, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Moon, Sun, Play, Square, Star, Clock, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -37,6 +40,14 @@ export default function SleepPage() {
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [quality, setQuality] = useState(0);
+
+  // Edit state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
+  const [editStartedAt, setEditStartedAt] = useState("");
+  const [editEndedAt, setEditEndedAt] = useState("");
+  const [editQuality, setEditQuality] = useState(0);
 
   useEffect(() => {
     if (!isTracking || !startTime) return;
@@ -74,6 +85,38 @@ export default function SleepPage() {
     },
   });
 
+  const updateLog = useMutation({
+    mutationFn: async () => {
+      if (!editingId) return;
+      const startDate = new Date(editStartedAt);
+      const endDate = new Date(editEndedAt);
+      const duration = differenceInMinutes(endDate, startDate);
+      const { error } = await supabase.from("sleep_logs").update({
+        sleep_type: editSleepType,
+        started_at: startDate.toISOString(),
+        ended_at: endDate.toISOString(),
+        duration_minutes: duration,
+        quality: editQuality > 0 ? String(editQuality) : null,
+      }).eq("id", editingId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      setEditDialogOpen(false);
+      setEditingId(null);
+    },
+  });
+
+  const openEdit = (log: NonNullable<typeof logs>[0]) => {
+    setEditingId(log.id);
+    setEditSleepType(log.sleep_type as "nap" | "night");
+    setEditStartedAt(format(new Date(log.started_at), "yyyy-MM-dd'T'HH:mm"));
+    setEditEndedAt(log.ended_at ? format(new Date(log.ended_at), "yyyy-MM-dd'T'HH:mm") : "");
+    setEditQuality(log.quality ? Number(log.quality) : 0);
+    setEditDialogOpen(true);
+  };
+
   const handleStart = () => {
     setStartTime(new Date());
     setIsTracking(true);
@@ -103,7 +146,6 @@ export default function SleepPage() {
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
 
-  // Weekly chart data
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekData = weekDays.map((day) => {
@@ -149,7 +191,6 @@ export default function SleepPage() {
       {/* Sleep Timer */}
       <Card className="border-0 bg-sleep-bg">
         <CardContent className="p-5 space-y-4">
-          {/* Nap / Night toggle */}
           <div className="flex gap-2">
             <Button variant={sleepType === "nap" ? "default" : "outline"} onClick={() => setSleepType("nap")} className="flex-1 touch-target gap-2">
               <Sun className="w-5 h-5" /> Nap
@@ -159,7 +200,6 @@ export default function SleepPage() {
             </Button>
           </div>
 
-          {/* Timer display */}
           {isTracking && (
             <div className="text-center py-4">
               <p className="text-5xl font-bold font-display text-sleep">{formatElapsed(elapsed)}</p>
@@ -169,7 +209,6 @@ export default function SleepPage() {
             </div>
           )}
 
-          {/* Start / Stop button */}
           <Button
             onClick={isTracking ? handleStop : handleStart}
             className={cn(
@@ -187,7 +226,6 @@ export default function SleepPage() {
             )}
           </Button>
 
-          {/* Quality rating (show when tracking) */}
           {isTracking && (
             <div className="flex items-center justify-center gap-1">
               <span className="text-sm text-muted-foreground mr-2">Quality:</span>
@@ -263,6 +301,44 @@ export default function SleepPage() {
         </CardContent>
       </Card>
 
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">Edit Sleep Log</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button variant={editSleepType === "nap" ? "default" : "outline"} onClick={() => setEditSleepType("nap")} className="flex-1 touch-target gap-2">
+                <Sun className="w-5 h-5" /> Nap
+              </Button>
+              <Button variant={editSleepType === "night" ? "default" : "outline"} onClick={() => setEditSleepType("night")} className="flex-1 touch-target gap-2">
+                <Moon className="w-5 h-5" /> Night
+              </Button>
+            </div>
+            <div className="space-y-1">
+              <Label>Start Time</Label>
+              <Input type="datetime-local" value={editStartedAt} onChange={(e) => setEditStartedAt(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>End Time</Label>
+              <Input type="datetime-local" value={editEndedAt} onChange={(e) => setEditEndedAt(e.target.value)} />
+            </div>
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-sm text-muted-foreground mr-2">Quality:</span>
+              {qualityStars.map((s) => (
+                <button key={s} onClick={() => setEditQuality(s)} className="touch-target p-1">
+                  <Star className={cn("w-7 h-7 transition-colors", s <= editQuality ? "fill-warning text-warning" : "text-muted-foreground/30")} />
+                </button>
+              ))}
+            </div>
+            <Button onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending}>
+              {updateLog.isPending ? "Saving..." : "Update Sleep Log"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Recent logs */}
       <div className="space-y-2">
         <h2 className="font-display font-bold text-sm">Recent Logs</h2>
@@ -280,13 +356,18 @@ export default function SleepPage() {
                   </p>
                 </div>
               </div>
-              {log.quality && (
-                <div className="flex gap-0.5">
-                  {qualityStars.map((s) => (
-                    <Star key={s} className={cn("w-3 h-3", s <= Number(log.quality) ? "fill-warning text-warning" : "text-muted-foreground/20")} />
-                  ))}
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {log.quality && (
+                  <div className="flex gap-0.5">
+                    {qualityStars.map((s) => (
+                      <Star key={s} className={cn("w-3 h-3", s <= Number(log.quality) ? "fill-warning text-warning" : "text-muted-foreground/20")} />
+                    ))}
+                  </div>
+                )}
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )) : (
