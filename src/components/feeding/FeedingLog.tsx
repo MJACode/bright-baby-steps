@@ -29,6 +29,7 @@ export default function FeedingLog() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [feedType, setFeedType] = useState("breast");
   const [side, setSide] = useState<string>("");
   const [durationMin, setDurationMin] = useState("");
