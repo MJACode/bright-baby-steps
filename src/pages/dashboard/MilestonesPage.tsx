@@ -91,7 +91,7 @@ export default function MilestonesPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <MessageCircle className="w-7 h-7 text-milestones" /> Speech
+            <Brain className="w-7 h-7 text-milestones" /> Milestones
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Add a child to track speech milestones.</p>
         </div>
