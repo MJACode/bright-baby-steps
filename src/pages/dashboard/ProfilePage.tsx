@@ -140,6 +140,10 @@ export default function ProfilePage() {
       </Card>
 
       {/* Pediatrician Export */}
+      {/* Partner Management */}
+      <PartnerManagement />
+
+      {/* Pediatrician Export */}
       <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
 
       {/* Sign out */}
