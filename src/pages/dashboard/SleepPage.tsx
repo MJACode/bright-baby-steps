@@ -41,6 +41,7 @@ export default function SleepPage() {
   const [elapsed, setElapsed] = useState(0);
 
   // Edit state
+  const [showAll, setShowAll] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
