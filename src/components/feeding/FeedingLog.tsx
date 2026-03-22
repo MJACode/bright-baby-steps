@@ -70,6 +70,7 @@ export default function FeedingLog() {
     setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
     setFoodDesc(log.food_description || "");
     setNotes(log.notes || "");
+    setLoggedAt(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
     setDialogOpen(true);
   };
 
