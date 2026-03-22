@@ -49,7 +49,7 @@ export default function DiapersPage() {
 
   const resetForm = () => {
     setEditingId(null);
-    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime("");
+    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
