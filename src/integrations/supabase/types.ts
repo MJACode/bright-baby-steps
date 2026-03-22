@@ -628,6 +628,66 @@ export type Database = {
           },
         ]
       }
+      partner_access: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          partner_id: string
+          revoked_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          partner_id: string
+          revoked_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          partner_id?: string
+          revoked_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      partner_invitations: {
+        Row: {
+          accepted_by: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          invite_code: string
+          owner_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          accepted_by?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invite_code?: string
+          owner_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          accepted_by?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invite_code?: string
+          owner_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pediatrician_exports: {
         Row: {
           child_id: string
@@ -863,7 +923,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_access_child: {
+        Args: { _child_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_partner_access: {
+        Args: { _owner_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
