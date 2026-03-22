@@ -146,6 +146,15 @@ export default function FeedingLog() {
               <DialogTitle className="font-display">{editingId ? "Edit Feed" : "Log a Feed"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Date & Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={loggedAt}
+                  onChange={(e) => setLoggedAt(e.target.value)}
+                  max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                />
+              </div>
               <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
                   <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">

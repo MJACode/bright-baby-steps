@@ -30,7 +30,7 @@ export default function DiapersPage() {
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
   const [flag, setFlag] = useState(false);
-  const [logTime, setLogTime] = useState("");
+  const [logTime, setLogTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   const { data: logs } = useQuery({
     queryKey: ["diaper-logs", activeChild?.id],
