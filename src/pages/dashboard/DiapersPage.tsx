@@ -25,6 +25,7 @@ export default function DiapersPage() {
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
