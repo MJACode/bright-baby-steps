@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Play, Square, Clock, Pencil, Info } from "lucide-react";
+import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -86,17 +86,26 @@ export default function SleepPage() {
 
   const updateLog = useMutation({
     mutationFn: async () => {
-      if (!editingId) return;
       const startDate = new Date(editStartedAt);
       const endDate = new Date(editEndedAt);
       const duration = differenceInMinutes(endDate, startDate);
-      const { error } = await supabase.from("sleep_logs").update({
+      const payload = {
         sleep_type: editSleepType,
         started_at: startDate.toISOString(),
         ended_at: endDate.toISOString(),
         duration_minutes: duration,
-      }).eq("id", editingId);
-      if (error) throw error;
+      };
+      if (editingId) {
+        const { error } = await supabase.from("sleep_logs").update(payload).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("sleep_logs").insert({
+          ...payload,
+          child_id: activeChild!.id,
+          parent_id: user!.id,
+        });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
@@ -177,30 +186,45 @@ export default function SleepPage() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Moon className="w-7 h-7 text-sleep" /> Sleep
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s sleep tracker</p>
+        <div className="flex items-center gap-2">
+          <div>
+            <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+              <Moon className="w-7 h-7 text-sleep" /> Sleep
+            </h1>
+            <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s sleep tracker</p>
+          </div>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-sleep">
+                  <Info className="w-5 h-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[220px] p-3">
+                <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
+                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep Guide ({ageGroup})
+                </p>
+                <div className="space-y-1 text-xs">
+                  <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{rec.total}</span></p>
+                  <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{rec.naps}</span></p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-sleep">
-                <Info className="w-5 h-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-[220px] p-3">
-              <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
-                <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep Guide ({ageGroup})
-              </p>
-              <div className="space-y-1 text-xs">
-                <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{rec.total}</span></p>
-                <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{rec.naps}</span></p>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button
+          size="icon"
+          onClick={() => {
+            setEditingId(null);
+            setEditSleepType("nap");
+            setEditStartedAt("");
+            setEditEndedAt("");
+            setEditDialogOpen(true);
+          }}
+          className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
       </div>
 
       {/* Sleep Timer */}
@@ -290,7 +314,7 @@ export default function SleepPage() {
       <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-display">Edit Sleep Log</DialogTitle>
+            <DialogTitle className="font-display">{editingId ? "Edit Sleep Log" : "Log Sleep"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
@@ -309,8 +333,8 @@ export default function SleepPage() {
               <Label>End Time</Label>
               <Input type="datetime-local" value={editEndedAt} onChange={(e) => setEditEndedAt(e.target.value)} />
             </div>
-            <Button onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending}>
-              {updateLog.isPending ? "Saving..." : "Update Sleep Log"}
+            <Button onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending || !editStartedAt || !editEndedAt}>
+              {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
             </Button>
           </div>
         </DialogContent>
