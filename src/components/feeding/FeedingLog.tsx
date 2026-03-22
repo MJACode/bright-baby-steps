@@ -38,6 +38,7 @@ export default function FeedingLog() {
   const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
   const [notes, setNotes] = useState("");
+  const [loggedAt, setLoggedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
