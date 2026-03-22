@@ -38,6 +38,7 @@ export default function FeedingLog() {
   const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
   const [notes, setNotes] = useState("");
+  const [loggedAt, setLoggedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
@@ -56,7 +57,7 @@ export default function FeedingLog() {
 
   const resetForm = () => {
     setEditingId(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes("");
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes(""); setLoggedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
@@ -69,6 +70,7 @@ export default function FeedingLog() {
     setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
     setFoodDesc(log.food_description || "");
     setNotes(log.notes || "");
+    setLoggedAt(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
     setDialogOpen(true);
   };
 
@@ -83,6 +85,7 @@ export default function FeedingLog() {
     amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
     food_description: feedType === "solid" ? foodDesc || null : null,
     notes: notes || null,
+    logged_at: new Date(loggedAt).toISOString(),
   });
 
   const saveMutation = useMutation({
@@ -144,6 +147,15 @@ export default function FeedingLog() {
               <DialogTitle className="font-display">{editingId ? "Edit Feed" : "Log a Feed"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Date & Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={loggedAt}
+                  onChange={(e) => setLoggedAt(e.target.value)}
+                  max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                />
+              </div>
               <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
                   <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">

@@ -30,7 +30,7 @@ export default function DiapersPage() {
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
   const [flag, setFlag] = useState(false);
-  const [logTime, setLogTime] = useState("");
+  const [logTime, setLogTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
   const { data: logs } = useQuery({
     queryKey: ["diaper-logs", activeChild?.id],
@@ -49,7 +49,7 @@ export default function DiapersPage() {
 
   const resetForm = () => {
     setEditingId(null);
-    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime("");
+    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
@@ -152,7 +152,7 @@ export default function DiapersPage() {
                 onChange={(e) => setLogTime(e.target.value)}
                 max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
               />
-              <p className="text-[10px] text-muted-foreground">Leave blank to use current time</p>
+              <p className="text-[10px] text-muted-foreground">Defaults to now — change if logging a past diaper</p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs font-semibold">Color</Label>
