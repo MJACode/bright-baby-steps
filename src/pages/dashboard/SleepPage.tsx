@@ -41,6 +41,7 @@ export default function SleepPage() {
   const [elapsed, setElapsed] = useState(0);
 
   // Edit state
+  const [showAll, setShowAll] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
@@ -318,7 +319,8 @@ export default function SleepPage() {
       {/* Recent logs */}
       <div className="space-y-2">
         <h2 className="font-display font-bold text-sm">Recent Logs</h2>
-        {logs && logs.length > 0 ? logs.slice(0, 10).map((log) => (
+        <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
+        {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
           <Card key={log.id} className="border-0 bg-sleep-bg">
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -339,6 +341,12 @@ export default function SleepPage() {
           </Card>
         )) : (
           <p className="text-sm text-muted-foreground">No sleep logs yet.</p>
+        )}
+        </div>
+        {logs && logs.length > 5 && (
+          <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
+            {showAll ? "Show less" : `View all ${logs.length} logs`}
+          </Button>
         )}
       </div>
     </div>
