@@ -206,7 +206,13 @@ export default function DiapersPage() {
             </div>
             <Button
               type="button"
-              onClick={() => saveMutation.mutate()}
+              onClick={() => {
+                if (!logTime || !selectedColor || !selectedConsistency) {
+                  toast({ title: "Please fill in all required fields", description: "Date, color, and consistency are required.", variant: "destructive" });
+                  return;
+                }
+                saveMutation.mutate();
+              }}
               disabled={saveMutation.isPending}
               className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
             >
