@@ -570,6 +570,124 @@ export type Database = {
         }
         Relationships: []
       }
+      illness_logs: {
+        Row: {
+          child_id: string
+          created_at: string
+          end_date: string | null
+          id: string
+          illness_name: string
+          notes: string | null
+          parent_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          illness_name: string
+          notes?: string | null
+          parent_id: string
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          illness_name?: string
+          notes?: string | null
+          parent_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "illness_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "illness_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medication_logs: {
+        Row: {
+          child_id: string
+          created_at: string
+          dose: string | null
+          end_date: string | null
+          frequency: string | null
+          id: string
+          illness_log_id: string | null
+          medication_name: string
+          notes: string | null
+          parent_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          dose?: string | null
+          end_date?: string | null
+          frequency?: string | null
+          id?: string
+          illness_log_id?: string | null
+          medication_name: string
+          notes?: string | null
+          parent_id: string
+          start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          dose?: string | null
+          end_date?: string | null
+          frequency?: string | null
+          id?: string
+          illness_log_id?: string | null
+          medication_name?: string
+          notes?: string | null
+          parent_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medication_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medication_logs_illness_log_id_fkey"
+            columns: ["illness_log_id"]
+            isOneToOne: false
+            referencedRelation: "illness_logs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medication_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parent_financial_checklist: {
         Row: {
           checklist_item_id: string
@@ -922,6 +1040,8 @@ export type Database = {
         Row: {
           child_id: string
           created_at: string
+          form: string | null
+          frequency: string | null
           id: string
           is_active: boolean
           name: string
@@ -934,6 +1054,8 @@ export type Database = {
         Insert: {
           child_id: string
           created_at?: string
+          form?: string | null
+          frequency?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -946,6 +1068,8 @@ export type Database = {
         Update: {
           child_id?: string
           created_at?: string
+          form?: string | null
+          frequency?: string | null
           id?: string
           is_active?: boolean
           name?: string
