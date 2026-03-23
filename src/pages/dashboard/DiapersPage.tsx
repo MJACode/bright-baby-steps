@@ -17,7 +17,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 
 const colors = ["yellow", "green", "brown", "dark-brown", "black", "red"];
-const consistencies = ["watery", "seedy", "pasty", "formed"];
+const consistencies = ["watery", "loose", "soft", "formed", "hard/pellets"];
 
 export default function DiapersPage() {
   const { user } = useAuth();
