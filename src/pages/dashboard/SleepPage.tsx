@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { toast } from "@/hooks/use-toast";
 
 const sleepRecommendations: Record<string, { total: string; naps: string }> = {
   newborn: { total: "14–17 hrs", naps: "4–5 naps" },
@@ -88,6 +89,15 @@ export default function SleepPage() {
     mutationFn: async () => {
       const startDate = new Date(editStartedAt);
       const endDate = new Date(editEndedAt);
+
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new Error("Please enter valid start and end times.");
+      }
+
+      if (endDate <= startDate) {
+        throw new Error("End time must be after start time.");
+      }
+
       const duration = differenceInMinutes(endDate, startDate);
       const payload = {
         sleep_type: editSleepType,
@@ -95,6 +105,7 @@ export default function SleepPage() {
         ended_at: endDate.toISOString(),
         duration_minutes: duration,
       };
+
       if (editingId) {
         const { error } = await supabase.from("sleep_logs").update(payload).eq("id", editingId);
         if (error) throw error;
@@ -112,6 +123,10 @@ export default function SleepPage() {
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
       setEditDialogOpen(false);
       setEditingId(null);
+      toast({ title: editingId ? "Sleep log updated! ✏️" : "Sleep logged! 😴" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to save sleep log", description: error.message, variant: "destructive" });
     },
   });
 
@@ -385,6 +400,7 @@ export default function SleepPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display">{editingId ? "Edit Sleep Log" : "Log Sleep"}</DialogTitle>
+            <DialogDescription>Set start and end time, then save changes.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
