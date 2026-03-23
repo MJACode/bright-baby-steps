@@ -176,10 +176,7 @@ export default function MilestonesPage() {
                     return (
                       <Card key={m.id} className="border-0 bg-card/60">
                           <CardHeader className="pb-1 pt-3 px-4">
-                            <div className="flex items-center justify-between">
-                              <CardTitle className="text-sm">{m.name}</CardTitle>
-                            </div>
-                            </div>
+                            <CardTitle className="text-sm">{m.name}</CardTitle>
                             <CardDescription className="text-xs">
                               Typical: {m.age_months_typical_start}–{m.age_months_typical_end} months
                             </CardDescription>
