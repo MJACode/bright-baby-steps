@@ -145,7 +145,7 @@ export default function DiapersPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Time</Label>
+              <Label className="text-xs font-semibold">Time <span className="text-destructive">*</span></Label>
               <Input
                 type="datetime-local"
                 value={logTime}
