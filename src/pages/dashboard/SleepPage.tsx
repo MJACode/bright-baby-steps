@@ -71,7 +71,7 @@ export default function SleepPage() {
   });
 
   const addLog = useMutation({
-    mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string; duration_minutes: number }) => {
+    mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string }) => {
       const { error } = await supabase.from("sleep_logs").insert({
         ...log,
         child_id: activeChild!.id,
@@ -98,12 +98,10 @@ export default function SleepPage() {
         throw new Error("End time must be after start time.");
       }
 
-      const duration = differenceInMinutes(endDate, startDate);
       const payload = {
         sleep_type: editSleepType,
         started_at: startDate.toISOString(),
         ended_at: endDate.toISOString(),
-        duration_minutes: duration,
       };
 
       if (editingId) {
