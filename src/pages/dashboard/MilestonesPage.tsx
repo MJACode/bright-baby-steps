@@ -172,15 +172,13 @@ export default function MilestonesPage() {
                   <div className="space-y-3 pb-2">
                     {cat.milestones.map((m: any) => {
                     const status = getMilestoneStatus(m.id);
-                    const isRelevant = m.age_months_typical_start <= relevantAge;
-                    const isConcern = m.age_months_concern_flag && ageMonths >= m.age_months_concern_flag && status !== "achieved";
 
                     return (
-                      <Card key={m.id} className={cn("border-0 bg-card/60", isConcern && "ring-2 ring-destructive/30")}>
+                      <Card key={m.id} className="border-0 bg-card/60">
                           <CardHeader className="pb-1 pt-3 px-4">
                             <div className="flex items-center justify-between">
                               <CardTitle className="text-sm">{m.name}</CardTitle>
-                              {isConcern && <Badge variant="destructive" className="text-[10px]">Check in</Badge>}
+                            </div>
                             </div>
                             <CardDescription className="text-xs">
                               Typical: {m.age_months_typical_start}–{m.age_months_typical_end} months
