@@ -89,6 +89,15 @@ export default function SleepPage() {
     mutationFn: async () => {
       const startDate = new Date(editStartedAt);
       const endDate = new Date(editEndedAt);
+
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new Error("Please enter valid start and end times.");
+      }
+
+      if (endDate <= startDate) {
+        throw new Error("End time must be after start time.");
+      }
+
       const duration = differenceInMinutes(endDate, startDate);
       const payload = {
         sleep_type: editSleepType,
@@ -96,6 +105,7 @@ export default function SleepPage() {
         ended_at: endDate.toISOString(),
         duration_minutes: duration,
       };
+
       if (editingId) {
         const { error } = await supabase.from("sleep_logs").update(payload).eq("id", editingId);
         if (error) throw error;
@@ -113,6 +123,10 @@ export default function SleepPage() {
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
       setEditDialogOpen(false);
       setEditingId(null);
+      toast({ title: editingId ? "Sleep log updated! ✏️" : "Sleep logged! 😴" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Unable to save sleep log", description: error.message, variant: "destructive" });
     },
   });
 
