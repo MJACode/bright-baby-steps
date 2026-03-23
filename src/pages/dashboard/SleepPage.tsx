@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { toast } from "@/hooks/use-toast";
 
 const sleepRecommendations: Record<string, { total: string; naps: string }> = {
   newborn: { total: "14–17 hrs", naps: "4–5 naps" },
