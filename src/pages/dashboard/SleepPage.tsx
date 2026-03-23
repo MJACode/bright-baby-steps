@@ -400,6 +400,7 @@ export default function SleepPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display">{editingId ? "Edit Sleep Log" : "Log Sleep"}</DialogTitle>
+            <DialogDescription>Set start and end time, then save changes.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
