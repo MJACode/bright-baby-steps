@@ -205,6 +205,7 @@ export default function DiapersPage() {
               </Button>
             </div>
             <Button
+              type="button"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
               className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
