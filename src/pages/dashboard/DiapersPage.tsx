@@ -179,7 +179,7 @@ export default function DiapersPage() {
               {selectedColor && <p className="text-xs text-muted-foreground capitalize">Selected: {selectedColor}</p>}
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Consistency</Label>
+              <Label className="text-xs font-semibold">Consistency <span className="text-destructive">*</span></Label>
               <div className="flex gap-2 flex-wrap">
                 {consistencies.map((c) => (
                   <Button
