@@ -141,7 +141,7 @@ export default function DiapersPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Dirty Diaper"}</DialogTitle>
-            <DialogDescription>Add details about the diaper. All fields are optional.</DialogDescription>
+            <DialogDescription>Log date, color, and consistency for each entry.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
