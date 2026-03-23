@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UtensilsCrossed, ShieldAlert } from "lucide-react";
+import { UtensilsCrossed, ShieldAlert, Pill } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
 import { Badge } from "@/components/ui/badge";
 import FeedingLog from "@/components/feeding/FeedingLog";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
+import SupplementTracker from "@/components/feeding/SupplementTracker";
 
 export default function FeedingPage() {
   const [tab, setTab] = useState("feeding");
@@ -44,18 +45,24 @@ export default function FeedingPage() {
   return (
     <div className="space-y-4">
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
+        <TabsList className="grid w-full grid-cols-3 h-14 p-1 bg-muted/60">
           <TabsTrigger
             value="feeding"
-            className="touch-target gap-1.5 text-sm font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
-            <UtensilsCrossed className="w-5 h-5" /> Feeding Logs
+            <UtensilsCrossed className="w-4 h-4" /> Feeding
+          </TabsTrigger>
+          <TabsTrigger
+            value="supplements"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <Pill className="w-4 h-4" /> Supps
           </TabsTrigger>
           <TabsTrigger
             value="allergens"
-            className="touch-target gap-1.5 text-sm font-bold data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive data-[state=active]:shadow-sm rounded-lg h-full relative"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive data-[state=active]:shadow-sm rounded-lg h-full relative"
           >
-            <ShieldAlert className="w-5 h-5" /> Allergen Intro
+            <ShieldAlert className="w-4 h-4" /> Allergens
             {activeChild && totalAllergens > 0 && (
               <Badge
                 variant="secondary"
@@ -71,6 +78,9 @@ export default function FeedingPage() {
         </TabsList>
         <TabsContent value="feeding" className="mt-4">
           <FeedingLog />
+        </TabsContent>
+        <TabsContent value="supplements" className="mt-4">
+          <SupplementTracker />
         </TabsContent>
         <TabsContent value="allergens" className="mt-4">
           <AllergenTracker />
