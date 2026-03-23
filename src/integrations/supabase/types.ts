@@ -918,6 +918,54 @@ export type Database = {
         }
         Relationships: []
       }
+      supplement_logs: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          iron: boolean
+          logged_at: string
+          notes: string | null
+          parent_id: string
+          vitamin_d: boolean
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          iron?: boolean
+          logged_at?: string
+          notes?: string | null
+          parent_id: string
+          vitamin_d?: boolean
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          iron?: boolean
+          logged_at?: string
+          notes?: string | null
+          parent_id?: string
+          vitamin_d?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplement_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplement_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
