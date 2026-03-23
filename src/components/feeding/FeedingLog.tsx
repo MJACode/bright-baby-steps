@@ -226,7 +226,7 @@ export default function FeedingLog() {
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
               </div>
 
-              <Button onClick={() => saveMutation.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={saveMutation.isPending}>
+              <Button type="button" onClick={() => saveMutation.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
               </Button>
             </div>
