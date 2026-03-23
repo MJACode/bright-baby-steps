@@ -159,6 +159,7 @@ export default function DiapersPage() {
               <div className="flex gap-2 flex-wrap">
                 {colors.map((c) => (
                   <button
+                    type="button"
                     key={c}
                     onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
                     className={cn(
