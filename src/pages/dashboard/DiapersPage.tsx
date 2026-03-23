@@ -155,7 +155,7 @@ export default function DiapersPage() {
               <p className="text-[10px] text-muted-foreground">Defaults to now — change if logging a past diaper</p>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Color</Label>
+              <Label className="text-xs font-semibold">Color <span className="text-destructive">*</span></Label>
               <div className="flex gap-2 flex-wrap">
                 {colors.map((c) => (
                   <button
