@@ -388,10 +388,10 @@ export default function SleepPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
-              <Button variant={editSleepType === "nap" ? "default" : "outline"} onClick={() => setEditSleepType("nap")} className="flex-1 touch-target gap-2">
+              <Button type="button" variant={editSleepType === "nap" ? "default" : "outline"} onClick={() => setEditSleepType("nap")} className="flex-1 touch-target gap-2">
                 <Sun className="w-5 h-5" /> Nap
               </Button>
-              <Button variant={editSleepType === "night" ? "default" : "outline"} onClick={() => setEditSleepType("night")} className="flex-1 touch-target gap-2">
+              <Button type="button" variant={editSleepType === "night" ? "default" : "outline"} onClick={() => setEditSleepType("night")} className="flex-1 touch-target gap-2">
                 <Moon className="w-5 h-5" /> Night
               </Button>
             </div>
@@ -403,7 +403,7 @@ export default function SleepPage() {
               <Label>End Time</Label>
               <Input type="datetime-local" value={editEndedAt} onChange={(e) => setEditEndedAt(e.target.value)} />
             </div>
-            <Button onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending || !editStartedAt || !editEndedAt}>
+            <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending || !editStartedAt || !editEndedAt}>
               {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
             </Button>
           </div>

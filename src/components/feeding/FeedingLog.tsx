@@ -158,7 +158,7 @@ export default function FeedingLog() {
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
-                  <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
+                  <Button key={ft.value} type="button" variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
                     {ft.label}
                   </Button>
                 ))}
@@ -226,7 +226,7 @@ export default function FeedingLog() {
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
               </div>
 
-              <Button onClick={() => saveMutation.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={saveMutation.isPending}>
+              <Button type="button" onClick={() => saveMutation.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
               </Button>
             </div>
