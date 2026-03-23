@@ -388,10 +388,10 @@ export default function SleepPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex gap-2">
-              <Button variant={editSleepType === "nap" ? "default" : "outline"} onClick={() => setEditSleepType("nap")} className="flex-1 touch-target gap-2">
+              <Button type="button" variant={editSleepType === "nap" ? "default" : "outline"} onClick={() => setEditSleepType("nap")} className="flex-1 touch-target gap-2">
                 <Sun className="w-5 h-5" /> Nap
               </Button>
-              <Button variant={editSleepType === "night" ? "default" : "outline"} onClick={() => setEditSleepType("night")} className="flex-1 touch-target gap-2">
+              <Button type="button" variant={editSleepType === "night" ? "default" : "outline"} onClick={() => setEditSleepType("night")} className="flex-1 touch-target gap-2">
                 <Moon className="w-5 h-5" /> Night
               </Button>
             </div>
