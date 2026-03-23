@@ -23,10 +23,14 @@ export function getAllergenStatus(
   intro: { status: string; allergen_exposure_logs?: { reaction_observed: boolean | null }[] } | undefined
 ): AllergenStatus {
   if (!intro) return "not_started";
+  // Respect the DB status for manually completed or reaction-flagged introductions
+  if (intro.status === "completed" || intro.status === "safe") return "introduced";
+  if (intro.status === "reaction_observed") return "reaction_noted";
   const exposures = intro.allergen_exposure_logs ?? [];
   const hasReaction = exposures.some((e) => e.reaction_observed === true);
   if (hasReaction) return "reaction_noted";
   if (exposures.length >= 2) return "introduced"; // 2 successful exposures = introduced per protocol
+  if (intro.status === "not_started" && exposures.length === 0) return "not_started";
   return "in_progress";
 }
 
