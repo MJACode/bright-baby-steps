@@ -141,11 +141,11 @@ export default function DiapersPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Dirty Diaper"}</DialogTitle>
-            <DialogDescription>Add details about the diaper. All fields are optional.</DialogDescription>
+            <DialogDescription>Log date, color, and consistency for each entry.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Time</Label>
+              <Label className="text-xs font-semibold">Time <span className="text-destructive">*</span></Label>
               <Input
                 type="datetime-local"
                 value={logTime}
@@ -155,7 +155,7 @@ export default function DiapersPage() {
               <p className="text-[10px] text-muted-foreground">Defaults to now — change if logging a past diaper</p>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Color</Label>
+              <Label className="text-xs font-semibold">Color <span className="text-destructive">*</span></Label>
               <div className="flex gap-2 flex-wrap">
                 {colors.map((c) => (
                   <button
@@ -179,7 +179,7 @@ export default function DiapersPage() {
               {selectedColor && <p className="text-xs text-muted-foreground capitalize">Selected: {selectedColor}</p>}
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold">Consistency</Label>
+              <Label className="text-xs font-semibold">Consistency <span className="text-destructive">*</span></Label>
               <div className="flex gap-2 flex-wrap">
                 {consistencies.map((c) => (
                   <Button
@@ -206,7 +206,13 @@ export default function DiapersPage() {
             </div>
             <Button
               type="button"
-              onClick={() => saveMutation.mutate()}
+              onClick={() => {
+                if (!logTime || !selectedColor || !selectedConsistency) {
+                  toast({ title: "Please fill in all required fields", description: "Date, color, and consistency are required.", variant: "destructive" });
+                  return;
+                }
+                saveMutation.mutate();
+              }}
               disabled={saveMutation.isPending}
               className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
             >
