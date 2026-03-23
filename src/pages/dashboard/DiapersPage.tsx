@@ -183,6 +183,7 @@ export default function DiapersPage() {
               <div className="flex gap-2 flex-wrap">
                 {consistencies.map((c) => (
                   <Button
+                    type="button"
                     key={c}
                     variant={selectedConsistency === c ? "default" : "outline"}
                     size="sm"
