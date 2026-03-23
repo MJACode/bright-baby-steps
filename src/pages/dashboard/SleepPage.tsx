@@ -145,12 +145,10 @@ export default function SleepPage() {
   const handleStop = useCallback(async () => {
     if (!startTime) return;
     const endTime = new Date();
-    const duration = differenceInMinutes(endTime, startTime);
     await addLog.mutateAsync({
       started_at: startTime.toISOString(),
       ended_at: endTime.toISOString(),
       sleep_type: sleepType,
-      duration_minutes: duration,
     });
     setIsTracking(false);
     setStartTime(null);
