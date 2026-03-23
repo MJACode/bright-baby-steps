@@ -16,8 +16,7 @@ import { useState } from "react";
 const statusOptions = [
 { value: "achieved", label: "✅ Achieved", icon: Check },
 { value: "emerging", label: "🌱 Emerging", icon: HelpCircle },
-{ value: "not_yet", label: "⏳ Not Yet", icon: Clock },
-{ value: "concern_flagged", label: "🚩 Concern", icon: Flag }];
+{ value: "not_yet", label: "⏳ Not Yet", icon: Clock }];
 
 
 export default function MilestonesPage() {
