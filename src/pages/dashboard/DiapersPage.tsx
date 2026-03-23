@@ -159,6 +159,7 @@ export default function DiapersPage() {
               <div className="flex gap-2 flex-wrap">
                 {colors.map((c) => (
                   <button
+                    type="button"
                     key={c}
                     onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
                     className={cn(
@@ -182,6 +183,7 @@ export default function DiapersPage() {
               <div className="flex gap-2 flex-wrap">
                 {consistencies.map((c) => (
                   <Button
+                    type="button"
                     key={c}
                     variant={selectedConsistency === c ? "default" : "outline"}
                     size="sm"
@@ -198,11 +200,12 @@ export default function DiapersPage() {
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any concerns..." />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant={flag ? "destructive" : "outline"} size="sm" className="touch-target" onClick={() => setFlag(!flag)}>
+              <Button type="button" variant={flag ? "destructive" : "outline"} size="sm" className="touch-target" onClick={() => setFlag(!flag)}>
                 <AlertTriangle className="w-4 h-4 mr-1" /> {flag ? "Flagged" : "Flag for attention"}
               </Button>
             </div>
             <Button
+              type="button"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
               className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
