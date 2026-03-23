@@ -158,7 +158,7 @@ export default function FeedingLog() {
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
-                  <Button key={ft.value} variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
+                  <Button key={ft.value} type="button" variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
                     {ft.label}
                   </Button>
                 ))}
