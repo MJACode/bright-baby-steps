@@ -918,47 +918,53 @@ export type Database = {
         }
         Relationships: []
       }
-      supplement_logs: {
+      supplements: {
         Row: {
           child_id: string
           created_at: string
           id: string
-          iron: boolean
-          logged_at: string
+          is_active: boolean
+          name: string
           notes: string | null
           parent_id: string
-          vitamin_d: boolean
+          started_at: string
+          stopped_at: string | null
+          updated_at: string
         }
         Insert: {
           child_id: string
           created_at?: string
           id?: string
-          iron?: boolean
-          logged_at?: string
+          is_active?: boolean
+          name: string
           notes?: string | null
           parent_id: string
-          vitamin_d?: boolean
+          started_at?: string
+          stopped_at?: string | null
+          updated_at?: string
         }
         Update: {
           child_id?: string
           created_at?: string
           id?: string
-          iron?: boolean
-          logged_at?: string
+          is_active?: boolean
+          name?: string
           notes?: string | null
           parent_id?: string
-          vitamin_d?: boolean
+          started_at?: string
+          stopped_at?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "supplement_logs_child_id_fkey"
+            foreignKeyName: "supplements_child_id_fkey"
             columns: ["child_id"]
             isOneToOne: false
             referencedRelation: "children"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "supplement_logs_parent_id_fkey"
+            foreignKeyName: "supplements_parent_id_fkey"
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
