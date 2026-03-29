@@ -26,13 +26,13 @@ export function WordSoundJournal({ childId }: WordSoundJournalProps) {
     queryKey: ["speech-journal", childId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("speech_journal")
+        .from("speech_journal" as any)
         .select("*")
         .eq("child_id", childId)
         .order("entry_date", { ascending: false })
         .limit(20);
       if (error) throw error;
-      return data;
+      return data as any[];
     },
   });
 
