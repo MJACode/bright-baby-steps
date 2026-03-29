@@ -40,7 +40,7 @@ export function WordSoundJournal({ childId }: WordSoundJournalProps) {
     queryKey: ["speech-journal-count", childId],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from("speech_journal")
+        .from("speech_journal" as any)
         .select("*", { count: "exact", head: true })
         .eq("child_id", childId);
       if (error) throw error;
