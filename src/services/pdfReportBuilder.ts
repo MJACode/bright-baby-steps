@@ -85,7 +85,7 @@ function renderTitleAndDisclaimer(h: PdfHelpers, data: ReportData) {
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 30, 30);
-  doc.text("Tiny Sprout — Pediatrician Report", margin, h.y);
+  doc.text("Baby Steps — Pediatrician Report", margin, h.y);
   h.y += 7;
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
