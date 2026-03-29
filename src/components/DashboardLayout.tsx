@@ -13,7 +13,7 @@ export default function DashboardLayout() {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <Sprout className="w-10 h-10 text-primary animate-pulse" />
+        <Footprints className="w-10 h-10 text-primary animate-pulse" />
         <p className="text-muted-foreground font-medium">Loading...</p>
       </div>
     );
