@@ -38,6 +38,23 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
   const [quickExporting, setQuickExporting] = useState(false);
+  const [exportHistory, setExportHistory] = useState<ExportRecord[]>([]);
+
+  const fetchExportHistory = useCallback(async () => {
+    const child = activeChild ?? children[0];
+    if (!child) return;
+    const { data } = await supabase
+      .from("pediatrician_exports")
+      .select("id, created_at, date_range_start, date_range_end, export_type")
+      .eq("child_id", child.id)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) setExportHistory(data);
+  }, [activeChild, children]);
+
+  useEffect(() => {
+    fetchExportHistory();
+  }, [fetchExportHistory]);
 
   useEffect(() => {
     if (!user?.id) return;
