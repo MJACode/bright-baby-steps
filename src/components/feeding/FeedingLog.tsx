@@ -300,6 +300,9 @@ export default function FeedingLog() {
         </Card>
       </div>
 
+      {/* 7-Day Trends Chart */}
+      {activeChild && <FeedingTrendsChart childId={activeChild.id} />}
+
       {/* Recent logs */}
       <div className="space-y-2">
         <h3 className="font-display font-bold text-sm">Recent Feeds</h3>
