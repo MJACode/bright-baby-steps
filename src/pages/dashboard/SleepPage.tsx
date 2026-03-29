@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus } from "lucide-react";
+import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sunrise, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay } from "date-fns";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
