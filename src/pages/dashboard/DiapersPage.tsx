@@ -128,13 +128,23 @@ export default function DiapersPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
         </div>
-        <Button
-          size="icon"
-          onClick={() => { resetForm(); setModalOpen(true); }}
-          className="rounded-full bg-diapers hover:bg-diapers/90 text-white touch-target w-12 h-12"
-        >
-          <Plus className="w-6 h-6" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => quickLogMutation.mutate()}
+            disabled={quickLogMutation.isPending}
+            className="rounded-full bg-diapers hover:bg-diapers/90 text-white touch-target h-12 px-5 text-sm font-bold"
+          >
+            {quickLogMutation.isPending ? "..." : "💩 Normal"}
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => { resetForm(); setModalOpen(true); }}
+            className="rounded-full border-diapers text-diapers hover:bg-diapers/10 touch-target w-12 h-12"
+          >
+            <Plus className="w-6 h-6" />
+          </Button>
+        </div>
       </div>
 
       <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
