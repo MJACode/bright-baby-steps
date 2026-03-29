@@ -7,7 +7,7 @@ import { differenceInMonths, differenceInWeeks, differenceInDays } from "date-fn
 export function useChildren() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [selectedChildId, setSelectedChildIdState] = React.useState<string | null>(() => {
+  const [selectedChildId, setSelectedChildIdState] = useState<string | null>(() => {
     try { return localStorage.getItem("active-child-id"); } catch { return null; }
   });
 
