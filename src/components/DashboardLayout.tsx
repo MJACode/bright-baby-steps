@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
+import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { Footprints, Home, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,9 @@ export default function DashboardLayout() {
               </Link>
             </Button>
           </div>
+        </div>
+        <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
+          <ChildSwitcher />
         </div>
       </header>
 
