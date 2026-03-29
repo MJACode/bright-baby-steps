@@ -50,7 +50,7 @@ export function WordSoundJournal({ childId }: WordSoundJournalProps) {
 
   const addEntry = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("speech_journal").insert({
+      const { error } = await supabase.from("speech_journal" as any).insert({
         child_id: childId,
         parent_id: user!.id,
         word_or_sound: wordOrSound.trim(),
