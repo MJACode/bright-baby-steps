@@ -3,7 +3,7 @@ import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame, Sprout, Plus } from "lucide-react";
+import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame, Footprints, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -171,7 +171,7 @@ export default function Dashboard() {
           <Card key={child.id} className="border-0 bg-secondary">
             <CardContent className="flex items-center gap-3 p-4">
               <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Sprout className="w-5 h-5 text-primary" />
+                <Footprints className="w-5 h-5 text-primary" />
               </div>
               <div>
                 <p className="font-bold text-sm">{child.name}</p>
