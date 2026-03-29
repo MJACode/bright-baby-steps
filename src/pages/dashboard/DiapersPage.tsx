@@ -93,6 +93,27 @@ export default function DiapersPage() {
     },
   });
 
+  const quickLogMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("diaper_logs").insert({
+        color: "brown",
+        consistency: "soft",
+        notes: null,
+        flag_for_attention: false,
+        logged_at: new Date().toISOString(),
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+        diaper_type: "dirty",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      toast({ title: "Normal diaper logged! 💩" });
+    },
+  });
+
   if (!activeChild) {
     return (
       <div className="space-y-6">
