@@ -176,8 +176,7 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
     </Collapsible>
   );
 }
-
-
+const sleepRecommendations: Record<string, { total: string; naps: string }> = {
   newborn: { total: "14–17 hrs", naps: "4–5 naps" },
   "3mo": { total: "14–16 hrs", naps: "3–4 naps" },
   "6mo": { total: "12–15 hrs", naps: "2–3 naps" },
