@@ -145,7 +145,11 @@ export default function FinancialPage() {
         </p>
       </div>
 
-      {/* Progress */}
+      {activeChild && (() => {
+        const ageMonths = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+        return <AgePromptBanner ageMonths={ageMonths} />;
+      })()}
+
       <Card className="border-0 bg-finance-bg">
         <CardContent className="p-4 space-y-2">
           <div className="flex items-center justify-between">
