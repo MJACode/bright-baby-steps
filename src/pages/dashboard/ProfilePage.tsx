@@ -151,6 +151,7 @@ export default function ProfilePage() {
       });
 
       doc.save(`${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`);
+      await fetchExportHistory();
       toast({ title: "PDF report downloaded! 📋" });
     } catch (err) {
       console.error(err);
