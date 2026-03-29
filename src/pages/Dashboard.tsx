@@ -7,6 +7,7 @@ import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame
 import { Link } from "react-router-dom";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { cn } from "@/lib/utils";
 import { format, isToday, differenceInDays } from "date-fns";
 
