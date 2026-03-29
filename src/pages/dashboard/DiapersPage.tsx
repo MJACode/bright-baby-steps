@@ -93,6 +93,27 @@ export default function DiapersPage() {
     },
   });
 
+  const quickLogMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("diaper_logs").insert({
+        color: "brown",
+        consistency: "soft",
+        notes: null,
+        flag_for_attention: false,
+        logged_at: new Date().toISOString(),
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+        diaper_type: "dirty",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      toast({ title: "Normal diaper logged! 💩" });
+    },
+  });
+
   if (!activeChild) {
     return (
       <div className="space-y-6">
@@ -128,20 +149,30 @@ export default function DiapersPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
         </div>
-        <Button
-          size="icon"
-          onClick={() => { resetForm(); setModalOpen(true); }}
-          className="rounded-full bg-diapers hover:bg-diapers/90 text-white touch-target w-12 h-12"
-        >
-          <Plus className="w-6 h-6" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => quickLogMutation.mutate()}
+            disabled={quickLogMutation.isPending}
+            className="rounded-full bg-diapers hover:bg-diapers/90 text-white touch-target h-12 px-5 text-sm font-bold"
+          >
+            {quickLogMutation.isPending ? "..." : "💩 Normal"}
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => { resetForm(); setModalOpen(true); }}
+            className="rounded-full border-diapers text-diapers hover:bg-diapers/10 touch-target w-12 h-12"
+          >
+            <Plus className="w-6 h-6" />
+          </Button>
+        </div>
       </div>
 
       <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Dirty Diaper"}</DialogTitle>
-            <DialogDescription>Log date, color, and consistency for each entry.</DialogDescription>
+            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Detailed Diaper"}</DialogTitle>
+            <DialogDescription>Use this for abnormal diapers — log color, consistency, and any concerns.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
