@@ -171,8 +171,8 @@ export default function DiapersPage() {
       <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Dirty Diaper"}</DialogTitle>
-            <DialogDescription>Log date, color, and consistency for each entry.</DialogDescription>
+            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Detailed Diaper"}</DialogTitle>
+            <DialogDescription>Use this for abnormal diapers — log color, consistency, and any concerns.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
