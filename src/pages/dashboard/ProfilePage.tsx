@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useChildren } from "@/hooks/useChildren";
@@ -15,14 +15,6 @@ import { format, subMonths, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePediatricianReport } from "@/services/pdfReportBuilder";
 
-interface ExportRecord {
-  id: string;
-  created_at: string;
-  date_range_start: string | null;
-  date_range_end: string | null;
-  export_type: string;
-}
-
 interface ReminderNote {
   id: string;
   text: string;
@@ -38,23 +30,6 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
   const [quickExporting, setQuickExporting] = useState(false);
-  const [exportHistory, setExportHistory] = useState<ExportRecord[]>([]);
-
-  const fetchExportHistory = useCallback(async () => {
-    const child = activeChild ?? children[0];
-    if (!child) return;
-    const { data } = await supabase
-      .from("pediatrician_exports")
-      .select("id, created_at, date_range_start, date_range_end, export_type")
-      .eq("child_id", child.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (data) setExportHistory(data);
-  }, [activeChild, children]);
-
-  useEffect(() => {
-    fetchExportHistory();
-  }, [fetchExportHistory]);
 
   useEffect(() => {
     if (!user?.id) return;
