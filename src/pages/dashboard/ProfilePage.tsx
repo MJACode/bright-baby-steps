@@ -27,6 +27,7 @@ export default function ProfilePage() {
   const { children } = useChildren();
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
+  const [quickExporting, setQuickExporting] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
