@@ -256,40 +256,14 @@ export default function ProfilePage() {
                 <FileDown className="w-4 h-4" />
                 {quickExporting ? "Generating PDF…" : "Quick Export (Last 30 Days)"}
               </Button>
-              <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} onExported={fetchExportHistory} />
-
-              {/* Export History */}
-              {exportHistory.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <History className="w-3.5 h-3.5" /> Export History
-                    </h3>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                      {exportHistory.map((exp) => (
-                        <div key={exp.id} className="flex items-center justify-between rounded-md bg-background px-3 py-2 text-xs">
-                          <div>
-                            <p className="font-medium">
-                              {format(new Date(exp.created_at), "MMM d, yyyy 'at' h:mm a")}
-                            </p>
-                            {exp.date_range_start && exp.date_range_end && (
-                              <p className="text-muted-foreground">
-                                Range: {format(new Date(exp.date_range_start), "MMM d")} – {format(new Date(exp.date_range_end), "MMM d, yyyy")}
-                              </p>
-                            )}
-                          </div>
-                          <span className="text-muted-foreground capitalize">{exp.export_type.replace(/_/g, " ")}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+              <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {/* Export History */}
+      <ExportHistory />
 
       {/* Partner Management */}
       <PartnerManagement />
