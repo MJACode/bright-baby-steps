@@ -60,24 +60,6 @@ export default function Dashboard() {
     enabled: !!activeChild,
   });
 
-  // Activity feed
-  const { data: recentActivity } = useQuery({
-    queryKey: ["activity-feed", activeChild?.id],
-    queryFn: async () => {
-      const [sleepRes, feedRes, diaperRes] = await Promise.all([
-        supabase.from("sleep_logs").select("id, started_at, duration_minutes, sleep_type").eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(5),
-        supabase.from("feeding_logs").select("id, logged_at, feeding_type, amount_oz").eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(5),
-        supabase.from("diaper_logs").select("id, logged_at, diaper_type").eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(5),
-      ]);
-      const items = [
-        ...(sleepRes.data?.map(s => ({ type: "sleep" as const, time: s.started_at, desc: `${s.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"} — ${s.duration_minutes || 0}min`, icon: Moon, color: "text-sleep" })) ?? []),
-        ...(feedRes.data?.map(f => ({ type: "feed" as const, time: f.logged_at, desc: `${f.feeding_type === "breast" ? "🤱" : f.feeding_type === "bottle" ? "🍼" : f.feeding_type === "pump" ? "🧴" : "🥣"} ${f.feeding_type}${f.amount_oz ? ` — ${f.amount_oz}oz` : ""}`, icon: UtensilsCrossed, color: "text-feeding" })) ?? []),
-        ...(diaperRes.data?.map(d => ({ type: "diaper" as const, time: d.logged_at, desc: `${d.diaper_type === "wet" ? "💧" : d.diaper_type === "dirty" ? "💩" : d.diaper_type === "both" ? "💧💩" : "✨"} ${d.diaper_type} diaper`, icon: Droplets, color: "text-diapers" })) ?? []),
-      ].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 10);
-      return items;
-    },
-    enabled: !!activeChild,
-  });
 
   // Streak calculation
   const { data: streakDays } = useQuery({
@@ -194,28 +176,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           } />
-        )}
-      </div>
-
-      {/* Activity feed */}
-      <div className="space-y-2">
-        <h2 className="font-display font-bold text-lg">Recent Activity</h2>
-        {recentActivity && recentActivity.length > 0 ? recentActivity.map((item, i) => (
-          <Card key={`${item.type}-${i}`} className="border-0 bg-secondary">
-            <CardContent className="p-3 flex items-center gap-3">
-              <item.icon className={cn("w-5 h-5 shrink-0", item.color)} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{item.desc}</p>
-                <p className="text-xs text-muted-foreground">{format(new Date(item.time), "MMM d, h:mm a")}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )) : (
-          <Card className="border-0 bg-secondary">
-            <CardContent className="p-4 text-center">
-              <p className="text-sm text-muted-foreground">Your activity feed will appear here once you start logging.</p>
-            </CardContent>
-          </Card>
         )}
       </div>
 
