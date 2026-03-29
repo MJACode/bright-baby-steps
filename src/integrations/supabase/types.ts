@@ -1036,6 +1036,51 @@ export type Database = {
         }
         Relationships: []
       }
+      speech_journal: {
+        Row: {
+          child_id: string
+          context: string | null
+          created_at: string
+          entry_date: string
+          id: string
+          parent_id: string
+          word_or_sound: string
+        }
+        Insert: {
+          child_id: string
+          context?: string | null
+          created_at?: string
+          entry_date?: string
+          id?: string
+          parent_id: string
+          word_or_sound: string
+        }
+        Update: {
+          child_id?: string
+          context?: string | null
+          created_at?: string
+          entry_date?: string
+          id?: string
+          parent_id?: string
+          word_or_sound?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "speech_journal_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "speech_journal_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplements: {
         Row: {
           child_id: string
