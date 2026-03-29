@@ -13,10 +13,50 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay } from "date-fns";
-import { useQuery as useRQQuery } from "@tanstack/react-query";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
+import { useMemo } from "react";
+
+function SleepTrendsChart({ childId }: { childId: string }) {
+  const { data: trendLogs } = useQuery({
+    queryKey: ["sleep-trends-7d", childId],
+    queryFn: async () => {
+      const sevenAgo = subDays(startOfDay(new Date()), 6).toISOString();
+      const { data, error } = await supabase
+        .from("sleep_logs")
+        .select("started_at, duration_minutes")
+        .eq("child_id", childId)
+        .gte("started_at", sevenAgo)
+        .order("started_at");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const chartData = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = subDays(startOfDay(new Date()), 6 - i);
+      return { date: d, day: format(d, "EEE"), value: 0 };
+    });
+    trendLogs?.forEach((log) => {
+      const key = format(new Date(log.started_at), "yyyy-MM-dd");
+      const entry = days.find((d) => format(d.date, "yyyy-MM-dd") === key);
+      if (entry) entry.value += (log.duration_minutes || 0) / 60;
+    });
+    return days.map((d) => ({ day: d.day, value: Math.round(d.value * 10) / 10 }));
+  }, [trendLogs]);
+
+  return (
+    <SevenDayChart
+      title="7-Day Sleep Trends"
+      data={chartData}
+      color="hsl(var(--sleep))"
+      yLabel="Hours"
+      formatValue={(v) => `${v.toFixed(1)}h`}
+    />
+  );
+}
 
 const sleepRecommendations: Record<string, { total: string; naps: string }> = {
   newborn: { total: "14–17 hrs", naps: "4–5 naps" },
