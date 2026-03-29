@@ -208,21 +208,35 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Quick Export */}
-      <Button
-        onClick={handleQuickExport}
-        disabled={quickExporting || children.length === 0}
-        className="w-full gap-2"
-      >
-        <FileDown className="w-4 h-4" />
-        {quickExporting ? "Generating PDF…" : "Export Pediatrician Report (Last 30 Days)"}
-      </Button>
+      {/* Pediatrician Report — collapsible */}
+      <Collapsible>
+        <Card className="border-0 bg-muted/50">
+          <CollapsibleTrigger className="w-full">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <ClipboardList className="w-4 h-4" /> Pediatrician Report
+              </CardTitle>
+              <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 space-y-3">
+              <Button
+                onClick={handleQuickExport}
+                disabled={quickExporting || children.length === 0}
+                className="w-full gap-2"
+              >
+                <FileDown className="w-4 h-4" />
+                {quickExporting ? "Generating PDF…" : "Quick Export (Last 30 Days)"}
+              </Button>
+              <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Partner Management */}
       <PartnerManagement />
-
-      {/* Full Pediatrician Export with options */}
-      <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
 
       {/* Sign out */}
       <Button variant="outline" onClick={signOut} className="w-full gap-2">
