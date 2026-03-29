@@ -121,6 +121,9 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Today's Briefing */}
+      <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
+
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
         <CardContent className="flex items-center gap-3 p-4">
