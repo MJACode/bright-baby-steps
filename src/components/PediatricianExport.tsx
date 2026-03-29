@@ -115,6 +115,7 @@ export default function PediatricianExport({ pediatricianNotes = "", onExported 
       });
 
       doc.save(`${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`);
+      onExported?.();
       toast({ title: "PDF report downloaded! 📋" });
     } catch (err) {
       console.error(err);
