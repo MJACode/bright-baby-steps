@@ -2,13 +2,11 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useChildren } from "@/hooks/useChildren";
-import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
-import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList, History } from "lucide-react";
+import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import PartnerManagement from "@/components/PartnerManagement";
 import { toast } from "@/hooks/use-toast";
@@ -31,21 +29,6 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
   const [quickExporting, setQuickExporting] = useState(false);
-
-  const { data: pastExports = [] } = useQuery({
-    queryKey: ["past-exports", user?.id],
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const { data } = await supabase
-        .from("pediatrician_exports")
-        .select("id, created_at, date_range_start, date_range_end, child_id, export_type")
-        .eq("parent_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      return (data as any[]) ?? [];
-    },
-    enabled: !!user?.id,
-  });
 
   useEffect(() => {
     if (!user?.id) return;
@@ -247,36 +230,6 @@ export default function ProfilePage() {
                 {quickExporting ? "Generating PDF…" : "Quick Export (Last 30 Days)"}
               </Button>
               <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
-
-              {/* Past Reports */}
-              {pastExports.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold flex items-center gap-1.5">
-                      <History className="w-3.5 h-3.5" /> Past Reports
-                    </p>
-                    {pastExports.map((exp) => {
-                      const childName = children.find((c) => c.id === exp.child_id)?.name ?? "Child";
-                      return (
-                        <div key={exp.id} className="flex items-center justify-between text-xs bg-background/60 rounded-md px-3 py-2">
-                          <div>
-                            <p className="font-medium">{childName}</p>
-                            <p className="text-muted-foreground">
-                              {exp.date_range_start && exp.date_range_end
-                                ? `${format(new Date(exp.date_range_start), "MMM d")} – ${format(new Date(exp.date_range_end), "MMM d, yyyy")}`
-                                : "Full report"}
-                            </p>
-                          </div>
-                          <p className="text-muted-foreground">
-                            {format(new Date(exp.created_at), "MMM d, yyyy")}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
             </CardContent>
           </CollapsibleContent>
         </Card>
