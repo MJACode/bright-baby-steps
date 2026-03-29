@@ -197,28 +197,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Activity feed */}
-      <div className="space-y-2">
-        <h2 className="font-display font-bold text-lg">Recent Activity</h2>
-        {recentActivity && recentActivity.length > 0 ? recentActivity.map((item, i) => (
-          <Card key={`${item.type}-${i}`} className="border-0 bg-secondary">
-            <CardContent className="p-3 flex items-center gap-3">
-              <item.icon className={cn("w-5 h-5 shrink-0", item.color)} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{item.desc}</p>
-                <p className="text-xs text-muted-foreground">{format(new Date(item.time), "MMM d, h:mm a")}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )) : (
-          <Card className="border-0 bg-secondary">
-            <CardContent className="p-4 text-center">
-              <p className="text-sm text-muted-foreground">Your activity feed will appear here once you start logging.</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
       <QuickLogFAB />
     </div>
   );
