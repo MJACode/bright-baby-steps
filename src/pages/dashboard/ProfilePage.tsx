@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useChildren } from "@/hooks/useChildren";
@@ -6,22 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList, History } from "lucide-react";
+import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
+import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
 import { toast } from "@/hooks/use-toast";
 import { format, subMonths, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePediatricianReport } from "@/services/pdfReportBuilder";
-import { Separator } from "@/components/ui/separator";
-
-interface ExportRecord {
-  id: string;
-  created_at: string;
-  date_range_start: string | null;
-  date_range_end: string | null;
-  export_type: string;
-}
 
 interface ReminderNote {
   id: string;
@@ -38,23 +30,6 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
   const [quickExporting, setQuickExporting] = useState(false);
-  const [exportHistory, setExportHistory] = useState<ExportRecord[]>([]);
-
-  const fetchExportHistory = useCallback(async () => {
-    const child = activeChild ?? children[0];
-    if (!child) return;
-    const { data } = await supabase
-      .from("pediatrician_exports")
-      .select("id, created_at, date_range_start, date_range_end, export_type")
-      .eq("child_id", child.id)
-      .order("created_at", { ascending: false })
-      .limit(20);
-    if (data) setExportHistory(data);
-  }, [activeChild, children]);
-
-  useEffect(() => {
-    fetchExportHistory();
-  }, [fetchExportHistory]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -151,7 +126,6 @@ export default function ProfilePage() {
       });
 
       doc.save(`${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`);
-      await fetchExportHistory();
       toast({ title: "PDF report downloaded! 📋" });
     } catch (err) {
       console.error(err);
@@ -256,40 +230,14 @@ export default function ProfilePage() {
                 <FileDown className="w-4 h-4" />
                 {quickExporting ? "Generating PDF…" : "Quick Export (Last 30 Days)"}
               </Button>
-              <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} onExported={fetchExportHistory} />
-
-              {/* Export History */}
-              {exportHistory.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
-                      <History className="w-3.5 h-3.5" /> Export History
-                    </h3>
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                      {exportHistory.map((exp) => (
-                        <div key={exp.id} className="flex items-center justify-between rounded-md bg-background px-3 py-2 text-xs">
-                          <div>
-                            <p className="font-medium">
-                              {format(new Date(exp.created_at), "MMM d, yyyy 'at' h:mm a")}
-                            </p>
-                            {exp.date_range_start && exp.date_range_end && (
-                              <p className="text-muted-foreground">
-                                Range: {format(new Date(exp.date_range_start), "MMM d")} – {format(new Date(exp.date_range_end), "MMM d, yyyy")}
-                              </p>
-                            )}
-                          </div>
-                          <span className="text-muted-foreground capitalize">{exp.export_type.replace(/_/g, " ")}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+              <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
             </CardContent>
           </CollapsibleContent>
         </Card>
       </Collapsible>
+
+      {/* Export History */}
+      <ExportHistory />
 
       {/* Partner Management */}
       <PartnerManagement />
