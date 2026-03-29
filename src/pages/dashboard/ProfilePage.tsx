@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { User, LogOut, Baby, StickyNote, Plus, Trash2 } from "lucide-react";
+import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import PartnerManagement from "@/components/PartnerManagement";
 import { toast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, subMonths, startOfDay, endOfDay } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { generatePediatricianReport } from "@/services/pdfReportBuilder";
 
 interface ReminderNote {
   id: string;
@@ -22,9 +24,10 @@ const STORAGE_KEY = "pediatrician_reminders";
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
-  const { children } = useChildren();
+  const { children, activeChild } = useChildren();
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
+  const [quickExporting, setQuickExporting] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -64,6 +67,71 @@ export default function ProfilePage() {
     .filter((r) => r.includeInReport)
     .map((r) => r.text)
     .join("\n• ");
+
+  const handleQuickExport = async () => {
+    const child = activeChild ?? children[0];
+    if (!child || !user) {
+      toast({ title: "No child profile found", variant: "destructive" });
+      return;
+    }
+    setQuickExporting(true);
+    try {
+      const dateFrom = subMonths(new Date(), 1);
+      const dateTo = new Date();
+      const from = startOfDay(dateFrom).toISOString();
+      const to = endOfDay(dateTo).toISOString();
+
+      const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes] =
+        await Promise.all([
+          supabase.from("feeding_logs").select("*").eq("child_id", child.id).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false }),
+          supabase.from("diaper_logs").select("*").eq("child_id", child.id).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false }),
+          supabase.from("sleep_logs").select("*").eq("child_id", child.id).gte("started_at", from).lte("started_at", to).order("started_at", { ascending: false }),
+          supabase.from("child_speech").select("*, speech:milestone_id(name, category_id)").eq("child_id", child.id),
+          supabase.from("allergen_introductions").select("*, allergens(name)").eq("child_id", child.id),
+          supabase.from("speech_categories").select("*"),
+          supabase.from("pediatrician_exports").select("created_at").eq("child_id", child.id).order("created_at", { ascending: false }).limit(1),
+          supabase.from("supplements").select("*").eq("child_id", child.id),
+          supabase.from("illness_logs").select("*").eq("child_id", child.id).gte("start_date", format(dateFrom, "yyyy-MM-dd")).lte("start_date", format(dateTo, "yyyy-MM-dd")).order("start_date", { ascending: false }),
+          supabase.from("medication_logs").select("*").eq("child_id", child.id).gte("start_date", format(dateFrom, "yyyy-MM-dd")).lte("start_date", format(dateTo, "yyyy-MM-dd")).order("start_date", { ascending: false }),
+        ]);
+
+      const allSections = new Set(["speech", "allergens", "feeding", "diapers", "sleep", "illness"] as const);
+      const notes = reportNotes ? `• ${reportNotes}` : "";
+
+      const doc = generatePediatricianReport({
+        child,
+        dateFrom,
+        dateTo,
+        milestones: (milestoneRes.data as any[]) ?? [],
+        categories: (categoryRes.data as any[]) ?? [],
+        lastExportDate: (lastExportRes.data as any[])?.[0]?.created_at ?? null,
+        feedings: (feedingRes.data as any[]) ?? [],
+        supplements: (supplementRes.data as any[]) ?? [],
+        diapers: (diaperRes.data as any[]) ?? [],
+        sleeps: (sleepRes.data as any[]) ?? [],
+        allergens: (allergenRes.data as any[]) ?? [],
+        illnesses: (illnessRes.data as any[]) ?? [],
+        medications: (medicationRes.data as any[]) ?? [],
+        pediatricianNotes: notes,
+      }, allSections);
+
+      await supabase.from("pediatrician_exports").insert({
+        child_id: child.id,
+        parent_id: user.id,
+        export_type: "pdf_report",
+        date_range_start: format(dateFrom, "yyyy-MM-dd"),
+        date_range_end: format(dateTo, "yyyy-MM-dd"),
+      });
+
+      doc.save(`${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`);
+      toast({ title: "PDF report downloaded! 📋" });
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Export failed", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setQuickExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -139,11 +207,20 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Pediatrician Export */}
+      {/* Quick Export */}
+      <Button
+        onClick={handleQuickExport}
+        disabled={quickExporting || children.length === 0}
+        className="w-full gap-2"
+      >
+        <FileDown className="w-4 h-4" />
+        {quickExporting ? "Generating PDF…" : "Export Pediatrician Report (Last 30 Days)"}
+      </Button>
+
       {/* Partner Management */}
       <PartnerManagement />
 
-      {/* Pediatrician Export */}
+      {/* Full Pediatrician Export with options */}
       <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
 
       {/* Sign out */}
