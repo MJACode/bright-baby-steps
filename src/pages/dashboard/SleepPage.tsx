@@ -388,26 +388,6 @@ export default function SleepPage() {
         </CardContent>
       </Card>
 
-      {/* Naps */}
-      <Card className="border-0 bg-sleep-bg">
-        <CardHeader className="pb-1 pt-3 px-4">
-          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-            <Sun className="w-3.5 h-3.5 text-sleep" /> Naps
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats?.avgNapsPerDay ?? "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg Naps / Day</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.avgNapDurationMin) : "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg Total Nap Duration</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Total Sleep */}
       <Card className="border-0 bg-sleep-bg">
