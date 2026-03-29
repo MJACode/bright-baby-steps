@@ -38,7 +38,7 @@ export function useChildren() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["children"] }),
   });
 
-  const setSelectedChildId = React.useCallback((id: string) => {
+  const setSelectedChildId = useCallback((id: string) => {
     setSelectedChildIdState(id);
     try { localStorage.setItem("active-child-id", id); } catch {}
   }, []);
