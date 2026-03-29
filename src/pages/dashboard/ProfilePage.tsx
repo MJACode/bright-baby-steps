@@ -207,11 +207,20 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Pediatrician Export */}
+      {/* Quick Export */}
+      <Button
+        onClick={handleQuickExport}
+        disabled={quickExporting || children.length === 0}
+        className="w-full gap-2"
+      >
+        <FileDown className="w-4 h-4" />
+        {quickExporting ? "Generating PDF…" : "Export Pediatrician Report (Last 30 Days)"}
+      </Button>
+
       {/* Partner Management */}
       <PartnerManagement />
 
-      {/* Pediatrician Export */}
+      {/* Full Pediatrician Export with options */}
       <PediatricianExport pediatricianNotes={reportNotes ? `• ${reportNotes}` : ""} />
 
       {/* Sign out */}
