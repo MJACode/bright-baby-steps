@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
+import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { useState } from "react";
 
 const statusOptions = [
