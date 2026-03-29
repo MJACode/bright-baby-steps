@@ -32,6 +32,21 @@ export default function ProfilePage() {
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
   const [quickExporting, setQuickExporting] = useState(false);
 
+  const { data: pastExports = [] } = useQuery({
+    queryKey: ["past-exports", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data } = await supabase
+        .from("pediatrician_exports")
+        .select("id, created_at, date_range_start, date_range_end, child_id, export_type")
+        .eq("parent_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      return (data as any[]) ?? [];
+    },
+    enabled: !!user?.id,
+  });
+
   useEffect(() => {
     if (!user?.id) return;
     const stored = localStorage.getItem(`${STORAGE_KEY}_${user.id}`);
