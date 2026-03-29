@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown } from "lucide-react";
+import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import PartnerManagement from "@/components/PartnerManagement";
 import { toast } from "@/hooks/use-toast";
