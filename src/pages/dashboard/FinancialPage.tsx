@@ -71,7 +71,6 @@ export default function FinancialPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
-  const queryClient = useQueryClient();
 
   const { data: items, isLoading } = useQuery({
     queryKey: ["financial-checklist-items"],
