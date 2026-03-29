@@ -48,6 +48,9 @@ export default function DashboardLayout() {
             </Button>
           </div>
         </div>
+        <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
+          <ChildSwitcher />
+        </div>
       </header>
 
       {/* Main content */}
