@@ -274,31 +274,6 @@ export default function FeedingLog() {
         </Dialog>
       </div>
 
-      {/* Today's stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="border-0 bg-feeding-bg">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-feeding">{todayLogs.length}</p>
-            <p className="text-[10px] text-muted-foreground">Feeds Today</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 bg-feeding-bg">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-feeding">
-              {todayLogs.reduce((s, l) => s + (l.amount_oz || 0), 0).toFixed(1)}
-            </p>
-            <p className="text-[10px] text-muted-foreground">oz Today</p>
-          </CardContent>
-        </Card>
-        <Card className="border-0 bg-feeding-bg">
-          <CardContent className="p-3 text-center">
-            <p className="text-2xl font-bold text-feeding">
-              {todayLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0)}
-            </p>
-            <p className="text-[10px] text-muted-foreground">min Today</p>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* 7-Day Trends Chart */}
       {activeChild && <FeedingTrendsChart childId={activeChild.id} />}
