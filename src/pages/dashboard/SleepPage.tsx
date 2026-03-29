@@ -12,7 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sunrise, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay } from "date-fns";
+import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays } from "date-fns";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
