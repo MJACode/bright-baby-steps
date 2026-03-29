@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useChildren } from "@/hooks/useChildren";
@@ -6,13 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList } from "lucide-react";
+import { User, LogOut, Baby, StickyNote, Plus, Trash2, FileDown, ChevronDown, ClipboardList, History } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import PartnerManagement from "@/components/PartnerManagement";
 import { toast } from "@/hooks/use-toast";
 import { format, subMonths, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePediatricianReport } from "@/services/pdfReportBuilder";
+import { Separator } from "@/components/ui/separator";
+
+interface ExportRecord {
+  id: string;
+  created_at: string;
+  date_range_start: string | null;
+  date_range_end: string | null;
+  export_type: string;
+}
 
 interface ReminderNote {
   id: string;
