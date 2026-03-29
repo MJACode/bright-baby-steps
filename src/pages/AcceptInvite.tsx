@@ -29,25 +29,26 @@ export default function AcceptInvite() {
   const loadInvite = async () => {
     if (!code) { setStatus("error"); return; }
 
-    const { data, error } = await supabase
-      .from("partner_invitations")
-      .select("*")
-      .eq("invite_code", code)
-      .single();
+    // Use secure RPC to look up invite without exposing all invitation data
+    const { data, error } = await supabase.rpc("lookup_partner_invitation", {
+      _invite_code: code,
+    });
 
     if (error || !data) { setStatus("error"); return; }
 
-    if (data.status !== "pending" || new Date(data.expires_at) < new Date()) {
+    const invite = data as { id: string; owner_id: string; status: string; expires_at: string };
+
+    if (invite.status !== "pending" || new Date(invite.expires_at) < new Date()) {
       setStatus("expired");
       return;
     }
 
-    if (data.owner_id === user?.id) {
+    if (invite.owner_id === user?.id) {
       setStatus("self");
       return;
     }
 
-    setInvite(data);
+    setInvite(invite);
     setStatus("ready");
   };
 

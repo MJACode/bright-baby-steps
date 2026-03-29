@@ -1158,6 +1158,10 @@ export type Database = {
         Args: { _owner_id: string; _user_id: string }
         Returns: boolean
       }
+      lookup_partner_invitation: {
+        Args: { _invite_code: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
