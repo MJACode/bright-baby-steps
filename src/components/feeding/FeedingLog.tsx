@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,9 +12,49 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { UtensilsCrossed, Plus, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
+import { SevenDayChart } from "@/components/charts/SevenDayChart";
+
+function FeedingTrendsChart({ childId }: { childId: string }) {
+  const { data: trendLogs } = useQuery({
+    queryKey: ["feeding-trends-7d", childId],
+    queryFn: async () => {
+      const sevenAgo = subDays(startOfDay(new Date()), 6).toISOString();
+      const { data, error } = await supabase
+        .from("feeding_logs")
+        .select("logged_at")
+        .eq("child_id", childId)
+        .gte("logged_at", sevenAgo)
+        .order("logged_at");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const chartData = useMemo(() => {
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = subDays(startOfDay(new Date()), 6 - i);
+      return { date: d, day: format(d, "EEE"), value: 0 };
+    });
+    trendLogs?.forEach((log) => {
+      const key = format(new Date(log.logged_at), "yyyy-MM-dd");
+      const entry = days.find((d) => format(d.date, "yyyy-MM-dd") === key);
+      if (entry) entry.value += 1;
+    });
+    return days.map((d) => ({ day: d.day, value: d.value }));
+  }, [trendLogs]);
+
+  return (
+    <SevenDayChart
+      title="7-Day Feeding Trends"
+      data={chartData}
+      color="hsl(var(--feeding))"
+      yLabel="Feeds"
+    />
+  );
+}
 
 const feedingTypes = [
   { value: "breast", label: "🤱 Breast" },
@@ -259,6 +299,9 @@ export default function FeedingLog() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 7-Day Trends Chart */}
+      {activeChild && <FeedingTrendsChart childId={activeChild.id} />}
 
       {/* Recent logs */}
       <div className="space-y-2">
