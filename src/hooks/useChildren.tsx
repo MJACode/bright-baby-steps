@@ -6,6 +6,9 @@ import { differenceInMonths, differenceInWeeks, differenceInDays } from "date-fn
 export function useChildren() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [selectedChildId, setSelectedChildIdState] = React.useState<string | null>(() => {
+    try { return localStorage.getItem("active-child-id"); } catch { return null; }
+  });
 
   const { data: children, isLoading } = useQuery({
     queryKey: ["children"],
@@ -34,9 +37,18 @@ export function useChildren() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["children"] }),
   });
 
-  const activeChild = children?.[0] ?? null;
+  const setSelectedChildId = React.useCallback((id: string) => {
+    setSelectedChildIdState(id);
+    try { localStorage.setItem("active-child-id", id); } catch {}
+  }, []);
 
-  return { children: children ?? [], isLoading, addChild, activeChild };
+  const activeChild = React.useMemo(() => {
+    if (!children || children.length === 0) return null;
+    const found = children.find(c => c.id === selectedChildId);
+    return found ?? children[0];
+  }, [children, selectedChildId]);
+
+  return { children: children ?? [], isLoading, addChild, activeChild, setSelectedChildId };
 }
 
 export function getAge(dob: string, isPremature?: boolean, dueDate?: string | null) {
