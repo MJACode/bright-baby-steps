@@ -7,6 +7,7 @@ import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame
 import { Link } from "react-router-dom";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { cn } from "@/lib/utils";
 import { format, isToday, differenceInDays } from "date-fns";
 
@@ -119,6 +120,9 @@ export default function Dashboard() {
           {activeChild ? `${activeChild.name} • ${getAge(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)}` : "Here's your baby's day at a glance."}
         </p>
       </div>
+
+      {/* Today's Briefing */}
+      <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
