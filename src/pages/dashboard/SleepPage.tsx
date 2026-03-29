@@ -60,7 +60,124 @@ function SleepTrendsChart({ childId }: { childId: string }) {
   );
 }
 
-const sleepRecommendations: Record<string, { total: string; naps: string }> = {
+// Age-appropriate minimum total sleep hours per day
+const ageMinSleepHours: Record<string, number> = {
+  newborn: 14,
+  "3mo": 14,
+  "6mo": 12,
+  "9mo": 12,
+  "12mo+": 11,
+};
+
+const sleepTips = [
+  { title: "Create a calming bedtime routine", content: "A warm bath, gentle massage, soft lullaby, or a short book can signal to your baby that it's time to wind down. Consistency is key — try to follow the same steps each night." },
+  { title: "Watch for sleepy cues", content: "Yawning, rubbing eyes, fussiness, and looking away are signs your baby is ready for sleep. Putting them down when drowsy but still awake helps them learn to self-soothe." },
+  { title: "Keep the sleep environment consistent", content: "A dark, cool room with white noise can help your baby sleep more soundly. Blackout curtains and a sound machine are simple tools that many parents find helpful." },
+  { title: "Daytime naps support nighttime sleep", content: "It might seem counterintuitive, but well-rested babies often sleep better at night. Skipping naps can lead to overtiredness and more night wakings." },
+];
+
+type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
+
+function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: number }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const insights = useMemo(() => {
+    const result: { icon: React.ReactNode; text: string }[] = [];
+    const sevenAgo = subDays(startOfDay(new Date()), 6);
+    const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenAgo);
+
+    if (recentLogs.length === 0) return result;
+
+    // 1. Average daily sleep below age minimum
+    const byDay = new Map<string, number>();
+    recentLogs.forEach(l => {
+      const key = format(new Date(l.started_at), "yyyy-MM-dd");
+      byDay.set(key, (byDay.get(key) || 0) + (l.duration_minutes || 0));
+    });
+    const daysWithData = byDay.size || 1;
+    const avgDailyHours = Array.from(byDay.values()).reduce((a, b) => a + b, 0) / daysWithData / 60;
+    const ageGroup = getAgeGroup(ageMonths);
+    const minHours = ageMinSleepHours[ageGroup] ?? 11;
+    if (avgDailyHours < minHours) {
+      result.push({
+        icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
+        text: "Your baby has been sleeping a bit less than average this week. A consistent bedtime routine can help.",
+      });
+    }
+
+    // 2. No naps in last 2 days
+    const twoDaysAgo = subDays(startOfDay(new Date()), 1);
+    const recentNaps = recentLogs.filter(l => l.sleep_type === "nap" && new Date(l.started_at) >= twoDaysAgo);
+    if (recentNaps.length === 0 && recentLogs.length > 0) {
+      result.push({
+        icon: <Sparkles className="w-5 h-5 text-sleep shrink-0" />,
+        text: "No naps logged recently — even short naps matter for development at this age!",
+      });
+    }
+
+    // 3. Early waking pattern (most night sessions end before 6am)
+    const nightLogs = recentLogs.filter(l => l.sleep_type === "night" && l.ended_at);
+    if (nightLogs.length >= 2) {
+      const earlyCount = nightLogs.filter(l => {
+        const endHour = new Date(l.ended_at!).getHours();
+        return endHour < 6;
+      }).length;
+      if (earlyCount > nightLogs.length / 2) {
+        result.push({
+          icon: <Sunrise className="w-5 h-5 text-sleep shrink-0" />,
+          text: "Early waking pattern detected — try a slightly later bedtime or a blackout curtain.",
+        });
+      }
+    }
+
+    return result.slice(0, 3);
+  }, [logs, ageMonths]);
+
+  if (insights.length === 0) return null;
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-sleep-bg hover:bg-sleep-bg/80 border-0">
+          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Sparkles className="w-4 h-4 text-sleep" /> Sleep Insights
+          </span>
+          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")} />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-3">
+        {insights.map((insight, i) => (
+          <Card key={i} className="border-0 bg-sleep-bg/60">
+            <CardContent className="p-3 flex items-start gap-3">
+              {insight.icon}
+              <p className="text-sm text-foreground/80 leading-relaxed">{insight.text}</p>
+            </CardContent>
+          </Card>
+        ))}
+
+        <Accordion type="single" collapsible className="w-full">
+          <AccordionItem value="tips" className="border-0">
+            <AccordionTrigger className="py-2 px-3 text-xs font-medium text-sleep hover:no-underline">
+              See sleep tips
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-2 px-1">
+                {sleepTips.map((tip, i) => (
+                  <div key={i} className="rounded-lg bg-background/50 p-3">
+                    <p className="text-xs font-semibold text-foreground mb-1">{tip.title}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{tip.content}</p>
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+
   newborn: { total: "14–17 hrs", naps: "4–5 naps" },
   "3mo": { total: "14–16 hrs", naps: "3–4 naps" },
   "6mo": { total: "12–15 hrs", naps: "2–3 naps" },
