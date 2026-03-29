@@ -24,7 +24,7 @@ const STORAGE_KEY = "pediatrician_reminders";
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
-  const { children } = useChildren();
+  const { children, activeChild } = useChildren();
   const [draft, setDraft] = useState("");
   const [reminders, setReminders] = useState<ReminderNote[]>([]);
   const [quickExporting, setQuickExporting] = useState(false);
