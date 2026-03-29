@@ -481,6 +481,9 @@ export default function SleepPage() {
         </Button>
       </div>
 
+      {/* Sleep Insights */}
+      {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
+
       {/* Overnight Sleep */}
       <Card className="border-0 bg-sleep-bg">
         <CardHeader className="pb-1 pt-3 px-4">
