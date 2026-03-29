@@ -43,7 +43,7 @@ export function useChildren() {
     try { localStorage.setItem("active-child-id", id); } catch {}
   }, []);
 
-  const activeChild = React.useMemo(() => {
+  const activeChild = useMemo(() => {
     if (!children || children.length === 0) return null;
     const found = children.find(c => c.id === selectedChildId);
     return found ?? children[0];
