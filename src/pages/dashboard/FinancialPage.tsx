@@ -1,15 +1,64 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useChildren } from "@/hooks/useChildren";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { DollarSign, ExternalLink, CheckCircle2, BookOpen, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DollarSign, ExternalLink, CheckCircle2, BookOpen, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
+
+function getFinancialPrompt(ageMonths: number) {
+  if (ageMonths < 3) return {
+    message: "Now is a great time to add your baby to your health insurance — most plans have a 30-day enrollment window.",
+    icon: Shield, key: "fin-prompt-0-3",
+  };
+  if (ageMonths < 6) return {
+    message: "Have you started an emergency fund? Even $500 can make a big difference for unexpected baby expenses.",
+    icon: PiggyBank, key: "fin-prompt-3-6",
+  };
+  if (ageMonths < 12) return {
+    message: "Consider opening a 529 college savings account — the earlier you start, the more time it has to grow.",
+    icon: GraduationCap, key: "fin-prompt-6-12",
+  };
+  return {
+    message: "Life insurance becomes even more important now that you have a dependent. Even a term policy offers peace of mind.",
+    icon: Heart, key: "fin-prompt-12",
+  };
+}
+
+function AgePromptBanner({ ageMonths }: { ageMonths: number }) {
+  const prompt = getFinancialPrompt(ageMonths);
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem(prompt.key) === "1");
+
+  if (dismissed) return null;
+
+  const Icon = prompt.icon;
+
+  return (
+    <Card className="border-0 bg-accent/40">
+      <CardContent className="px-4 py-3 flex items-start gap-3">
+        <div className="rounded-full bg-accent p-2 shrink-0 mt-0.5">
+          <Icon className="w-5 h-5 text-accent-foreground" />
+        </div>
+        <p className="text-sm text-foreground/90 flex-1 leading-relaxed">{prompt.message}</p>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={() => { localStorage.setItem(prompt.key, "1"); setDismissed(true); }}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 const lessonCards = [
   { title: "Why 529 Plans Matter", desc: "Tax-advantaged savings for education. Start early for compound growth.", icon: "🎓" },
