@@ -14,7 +14,6 @@ import { toast } from "@/hooks/use-toast";
 import { format, subMonths, startOfDay, endOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePediatricianReport } from "@/services/pdfReportBuilder";
-import { Separator } from "@/components/ui/separator";
 
 interface ExportRecord {
   id: string;
