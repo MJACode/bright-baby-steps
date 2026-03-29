@@ -26,7 +26,7 @@ const SECTIONS = [
 
 type SectionKey = (typeof SECTIONS)[number]["key"];
 
-export default function PediatricianExport({ pediatricianNotes = "" }: { pediatricianNotes?: string }) {
+export default function PediatricianExport({ pediatricianNotes = "", onExported }: { pediatricianNotes?: string; onExported?: () => void }) {
   const { user } = useAuth();
   const { children, activeChild } = useChildren();
   const [exportChild, setExportChild] = useState(activeChild?.id ?? "");
