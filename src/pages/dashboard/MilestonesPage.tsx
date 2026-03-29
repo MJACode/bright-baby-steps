@@ -211,6 +211,9 @@ export default function MilestonesPage() {
         })}
         </Accordion>
       }
+
+      {/* Word & Sound Journal */}
+      {activeChild && <WordSoundJournal childId={activeChild.id} />}
     </div>);
 
 }
