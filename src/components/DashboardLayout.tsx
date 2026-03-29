@@ -29,8 +29,8 @@ export default function DashboardLayout() {
       <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
           <Link to="/dashboard" className="flex items-center gap-2">
-            <Sprout className="w-6 h-6 text-primary" />
-            <span className="font-display font-bold text-lg">Tiny Sprout</span>
+            <Footprints className="w-6 h-6 text-primary" />
+            <span className="font-display font-bold text-lg">Baby Steps</span>
           </Link>
           <div className="flex items-center gap-1">
             {!isHome && (
