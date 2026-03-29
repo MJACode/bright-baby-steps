@@ -1,24 +1,16 @@
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Brain, Check, HelpCircle, Clock, PartyPopper } from "lucide-react";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Brain, PartyPopper, ChevronDown } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
-import { useState } from "react";
-
-const statusOptions = [
-{ value: "achieved", label: "✅ Achieved", icon: Check },
-{ value: "emerging", label: "🌱 Emerging", icon: HelpCircle },
-{ value: "not_yet", label: "⏳ Not Yet", icon: Clock }];
-
+import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function MilestonesPage() {
   const { user } = useAuth();
@@ -26,39 +18,44 @@ export default function MilestonesPage() {
   const queryClient = useQueryClient();
   const [showConfetti, setShowConfetti] = useState(false);
 
-  const ageMonths = activeChild ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date) : 0;
+  const ageMonths = activeChild
+    ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
+    : 0;
 
   const { data: categories, isLoading } = useQuery({
     queryKey: ["milestone-categories-with-milestones"],
     queryFn: async () => {
-      const { data: cats, error: catError } = await supabase.from("speech_categories").select("*").order("sort_order");
+      const { data: cats, error: catError } = await supabase
+        .from("speech_categories").select("*").order("sort_order");
       if (catError) throw catError;
-      const { data: milestones, error: msError } = await supabase.from("speech").select("*").order("age_months_typical_start, sort_order");
+      const { data: milestones, error: msError } = await supabase
+        .from("speech").select("*").order("age_months_typical_start, sort_order");
       if (msError) throw msError;
       return cats.map((cat) => ({
         ...cat,
-        milestones: milestones.filter((m) => m.category_id === cat.id)
+        milestones: milestones.filter((m) => m.category_id === cat.id),
       }));
-    }
+    },
   });
 
   const { data: childMilestones } = useQuery({
     queryKey: ["child-milestones", activeChild?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("child_speech").select("*").eq("child_id", activeChild!.id);
+      const { data, error } = await supabase
+        .from("child_speech").select("*").eq("child_id", activeChild!.id);
       if (error) throw error;
       return data;
     },
-    enabled: !!activeChild
+    enabled: !!activeChild,
   });
 
   const updateMilestone = useMutation({
-    mutationFn: async ({ milestoneId, status }: {milestoneId: string;status: string;}) => {
+    mutationFn: async ({ milestoneId, status }: { milestoneId: string; status: string }) => {
       const existing = childMilestones?.find((cm) => cm.milestone_id === milestoneId);
       if (existing) {
         const { error } = await supabase.from("child_speech").update({
           status,
-          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
         }).eq("id", existing.id);
         if (error) throw error;
       } else {
@@ -67,7 +64,7 @@ export default function MilestonesPage() {
           parent_id: user!.id,
           milestone_id: milestoneId,
           status,
-          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null
+          achieved_at: status === "achieved" ? new Date().toISOString().split("T")[0] : null,
         });
         if (error) throw error;
       }
@@ -77,13 +74,54 @@ export default function MilestonesPage() {
       if (status === "achieved") {
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 2000);
-        toast({ title: "🎉 Speech milestone achieved!" });
+        toast({ title: "🎉 Milestone achieved!" });
       }
-    }
+    },
   });
 
-  const getMilestoneStatus = (milestoneId: string) => {
-    return childMilestones?.find((cm) => cm.milestone_id === milestoneId)?.status as string ?? "not_yet";
+  // Build a status lookup map
+  const milestoneStatuses = useMemo(() => {
+    const map: Record<string, string> = {};
+    childMilestones?.forEach((cm) => {
+      map[cm.milestone_id] = cm.status;
+    });
+    return map;
+  }, [childMilestones]);
+
+  // Split milestones into current / upcoming / earlier per category
+  const { currentCats, upcomingCats, earlierCats } = useMemo(() => {
+    if (!categories) return { currentCats: [], upcomingCats: [], earlierCats: [] };
+
+    const current: any[] = [];
+    const upcoming: any[] = [];
+    const earlier: any[] = [];
+
+    categories.forEach((cat) => {
+      const cur: any[] = [];
+      const up: any[] = [];
+      const ear: any[] = [];
+
+      cat.milestones.forEach((m: any) => {
+        if (ageMonths >= m.age_months_typical_start && ageMonths <= m.age_months_typical_end) {
+          cur.push(m);
+        } else if (ageMonths < m.age_months_typical_start) {
+          up.push(m);
+        } else {
+          // Past milestone
+          ear.push(m);
+        }
+      });
+
+      current.push({ ...cat, milestones: cur });
+      upcoming.push({ ...cat, milestones: up });
+      earlier.push({ ...cat, milestones: ear });
+    });
+
+    return { currentCats: current, upcomingCats: upcoming, earlierCats: earlier };
+  }, [categories, ageMonths]);
+
+  const handleStatusChange = (milestoneId: string, status: string) => {
+    updateMilestone.mutate({ milestoneId, status });
   };
 
   if (!activeChild) {
@@ -96,25 +134,25 @@ export default function MilestonesPage() {
           <p className="text-muted-foreground text-sm mt-1">Add a child to track milestones.</p>
         </div>
         <AddChildDialog />
-      </div>);
-
+      </div>
+    );
   }
 
   const totalMilestones = categories?.reduce((s, c) => s + c.milestones.length, 0) ?? 0;
   const achievedCount = childMilestones?.filter((cm) => cm.status === "achieved").length ?? 0;
-  const progressPct = totalMilestones > 0 ? Math.round(achievedCount / totalMilestones * 100) : 0;
+  const progressPct = totalMilestones > 0 ? Math.round((achievedCount / totalMilestones) * 100) : 0;
 
-  // Filter milestones relevant to age
-  const relevantAge = ageMonths + 3; // show a bit ahead
+  const hasCurrentMilestones = currentCats.some((c) => c.milestones.length > 0);
+  const hasUpcomingMilestones = upcomingCats.some((c) => c.milestones.length > 0);
+  const hasEarlierMilestones = earlierCats.some((c) => c.milestones.length > 0);
 
   return (
     <div className="space-y-5">
-      {/* Confetti overlay */}
-      {showConfetti &&
-      <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
+      {showConfetti && (
+        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
           <PartyPopper className="w-24 h-24 text-milestones animate-bounce" />
         </div>
-      }
+      )}
 
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
@@ -149,71 +187,71 @@ export default function MilestonesPage() {
         </CardContent>
       </Card>
 
-      {/* Categories */}
-      {isLoading ?
-      <p className="text-sm text-muted-foreground">Loading milestones...</p> :
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading milestones...</p>
+      ) : (
+        <div className="space-y-6">
+          {/* Current age band */}
+          {hasCurrentMilestones && (
+            <div className="space-y-2">
+              <h2 className="font-display font-bold text-lg text-foreground">
+                Right now ({ageMonths}mo)
+              </h2>
+              <MilestoneCategoryGroup
+                categories={currentCats}
+                milestoneStatuses={milestoneStatuses}
+                onStatusChange={handleStatusChange}
+                isPending={updateMilestone.isPending}
+                ageMonths={ageMonths}
+              />
+            </div>
+          )}
 
-      <Accordion type="multiple" className="space-y-2">
-          {categories?.map((cat) => {
-          const catAchieved = cat.milestones.filter((m: any) => getMilestoneStatus(m.id) === "achieved").length;
-          const catPct = cat.milestones.length > 0 ? Math.round(catAchieved / cat.milestones.length * 100) : 0;
+          {/* Upcoming milestones */}
+          {hasUpcomingMilestones && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+                <h2 className="font-display font-bold text-lg text-muted-foreground">
+                  Coming up next
+                </h2>
+                <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <MilestoneCategoryGroup
+                  categories={upcomingCats}
+                  milestoneStatuses={milestoneStatuses}
+                  onStatusChange={handleStatusChange}
+                  isPending={updateMilestone.isPending}
+                  ageMonths={ageMonths}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
-          return (
-            <AccordionItem key={cat.id} value={cat.id} className="border rounded-xl px-4 bg-milestones-bg border-0">
-                <AccordionTrigger className="hover:no-underline touch-target">
-                  <div className="flex items-center gap-3 w-full">
-                    <span className="font-display font-bold">{cat.name}</span>
-                    <Badge variant="secondary" className="text-xs">{catAchieved}/{cat.milestones.length}</Badge>
-                    <div className="flex-1 max-w-[80px] ml-auto mr-2">
-                      <Progress value={catPct} className="h-2" />
-                    </div>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-3 pb-2">
-                    {cat.milestones.map((m: any) => {
-                    const status = getMilestoneStatus(m.id);
+          {/* Earlier milestones */}
+          {hasEarlierMilestones && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+                <h2 className="font-display font-bold text-lg text-muted-foreground">
+                  Earlier milestones
+                </h2>
+                <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2">
+                <MilestoneCategoryGroup
+                  categories={earlierCats}
+                  milestoneStatuses={milestoneStatuses}
+                  onStatusChange={handleStatusChange}
+                  isPending={updateMilestone.isPending}
+                  ageMonths={ageMonths}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </div>
+      )}
 
-                    return (
-                      <Card key={m.id} className="border-0 bg-card/60">
-                          <CardHeader className="pb-1 pt-3 px-4">
-                            <CardTitle className="text-sm">{m.name}</CardTitle>
-                            <CardDescription className="text-xs">
-                              Typical: {m.age_months_typical_start}–{m.age_months_typical_end} months
-                            </CardDescription>
-                          </CardHeader>
-                          <CardContent className="px-4 pb-3 pt-1">
-                            {m.description && <p className="text-xs text-muted-foreground mb-2">{m.description}</p>}
-                            {activeChild &&
-                          <div className="flex gap-1">
-                                {statusOptions.map((opt) =>
-                            <Button
-                              key={opt.value}
-                              variant={status === opt.value ? "default" : "outline"}
-                              size="sm"
-                              className={cn("text-xs touch-target flex-1", status === opt.value && opt.value === "achieved" && "bg-success hover:bg-success/90")}
-                              onClick={() => updateMilestone.mutate({ milestoneId: m.id, status: opt.value })}
-                              disabled={updateMilestone.isPending}>
-                              
-                                    {opt.label}
-                                  </Button>
-                            )}
-                              </div>
-                          }
-                          </CardContent>
-                        </Card>);
-
-                  })}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>);
-
-        })}
-        </Accordion>
-      }
-
-      {/* Word & Sound Journal */}
       {activeChild && <WordSoundJournal childId={activeChild.id} />}
-    </div>);
-
+    </div>
+  );
 }
