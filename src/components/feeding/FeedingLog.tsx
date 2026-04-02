@@ -146,7 +146,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
     reaction_noted: feedType === "solid" ? reactionNoted : false,
     reaction_description: feedType === "solid" && reactionNoted ? reactionDescription || null : null,
     notes: notes || null,
-    logged_at: new Date(loggedAt).toISOString(),
+    logged_at: loggedAt.toISOString(),
   });
 
   const saveMutation = useMutation({
