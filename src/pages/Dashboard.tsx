@@ -4,7 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame, Footprints, Plus } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { formatDistanceToNow } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
@@ -13,6 +15,7 @@ import { format, isToday, differenceInDays } from "date-fns";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { children, activeChild, isLoading: childrenLoading } = useChildren();
 
   // Today's stats
@@ -61,6 +64,47 @@ export default function Dashboard() {
   });
 
 
+  // Last logged timestamps
+  const { data: lastSleep } = useQuery({
+    queryKey: ["last-sleep", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("sleep_logs").select("started_at")
+        .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(1);
+      return data?.[0]?.started_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const { data: lastFeed } = useQuery({
+    queryKey: ["last-feed", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("feeding_logs").select("logged_at")
+        .eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(1);
+      return data?.[0]?.logged_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const { data: lastDiaper } = useQuery({
+    queryKey: ["last-diaper", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("diaper_logs").select("logged_at")
+        .eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(1);
+      return data?.[0]?.logged_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const { data: lastMilestone } = useQuery({
+    queryKey: ["last-milestone", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("child_speech").select("updated_at")
+        .eq("child_id", activeChild!.id).eq("status", "achieved").order("updated_at", { ascending: false }).limit(1);
+      return data?.[0]?.updated_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
   // Streak calculation
   const { data: streakDays } = useQuery({
     queryKey: ["streak", activeChild?.id],
@@ -84,6 +128,12 @@ export default function Dashboard() {
 
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
   const formatMin = (m: number) => { const h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; };
+  const timeAgo = (ts: string | null) => {
+    if (!ts) return null;
+    try { return formatDistanceToNow(new Date(ts), { addSuffix: true }); } catch { return null; }
+  };
+
+  const lastLogged = [timeAgo(lastSleep), timeAgo(lastFeed), timeAgo(lastDiaper), timeAgo(lastMilestone)];
 
   const summaryCards = [
     { title: "Sleep", icon: Moon, href: "/dashboard/sleep", color: "text-sleep", bgColor: "bg-sleep-bg", stat: activeChild ? formatMin(todaySleep ?? 0) : "—", sub: activeChild ? "today" : "Add child" },
@@ -108,33 +158,56 @@ export default function Dashboard() {
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
-        <CardContent className="flex items-center gap-3 p-4">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <Flame className="w-5 h-5 text-primary" />
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+              <Flame className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">
+                {(streakDays ?? 0) > 0 ? `🔥 ${streakDays}-day tracking streak!` : "Start your tracking streak!"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {(streakDays ?? 0) > 0 ? "Keep it going — consistency matters." : "Log your first entry to begin."}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-sm">
-              {(streakDays ?? 0) > 0 ? `🔥 ${streakDays}-day tracking streak!` : "Start your tracking streak!"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {(streakDays ?? 0) > 0 ? "Keep it going — consistency matters." : "Log your first entry to begin."}
-            </p>
+          <div className="flex gap-2 mt-3 ml-[52px]">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs font-semibold bg-background/60 border-primary/20 text-primary hover:bg-primary/10"
+              onClick={() => navigate("/dashboard/sleep")}
+            >
+              <Moon className="w-3.5 h-3.5 mr-1" /> + Log Sleep
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs font-semibold bg-background/60 border-primary/20 text-primary hover:bg-primary/10"
+              onClick={() => navigate("/dashboard/feeding")}
+            >
+              <UtensilsCrossed className="w-3.5 h-3.5 mr-1" /> + Log Feed
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Summary grid */}
       <div className="grid grid-cols-2 gap-3">
-        {summaryCards.map((card) => (
+        {summaryCards.map((card, idx) => (
           <Link key={card.title} to={card.href}>
             <Card className={cn("border-0 transition-all active:scale-[0.97] touch-target h-full", card.bgColor)}>
-              <CardContent className="p-4 flex flex-col gap-2">
+              <CardContent className="p-4 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <card.icon className={cn("w-6 h-6", card.color)} />
                   <span className={cn("text-xs font-bold uppercase tracking-wide", card.color)}>{card.title}</span>
                 </div>
                 <p className="font-bold text-2xl leading-tight">{card.stat}</p>
                 <p className="text-xs text-muted-foreground">{card.sub}</p>
+                {activeChild && lastLogged[idx] && (
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">last logged {lastLogged[idx]}</p>
+                )}
               </CardContent>
             </Card>
           </Link>
