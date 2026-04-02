@@ -49,7 +49,16 @@ export default function DiapersPage() {
     enabled: !!activeChild,
   });
 
-  const resetForm = () => {
+  // Auto-open modal when navigated from FAB
+  useEffect(() => {
+    if ((location.state as any)?.openModal && activeChild) {
+      resetForm();
+      setModalOpen(true);
+      // Clear the state so it doesn't re-trigger
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, activeChild]);
+
     setEditingId(null);
     setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
