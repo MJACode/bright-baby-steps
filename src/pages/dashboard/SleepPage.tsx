@@ -550,8 +550,8 @@ export default function SleepPage() {
           onClick={() => {
             setEditingId(null);
             setEditSleepType("nap");
-            setEditStartedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-            setEditEndedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+            setEditStartedAt(new Date());
+            setEditEndedAt(new Date());
             setEditDialogOpen(true);
           }}
           className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
