@@ -25,7 +25,18 @@ interface MilestoneCardProps {
 
 export function MilestoneCard({ milestone, status, photoUrl, onStatusChange, onPhotoChange, isPending, showConcernNote, userId }: MilestoneCardProps) {
   const [uploading, setUploading] = useState(false);
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Generate signed URL for private bucket
+  useEffect(() => {
+    if (!photoUrl) { setSignedUrl(null); return; }
+    let cancelled = false;
+    supabase.storage.from("milestone-photos")
+      .createSignedUrl(photoUrl, 3600)
+      .then(({ data }) => { if (!cancelled && data) setSignedUrl(data.signedUrl); });
+    return () => { cancelled = true; };
+  }, [photoUrl]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,17 +54,13 @@ export function MilestoneCard({ milestone, status, photoUrl, onStatusChange, onP
     setUploading(true);
     try {
       const ext = file.name.split(".").pop();
-      const path = `${userId}/${milestone.id}-${Date.now()}.${ext}`;
+      const storagePath = `${userId}/${milestone.id}-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("milestone-photos")
-        .upload(path, file, { upsert: true });
+        .upload(storagePath, file, { upsert: true });
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from("milestone-photos")
-        .getPublicUrl(path);
-
-      onPhotoChange(milestone.id, publicUrl);
+      onPhotoChange(milestone.id, storagePath);
       toast({ title: "📸 Photo saved!" });
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
