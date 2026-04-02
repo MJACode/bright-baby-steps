@@ -613,7 +613,13 @@ export default function SleepPage() {
 
 
       {/* 7-Day Trends Chart */}
-      {activeChild && <SleepTrendsChart childId={activeChild.id} />}
+      {activeChild && <SleepTrendsChart childId={activeChild.id} onAddEntry={() => {
+        setEditingId(null);
+        setEditSleepType("nap");
+        setEditStartedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setEditEndedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setEditDialogOpen(true);
+      }} />}
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
