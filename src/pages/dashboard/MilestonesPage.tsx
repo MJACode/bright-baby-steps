@@ -88,6 +88,53 @@ export default function MilestonesPage() {
     },
   });
 
+  // Custom milestones
+  const { data: customMilestones } = useQuery({
+    queryKey: ["custom-milestones", activeChild?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("custom_milestones")
+        .select("*")
+        .eq("child_id", activeChild!.id)
+        .order("achieved_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!activeChild,
+  });
+
+  const addCustomMilestone = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("custom_milestones").insert({
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+        name: customName.trim(),
+        achieved_at: customDate,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
+      setCustomModalOpen(false);
+      setCustomName("");
+      setCustomDate(format(new Date(), "yyyy-MM-dd"));
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2000);
+      toast({ title: "🎉 Custom milestone saved!" });
+    },
+  });
+
+  const deleteCustomMilestone = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("custom_milestones").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
+      toast({ title: "Milestone removed" });
+    },
+  });
+
   // Build a status lookup map
   const milestoneStatuses = useMemo(() => {
     const map: Record<string, string> = {};
