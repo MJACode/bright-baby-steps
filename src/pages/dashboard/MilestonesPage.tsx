@@ -4,19 +4,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { Card, CardContent } from "@/components/ui/card";
-import { Brain, PartyPopper, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Brain, PartyPopper, ChevronDown, Plus, Star, Pencil, Trash2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 export default function MilestonesPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const [showConfetti, setShowConfetti] = useState(false);
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const ageMonths = activeChild
     ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
@@ -76,6 +85,53 @@ export default function MilestonesPage() {
         setTimeout(() => setShowConfetti(false), 2000);
         toast({ title: "🎉 Milestone achieved!" });
       }
+    },
+  });
+
+  // Custom milestones
+  const { data: customMilestones } = useQuery({
+    queryKey: ["custom-milestones", activeChild?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("custom_milestones")
+        .select("*")
+        .eq("child_id", activeChild!.id)
+        .order("achieved_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!activeChild,
+  });
+
+  const addCustomMilestone = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("custom_milestones").insert({
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+        name: customName.trim(),
+        achieved_at: customDate,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
+      setCustomModalOpen(false);
+      setCustomName("");
+      setCustomDate(format(new Date(), "yyyy-MM-dd"));
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2000);
+      toast({ title: "🎉 Custom milestone saved!" });
+    },
+  });
+
+  const deleteCustomMilestone = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("custom_milestones").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
+      toast({ title: "Milestone removed" });
     },
   });
 
@@ -209,7 +265,7 @@ export default function MilestonesPage() {
 
           {/* Upcoming milestones */}
           {hasUpcomingMilestones && (
-            <Collapsible>
+            <Collapsible defaultOpen>
               <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
                 <h2 className="font-display font-bold text-lg text-muted-foreground">
                   Coming up next
@@ -250,6 +306,95 @@ export default function MilestonesPage() {
           )}
         </div>
       )}
+
+      {/* Custom Milestones */}
+      {activeChild && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-bold text-lg flex items-center gap-2">
+              <Star className="w-5 h-5 text-milestones" /> Custom Milestones
+            </h2>
+          </div>
+
+          {customMilestones && customMilestones.length > 0 && (
+            <div className="space-y-2">
+              {customMilestones.map((cm) => (
+                <Card key={cm.id} className="border-0 bg-milestones-bg/60">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">{cm.name}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(cm.achieved_at), "MMM d, yyyy")}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteCustomMilestone.mutate(cm.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full border-dashed border-milestones/30 text-milestones hover:bg-milestones-bg gap-2 touch-target"
+            onClick={() => {
+              setCustomName("");
+              setCustomDate(format(new Date(), "yyyy-MM-dd"));
+              setCustomModalOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4" /> Custom Milestone
+          </Button>
+        </div>
+      )}
+
+      {/* Custom Milestone Modal */}
+      <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Add Custom Milestone</DialogTitle>
+            <DialogDescription>Record a special moment — first laugh, first step, anything meaningful!</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">What happened?</Label>
+              <Input
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="e.g. First laugh, first solid bite, rolled over"
+                maxLength={100}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Date</Label>
+              <Input
+                type="date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                max={format(new Date(), "yyyy-MM-dd")}
+              />
+            </div>
+            <Button
+              onClick={() => {
+                if (!customName.trim()) {
+                  toast({ title: "Please enter a milestone name", variant: "destructive" });
+                  return;
+                }
+                addCustomMilestone.mutate();
+              }}
+              disabled={addCustomMilestone.isPending}
+              className="w-full h-12 text-base font-bold rounded-xl touch-target bg-milestones hover:bg-milestones/90 text-white"
+            >
+              {addCustomMilestone.isPending ? "Saving..." : "Save Milestone 🎉"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {activeChild && <WordSoundJournal childId={activeChild.id} />}
     </div>
