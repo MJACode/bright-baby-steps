@@ -112,7 +112,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
 
   const resetForm = () => {
     setEditingId(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(new Date());
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
