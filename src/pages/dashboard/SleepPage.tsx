@@ -650,7 +650,7 @@ export default function SleepPage() {
               onChange={setEditEndedAt}
               maxDate={new Date()}
             />
-            <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending || !editStartedAt || !editEndedAt}>
+            <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending}>
               {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
             </Button>
           </div>
