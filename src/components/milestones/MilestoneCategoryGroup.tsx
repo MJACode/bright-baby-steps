@@ -6,19 +6,24 @@ import { MilestoneCard } from "./MilestoneCard";
 interface MilestoneCategoryGroupProps {
   categories: any[];
   milestoneStatuses: Record<string, string>;
+  milestonePhotos?: Record<string, string | null>;
   onStatusChange: (milestoneId: string, status: string) => void;
+  onPhotoChange?: (milestoneId: string, photoUrl: string | null) => void;
   isPending: boolean;
   ageMonths: number;
+  userId?: string;
 }
 
 export function MilestoneCategoryGroup({
   categories,
   milestoneStatuses,
+  milestonePhotos,
   onStatusChange,
+  onPhotoChange,
   isPending,
   ageMonths,
+  userId,
 }: MilestoneCategoryGroupProps) {
-  // Filter to only categories that have milestones in this group
   const nonEmpty = categories.filter((cat) => cat.milestones.length > 0);
 
   if (nonEmpty.length === 0) return null;
@@ -64,9 +69,12 @@ export function MilestoneCategoryGroup({
                       key={m.id}
                       milestone={m}
                       status={status}
+                      photoUrl={milestonePhotos?.[m.id]}
                       onStatusChange={onStatusChange}
+                      onPhotoChange={onPhotoChange}
                       isPending={isPending}
                       showConcernNote={showConcernNote}
+                      userId={userId}
                     />
                   );
                 })}
