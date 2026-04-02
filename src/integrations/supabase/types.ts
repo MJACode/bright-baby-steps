@@ -408,6 +408,36 @@ export type Database = {
           },
         ]
       }
+      custom_milestones: {
+        Row: {
+          achieved_at: string
+          child_id: string
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          parent_id: string
+        }
+        Insert: {
+          achieved_at?: string
+          child_id: string
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          parent_id: string
+        }
+        Update: {
+          achieved_at?: string
+          child_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          parent_id?: string
+        }
+        Relationships: []
+      }
       diaper_logs: {
         Row: {
           child_id: string

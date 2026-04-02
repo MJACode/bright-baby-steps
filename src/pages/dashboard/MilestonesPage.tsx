@@ -4,13 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { Card, CardContent } from "@/components/ui/card";
-import { Brain, PartyPopper, ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Brain, PartyPopper, ChevronDown, Plus, Star, Pencil, Trash2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 export default function MilestonesPage() {
   const { user } = useAuth();
