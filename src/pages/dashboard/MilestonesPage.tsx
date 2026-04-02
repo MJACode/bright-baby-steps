@@ -307,6 +307,95 @@ export default function MilestonesPage() {
         </div>
       )}
 
+      {/* Custom Milestones */}
+      {activeChild && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-bold text-lg flex items-center gap-2">
+              <Star className="w-5 h-5 text-milestones" /> Custom Milestones
+            </h2>
+          </div>
+
+          {customMilestones && customMilestones.length > 0 && (
+            <div className="space-y-2">
+              {customMilestones.map((cm) => (
+                <Card key={cm.id} className="border-0 bg-milestones-bg/60">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">{cm.name}</p>
+                      <p className="text-xs text-muted-foreground">{format(new Date(cm.achieved_at), "MMM d, yyyy")}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteCustomMilestone.mutate(cm.id)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            className="w-full border-dashed border-milestones/30 text-milestones hover:bg-milestones-bg gap-2 touch-target"
+            onClick={() => {
+              setCustomName("");
+              setCustomDate(format(new Date(), "yyyy-MM-dd"));
+              setCustomModalOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4" /> Custom Milestone
+          </Button>
+        </div>
+      )}
+
+      {/* Custom Milestone Modal */}
+      <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Add Custom Milestone</DialogTitle>
+            <DialogDescription>Record a special moment — first laugh, first step, anything meaningful!</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">What happened?</Label>
+              <Input
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="e.g. First laugh, first solid bite, rolled over"
+                maxLength={100}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Date</Label>
+              <Input
+                type="date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                max={format(new Date(), "yyyy-MM-dd")}
+              />
+            </div>
+            <Button
+              onClick={() => {
+                if (!customName.trim()) {
+                  toast({ title: "Please enter a milestone name", variant: "destructive" });
+                  return;
+                }
+                addCustomMilestone.mutate();
+              }}
+              disabled={addCustomMilestone.isPending}
+              className="w-full h-12 text-base font-bold rounded-xl touch-target bg-milestones hover:bg-milestones/90 text-white"
+            >
+              {addCustomMilestone.isPending ? "Saving..." : "Save Milestone 🎉"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {activeChild && <WordSoundJournal childId={activeChild.id} />}
     </div>
   );
