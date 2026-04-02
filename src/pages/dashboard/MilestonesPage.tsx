@@ -121,11 +121,10 @@ export default function MilestonesPage() {
 
   const uploadPhoto = async (file: File): Promise<string> => {
     const ext = file.name.split(".").pop();
-    const path = `${user!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("milestone-photos").upload(path, file, { upsert: true });
+    const storagePath = `${user!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("milestone-photos").upload(storagePath, file, { upsert: true });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from("milestone-photos").getPublicUrl(path);
-    return publicUrl;
+    return storagePath;
   };
 
   const addCustomMilestone = useMutation({
