@@ -20,7 +20,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
 
-function SleepTrendsChart({ childId }: { childId: string }) {
+function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
     queryKey: ["sleep-trends-7d", childId],
     queryFn: async () => {
@@ -48,6 +48,34 @@ function SleepTrendsChart({ childId }: { childId: string }) {
     });
     return days.map((d) => ({ day: d.day, value: Math.round(d.value * 10) / 10 }));
   }, [trendLogs]);
+
+  const hasData = chartData.some(d => d.value > 0);
+
+  if (!hasData) {
+    return (
+      <Card className="border-0 bg-card/60">
+        <CardHeader className="pb-1 pt-3 px-4">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            7-Day Sleep Trends
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 flex flex-col items-center justify-center py-8 gap-3">
+          <CloudMoon className="w-10 h-10 text-sleep/40" />
+          <p className="text-sm text-muted-foreground text-center">No sleep logged this week</p>
+          {onAddEntry && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onAddEntry}
+              className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg"
+            >
+              <Plus className="w-4 h-4" /> Add your first entry
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <SevenDayChart
@@ -79,24 +107,46 @@ const sleepTips = [
 type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
 
 function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: number }) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
 
-  const insights = useMemo(() => {
+  const ageGroup = getAgeGroup(ageMonths);
+  const rec = sleepRecommendations[ageGroup];
+
+  const { insights, napBreakdown } = useMemo(() => {
     const result: { icon: React.ReactNode; text: string }[] = [];
     const sevenAgo = subDays(startOfDay(new Date()), 6);
     const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenAgo);
 
-    if (recentLogs.length === 0) return result;
-
-    // 1. Average daily sleep below age minimum
-    const byDay = new Map<string, number>();
+    // Nap vs night breakdown
+    const napLogs = recentLogs.filter(l => l.sleep_type === "nap");
+    const nightLogs = recentLogs.filter(l => l.sleep_type === "night");
+    const byDay = new Map<string, { napMin: number; nightMin: number; napCount: number }>();
     recentLogs.forEach(l => {
       const key = format(new Date(l.started_at), "yyyy-MM-dd");
-      byDay.set(key, (byDay.get(key) || 0) + (l.duration_minutes || 0));
+      const entry = byDay.get(key) || { napMin: 0, nightMin: 0, napCount: 0 };
+      if (l.sleep_type === "nap") {
+        entry.napMin += l.duration_minutes || 0;
+        entry.napCount += 1;
+      } else {
+        entry.nightMin += l.duration_minutes || 0;
+      }
+      byDay.set(key, entry);
     });
     const daysWithData = byDay.size || 1;
-    const avgDailyHours = Array.from(byDay.values()).reduce((a, b) => a + b, 0) / daysWithData / 60;
-    const ageGroup = getAgeGroup(ageMonths);
+    const totalNapMin = Array.from(byDay.values()).reduce((s, d) => s + d.napMin, 0);
+    const totalNightMin = Array.from(byDay.values()).reduce((s, d) => s + d.nightMin, 0);
+    const totalNapCount = Array.from(byDay.values()).reduce((s, d) => s + d.napCount, 0);
+
+    const napBreakdownData = recentLogs.length > 0 ? {
+      avgNapHours: Math.round(totalNapMin / daysWithData / 6) / 10,
+      avgNightHours: Math.round(totalNightMin / daysWithData / 6) / 10,
+      avgNapsPerDay: Math.round(totalNapCount / daysWithData * 10) / 10,
+    } : null;
+
+    if (recentLogs.length === 0) return { insights: result, napBreakdown: napBreakdownData };
+
+    // 1. Average daily sleep below age minimum
+    const avgDailyHours = (totalNapMin + totalNightMin) / daysWithData / 60;
     const minHours = ageMinSleepHours[ageGroup] ?? 11;
     if (avgDailyHours < minHours) {
       result.push({
@@ -115,14 +165,11 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
       });
     }
 
-    // 3. Early waking pattern (most night sessions end before 6am)
-    const nightLogs = recentLogs.filter(l => l.sleep_type === "night" && l.ended_at);
-    if (nightLogs.length >= 2) {
-      const earlyCount = nightLogs.filter(l => {
-        const endHour = new Date(l.ended_at!).getHours();
-        return endHour < 6;
-      }).length;
-      if (earlyCount > nightLogs.length / 2) {
+    // 3. Early waking pattern
+    const nightWithEnd = recentLogs.filter(l => l.sleep_type === "night" && l.ended_at);
+    if (nightWithEnd.length >= 2) {
+      const earlyCount = nightWithEnd.filter(l => new Date(l.ended_at!).getHours() < 6).length;
+      if (earlyCount > nightWithEnd.length / 2) {
         result.push({
           icon: <Sunrise className="w-5 h-5 text-sleep shrink-0" />,
           text: "Early waking pattern detected — try a slightly later bedtime or a blackout curtain.",
@@ -130,10 +177,10 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
       }
     }
 
-    return result.slice(0, 3);
+    return { insights: result.slice(0, 3), napBreakdown: napBreakdownData };
   }, [logs, ageMonths]);
 
-  if (insights.length === 0) return null;
+  if (insights.length === 0 && !napBreakdown) return null;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -146,6 +193,37 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-3">
+        {/* Nap vs Night Breakdown */}
+        {napBreakdown && (
+          <Card className="border-0 bg-sleep-bg/60">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                <Moon className="w-3.5 h-3.5 text-sleep" /> Nap vs. Night Breakdown
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <p className="text-lg font-bold text-sleep">{napBreakdown.avgNightHours}h</p>
+                  <p className="text-[10px] text-muted-foreground">Night sleep/day</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-sleep">{napBreakdown.avgNapHours}h</p>
+                  <p className="text-[10px] text-muted-foreground">Nap sleep/day</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-sleep">{napBreakdown.avgNapsPerDay}</p>
+                  <p className="text-[10px] text-muted-foreground">Naps/day</p>
+                </div>
+              </div>
+              <div className="rounded-lg bg-background/50 p-2.5">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  <span className="font-medium text-foreground/80">Age-typical benchmarks:</span>{" "}
+                  Babies this age typically need {rec.naps} totaling {rec.napHours}, plus {rec.nightHours} overnight.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {insights.map((insight, i) => (
           <Card key={i} className="border-0 bg-sleep-bg/60">
             <CardContent className="p-3 flex items-start gap-3">
@@ -176,12 +254,12 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
     </Collapsible>
   );
 }
-const sleepRecommendations: Record<string, { total: string; naps: string }> = {
-  newborn: { total: "14–17 hrs", naps: "4–5 naps" },
-  "3mo": { total: "14–16 hrs", naps: "3–4 naps" },
-  "6mo": { total: "12–15 hrs", naps: "2–3 naps" },
-  "9mo": { total: "12–15 hrs", naps: "2 naps" },
-  "12mo+": { total: "11–14 hrs", naps: "1–2 naps" },
+const sleepRecommendations: Record<string, { total: string; naps: string; napHours: string; nightHours: string }> = {
+  newborn: { total: "14–17 hrs", naps: "4–5 naps/day", napHours: "6–8h", nightHours: "8–9h" },
+  "3mo": { total: "14–16 hrs", naps: "3–4 naps/day", napHours: "4–6h", nightHours: "9–11h" },
+  "6mo": { total: "12–15 hrs", naps: "2–3 naps/day", napHours: "3–4h", nightHours: "10–12h" },
+  "9mo": { total: "12–15 hrs", naps: "2 naps/day", napHours: "2–3h", nightHours: "10–12h" },
+  "12mo+": { total: "11–14 hrs", naps: "1–2 naps/day", napHours: "2–3h", nightHours: "10–12h" },
 };
 
 function getAgeGroup(ageMonths: number): string {
@@ -535,7 +613,13 @@ export default function SleepPage() {
 
 
       {/* 7-Day Trends Chart */}
-      {activeChild && <SleepTrendsChart childId={activeChild.id} />}
+      {activeChild && <SleepTrendsChart childId={activeChild.id} onAddEntry={() => {
+        setEditingId(null);
+        setEditSleepType("nap");
+        setEditStartedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setEditEndedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setEditDialogOpen(true);
+      }} />}
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
