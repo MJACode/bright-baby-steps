@@ -23,6 +23,9 @@ export default function MilestonesPage() {
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const [showConfetti, setShowConfetti] = useState(false);
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const ageMonths = activeChild
     ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
