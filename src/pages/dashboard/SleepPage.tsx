@@ -20,7 +20,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
 
-function SleepTrendsChart({ childId }: { childId: string }) {
+function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
     queryKey: ["sleep-trends-7d", childId],
     queryFn: async () => {
@@ -48,6 +48,34 @@ function SleepTrendsChart({ childId }: { childId: string }) {
     });
     return days.map((d) => ({ day: d.day, value: Math.round(d.value * 10) / 10 }));
   }, [trendLogs]);
+
+  const hasData = chartData.some(d => d.value > 0);
+
+  if (!hasData) {
+    return (
+      <Card className="border-0 bg-card/60">
+        <CardHeader className="pb-1 pt-3 px-4">
+          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            7-Day Sleep Trends
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 flex flex-col items-center justify-center py-8 gap-3">
+          <CloudMoon className="w-10 h-10 text-sleep/40" />
+          <p className="text-sm text-muted-foreground text-center">No sleep logged this week</p>
+          {onAddEntry && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onAddEntry}
+              className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg"
+            >
+              <Plus className="w-4 h-4" /> Add your first entry
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <SevenDayChart
