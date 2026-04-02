@@ -9,13 +9,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UtensilsCrossed, Plus, Pencil } from "lucide-react";
+import { UtensilsCrossed, Plus, Pencil, ShieldAlert, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
+
+const foodCategories = [
+  { value: "fruit", label: "🍎 Fruit" },
+  { value: "vegetable", label: "🥦 Vegetable" },
+  { value: "grain_cereal", label: "🌾 Grain/Cereal" },
+  { value: "protein", label: "🍗 Protein" },
+  { value: "dairy", label: "🧀 Dairy" },
+  { value: "other", label: "🍽️ Other" },
+];
 
 function FeedingTrendsChart({ childId }: { childId: string }) {
   const { data: trendLogs } = useQuery({

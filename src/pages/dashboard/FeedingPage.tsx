@@ -77,7 +77,7 @@ export default function FeedingPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="feeding" className="mt-4">
-          <FeedingLog />
+          <FeedingLog onNavigateToAllergens={() => setTab("allergens")} />
         </TabsContent>
         <TabsContent value="supplements" className="mt-4">
           <SupplementTracker />
