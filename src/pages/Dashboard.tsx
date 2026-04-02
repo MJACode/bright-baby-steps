@@ -15,6 +15,7 @@ import { format, isToday, differenceInDays } from "date-fns";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { children, activeChild, isLoading: childrenLoading } = useChildren();
 
   // Today's stats
