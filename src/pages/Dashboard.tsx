@@ -158,33 +158,56 @@ export default function Dashboard() {
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
-        <CardContent className="flex items-center gap-3 p-4">
-          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <Flame className="w-5 h-5 text-primary" />
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+              <Flame className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">
+                {(streakDays ?? 0) > 0 ? `🔥 ${streakDays}-day tracking streak!` : "Start your tracking streak!"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {(streakDays ?? 0) > 0 ? "Keep it going — consistency matters." : "Log your first entry to begin."}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-sm">
-              {(streakDays ?? 0) > 0 ? `🔥 ${streakDays}-day tracking streak!` : "Start your tracking streak!"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {(streakDays ?? 0) > 0 ? "Keep it going — consistency matters." : "Log your first entry to begin."}
-            </p>
+          <div className="flex gap-2 mt-3 ml-[52px]">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs font-semibold bg-background/60 border-primary/20 text-primary hover:bg-primary/10"
+              onClick={() => navigate("/dashboard/sleep")}
+            >
+              <Moon className="w-3.5 h-3.5 mr-1" /> + Log Sleep
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs font-semibold bg-background/60 border-primary/20 text-primary hover:bg-primary/10"
+              onClick={() => navigate("/dashboard/feeding")}
+            >
+              <UtensilsCrossed className="w-3.5 h-3.5 mr-1" /> + Log Feed
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Summary grid */}
       <div className="grid grid-cols-2 gap-3">
-        {summaryCards.map((card) => (
+        {summaryCards.map((card, idx) => (
           <Link key={card.title} to={card.href}>
             <Card className={cn("border-0 transition-all active:scale-[0.97] touch-target h-full", card.bgColor)}>
-              <CardContent className="p-4 flex flex-col gap-2">
+              <CardContent className="p-4 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
                   <card.icon className={cn("w-6 h-6", card.color)} />
                   <span className={cn("text-xs font-bold uppercase tracking-wide", card.color)}>{card.title}</span>
                 </div>
                 <p className="font-bold text-2xl leading-tight">{card.stat}</p>
                 <p className="text-xs text-muted-foreground">{card.sub}</p>
+                {activeChild && lastLogged[idx] && (
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">last logged {lastLogged[idx]}</p>
+                )}
               </CardContent>
             </Card>
           </Link>
