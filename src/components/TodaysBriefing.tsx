@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
-import { format, subHours } from "date-fns";
+import { format, subHours, differenceInHours } from "date-fns";
 import { getAgeInMonths } from "@/hooks/useChildren";
 
 interface TodaysBriefingProps {
@@ -27,32 +27,59 @@ function getExpectedFeeds(ageMonths: number): number {
 export function TodaysBriefing({ activeChild, todayFeeds }: TodaysBriefingProps) {
   const now = new Date();
   const currentHour = now.getHours();
+  const today = format(now, "yyyy-MM-dd");
 
   const ageMonths = activeChild
     ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
     : 0;
 
-  // Check if any sleep logged in last 4 hours
-  const { data: recentSleep } = useQuery({
-    queryKey: ["recent-sleep-4h", activeChild?.id],
+  // Today's sleep total
+  const { data: todaySleepMin } = useQuery({
+    queryKey: ["briefing-today-sleep", activeChild?.id, today],
     queryFn: async () => {
-      const fourHoursAgo = subHours(now, 4).toISOString();
       const { data } = await supabase
         .from("sleep_logs")
-        .select("id")
+        .select("duration_minutes")
         .eq("child_id", activeChild!.id)
-        .gte("started_at", fourHoursAgo)
-        .limit(1);
-      return (data?.length ?? 0) > 0;
+        .gte("started_at", `${today}T00:00:00`);
+      return data?.reduce((s, l) => s + (l.duration_minutes || 0), 0) ?? 0;
     },
     enabled: !!activeChild,
   });
 
-  // Get one unachieved milestone in the current age band
+  // Last feed time
+  const { data: lastFeedAt } = useQuery({
+    queryKey: ["briefing-last-feed", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("feeding_logs")
+        .select("logged_at")
+        .eq("child_id", activeChild!.id)
+        .order("logged_at", { ascending: false })
+        .limit(1);
+      return data?.[0]?.logged_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  // Today's diaper count
+  const { data: todayDiapers } = useQuery({
+    queryKey: ["briefing-today-diapers", activeChild?.id, today],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("diaper_logs")
+        .select("id")
+        .eq("child_id", activeChild!.id)
+        .gte("logged_at", `${today}T00:00:00`);
+      return data?.length ?? 0;
+    },
+    enabled: !!activeChild,
+  });
+
+  // Pending milestone
   const { data: pendingMilestone } = useQuery({
     queryKey: ["pending-milestone-briefing", activeChild?.id, ageMonths],
     queryFn: async () => {
-      // Get milestones in the child's age band that aren't achieved
       const { data: milestones } = await supabase
         .from("speech")
         .select("id, name")
@@ -77,30 +104,67 @@ export function TodaysBriefing({ activeChild, todayFeeds }: TodaysBriefingProps)
     enabled: !!activeChild && ageMonths >= 0,
   });
 
-  // Build suggestions
+  // Build data-driven suggestions
   const suggestions: string[] = [];
 
   if (activeChild) {
-    const expectedFeeds = getExpectedFeeds(ageMonths);
-    if (todayFeeds < expectedFeeds) {
-      suggestions.push("Consider adding one more feed before bedtime 🍼");
+    const hasData = todaySleepMin !== undefined || lastFeedAt !== undefined || todayDiapers !== undefined;
+
+    // Sleep insights
+    if (todaySleepMin !== undefined) {
+      if (todaySleepMin === 0) {
+        suggestions.push("No sleep logged yet today — tap Sleep to add an entry 🌙");
+      } else {
+        const hours = Math.floor(todaySleepMin / 60);
+        const mins = todaySleepMin % 60;
+        const sleepStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        suggestions.push(`${sleepStr} of sleep logged today so far 😴`);
+      }
     }
 
-    if (currentHour >= 18 && recentSleep === false) {
-      suggestions.push("It might be time for the evening wind-down 🌙");
+    // Feed insights
+    if (lastFeedAt) {
+      const hoursSinceLastFeed = differenceInHours(now, new Date(lastFeedAt));
+      if (hoursSinceLastFeed >= 3) {
+        suggestions.push(`Last feed was ${hoursSinceLastFeed} hours ago — time for another? 🍼`);
+      } else {
+        const expectedFeeds = getExpectedFeeds(ageMonths);
+        if (todayFeeds < expectedFeeds) {
+          suggestions.push(`${todayFeeds} of ~${expectedFeeds} feeds so far today 🍼`);
+        }
+      }
+    } else if (todayFeeds === 0) {
+      suggestions.push("No feeds logged yet today — tap Feeding to add one 🍼");
     }
 
+    // Diaper insights
+    if (todayDiapers !== undefined && todayDiapers === 0 && currentHour >= 10) {
+      suggestions.push("No diapers logged today yet 🧷");
+    }
+
+    // Milestone nudge
     if (pendingMilestone) {
       suggestions.push(
         `Practice "${pendingMilestone.name}" today — just a few minutes makes a difference! ✨`
       );
     }
+
+    // Evening wind-down
+    if (currentHour >= 18 && todaySleepMin !== undefined && todaySleepMin > 0) {
+      // Only show if they're actively tracking
+      if (suggestions.length < 3) {
+        suggestions.push("It might be time for the evening wind-down 🌙");
+      }
+    }
+
+    // If no data at all, show disclaimer
+    if (!hasData || suggestions.length === 0) {
+      suggestions.push("Tips based on general guidance — log data to personalize 💛");
+    }
   }
 
-  // Cap at 3
   const display = suggestions.slice(0, 3);
 
-  // Fallback encouragement
   if (display.length === 0) {
     display.push("You're doing great — everything looks on track today! 💛");
   }
