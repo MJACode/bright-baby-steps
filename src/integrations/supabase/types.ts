@@ -507,11 +507,14 @@ export type Database = {
           created_at: string
           duration_minutes: number | null
           feeding_type: string
+          food_category: string | null
           food_description: string | null
           id: string
           logged_at: string
           notes: string | null
           parent_id: string
+          reaction_description: string | null
+          reaction_noted: boolean | null
           side: string | null
         }
         Insert: {
@@ -522,11 +525,14 @@ export type Database = {
           created_at?: string
           duration_minutes?: number | null
           feeding_type: string
+          food_category?: string | null
           food_description?: string | null
           id?: string
           logged_at?: string
           notes?: string | null
           parent_id: string
+          reaction_description?: string | null
+          reaction_noted?: boolean | null
           side?: string | null
         }
         Update: {
@@ -537,11 +543,14 @@ export type Database = {
           created_at?: string
           duration_minutes?: number | null
           feeding_type?: string
+          food_category?: string | null
           food_description?: string | null
           id?: string
           logged_at?: string
           notes?: string | null
           parent_id?: string
+          reaction_description?: string | null
+          reaction_noted?: boolean | null
           side?: string | null
         }
         Relationships: [

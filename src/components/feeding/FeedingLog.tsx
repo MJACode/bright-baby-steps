@@ -9,13 +9,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UtensilsCrossed, Plus, Pencil } from "lucide-react";
+import { UtensilsCrossed, Plus, Pencil, ShieldAlert, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
+
+const foodCategories = [
+  { value: "fruit", label: "🍎 Fruit" },
+  { value: "vegetable", label: "🥦 Vegetable" },
+  { value: "grain_cereal", label: "🌾 Grain/Cereal" },
+  { value: "protein", label: "🍗 Protein" },
+  { value: "dairy", label: "🧀 Dairy" },
+  { value: "other", label: "🍽️ Other" },
+];
 
 function FeedingTrendsChart({ childId }: { childId: string }) {
   const { data: trendLogs } = useQuery({
@@ -63,7 +74,7 @@ const feedingTypes = [
   { value: "solid", label: "🥣 Solid" },
 ];
 
-export default function FeedingLog() {
+export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAllergens?: () => void }) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
@@ -77,6 +88,9 @@ export default function FeedingLog() {
   const [amountOzLeft, setAmountOzLeft] = useState("");
   const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
+  const [foodCategory, setFoodCategory] = useState("");
+  const [reactionNoted, setReactionNoted] = useState(false);
+  const [reactionDescription, setReactionDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [loggedAt, setLoggedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
@@ -97,7 +111,7 @@ export default function FeedingLog() {
 
   const resetForm = () => {
     setEditingId(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setNotes(""); setLoggedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
@@ -109,6 +123,9 @@ export default function FeedingLog() {
     setAmountOzLeft(log.amount_oz_left ? String(log.amount_oz_left) : "");
     setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
     setFoodDesc(log.food_description || "");
+    setFoodCategory((log as any).food_category || "");
+    setReactionNoted((log as any).reaction_noted || false);
+    setReactionDescription((log as any).reaction_description || "");
     setNotes(log.notes || "");
     setLoggedAt(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
     setDialogOpen(true);
@@ -124,6 +141,9 @@ export default function FeedingLog() {
     amount_oz_left: feedType === "pump" && amountOzLeft ? Number(amountOzLeft) : null,
     amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
     food_description: feedType === "solid" ? foodDesc || null : null,
+    food_category: feedType === "solid" ? foodCategory || null : null,
+    reaction_noted: feedType === "solid" ? reactionNoted : false,
+    reaction_description: feedType === "solid" && reactionNoted ? reactionDescription || null : null,
     notes: notes || null,
     logged_at: new Date(loggedAt).toISOString(),
   });
@@ -255,9 +275,62 @@ export default function FeedingLog() {
               )}
 
               {feedType === "solid" && (
-                <div className="space-y-1">
-                  <Label>Food Description</Label>
-                  <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Food Description</Label>
+                    <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Food Group</Label>
+                    <Select value={foodCategory} onValueChange={setFoodCategory}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {foodCategories.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="reaction-noted"
+                      checked={reactionNoted}
+                      onCheckedChange={(checked) => setReactionNoted(checked === true)}
+                    />
+                    <Label htmlFor="reaction-noted" className="text-sm cursor-pointer flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
+                      Reaction noted
+                    </Label>
+                  </div>
+
+                  {reactionNoted && (
+                    <div className="space-y-1 ml-6">
+                      <Label className="text-xs">Describe the reaction</Label>
+                      <Textarea
+                        value={reactionDescription}
+                        onChange={(e) => setReactionDescription(e.target.value)}
+                        placeholder="e.g. mild rash on cheeks, fussiness after eating"
+                        rows={2}
+                      />
+                    </div>
+                  )}
+
+                  {onNavigateToAllergens && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-xs text-feeding hover:text-feeding/80 px-0"
+                      onClick={() => { setDialogOpen(false); onNavigateToAllergens(); }}
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      View Allergen Tracker →
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -297,7 +370,15 @@ export default function FeedingLog() {
                     } {log.duration_minutes ? `${log.duration_minutes} min` : ""}
                     {log.food_description ? log.food_description : ""}
                   </p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(log.logged_at), "MMM d, h:mm a")}
+                    {(log as any).food_category && ` · ${foodCategories.find(c => c.value === (log as any).food_category)?.label || (log as any).food_category}`}
+                  </p>
+                  {(log as any).reaction_noted && (
+                    <p className="text-xs text-[hsl(var(--warning))] flex items-center gap-1 mt-0.5">
+                      <AlertTriangle className="w-3 h-3" /> Reaction noted{(log as any).reaction_description ? `: ${(log as any).reaction_description}` : ""}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
