@@ -141,6 +141,9 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
     amount_oz_left: feedType === "pump" && amountOzLeft ? Number(amountOzLeft) : null,
     amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
     food_description: feedType === "solid" ? foodDesc || null : null,
+    food_category: feedType === "solid" ? foodCategory || null : null,
+    reaction_noted: feedType === "solid" ? reactionNoted : false,
+    reaction_description: feedType === "solid" && reactionNoted ? reactionDescription || null : null,
     notes: notes || null,
     logged_at: new Date(loggedAt).toISOString(),
   });
