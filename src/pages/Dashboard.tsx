@@ -64,6 +64,47 @@ export default function Dashboard() {
   });
 
 
+  // Last logged timestamps
+  const { data: lastSleep } = useQuery({
+    queryKey: ["last-sleep", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("sleep_logs").select("started_at")
+        .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(1);
+      return data?.[0]?.started_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const { data: lastFeed } = useQuery({
+    queryKey: ["last-feed", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("feeding_logs").select("logged_at")
+        .eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(1);
+      return data?.[0]?.logged_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const { data: lastDiaper } = useQuery({
+    queryKey: ["last-diaper", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("diaper_logs").select("logged_at")
+        .eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(1);
+      return data?.[0]?.logged_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const { data: lastMilestone } = useQuery({
+    queryKey: ["last-milestone", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("child_speech").select("updated_at")
+        .eq("child_id", activeChild!.id).eq("status", "achieved").order("updated_at", { ascending: false }).limit(1);
+      return data?.[0]?.updated_at ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
   // Streak calculation
   const { data: streakDays } = useQuery({
     queryKey: ["streak", activeChild?.id],
@@ -87,6 +128,12 @@ export default function Dashboard() {
 
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
   const formatMin = (m: number) => { const h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; };
+  const timeAgo = (ts: string | null) => {
+    if (!ts) return null;
+    try { return formatDistanceToNow(new Date(ts), { addSuffix: true }); } catch { return null; }
+  };
+
+  const lastLogged = [timeAgo(lastSleep), timeAgo(lastFeed), timeAgo(lastDiaper), timeAgo(lastMilestone)];
 
   const summaryCards = [
     { title: "Sleep", icon: Moon, href: "/dashboard/sleep", color: "text-sleep", bgColor: "bg-sleep-bg", stat: activeChild ? formatMin(todaySleep ?? 0) : "—", sub: activeChild ? "today" : "Add child" },
