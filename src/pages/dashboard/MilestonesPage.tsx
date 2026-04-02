@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,55 @@ import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { format } from "date-fns";
+
+function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
+  milestone: any;
+  onDelete: () => void;
+  onRemovePhoto: () => void;
+  onAddPhoto: () => void;
+}) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!milestone.photo_url) { setSignedUrl(null); return; }
+    let cancelled = false;
+    supabase.storage.from("milestone-photos")
+      .createSignedUrl(milestone.photo_url, 3600)
+      .then(({ data }) => { if (!cancelled && data) setSignedUrl(data.signedUrl); });
+    return () => { cancelled = true; };
+  }, [milestone.photo_url]);
+
+  return (
+    <Card className="border-0 bg-milestones-bg/60">
+      <CardContent className="p-3">
+        <div className="flex items-center gap-3">
+          {signedUrl && (
+            <div className="relative shrink-0">
+              <img src={signedUrl} alt={milestone.name} className="w-12 h-12 rounded-lg object-cover ring-2 ring-milestones/20" />
+              <button onClick={onRemovePhoto} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold">{milestone.name}</p>
+            <p className="text-xs text-muted-foreground">{format(new Date(milestone.achieved_at), "MMM d, yyyy")}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {!milestone.photo_url && (
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-milestones hover:text-milestones/80" onClick={onAddPhoto}>
+                <Camera className="w-4 h-4" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onDelete}>
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function MilestonesPage() {
   const { user } = useAuth();
@@ -121,11 +170,10 @@ export default function MilestonesPage() {
 
   const uploadPhoto = async (file: File): Promise<string> => {
     const ext = file.name.split(".").pop();
-    const path = `${user!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("milestone-photos").upload(path, file, { upsert: true });
+    const storagePath = `${user!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("milestone-photos").upload(storagePath, file, { upsert: true });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from("milestone-photos").getPublicUrl(path);
-    return publicUrl;
+    return storagePath;
   };
 
   const addCustomMilestone = useMutation({
@@ -379,51 +427,13 @@ export default function MilestonesPage() {
           {customMilestones && customMilestones.length > 0 && (
             <div className="space-y-2">
               {customMilestones.map((cm) => (
-                <Card key={cm.id} className="border-0 bg-milestones-bg/60">
-                  <CardContent className="p-3">
-                    <div className="flex items-center gap-3">
-                      {cm.photo_url && (
-                        <div className="relative shrink-0">
-                          <img
-                            src={cm.photo_url}
-                            alt={cm.name}
-                            className="w-12 h-12 rounded-lg object-cover ring-2 ring-milestones/20"
-                          />
-                          <button
-                            onClick={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: null })}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold">{cm.name}</p>
-                        <p className="text-xs text-muted-foreground">{format(new Date(cm.achieved_at), "MMM d, yyyy")}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {!cm.photo_url && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-milestones hover:text-milestones/80"
-                            onClick={() => handleCustomPhotoUpload(cm.id)}
-                          >
-                            <Camera className="w-4 h-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteCustomMilestone.mutate(cm.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <CustomMilestoneCard
+                  key={cm.id}
+                  milestone={cm}
+                  onDelete={() => deleteCustomMilestone.mutate(cm.id)}
+                  onRemovePhoto={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: null })}
+                  onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
+                />
               ))}
             </div>
           )}
