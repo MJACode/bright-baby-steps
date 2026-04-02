@@ -148,7 +148,9 @@ export default function DiapersPage() {
   const weekData = weekDays.map((day) => {
     const dayEnd = addDays(day, 1);
     const dayLogs = logs?.filter(l => isWithinInterval(new Date(l.logged_at), { start: day, end: dayEnd })) ?? [];
-    return { day: format(day, "EEE"), count: dayLogs.length };
+    const wet = dayLogs.filter(l => l.diaper_type === "wet").length;
+    const dirty = dayLogs.length - wet; // everything else counts as dirty
+    return { day: format(day, "EEE"), wet, dirty, total: dayLogs.length };
   });
 
   return (
