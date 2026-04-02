@@ -204,12 +204,12 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
     </Collapsible>
   );
 }
-const sleepRecommendations: Record<string, { total: string; naps: string }> = {
-  newborn: { total: "14–17 hrs", naps: "4–5 naps" },
-  "3mo": { total: "14–16 hrs", naps: "3–4 naps" },
-  "6mo": { total: "12–15 hrs", naps: "2–3 naps" },
-  "9mo": { total: "12–15 hrs", naps: "2 naps" },
-  "12mo+": { total: "11–14 hrs", naps: "1–2 naps" },
+const sleepRecommendations: Record<string, { total: string; naps: string; napHours: string; nightHours: string }> = {
+  newborn: { total: "14–17 hrs", naps: "4–5 naps/day", napHours: "6–8h", nightHours: "8–9h" },
+  "3mo": { total: "14–16 hrs", naps: "3–4 naps/day", napHours: "4–6h", nightHours: "9–11h" },
+  "6mo": { total: "12–15 hrs", naps: "2–3 naps/day", napHours: "3–4h", nightHours: "10–12h" },
+  "9mo": { total: "12–15 hrs", naps: "2 naps/day", napHours: "2–3h", nightHours: "10–12h" },
+  "12mo+": { total: "11–14 hrs", naps: "1–2 naps/day", napHours: "2–3h", nightHours: "10–12h" },
 };
 
 function getAgeGroup(ageMonths: number): string {
