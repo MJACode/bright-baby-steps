@@ -326,8 +326,8 @@ export default function SleepPage() {
 
   const updateLog = useMutation({
     mutationFn: async () => {
-      const startDate = new Date(editStartedAt);
-      const endDate = new Date(editEndedAt);
+      const startDate = editStartedAt;
+      const endDate = editEndedAt;
 
       if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
         throw new Error("Please enter valid start and end times.");
