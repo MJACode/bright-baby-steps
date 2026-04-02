@@ -24,6 +24,7 @@ export default function DiapersPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
