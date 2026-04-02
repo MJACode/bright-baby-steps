@@ -128,7 +128,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
     setReactionNoted((log as any).reaction_noted || false);
     setReactionDescription((log as any).reaction_description || "");
     setNotes(log.notes || "");
-    setLoggedAt(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
+    setLoggedAt(new Date(log.logged_at));
     setDialogOpen(true);
   };
 
