@@ -305,6 +305,7 @@ export type Database = {
           notes: string | null
           parent_id: string
           pediatrician_notified: boolean | null
+          photo_url: string | null
           status: string
           updated_at: string
         }
@@ -318,6 +319,7 @@ export type Database = {
           notes?: string | null
           parent_id: string
           pediatrician_notified?: boolean | null
+          photo_url?: string | null
           status?: string
           updated_at?: string
         }
@@ -331,6 +333,7 @@ export type Database = {
           notes?: string | null
           parent_id?: string
           pediatrician_notified?: boolean | null
+          photo_url?: string | null
           status?: string
           updated_at?: string
         }
@@ -417,6 +420,7 @@ export type Database = {
           name: string
           notes: string | null
           parent_id: string
+          photo_url: string | null
         }
         Insert: {
           achieved_at?: string
@@ -426,6 +430,7 @@ export type Database = {
           name: string
           notes?: string | null
           parent_id: string
+          photo_url?: string | null
         }
         Update: {
           achieved_at?: string
@@ -435,6 +440,7 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_id?: string
+          photo_url?: string | null
         }
         Relationships: []
       }
