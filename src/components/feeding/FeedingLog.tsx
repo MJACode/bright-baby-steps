@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
@@ -92,7 +93,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
   const [reactionNoted, setReactionNoted] = useState(false);
   const [reactionDescription, setReactionDescription] = useState("");
   const [notes, setNotes] = useState("");
-  const [loggedAt, setLoggedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [loggedAt, setLoggedAt] = useState<Date>(new Date());
 
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
@@ -111,7 +112,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
 
   const resetForm = () => {
     setEditingId(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(new Date());
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
@@ -127,7 +128,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
     setReactionNoted((log as any).reaction_noted || false);
     setReactionDescription((log as any).reaction_description || "");
     setNotes(log.notes || "");
-    setLoggedAt(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
+    setLoggedAt(new Date(log.logged_at));
     setDialogOpen(true);
   };
 
@@ -145,7 +146,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
     reaction_noted: feedType === "solid" ? reactionNoted : false,
     reaction_description: feedType === "solid" && reactionNoted ? reactionDescription || null : null,
     notes: notes || null,
-    logged_at: new Date(loggedAt).toISOString(),
+    logged_at: loggedAt.toISOString(),
   });
 
   const saveMutation = useMutation({
@@ -207,15 +208,12 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
               <DialogTitle className="font-display">{editingId ? "Edit Feed" : "Log a Feed"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Date & Time</Label>
-                <Input
-                  type="datetime-local"
-                  value={loggedAt}
-                  onChange={(e) => setLoggedAt(e.target.value)}
-                  max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
-                />
-              </div>
+              <MobileDateTimePicker
+                label="Date & Time"
+                value={loggedAt}
+                onChange={setLoggedAt}
+                maxDate={new Date()}
+              />
               <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
                   <Button key={ft.value} type="button" variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">

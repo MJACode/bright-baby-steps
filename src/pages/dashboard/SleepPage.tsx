@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -284,8 +285,8 @@ export default function SleepPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
-  const [editStartedAt, setEditStartedAt] = useState("");
-  const [editEndedAt, setEditEndedAt] = useState("");
+  const [editStartedAt, setEditStartedAt] = useState<Date>(new Date());
+  const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
 
   useEffect(() => {
     if (!isTracking || !startTime) return;
@@ -325,8 +326,8 @@ export default function SleepPage() {
 
   const updateLog = useMutation({
     mutationFn: async () => {
-      const startDate = new Date(editStartedAt);
-      const endDate = new Date(editEndedAt);
+      const startDate = editStartedAt;
+      const endDate = editEndedAt;
 
       if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
         throw new Error("Please enter valid start and end times.");
@@ -369,8 +370,8 @@ export default function SleepPage() {
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
     setEditSleepType(log.sleep_type as "nap" | "night");
-    setEditStartedAt(format(new Date(log.started_at), "yyyy-MM-dd'T'HH:mm"));
-    setEditEndedAt(log.ended_at ? format(new Date(log.ended_at), "yyyy-MM-dd'T'HH:mm") : "");
+    setEditStartedAt(new Date(log.started_at));
+    setEditEndedAt(log.ended_at ? new Date(log.ended_at) : new Date());
     setEditDialogOpen(true);
   };
 
@@ -549,8 +550,8 @@ export default function SleepPage() {
           onClick={() => {
             setEditingId(null);
             setEditSleepType("nap");
-            setEditStartedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-            setEditEndedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+            setEditStartedAt(new Date());
+            setEditEndedAt(new Date());
             setEditDialogOpen(true);
           }}
           className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
@@ -616,8 +617,8 @@ export default function SleepPage() {
       {activeChild && <SleepTrendsChart childId={activeChild.id} onAddEntry={() => {
         setEditingId(null);
         setEditSleepType("nap");
-        setEditStartedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-        setEditEndedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setEditStartedAt(new Date());
+        setEditEndedAt(new Date());
         setEditDialogOpen(true);
       }} />}
 
@@ -637,15 +638,19 @@ export default function SleepPage() {
                 <Moon className="w-5 h-5" /> Night
               </Button>
             </div>
-            <div className="space-y-1">
-              <Label>Start Time</Label>
-              <Input type="datetime-local" value={editStartedAt} onChange={(e) => setEditStartedAt(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>End Time</Label>
-              <Input type="datetime-local" value={editEndedAt} onChange={(e) => setEditEndedAt(e.target.value)} />
-            </div>
-            <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending || !editStartedAt || !editEndedAt}>
+            <MobileDateTimePicker
+              label="Start Time"
+              value={editStartedAt}
+              onChange={setEditStartedAt}
+              maxDate={new Date()}
+            />
+            <MobileDateTimePicker
+              label="End Time"
+              value={editEndedAt}
+              onChange={setEditEndedAt}
+              maxDate={new Date()}
+            />
+            <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending}>
               {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
             </Button>
           </div>
