@@ -74,7 +74,7 @@ const feedingTypes = [
   { value: "solid", label: "🥣 Solid" },
 ];
 
-export default function FeedingLog() {
+export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAllergens?: () => void }) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
@@ -88,6 +88,9 @@ export default function FeedingLog() {
   const [amountOzLeft, setAmountOzLeft] = useState("");
   const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
+  const [foodCategory, setFoodCategory] = useState("");
+  const [reactionNoted, setReactionNoted] = useState(false);
+  const [reactionDescription, setReactionDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [loggedAt, setLoggedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
 
