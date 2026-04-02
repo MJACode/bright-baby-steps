@@ -275,9 +275,62 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
               )}
 
               {feedType === "solid" && (
-                <div className="space-y-1">
-                  <Label>Food Description</Label>
-                  <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label>Food Description</Label>
+                    <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Food Group</Label>
+                    <Select value={foodCategory} onValueChange={setFoodCategory}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {foodCategories.map((cat) => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="reaction-noted"
+                      checked={reactionNoted}
+                      onCheckedChange={(checked) => setReactionNoted(checked === true)}
+                    />
+                    <Label htmlFor="reaction-noted" className="text-sm cursor-pointer flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
+                      Reaction noted
+                    </Label>
+                  </div>
+
+                  {reactionNoted && (
+                    <div className="space-y-1 ml-6">
+                      <Label className="text-xs">Describe the reaction</Label>
+                      <Textarea
+                        value={reactionDescription}
+                        onChange={(e) => setReactionDescription(e.target.value)}
+                        placeholder="e.g. mild rash on cheeks, fussiness after eating"
+                        rows={2}
+                      />
+                    </div>
+                  )}
+
+                  {onNavigateToAllergens && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-xs text-feeding hover:text-feeding/80 px-0"
+                      onClick={() => { setDialogOpen(false); onNavigateToAllergens(); }}
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      View Allergen Tracker →
+                    </Button>
+                  )}
                 </div>
               )}
 
