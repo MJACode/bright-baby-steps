@@ -286,16 +286,36 @@ export default function DiapersPage() {
 
       {/* Weekly chart */}
       <Card className="border-0 bg-card">
-        <CardHeader className="pb-2"><CardTitle className="text-sm">This Week</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">This Week</CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-amber-300" />
+                <span className="text-[10px] text-muted-foreground">Wet</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-sm bg-diapers" />
+                <span className="text-[10px] text-muted-foreground">Dirty</span>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent>
           <div className="flex items-end justify-between gap-1 h-24">
             {weekData.map((d) => {
-              const barH = Math.min((d.count / 12) * 80, 80);
+              const maxCount = Math.max(...weekData.map(w => w.total), 1);
+              const scale = 80 / Math.max(maxCount, 6);
+              const wetH = d.wet * scale;
+              const dirtyH = d.dirty * scale;
               return (
                 <div key={d.day} className="flex flex-col items-center flex-1 gap-1">
-                  <span className="text-[10px] font-bold text-diapers">{d.count || ""}</span>
-                  <div className="w-full rounded-t-lg bg-diapers/20 relative" style={{ height: 80 }}>
-                    <div className="absolute bottom-0 w-full rounded-t-lg bg-diapers transition-all" style={{ height: barH }} />
+                  <span className="text-[10px] font-bold text-diapers">{d.total || ""}</span>
+                  <div className="w-full rounded-t-lg bg-diapers/10 relative flex flex-col justify-end" style={{ height: 80 }}>
+                    {/* Dirty (bottom) */}
+                    <div className="w-full bg-diapers transition-all" style={{ height: dirtyH, borderRadius: d.wet > 0 ? '0' : '6px 6px 0 0' }} />
+                    {/* Wet (top) */}
+                    <div className="w-full bg-amber-300 transition-all order-first" style={{ height: wetH, borderRadius: '6px 6px 0 0' }} />
                   </div>
                   <span className="text-[10px] text-muted-foreground">{d.day}</span>
                 </div>
