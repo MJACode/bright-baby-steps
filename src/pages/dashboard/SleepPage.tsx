@@ -617,8 +617,8 @@ export default function SleepPage() {
       {activeChild && <SleepTrendsChart childId={activeChild.id} onAddEntry={() => {
         setEditingId(null);
         setEditSleepType("nap");
-        setEditStartedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-        setEditEndedAt(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+        setEditStartedAt(new Date());
+        setEditEndedAt(new Date());
         setEditDialogOpen(true);
       }} />}
 
