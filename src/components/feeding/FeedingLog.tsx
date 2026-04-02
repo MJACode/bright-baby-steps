@@ -93,7 +93,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
   const [reactionNoted, setReactionNoted] = useState(false);
   const [reactionDescription, setReactionDescription] = useState("");
   const [notes, setNotes] = useState("");
-  const [loggedAt, setLoggedAt] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [loggedAt, setLoggedAt] = useState<Date>(new Date());
 
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
