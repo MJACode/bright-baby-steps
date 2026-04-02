@@ -285,8 +285,8 @@ export default function SleepPage() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
-  const [editStartedAt, setEditStartedAt] = useState("");
-  const [editEndedAt, setEditEndedAt] = useState("");
+  const [editStartedAt, setEditStartedAt] = useState<Date>(new Date());
+  const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
 
   useEffect(() => {
     if (!isTracking || !startTime) return;
