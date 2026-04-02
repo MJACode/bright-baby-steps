@@ -370,7 +370,15 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
                     } {log.duration_minutes ? `${log.duration_minutes} min` : ""}
                     {log.food_description ? log.food_description : ""}
                   </p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(log.logged_at), "MMM d, h:mm a")}
+                    {(log as any).food_category && ` · ${foodCategories.find(c => c.value === (log as any).food_category)?.label || (log as any).food_category}`}
+                  </p>
+                  {(log as any).reaction_noted && (
+                    <p className="text-xs text-[hsl(var(--warning))] flex items-center gap-1 mt-0.5">
+                      <AlertTriangle className="w-3 h-3" /> Reaction noted{(log as any).reaction_description ? `: ${(log as any).reaction_description}` : ""}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
