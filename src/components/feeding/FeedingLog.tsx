@@ -123,6 +123,9 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
     setAmountOzLeft(log.amount_oz_left ? String(log.amount_oz_left) : "");
     setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
     setFoodDesc(log.food_description || "");
+    setFoodCategory((log as any).food_category || "");
+    setReactionNoted((log as any).reaction_noted || false);
+    setReactionDescription((log as any).reaction_description || "");
     setNotes(log.notes || "");
     setLoggedAt(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
     setDialogOpen(true);
