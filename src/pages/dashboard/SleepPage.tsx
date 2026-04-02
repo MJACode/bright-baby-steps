@@ -638,14 +638,18 @@ export default function SleepPage() {
                 <Moon className="w-5 h-5" /> Night
               </Button>
             </div>
-            <div className="space-y-1">
-              <Label>Start Time</Label>
-              <Input type="datetime-local" value={editStartedAt} onChange={(e) => setEditStartedAt(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>End Time</Label>
-              <Input type="datetime-local" value={editEndedAt} onChange={(e) => setEditEndedAt(e.target.value)} />
-            </div>
+            <MobileDateTimePicker
+              label="Start Time"
+              value={editStartedAt}
+              onChange={setEditStartedAt}
+              maxDate={new Date()}
+            />
+            <MobileDateTimePicker
+              label="End Time"
+              value={editEndedAt}
+              onChange={setEditEndedAt}
+              maxDate={new Date()}
+            />
             <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending || !editStartedAt || !editEndedAt}>
               {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
             </Button>
