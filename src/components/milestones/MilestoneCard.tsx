@@ -84,10 +84,10 @@ export function MilestoneCard({ milestone, status, photoUrl, onStatusChange, onP
               Typical: {milestone.age_months_typical_start}–{milestone.age_months_typical_end} months
             </CardDescription>
           </div>
-          {photoUrl && (
+          {signedUrl && (
             <div className="relative shrink-0">
               <img
-                src={photoUrl}
+                src={signedUrl}
                 alt={`${milestone.name} photo`}
                 className="w-12 h-12 rounded-lg object-cover ring-2 ring-milestones/20"
               />
