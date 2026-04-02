@@ -216,6 +216,8 @@ export default function MilestonesPage() {
           {/* Upcoming milestones */}
           {hasUpcomingMilestones && (
             <Collapsible defaultOpen>
+              <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+                <h2 className="font-display font-bold text-lg text-muted-foreground">
                   Coming up next
                 </h2>
                 <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
