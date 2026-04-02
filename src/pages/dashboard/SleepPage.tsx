@@ -370,8 +370,8 @@ export default function SleepPage() {
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
     setEditSleepType(log.sleep_type as "nap" | "night");
-    setEditStartedAt(format(new Date(log.started_at), "yyyy-MM-dd'T'HH:mm"));
-    setEditEndedAt(log.ended_at ? format(new Date(log.ended_at), "yyyy-MM-dd'T'HH:mm") : "");
+    setEditStartedAt(new Date(log.started_at));
+    setEditEndedAt(log.ended_at ? new Date(log.ended_at) : new Date());
     setEditDialogOpen(true);
   };
 
