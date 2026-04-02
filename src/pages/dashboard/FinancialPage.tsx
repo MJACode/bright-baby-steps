@@ -135,13 +135,15 @@ export default function FinancialPage() {
 
   return (
     <div className="space-y-5">
-      <div>
+      <div className="space-y-2">
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
           <DollarSign className="w-7 h-7 text-finance" /> Finance
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">Financial steps for new parents.</p>
-        <p className="text-xs text-muted-foreground mt-2 italic">
-          ⚠️ General guidance only — not personalized financial advice.
+        <p className="text-sm text-foreground/80 leading-relaxed">
+          Financial steps new parents often miss — check off as you go.
+        </p>
+        <p className="text-[11px] text-muted-foreground italic">
+          General guidance only — not personalized financial advice.
         </p>
       </div>
 
