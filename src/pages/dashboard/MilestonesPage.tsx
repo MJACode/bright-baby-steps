@@ -386,12 +386,6 @@ export default function MilestonesPage() {
                   onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
                 />
               ))}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
             </div>
           )}
 
