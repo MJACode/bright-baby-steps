@@ -63,7 +63,28 @@ export default function Dashboard() {
     enabled: !!activeChild,
   });
 
+  // Streak calculation
+  const { data: streakDays } = useQuery({
+    queryKey: ["streak", activeChild?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("sleep_logs").select("started_at")
+        .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(100);
+      if (!data || data.length === 0) return 0;
+      let streak = 0;
+      let checkDate = new Date();
+      for (let i = 0; i < 60; i++) {
+        const dateStr = format(checkDate, "yyyy-MM-dd");
+        const hasLog = data.some(l => format(new Date(l.started_at), "yyyy-MM-dd") === dateStr);
+        if (hasLog) { streak++; checkDate = new Date(checkDate.getTime() - 86400000); }
+        else if (i === 0) { checkDate = new Date(checkDate.getTime() - 86400000); }
+        else break;
+      }
+      return streak;
+    },
+    enabled: !!activeChild,
+  });
 
+  const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
   const formatMin = (m: number) => { const h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; };
 
 
