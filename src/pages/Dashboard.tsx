@@ -1,15 +1,15 @@
 import { useAuth } from "@/hooks/useAuth";
-import { useChildren } from "@/hooks/useChildren";
+import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Moon, Droplets, UtensilsCrossed, MessageCircle, Flame } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
-import { TodaysBriefing } from "@/components/TodaysBriefing";
+import { AIChatWidget } from "@/components/AIChatWidget";
+import { cn } from "@/lib/utils";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { cn } from "@/lib/utils";
 
