@@ -2,12 +2,16 @@ import { Navigate, Outlet, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
+import { useChildren } from "@/hooks/useChildren";
 import { Footprints, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
+  const { children } = useChildren();
+  const [childSwitcherOpen, setChildSwitcherOpen] = useState(false);
 
   if (loading) {
     return (
@@ -27,10 +31,13 @@ export default function DashboardLayout() {
       {/* Top header */}
       <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
-          <Link to="/dashboard" className="flex items-center gap-2">
+          <button
+            onClick={() => setChildSwitcherOpen(true)}
+            className="flex items-center gap-2 active:scale-95 transition-transform"
+          >
             <Footprints className="w-6 h-6 text-primary" />
             <span className="font-display font-bold text-lg">Baby Steps</span>
-          </Link>
+          </button>
           <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
             <Link to="/dashboard/profile">
               <UserCircle className="w-5 h-5" />
@@ -38,7 +45,7 @@ export default function DashboardLayout() {
           </Button>
         </div>
         <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
-          <ChildSwitcher />
+          <ChildSwitcher externalOpen={childSwitcherOpen} onExternalOpenChange={setChildSwitcherOpen} />
         </div>
       </header>
 
