@@ -368,7 +368,7 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     <Card className="border-0 bg-card shadow-lg overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("history"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           {activeSkillInfo && (
