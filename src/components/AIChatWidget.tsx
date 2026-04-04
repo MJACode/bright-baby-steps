@@ -2,14 +2,13 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Plus, ChevronLeft, Trash2, Clock, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
-import { formatDistanceToNow } from "date-fns";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
@@ -39,7 +38,7 @@ interface AIChatWidgetProps {
   activeChildId?: string;
 }
 
-type View = "closed" | "history" | "skills" | "chat";
+type View = "closed" | "skills" | "chat";
 
 export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const { user } = useAuth();
@@ -274,6 +273,16 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     setView("skills");
   };
 
+  const handleVoiceFromOutside = () => {
+    setActiveSkill("general");
+    setMessages([]);
+    setCurrentConvoId(null);
+    chatHistory.startNewChat();
+    setView("chat");
+    // Start voice recognition after a brief delay to let the view render
+    setTimeout(() => toggleVoice(), 300);
+  };
+
   const handleSelectSkill = (skillId: SkillId) => {
     setActiveSkill(skillId);
     setView("chat");
@@ -292,65 +301,28 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
 
   const activeSkillInfo = SKILLS.find(s => s.id === activeSkill);
 
-  // CLOSED
+  // CLOSED — AI button + voice mic side by side
   if (view === "closed") {
     return (
-      <button onClick={() => setView("history")} className="flex items-center gap-2 w-full p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
-        <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-          <Bot className="w-5 h-5 text-primary" />
-        </div>
-        <div className="text-left">
-          <p className="text-sm font-semibold">Ask Baby Steps AI</p>
-          <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
-        </div>
-      </button>
-    );
-  }
-
-  // HISTORY
-  if (view === "history") {
-    return (
-      <Card className="border-0 bg-card shadow-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
-          <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
+        <button onClick={() => setView("skills")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
             <Bot className="w-5 h-5 text-primary" />
-            <span className="text-sm font-semibold">Baby Steps AI</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewChat}>
-              <Plus className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-              <X className="w-4 h-4" />
-            </Button>
+          <div className="text-left">
+            <p className="text-sm font-semibold">Ask Baby Steps AI</p>
+            <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
           </div>
-        </div>
-        <div className="max-h-80 overflow-y-auto">
-          {chatHistory.conversations.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-3">No conversations yet</p>
-              <Button size="sm" onClick={handleNewChat} className="gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> Start a Chat
-              </Button>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {chatHistory.conversations.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors cursor-pointer group" onClick={() => handleOpenConversation(c.id)}>
-                  <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{c.title}</p>
-                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(c.updated_at), { addSuffix: true })}</p>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={(e) => { e.stopPropagation(); chatHistory.deleteConversation(c.id); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Card>
+        </button>
+        {supportsVoice && (
+          <button
+            onClick={handleVoiceFromOutside}
+            className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+          >
+            <Mic className="w-5 h-5 text-primary" />
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -360,7 +332,7 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
       <Card className="border-0 bg-card shadow-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("history")}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <span className="text-sm font-semibold">Choose an Expert</span>
@@ -396,7 +368,7 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     <Card className="border-0 bg-card shadow-lg overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("history"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
           {activeSkillInfo && (
