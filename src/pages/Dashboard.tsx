@@ -3,7 +3,7 @@ import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, MessageCircle, DollarSign, Baby, Flame, Footprints, Plus } from "lucide-react";
+import { Moon, Droplets, UtensilsCrossed, MessageCircle, Baby, Flame, Footprints, Plus } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
