@@ -1,50 +1,40 @@
 
 
-## Dashboard Redesign: Action-First for Busy Parents
+## Add Home Tab + Merge Finance into Milestones
 
-### Current Layout (top to bottom)
-1. Greeting + child info
-2. Today's Briefing (dynamic tips)
-3. Streak card with 2 quick-log buttons
-4. 4 stat cards in a 2x2 grid (Sleep, Feeding, Diapers, Speech)
-5. Children section
-6. Floating Action Button (FAB)
+### What changes
 
-### Problems
-- The 4 stat cards take up the most space but provide the least urgency — parents can see these numbers on each tab
-- Quick actions are buried in the streak card and behind the FAB
-- The most actionable content (Briefing) is sandwiched between passive elements
+**Bottom tab bar**: Replace the 5-tab layout (Sleep · Food · Diapers · Milestones · Finance) with a new 5-tab layout: **Sleep · Food · Home · Diapers · Milestones**. Home sits in the center with a distinct `Home` icon, making it immediately discoverable.
 
-### Proposed New Layout (top to bottom)
+**Finance merged into Milestones**: The Milestones page gets a tab switcher (like the Feeding page has for Feed/Supplements/Allergens). Two tabs: "Development" (current milestones content) and "Financial" (current FinancialPage content, embedded directly). This keeps Finance accessible without occupying a bottom tab slot.
 
-1. **Greeting + child info** (keep as-is)
+**Header cleanup**: Remove the Home icon button from the top header bar since it's now redundant — Home is always one tap away in the bottom bar.
 
-2. **Quick Actions row** — 4 prominent, colorful pill buttons in a single row: Log Sleep, Log Feed, Log Diaper, Log Milestone. Each navigates directly to the respective tab. These replace the FAB as the primary logging entry point. Big touch targets, one-tap logging.
+**Route redirect**: Keep `/dashboard/financial` as a route but redirect it to `/dashboard/milestones` (with a query param or state to auto-select the Financial tab) so any existing links still work.
 
-3. **Today's Briefing** (keep as-is, move up for prominence) — the smart, data-driven nudges are the most valuable "at a glance" content
+### Technical changes
 
-4. **Compact Today Summary** — replace the 4 large stat cards with a single compact card showing a horizontal row of today's numbers: `🌙 2h  🍼 3  🧷 4  💬 2`. Each segment is still tappable to navigate to its tab. Takes 1/4 the vertical space.
+**`src/components/BottomTabBar.tsx`**
+- Replace the 5 tabs array: remove Finance, add Home (`/dashboard`) in center position
+- Use `Home` icon from lucide-react for the center tab
+- Style the Home tab slightly differently (primary color) to make it stand out
 
-5. **Streak card** (keep as-is, remove the duplicate quick-log buttons since we now have the top row)
+**`src/pages/dashboard/MilestonesPage.tsx`**
+- Add a `Tabs` component at the top with two tabs: "Development" and "Financial"
+- "Development" tab contains all existing milestones content
+- "Financial" tab renders the `FinancialPage` component (extracted as a reusable component)
+- Accept location state to auto-select Financial tab when redirected
 
-6. **Children section** (keep as-is)
+**`src/pages/dashboard/FinancialPage.tsx`**
+- Export the main content as a reusable `FinancialContent` component (no page wrapper)
+- Keep the page-level default export for backward compatibility / direct route access
 
-7. **FAB** (keep for convenience, but it's no longer the only way to quick-log)
+**`src/App.tsx`**
+- Update the `/dashboard/financial` route to redirect to `/dashboard/milestones`
 
-### Technical Changes
+**`src/components/DashboardLayout.tsx`**
+- Remove the Home button from the top header (no longer needed)
 
-**File: `src/pages/Dashboard.tsx`**
-- Add a new Quick Actions row component with 4 horizontal pill buttons (Sleep, Feed, Diaper, Milestone) using the existing category colors
-- Replace the 2x2 `summaryCards` grid with a single compact "Today" card containing an inline horizontal stat row — each stat is a small icon + number, tappable
-- Remove the "+ Log Sleep" and "+ Log Feed" buttons from the streak card (now redundant)
-- Reorder sections: greeting → quick actions → briefing → compact summary → streak → children
-- All existing queries remain unchanged; just the rendering changes
-
-**No new files, no database changes, no new dependencies.**
-
-### Result
-- Parent opens app → immediately sees 4 big "log" buttons
-- Below that, smart tips tell them what needs attention
-- Compact stats still visible but don't dominate
-- Fewer taps to the most common action (logging)
+**`src/pages/Dashboard.tsx`**
+- Update any quick action referencing `/dashboard/financial` to point to `/dashboard/milestones`
 
