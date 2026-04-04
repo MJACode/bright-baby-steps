@@ -1,25 +1,37 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, Send, X, Bot, Loader2 } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
 
 type Message = { role: "user" | "assistant"; content: string };
+type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
 const SUGGESTIONS = [
+  "Log a 2 hour nap",
   "How much should my baby sleep?",
-  "When to start solids?",
-  "Is this diaper color normal?",
+  "Log a bottle feeding",
   "Tips for teething pain",
 ];
 
-export function AIChatWidget() {
+interface AIChatWidgetProps {
+  activeChildId?: string;
+}
+
+export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
+  const [actionSaving, setActionSaving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,7 +39,7 @@ export function AIChatWidget() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, pendingAction]);
 
   useEffect(() => {
     if (isOpen && inputRef.current) {
@@ -35,8 +47,120 @@ export function AIChatWidget() {
     }
   }, [isOpen]);
 
+  const parseLogAction = (text: string): LogAction | null => {
+    const lower = text.toLowerCase();
+
+    // Sleep patterns
+    const sleepMatch = lower.match(/log\s+(?:a\s+)?(\d+\.?\d*)\s*(?:hr|hour|h)?\s*(\d+)?\s*(?:min|minute|m)?\s*(nap|night|sleep)?/);
+    if (sleepMatch) {
+      const hours = parseFloat(sleepMatch[1]) || 0;
+      const mins = parseInt(sleepMatch[2] || "0") || 0;
+      const totalMins = Math.round(hours * 60 + mins);
+      const sleepType = sleepMatch[3] === "night" ? "night" : "nap";
+      if (totalMins > 0) {
+        return {
+          type: "sleep",
+          label: `${sleepType === "nap" ? "☀️ Nap" : "🌙 Night"} — ${hours > 0 ? `${Math.floor(totalMins / 60)}h ${totalMins % 60}m` : `${totalMins}m`}`,
+          data: { duration_minutes: String(totalMins), sleep_type: sleepType },
+        };
+      }
+    }
+
+    // Feeding patterns
+    const feedMatch = lower.match(/log\s+(?:a\s+)?(?:(\d+\.?\d*)\s*(?:oz|ounce))?\s*(bottle|breast|formula|nursing|feed|solid)/);
+    if (feedMatch) {
+      const oz = feedMatch[1] || "";
+      const typeWord = feedMatch[2] || "bottle";
+      let feedingType = "bottle";
+      if (typeWord.includes("breast") || typeWord.includes("nurs")) feedingType = "breast";
+      else if (typeWord.includes("solid")) feedingType = "solid";
+      else if (typeWord.includes("formula")) feedingType = "formula";
+      return {
+        type: "feeding",
+        label: `🍼 ${feedingType.charAt(0).toUpperCase() + feedingType.slice(1)}${oz ? ` — ${oz} oz` : ""}`,
+        data: { feeding_type: feedingType, ...(oz ? { amount_oz: oz } : {}) },
+      };
+    }
+
+    // Diaper patterns
+    const diaperMatch = lower.match(/log\s+(?:a\s+)?(wet|dirty|mixed|diaper)/);
+    if (diaperMatch) {
+      const dType = diaperMatch[1] === "diaper" ? "wet" : diaperMatch[1];
+      return {
+        type: "diaper",
+        label: `🧷 ${dType.charAt(0).toUpperCase() + dType.slice(1)} diaper`,
+        data: { diaper_type: dType },
+      };
+    }
+
+    return null;
+  };
+
+  const executeAction = async (action: LogAction) => {
+    if (!activeChildId || !user) {
+      toast({ title: "No active child selected", variant: "destructive" });
+      return;
+    }
+    setActionSaving(true);
+    try {
+      const now = new Date();
+      if (action.type === "sleep") {
+        const durationMins = parseInt(action.data.duration_minutes);
+        const endedAt = now.toISOString();
+        const startedAt = new Date(now.getTime() - durationMins * 60000).toISOString();
+        const { error } = await supabase.from("sleep_logs").insert({
+          child_id: activeChildId,
+          parent_id: user.id,
+          sleep_type: action.data.sleep_type,
+          started_at: startedAt,
+          ended_at: endedAt,
+        });
+        if (error) throw error;
+      } else if (action.type === "feeding") {
+        const { error } = await supabase.from("feeding_logs").insert({
+          child_id: activeChildId,
+          parent_id: user.id,
+          feeding_type: action.data.feeding_type,
+          ...(action.data.amount_oz ? { amount_oz: parseFloat(action.data.amount_oz) } : {}),
+        });
+        if (error) throw error;
+      } else if (action.type === "diaper") {
+        const { error } = await supabase.from("diaper_logs").insert({
+          child_id: activeChildId,
+          parent_id: user.id,
+          diaper_type: action.data.diaper_type,
+        });
+        if (error) throw error;
+      }
+      queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["today-sleep"] });
+      queryClient.invalidateQueries({ queryKey: ["today-feeds"] });
+      queryClient.invalidateQueries({ queryKey: ["today-diapers"] });
+      queryClient.invalidateQueries({ queryKey: ["streak"] });
+      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+
+      setPendingAction(null);
+      setMessages((prev) => [...prev, { role: "assistant", content: `✅ Logged! ${action.label}` }]);
+      toast({ title: "Entry logged! ✅" });
+    } catch (e) {
+      toast({ title: "Failed to log entry", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setActionSaving(false);
+    }
+  };
+
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
+
+    // Check if this is a log command
+    const action = parseLogAction(text);
+    if (action) {
+      const userMsg: Message = { role: "user", content: text.trim() };
+      setMessages((prev) => [...prev, userMsg]);
+      setInput("");
+      setPendingAction(action);
+      return;
+    }
 
     const userMsg: Message = { role: "user", content: text.trim() };
     const updatedMessages = [...messages, userMsg];
@@ -122,6 +246,12 @@ export function AIChatWidget() {
     }
   };
 
+  const actionIcon = (type: string) => {
+    if (type === "sleep") return <Moon className="w-4 h-4 text-sleep" />;
+    if (type === "feeding") return <UtensilsCrossed className="w-4 h-4 text-feeding" />;
+    return <Droplets className="w-4 h-4 text-diapers" />;
+  };
+
   if (!isOpen) {
     return (
       <button
@@ -133,7 +263,7 @@ export function AIChatWidget() {
         </div>
         <div className="text-left">
           <p className="text-sm font-semibold">Ask Baby Steps AI</p>
-          <p className="text-xs text-muted-foreground">Sleep, feeding, milestones & more</p>
+          <p className="text-xs text-muted-foreground">Ask questions or log entries by voice</p>
         </div>
       </button>
     );
@@ -154,10 +284,10 @@ export function AIChatWidget() {
 
       {/* Messages */}
       <div ref={scrollRef} className="h-64 overflow-y-auto p-3 space-y-3">
-        {messages.length === 0 && (
+        {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center py-2">
-              Ask me anything about your baby! 👶
+              Ask questions or log entries naturally! 👶
             </p>
             <div className="flex flex-wrap gap-1.5">
               {SUGGESTIONS.map((s) => (
@@ -195,6 +325,38 @@ export function AIChatWidget() {
         )}
       </div>
 
+      {/* Pending action confirmation */}
+      {pendingAction && (
+        <div className="px-3 pb-2">
+          <div className="rounded-xl bg-secondary/80 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              {actionIcon(pendingAction.type)}
+              <span className="text-sm font-medium">{pendingAction.label}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 gap-1.5 h-8"
+                onClick={() => executeAction(pendingAction)}
+                disabled={actionSaving}
+              >
+                {actionSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                Confirm
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8"
+                onClick={() => setPendingAction(null)}
+                disabled={actionSaving}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="p-3 border-t border-border">
         <form
@@ -208,7 +370,7 @@ export function AIChatWidget() {
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
+            placeholder="Ask a question or log an entry..."
             className="flex-1 h-9 text-sm rounded-full"
             disabled={isLoading}
           />

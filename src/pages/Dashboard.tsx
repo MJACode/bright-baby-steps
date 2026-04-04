@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Moon, Droplets, UtensilsCrossed, MessageCircle, Baby, Flame, Footprints, Plus } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
@@ -19,18 +19,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { children, activeChild, isLoading: childrenLoading } = useChildren();
 
-  // Today's stats
-  const { data: todaySleep } = useQuery({
-    queryKey: ["today-sleep", activeChild?.id],
-    queryFn: async () => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const { data } = await supabase.from("sleep_logs").select("duration_minutes")
-        .eq("child_id", activeChild!.id).gte("started_at", `${today}T00:00:00`);
-      return data?.reduce((s, l) => s + (l.duration_minutes || 0), 0) ?? 0;
-    },
-    enabled: !!activeChild,
-  });
-
   const { data: todayFeeds } = useQuery({
     queryKey: ["today-feeds", activeChild?.id],
     queryFn: async () => {
@@ -38,28 +26,6 @@ export default function Dashboard() {
       const { data } = await supabase.from("feeding_logs").select("id")
         .eq("child_id", activeChild!.id).gte("logged_at", `${today}T00:00:00`);
       return data?.length ?? 0;
-    },
-    enabled: !!activeChild,
-  });
-
-  const { data: todayDiapers } = useQuery({
-    queryKey: ["today-diapers", activeChild?.id],
-    queryFn: async () => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const { data } = await supabase.from("diaper_logs").select("id")
-        .eq("child_id", activeChild!.id).gte("logged_at", `${today}T00:00:00`);
-      return data?.length ?? 0;
-    },
-    enabled: !!activeChild,
-  });
-
-  const { data: milestoneStats } = useQuery({
-    queryKey: ["milestone-stats", activeChild?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("child_speech").select("status")
-        .eq("child_id", activeChild!.id);
-      const observed = data?.filter(m => m.status === "achieved").length ?? 0;
-      return { observed, total: data?.length ?? 0 };
     },
     enabled: !!activeChild,
   });
@@ -86,21 +52,12 @@ export default function Dashboard() {
   });
 
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
-  const formatMin = (m: number) => { const h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; };
-
 
   const quickActions = [
     { label: "Log Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep text-white" },
     { label: "Log Feed", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding text-white" },
     { label: "Log Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers text-white" },
     { label: "Milestones", icon: MessageCircle, path: "/dashboard/milestones", color: "bg-milestones text-white" },
-  ];
-
-  const compactStats = [
-    { icon: Moon, value: activeChild ? formatMin(todaySleep ?? 0) : "—", color: "text-sleep", href: "/dashboard/sleep" },
-    { icon: UtensilsCrossed, value: activeChild ? String(todayFeeds ?? 0) : "—", color: "text-feeding", href: "/dashboard/feeding" },
-    { icon: Droplets, value: activeChild ? String(todayDiapers ?? 0) : "—", color: "text-diapers", href: "/dashboard/diapers" },
-    { icon: MessageCircle, value: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", color: "text-milestones", href: "/dashboard/milestones" },
   ];
 
   return (
@@ -114,6 +71,9 @@ export default function Dashboard() {
           {activeChild ? `${activeChild.name} • ${getAge(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)}` : "Here's your baby's day at a glance."}
         </p>
       </div>
+
+      {/* Today's Briefing */}
+      <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
 
       {/* Quick Actions Row */}
       <div className="grid grid-cols-4 gap-2">
@@ -132,26 +92,8 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Today's Briefing */}
-      <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
-
       {/* AI Chat */}
-      <AIChatWidget />
-
-      {/* Compact Today Summary */}
-      <Card className="border-0 bg-secondary">
-        <CardContent className="p-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Today</p>
-          <div className="flex items-center justify-around">
-            {compactStats.map((stat) => (
-              <Link key={stat.href} to={stat.href} className="flex items-center gap-1.5 active:scale-95 transition-transform">
-                <stat.icon className={cn("w-4 h-4", stat.color)} />
-                <span className="font-bold text-sm">{stat.value}</span>
-              </Link>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <AIChatWidget activeChildId={activeChild?.id} />
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
