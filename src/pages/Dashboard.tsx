@@ -114,43 +114,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Children */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display font-bold text-lg flex items-center gap-2">
-            <Baby className="w-5 h-5 text-primary" /> Children
-          </h2>
-          <AddChildDialog trigger={
-            <button className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center touch-target">
-              <Plus className="w-4 h-4 text-primary" />
-            </button>
-          } />
-        </div>
-        {children.length > 0 ? children.map((child) => (
-          <Card key={child.id} className="border-0 bg-secondary">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Footprints className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-bold text-sm">{child.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {getAge(child.date_of_birth, child.is_premature ?? false, child.due_date)} old
-                  {child.is_premature ? " (adjusted)" : ""}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )) : (
-          <AddChildDialog trigger={
-            <Card className="border border-dashed border-border cursor-pointer hover:bg-secondary/50 transition-colors">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">Tap to add your first child 🌱</p>
-              </CardContent>
-            </Card>
-          } />
-        )}
-      </div>
 
       <QuickLogFAB />
     </div>
