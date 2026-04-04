@@ -72,6 +72,8 @@ export default function MilestonesPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") === "financial" ? "financial" : "development";
   const [showConfetti, setShowConfetti] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customName, setCustomName] = useState("");
