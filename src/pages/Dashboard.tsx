@@ -64,74 +64,7 @@ export default function Dashboard() {
   });
 
 
-  // Last logged timestamps
-  const { data: lastSleep } = useQuery({
-    queryKey: ["last-sleep", activeChild?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("sleep_logs").select("started_at")
-        .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(1);
-      return data?.[0]?.started_at ?? null;
-    },
-    enabled: !!activeChild,
-  });
-
-  const { data: lastFeed } = useQuery({
-    queryKey: ["last-feed", activeChild?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("feeding_logs").select("logged_at")
-        .eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(1);
-      return data?.[0]?.logged_at ?? null;
-    },
-    enabled: !!activeChild,
-  });
-
-  const { data: lastDiaper } = useQuery({
-    queryKey: ["last-diaper", activeChild?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("diaper_logs").select("logged_at")
-        .eq("child_id", activeChild!.id).order("logged_at", { ascending: false }).limit(1);
-      return data?.[0]?.logged_at ?? null;
-    },
-    enabled: !!activeChild,
-  });
-
-  const { data: lastMilestone } = useQuery({
-    queryKey: ["last-milestone", activeChild?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("child_speech").select("updated_at")
-        .eq("child_id", activeChild!.id).eq("status", "achieved").order("updated_at", { ascending: false }).limit(1);
-      return data?.[0]?.updated_at ?? null;
-    },
-    enabled: !!activeChild,
-  });
-
-  // Streak calculation
-  const { data: streakDays } = useQuery({
-    queryKey: ["streak", activeChild?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("sleep_logs").select("started_at")
-        .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(100);
-      if (!data || data.length === 0) return 0;
-      let streak = 0;
-      let checkDate = new Date();
-      for (let i = 0; i < 60; i++) {
-        const dateStr = format(checkDate, "yyyy-MM-dd");
-        const hasLog = data.some(l => format(new Date(l.started_at), "yyyy-MM-dd") === dateStr);
-        if (hasLog) { streak++; checkDate = new Date(checkDate.getTime() - 86400000); }
-        else if (i === 0) { checkDate = new Date(checkDate.getTime() - 86400000); }
-        else break;
-      }
-      return streak;
-    },
-    enabled: !!activeChild,
-  });
-
-  const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
   const formatMin = (m: number) => { const h = Math.floor(m / 60); return h > 0 ? `${h}h ${m % 60}m` : `${m}m`; };
-  const timeAgo = (ts: string | null) => {
-    if (!ts) return null;
-    try { return formatDistanceToNow(new Date(ts), { addSuffix: true }); } catch { return null; }
-  };
 
 
   const quickActions = [
