@@ -107,12 +107,24 @@ export default function Dashboard() {
               <Flame className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="font-bold text-sm">
-                {(streakDays ?? 0) > 0 ? `🔥 ${streakDays}-day tracking streak!` : "Start your tracking streak!"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {(streakDays ?? 0) > 0 ? "Keep it going — consistency matters." : "Log your first entry to begin."}
-              </p>
+              {(streakData?.streak ?? 0) > 0 ? (
+                <>
+                  <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
+                  <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
+                </>
+              ) : streakData?.lastLogDate ? (
+                <>
+                  <p className="font-bold text-sm">Time to log again!</p>
+                  <p className="text-xs text-muted-foreground">
+                    Last entry was {formatDistanceToNow(streakData.lastLogDate, { addSuffix: true })}. Pick up where you left off!
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-sm">Start your tracking streak!</p>
+                  <p className="text-xs text-muted-foreground">Log your first entry to begin.</p>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
