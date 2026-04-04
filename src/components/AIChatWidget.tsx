@@ -38,7 +38,7 @@ interface AIChatWidgetProps {
   activeChildId?: string;
 }
 
-type View = "closed" | "history" | "skills" | "chat";
+type View = "closed" | "skills" | "chat";
 
 export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const { user } = useAuth();
