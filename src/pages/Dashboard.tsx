@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Moon, Droplets, UtensilsCrossed, Brain, Flame } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
@@ -30,12 +30,14 @@ export default function Dashboard() {
   });
 
   // Streak calculation
-  const { data: streakDays } = useQuery({
+  const { data: streakData } = useQuery({
     queryKey: ["streak", activeChild?.id],
     queryFn: async () => {
       const { data } = await supabase.from("sleep_logs").select("started_at")
         .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(100);
-      if (!data || data.length === 0) return 0;
+      if (!data || data.length === 0) return { streak: 0, lastLogDate: null };
+      
+      const lastLogDate = new Date(data[0].started_at);
       let streak = 0;
       let checkDate = new Date();
       for (let i = 0; i < 60; i++) {
@@ -45,7 +47,7 @@ export default function Dashboard() {
         else if (i === 0) { checkDate = new Date(checkDate.getTime() - 86400000); }
         else break;
       }
-      return streak;
+      return { streak, lastLogDate };
     },
     enabled: !!activeChild,
   });
@@ -105,12 +107,24 @@ export default function Dashboard() {
               <Flame className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="font-bold text-sm">
-                {(streakDays ?? 0) > 0 ? `🔥 ${streakDays}-day tracking streak!` : "Start your tracking streak!"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {(streakDays ?? 0) > 0 ? "Keep it going — consistency matters." : "Log your first entry to begin."}
-              </p>
+              {(streakData?.streak ?? 0) > 0 ? (
+                <>
+                  <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
+                  <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
+                </>
+              ) : streakData?.lastLogDate ? (
+                <>
+                  <p className="font-bold text-sm">Time to log again!</p>
+                  <p className="text-xs text-muted-foreground">
+                    Last entry was {formatDistanceToNow(streakData.lastLogDate, { addSuffix: true })}. Pick up where you left off!
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-sm">Start your tracking streak!</p>
+                  <p className="text-xs text-muted-foreground">Log your first entry to begin.</p>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
