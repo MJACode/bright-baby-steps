@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Moon, Droplets, UtensilsCrossed, Brain, Flame } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
