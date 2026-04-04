@@ -142,8 +142,23 @@ export default function Dashboard() {
     { title: "Speech", icon: MessageCircle, href: "/dashboard/milestones", color: "text-milestones", bgColor: "bg-milestones-bg", stat: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", sub: activeChild ? "observed" : "Add child" },
   ];
 
+  const quickActions = [
+    { label: "Log Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep text-white" },
+    { label: "Log Feed", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding text-white" },
+    { label: "Log Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers text-white" },
+    { label: "Milestones", icon: MessageCircle, path: "/dashboard/milestones", color: "bg-milestones text-white" },
+  ];
+
+  const compactStats = [
+    { icon: Moon, value: activeChild ? formatMin(todaySleep ?? 0) : "—", color: "text-sleep", href: "/dashboard/sleep" },
+    { icon: UtensilsCrossed, value: activeChild ? String(todayFeeds ?? 0) : "—", color: "text-feeding", href: "/dashboard/feeding" },
+    { icon: Droplets, value: activeChild ? String(todayDiapers ?? 0) : "—", color: "text-diapers", href: "/dashboard/diapers" },
+    { icon: MessageCircle, value: activeChild ? `${milestoneStats?.observed ?? 0}` : "—", color: "text-milestones", href: "/dashboard/milestones" },
+  ];
+
   return (
     <div className="space-y-5">
+      {/* Greeting */}
       <div className="pt-1">
         <h1 className="font-display text-2xl font-bold">
           {firstName ? `Hi, ${firstName}` : "Welcome"} 🌱
@@ -153,8 +168,40 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* Quick Actions Row */}
+      <div className="grid grid-cols-4 gap-2">
+        {quickActions.map((action) => (
+          <button
+            key={action.label}
+            onClick={() => navigate(action.path)}
+            className={cn(
+              "flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl font-semibold text-xs transition-all active:scale-95 touch-target shadow-sm",
+              action.color
+            )}
+          >
+            <action.icon className="w-6 h-6" />
+            <span className="leading-tight text-center">{action.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Today's Briefing */}
       <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
+
+      {/* Compact Today Summary */}
+      <Card className="border-0 bg-secondary">
+        <CardContent className="p-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Today</p>
+          <div className="flex items-center justify-around">
+            {compactStats.map((stat) => (
+              <Link key={stat.href} to={stat.href} className="flex items-center gap-1.5 active:scale-95 transition-transform">
+                <stat.icon className={cn("w-4 h-4", stat.color)} />
+                <span className="font-bold text-sm">{stat.value}</span>
+              </Link>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
@@ -172,47 +219,8 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <div className="flex gap-2 mt-3 ml-[52px]">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs font-semibold bg-background/60 border-primary/20 text-primary hover:bg-primary/10"
-              onClick={() => navigate("/dashboard/sleep")}
-            >
-              <Moon className="w-3.5 h-3.5 mr-1" /> + Log Sleep
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs font-semibold bg-background/60 border-primary/20 text-primary hover:bg-primary/10"
-              onClick={() => navigate("/dashboard/feeding")}
-            >
-              <UtensilsCrossed className="w-3.5 h-3.5 mr-1" /> + Log Feed
-            </Button>
-          </div>
         </CardContent>
       </Card>
-
-      {/* Summary grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {summaryCards.map((card, idx) => (
-          <Link key={card.title} to={card.href}>
-            <Card className={cn("border-0 transition-all active:scale-[0.97] touch-target h-full", card.bgColor)}>
-              <CardContent className="p-4 flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <card.icon className={cn("w-6 h-6", card.color)} />
-                  <span className={cn("text-xs font-bold uppercase tracking-wide", card.color)}>{card.title}</span>
-                </div>
-                <p className="font-bold text-2xl leading-tight">{card.stat}</p>
-                <p className="text-xs text-muted-foreground">{card.sub}</p>
-                {activeChild && lastLogged[idx] && (
-                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">last logged {lastLogged[idx]}</p>
-                )}
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
 
       {/* Children */}
       <div className="space-y-3">
