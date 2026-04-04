@@ -7,6 +7,7 @@ import { User, LogOut, Baby, ClipboardList, ChevronDown } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
+import { FeedbackDialog } from "@/components/FeedbackDialog";
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
