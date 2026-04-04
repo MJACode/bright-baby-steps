@@ -371,6 +371,7 @@ export type Database = {
           id: string
           is_premature: boolean | null
           name: string
+          next_appointment: string | null
           parent_id: string
           photo_url: string | null
           updated_at: string
@@ -384,6 +385,7 @@ export type Database = {
           id?: string
           is_premature?: boolean | null
           name: string
+          next_appointment?: string | null
           parent_id: string
           photo_url?: string | null
           updated_at?: string
@@ -397,6 +399,7 @@ export type Database = {
           id?: string
           is_premature?: boolean | null
           name?: string
+          next_appointment?: string | null
           parent_id?: string
           photo_url?: string | null
           updated_at?: string
@@ -895,6 +898,44 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pediatrician_reminders: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          include_in_report: boolean
+          parent_id: string
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          include_in_report?: boolean
+          parent_id: string
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          include_in_report?: boolean
+          parent_id?: string
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pediatrician_reminders_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
             referencedColumns: ["id"]
           },
         ]
