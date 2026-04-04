@@ -301,18 +301,28 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
 
   const activeSkillInfo = SKILLS.find(s => s.id === activeSkill);
 
-  // CLOSED
+  // CLOSED — AI button + voice mic side by side
   if (view === "closed") {
     return (
-      <button onClick={() => setView("history")} className="flex items-center gap-2 w-full p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
-        <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-          <Bot className="w-5 h-5 text-primary" />
-        </div>
-        <div className="text-left">
-          <p className="text-sm font-semibold">Ask Baby Steps AI</p>
-          <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
-        </div>
-      </button>
+      <div className="flex items-center gap-2">
+        <button onClick={() => setView("skills")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+            <Bot className="w-5 h-5 text-primary" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold">Ask Baby Steps AI</p>
+            <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
+          </div>
+        </button>
+        {supportsVoice && (
+          <button
+            onClick={handleVoiceFromOutside}
+            className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+          >
+            <Mic className="w-5 h-5 text-primary" />
+          </button>
+        )}
+      </div>
     );
   }
 
