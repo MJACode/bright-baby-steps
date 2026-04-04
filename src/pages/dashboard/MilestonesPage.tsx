@@ -1,5 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
@@ -8,13 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X, DollarSign } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { format } from "date-fns";
+import FinancialContent from "./FinancialPage";
 
 function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
   milestone: any;
@@ -69,6 +72,8 @@ export default function MilestonesPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") === "financial" ? "financial" : "development";
   const [showConfetti, setShowConfetti] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customName, setCustomName] = useState("");
@@ -348,198 +353,220 @@ export default function MilestonesPage() {
           <Brain className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {activeChild.name} • {ageMonths}mo {activeChild.is_premature ? "(adjusted)" : ""}
-        </p>
-        <p className="text-xs text-muted-foreground mt-1 italic">
-          ⚠️ Every child develops at their own pace. Consult your pediatrician with concerns.
+          {activeChild ? `${activeChild.name} • ${ageMonths}mo ${activeChild.is_premature ? "(adjusted)" : ""}` : "Add a child to track milestones."}
         </p>
       </div>
 
-      {/* Progress ring */}
-      <Card className="border-0 bg-milestones-bg">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="relative w-16 h-16">
-              <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
-                <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones) / 0.2)" strokeWidth="3" />
-                <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones))" strokeWidth="3" strokeDasharray={`${progressPct}, 100`} strokeLinecap="round" />
-              </svg>
-              <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-milestones">{progressPct}%</span>
-            </div>
-            <div>
-              <p className="font-bold text-sm">{achievedCount} of {totalMilestones} observed</p>
-              <p className="text-xs text-muted-foreground">
-                {progressPct >= 80 ? "🌟 On Track" : progressPct >= 50 ? "Almost There" : "Let's Check In"}
+      <Tabs defaultValue={defaultTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-2">
+          <TabsTrigger value="development" className="gap-1.5">
+            <Brain className="w-4 h-4" /> Development
+          </TabsTrigger>
+          <TabsTrigger value="financial" className="gap-1.5">
+            <DollarSign className="w-4 h-4" /> Financial
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="development" className="mt-4 space-y-5">
+          {!activeChild ? (
+            <AddChildDialog />
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground italic">
+                ⚠️ Every child develops at their own pace. Consult your pediatrician with concerns.
               </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading milestones...</p>
-      ) : (
-        <div className="space-y-6">
-          {hasCurrentMilestones && (
-            <div className="space-y-2">
-              <h2 className="font-display font-bold text-lg text-foreground">
-                Right now ({ageMonths}mo)
-              </h2>
-              <MilestoneCategoryGroup categories={currentCats} {...categoryGroupProps} />
-            </div>
-          )}
+              {/* Progress ring */}
+              <Card className="border-0 bg-milestones-bg">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="relative w-16 h-16">
+                      <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
+                        <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones) / 0.2)" strokeWidth="3" />
+                        <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones))" strokeWidth="3" strokeDasharray={`${progressPct}, 100`} strokeLinecap="round" />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-milestones">{progressPct}%</span>
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm">{achievedCount} of {totalMilestones} observed</p>
+                      <p className="text-xs text-muted-foreground">
+                        {progressPct >= 80 ? "🌟 On Track" : progressPct >= 50 ? "Almost There" : "Let's Check In"}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {hasUpcomingMilestones && (
-            <Collapsible defaultOpen>
-              <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
-                <h2 className="font-display font-bold text-lg text-muted-foreground">Coming up next</h2>
-                <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2">
-                <MilestoneCategoryGroup categories={upcomingCats} {...categoryGroupProps} />
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-
-          {hasEarlierMilestones && (
-            <Collapsible>
-              <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
-                <h2 className="font-display font-bold text-lg text-muted-foreground">Earlier milestones</h2>
-                <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2">
-                <MilestoneCategoryGroup categories={earlierCats} {...categoryGroupProps} />
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-        </div>
-      )}
-
-      {/* Custom Milestones */}
-      {activeChild && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display font-bold text-lg flex items-center gap-2">
-              <Star className="w-5 h-5 text-milestones" /> Custom Milestones
-            </h2>
-          </div>
-
-          {customMilestones && customMilestones.length > 0 && (
-            <div className="space-y-2">
-              {customMilestones.map((cm) => (
-                <CustomMilestoneCard
-                  key={cm.id}
-                  milestone={cm}
-                  onDelete={() => deleteCustomMilestone.mutate(cm.id)}
-                  onRemovePhoto={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: null })}
-                  onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
-                />
-              ))}
-            </div>
-          )}
-
-          <Button
-            variant="outline"
-            className="w-full border-dashed border-milestones/30 text-milestones hover:bg-milestones-bg gap-2 touch-target"
-            onClick={() => {
-              setCustomName("");
-              setCustomDate(format(new Date(), "yyyy-MM-dd"));
-              setCustomPhotoFile(null);
-              setCustomPhotoPreview(null);
-              setCustomModalOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4" /> Custom Milestone
-          </Button>
-        </div>
-      )}
-
-      {/* Custom Milestone Modal */}
-      <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-display">Add Custom Milestone</DialogTitle>
-            <DialogDescription>Record a special moment — first laugh, first step, anything meaningful!</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">What happened?</Label>
-              <Input
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="e.g. First laugh, first solid bite, rolled over"
-                maxLength={100}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Date</Label>
-              <Input
-                type="date"
-                value={customDate}
-                onChange={(e) => setCustomDate(e.target.value)}
-                max={format(new Date(), "yyyy-MM-dd")}
-              />
-            </div>
-
-            {/* Photo upload */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Photo (optional)</Label>
-              <input
-                ref={customFileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleCustomPhotoSelect}
-              />
-              {customPhotoPreview ? (
-                <div className="relative inline-block">
-                  <img
-                    src={customPhotoPreview}
-                    alt="Preview"
-                    className="w-20 h-20 rounded-lg object-cover ring-2 ring-milestones/20"
-                  />
-                  <button
-                    onClick={() => {
-                      setCustomPhotoFile(null);
-                      setCustomPhotoPreview(null);
-                      if (customFileRef.current) customFileRef.current.value = "";
-                    }}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
+              {isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading milestones...</p>
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-milestones border-milestones/30"
-                  onClick={() => customFileRef.current?.click()}
-                >
-                  <Camera className="w-3.5 h-3.5" /> Add photo
-                </Button>
+                <div className="space-y-6">
+                  {hasCurrentMilestones && (
+                    <div className="space-y-2">
+                      <h2 className="font-display font-bold text-lg text-foreground">
+                        Right now ({ageMonths}mo)
+                      </h2>
+                      <MilestoneCategoryGroup categories={currentCats} {...categoryGroupProps} />
+                    </div>
+                  )}
+
+                  {hasUpcomingMilestones && (
+                    <Collapsible defaultOpen>
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+                        <h2 className="font-display font-bold text-lg text-muted-foreground">Coming up next</h2>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        <MilestoneCategoryGroup categories={upcomingCats} {...categoryGroupProps} />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  {hasEarlierMilestones && (
+                    <Collapsible>
+                      <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+                        <h2 className="font-display font-bold text-lg text-muted-foreground">Earlier milestones</h2>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        <MilestoneCategoryGroup categories={earlierCats} {...categoryGroupProps} />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+                </div>
               )}
-            </div>
 
-            <Button
-              onClick={() => {
-                if (!customName.trim()) {
-                  toast({ title: "Please enter a milestone name", variant: "destructive" });
-                  return;
-                }
-                addCustomMilestone.mutate();
-              }}
-              disabled={addCustomMilestone.isPending}
-              className="w-full h-12 text-base font-bold rounded-xl touch-target bg-milestones hover:bg-milestones/90 text-white"
-            >
-              {addCustomMilestone.isPending ? "Saving..." : "Save Milestone 🎉"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              {/* Custom Milestones */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display font-bold text-lg flex items-center gap-2">
+                    <Star className="w-5 h-5 text-milestones" /> Custom Milestones
+                  </h2>
+                </div>
 
-      {activeChild && <WordSoundJournal childId={activeChild.id} />}
+                {customMilestones && customMilestones.length > 0 && (
+                  <div className="space-y-2">
+                    {customMilestones.map((cm) => (
+                      <CustomMilestoneCard
+                        key={cm.id}
+                        milestone={cm}
+                        onDelete={() => deleteCustomMilestone.mutate(cm.id)}
+                        onRemovePhoto={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: null })}
+                        onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  className="w-full border-dashed border-milestones/30 text-milestones hover:bg-milestones-bg gap-2 touch-target"
+                  onClick={() => {
+                    setCustomName("");
+                    setCustomDate(format(new Date(), "yyyy-MM-dd"));
+                    setCustomPhotoFile(null);
+                    setCustomPhotoPreview(null);
+                    setCustomModalOpen(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4" /> Custom Milestone
+                </Button>
+              </div>
+
+              {/* Custom Milestone Modal */}
+              <Dialog open={customModalOpen} onOpenChange={setCustomModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="font-display">Add Custom Milestone</DialogTitle>
+                    <DialogDescription>Record a special moment — first laugh, first step, anything meaningful!</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">What happened?</Label>
+                      <Input
+                        value={customName}
+                        onChange={(e) => setCustomName(e.target.value)}
+                        placeholder="e.g. First laugh, first solid bite, rolled over"
+                        maxLength={100}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Date</Label>
+                      <Input
+                        type="date"
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                        max={format(new Date(), "yyyy-MM-dd")}
+                      />
+                    </div>
+
+                    {/* Photo upload */}
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Photo (optional)</Label>
+                      <input
+                        ref={customFileRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleCustomPhotoSelect}
+                      />
+                      {customPhotoPreview ? (
+                        <div className="relative inline-block">
+                          <img
+                            src={customPhotoPreview}
+                            alt="Preview"
+                            className="w-20 h-20 rounded-lg object-cover ring-2 ring-milestones/20"
+                          />
+                          <button
+                            onClick={() => {
+                              setCustomPhotoFile(null);
+                              setCustomPhotoPreview(null);
+                              if (customFileRef.current) customFileRef.current.value = "";
+                            }}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5 text-milestones border-milestones/30"
+                          onClick={() => customFileRef.current?.click()}
+                        >
+                          <Camera className="w-3.5 h-3.5" /> Add photo
+                        </Button>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={() => {
+                        if (!customName.trim()) {
+                          toast({ title: "Please enter a milestone name", variant: "destructive" });
+                          return;
+                        }
+                        addCustomMilestone.mutate();
+                      }}
+                      disabled={addCustomMilestone.isPending}
+                      className="w-full h-12 text-base font-bold rounded-xl touch-target bg-milestones hover:bg-milestones/90 text-white"
+                    >
+                      {addCustomMilestone.isPending ? "Saving..." : "Save Milestone 🎉"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <WordSoundJournal childId={activeChild.id} />
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="financial" className="mt-4">
+          <FinancialContent />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

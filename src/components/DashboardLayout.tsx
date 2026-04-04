@@ -1,15 +1,13 @@
-import { Navigate, Outlet, useLocation, Link } from "react-router-dom";
+import { Navigate, Outlet, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
-import { Footprints, Home, UserCircle } from "lucide-react";
+import { Footprints, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
-  const location = useLocation();
-  const isHome = location.pathname === "/dashboard";
 
   if (loading) {
     return (
@@ -33,20 +31,11 @@ export default function DashboardLayout() {
             <Footprints className="w-6 h-6 text-primary" />
             <span className="font-display font-bold text-lg">Baby Steps</span>
           </Link>
-          <div className="flex items-center gap-1">
-            {!isHome && (
-              <Button variant="ghost" size="icon" asChild className="touch-target">
-                <Link to="/dashboard">
-                  <Home className="w-5 h-5" />
-                </Link>
-              </Button>
-            )}
-            <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
-              <Link to="/dashboard/profile">
-                <UserCircle className="w-5 h-5" />
-              </Link>
-            </Button>
-          </div>
+          <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+            <Link to="/dashboard/profile">
+              <UserCircle className="w-5 h-5" />
+            </Link>
+          </Button>
         </div>
         <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
           <ChildSwitcher />
