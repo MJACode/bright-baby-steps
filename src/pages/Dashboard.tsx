@@ -10,8 +10,6 @@ import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { cn } from "@/lib/utils";
-import { AIChatWidget } from "@/components/AIChatWidget";
-import { cn } from "@/lib/utils";
 
 
 export default function Dashboard() {
