@@ -9,7 +9,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
-import { formatDistanceToNow } from "date-fns";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
