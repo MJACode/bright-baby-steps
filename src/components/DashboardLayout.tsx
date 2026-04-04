@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation, Link } from "react-router-dom";
+import { Navigate, Outlet, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
@@ -8,8 +8,6 @@ import { cn } from "@/lib/utils";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
-  const location = useLocation();
-  const isHome = location.pathname === "/dashboard";
 
   if (loading) {
     return (
