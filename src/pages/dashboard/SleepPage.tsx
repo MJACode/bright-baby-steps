@@ -565,17 +565,6 @@ export default function SleepPage() {
 
 
 
-
-
-      {/* 7-Day Trends Chart */}
-      {activeChild && <SleepTrendsChart childId={activeChild.id} onAddEntry={() => {
-        setEditingId(null);
-        setEditSleepType("nap");
-        setEditStartedAt(new Date());
-        setEditEndedAt(new Date());
-        setEditDialogOpen(true);
-      }} />}
-
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
         <DialogContent className="max-w-sm">
