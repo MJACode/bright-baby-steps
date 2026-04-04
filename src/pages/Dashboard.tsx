@@ -56,7 +56,7 @@ export default function Dashboard() {
     { label: "Log Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep text-white" },
     { label: "Log Feed", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding text-white" },
     { label: "Log Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers text-white" },
-    { label: "Milestones", icon: MessageCircle, path: "/dashboard/milestones", color: "bg-milestones text-white" },
+    { label: "Milestones", icon: Brain, path: "/dashboard/milestones", color: "bg-milestones text-white" },
   ];
 
   return (
