@@ -3,7 +3,7 @@ import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, MessageCircle, Flame } from "lucide-react";
+import { Moon, Droplets, UtensilsCrossed, Brain, Flame } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
