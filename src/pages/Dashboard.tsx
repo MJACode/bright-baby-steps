@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
-import { AddChildDialog } from "@/components/AddChildDialog";
+import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { cn } from "@/lib/utils";
