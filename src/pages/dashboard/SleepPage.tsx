@@ -563,52 +563,6 @@ export default function SleepPage() {
       {/* Sleep Insights */}
       {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
 
-      {/* Overnight Sleep */}
-      <Card className="border-0 bg-sleep-bg">
-        <CardHeader className="pb-1 pt-3 px-4">
-          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-            <Moon className="w-3.5 h-3.5 text-sleep" /> Overnight Sleep
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3">
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats?.avgBedtime ?? "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg Bedtime</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats?.avgWakeTime ?? "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg Wake Time</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.avgOvernightMin) : "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg Overnight</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-
-      {/* Total Sleep */}
-      <Card className="border-0 bg-sleep-bg">
-        <CardHeader className="pb-1 pt-3 px-4">
-          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-sleep" /> Total Sleep
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.recentAvgPerDay) : "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg / Day (Last 7 Days)</p>
-            </div>
-            <div>
-              <p className="text-lg font-bold text-sleep">{stats ? formatElapsed(stats.avgTotalPerDay) : "—"}</p>
-              <p className="text-[10px] text-muted-foreground">Avg / Day (All Time)</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
 
 

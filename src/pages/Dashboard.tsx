@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
+import { AIChatWidget } from "@/components/AIChatWidget";
 import { cn } from "@/lib/utils";
 
 
@@ -133,6 +134,9 @@ export default function Dashboard() {
 
       {/* Today's Briefing */}
       <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
+
+      {/* AI Chat */}
+      <AIChatWidget />
 
       {/* Compact Today Summary */}
       <Card className="border-0 bg-secondary">
