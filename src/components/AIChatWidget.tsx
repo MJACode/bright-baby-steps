@@ -273,6 +273,16 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     setView("skills");
   };
 
+  const handleVoiceFromOutside = () => {
+    setActiveSkill("general");
+    setMessages([]);
+    setCurrentConvoId(null);
+    chatHistory.startNewChat();
+    setView("chat");
+    // Start voice recognition after a brief delay to let the view render
+    setTimeout(() => toggleVoice(), 300);
+  };
+
   const handleSelectSkill = (skillId: SkillId) => {
     setActiveSkill(skillId);
     setView("chat");
