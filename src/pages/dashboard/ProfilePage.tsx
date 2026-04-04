@@ -62,6 +62,9 @@ export default function ProfilePage() {
       {/* Partner Management */}
       <PartnerManagement />
 
+      {/* Feedback */}
+      <FeedbackDialog />
+
       {/* Sign out */}
       <Button variant="outline" onClick={signOut} className="w-full gap-2">
         <LogOut className="w-4 h-4" /> Sign Out
