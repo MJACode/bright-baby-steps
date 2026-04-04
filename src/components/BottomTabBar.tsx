@@ -1,13 +1,13 @@
-import { Moon, UtensilsCrossed, Droplets, Brain, DollarSign } from "lucide-react";
+import { Moon, UtensilsCrossed, Droplets, Brain, Home } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const tabs = [
   { label: "Sleep", path: "/dashboard/sleep", icon: Moon, colorClass: "text-sleep" },
   { label: "Food", path: "/dashboard/feeding", icon: UtensilsCrossed, colorClass: "text-feeding" },
+  { label: "Home", path: "/dashboard", icon: Home, colorClass: "text-primary", isHome: true },
   { label: "Diapers", path: "/dashboard/diapers", icon: Droplets, colorClass: "text-diapers" },
   { label: "Milestones", path: "/dashboard/milestones", icon: Brain, colorClass: "text-milestones" },
-  { label: "Finance", path: "/dashboard/financial", icon: DollarSign, colorClass: "text-finance" },
 ];
 
 export function BottomTabBar() {
@@ -17,11 +17,14 @@ export function BottomTabBar() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border safe-area-bottom">
       <div className="flex items-stretch justify-around h-[var(--tab-bar-height)] max-w-lg mx-auto">
         {tabs.map((tab) => {
-          const isActive = location.pathname === tab.path;
+          const isActive = tab.isHome
+            ? location.pathname === "/dashboard"
+            : location.pathname === tab.path;
           return (
             <RouterNavLink
               key={tab.path}
               to={tab.path}
+              end={tab.isHome}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 flex-1 touch-target transition-all duration-200",
                 isActive ? tab.colorClass : "text-muted-foreground"
@@ -29,9 +32,10 @@ export function BottomTabBar() {
             >
               <div className={cn(
                 "p-1.5 rounded-xl transition-all duration-200",
-                isActive && "bg-current/10 scale-110"
+                isActive && "bg-current/10 scale-110",
+                tab.isHome && !isActive && "bg-primary/10 rounded-full"
               )}>
-                <tab.icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
+                <tab.icon className={cn("w-6 h-6", tab.isHome && !isActive && "text-primary")} strokeWidth={isActive ? 2.5 : 2} />
               </div>
               <span className={cn(
                 "text-[11px] font-semibold leading-none",

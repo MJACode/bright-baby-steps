@@ -39,7 +39,7 @@ const App = () => (
               <Route path="feeding" element={<FeedingPage />} />
               <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
               <Route path="milestones" element={<MilestonesPage />} />
-              <Route path="financial" element={<FinancialPage />} />
+              <Route path="financial" element={<Navigate to="/dashboard/milestones?tab=financial" replace />} />
               <Route path="profile" element={<ProfilePage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
