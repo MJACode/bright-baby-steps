@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
-import { format, subHours, differenceInHours } from "date-fns";
+import { format, subHours, differenceInHours, differenceInDays } from "date-fns";
 import { getAgeInMonths } from "@/hooks/useChildren";
 
 interface TodaysBriefingProps {
@@ -11,6 +11,7 @@ interface TodaysBriefingProps {
     date_of_birth: string;
     is_premature?: boolean | null;
     due_date?: string | null;
+    next_appointment?: string | null;
   } | null;
   todayFeeds: number;
 }
@@ -109,6 +110,19 @@ export function TodaysBriefing({ activeChild, todayFeeds }: TodaysBriefingProps)
 
   if (activeChild) {
     const hasData = todaySleepMin !== undefined || lastFeedAt !== undefined || todayDiapers !== undefined;
+
+    // Upcoming appointment tip
+    if (activeChild.next_appointment) {
+      const apptDate = new Date(activeChild.next_appointment + "T00:00:00");
+      const daysUntil = differenceInDays(apptDate, now);
+      if (daysUntil >= 0 && daysUntil <= 3) {
+        suggestions.push(
+          daysUntil === 0
+            ? "📋 Dr visit today — tap Visit Prep to review your notes!"
+            : `📋 Dr visit in ${daysUntil} day${daysUntil !== 1 ? "s" : ""} — tap Visit Prep to get ready`
+        );
+      }
+    }
 
     // Sleep insights
     if (todaySleepMin !== undefined) {
