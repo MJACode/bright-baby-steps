@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { children, activeChild, isLoading: childrenLoading } = useChildren();
+  const { activeChild } = useChildren();
 
   const { data: todayFeeds } = useQuery({
     queryKey: ["today-feeds", activeChild?.id],
