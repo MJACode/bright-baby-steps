@@ -14,7 +14,6 @@ import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
 
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
-import FinancialPage from "./pages/dashboard/FinancialPage";
 import ProfilePage from "./pages/dashboard/ProfilePage";
 import NotFound from "./pages/NotFound";
 
