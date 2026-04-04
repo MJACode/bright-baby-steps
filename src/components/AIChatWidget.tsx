@@ -326,53 +326,6 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     );
   }
 
-  // HISTORY
-  if (view === "history") {
-    return (
-      <Card className="border-0 bg-card shadow-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Bot className="w-5 h-5 text-primary" />
-            <span className="text-sm font-semibold">Baby Steps AI</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewChat}>
-              <Plus className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="max-h-80 overflow-y-auto">
-          {chatHistory.conversations.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-3">No conversations yet</p>
-              <Button size="sm" onClick={handleNewChat} className="gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> Start a Chat
-              </Button>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {chatHistory.conversations.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors cursor-pointer group" onClick={() => handleOpenConversation(c.id)}>
-                  <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{c.title}</p>
-                    <p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(c.updated_at), { addSuffix: true })}</p>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={(e) => { e.stopPropagation(); chatHistory.deleteConversation(c.id); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Card>
-    );
-  }
-
   // SKILLS PICKER
   if (view === "skills") {
     return (
