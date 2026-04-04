@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Plus, ChevronLeft, Trash2, Clock, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Plus, ChevronLeft, Trash2, Clock, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -56,6 +56,62 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const [activeSkill, setActiveSkill] = useState<SkillId>("general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const supportsVoice = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
+  const toggleVoice = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({ title: "Voice not supported", description: "Your browser doesn't support speech recognition.", variant: "destructive" });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognitionRef.current = recognition;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      setInput(finalTranscript + interim);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      if (finalTranscript.trim()) {
+        sendMessage(finalTranscript.trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      if (event.error !== "no-speech") {
+        toast({ title: "Voice error", description: event.error, variant: "destructive" });
+      }
+    };
+
+    recognition.start();
+    setIsListening(true);
+  };
 
   useEffect(() => {
     if (chatHistory.savedMessages.length > 0 && chatHistory.activeConversationId) {
@@ -405,7 +461,12 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
 
       <div className="p-3 border-t border-border">
         <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
-          <Input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask a question or log an entry..." className="flex-1 h-9 text-sm rounded-full" disabled={isLoading} />
+          <Input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={isListening ? "Listening..." : "Ask a question or log an entry..."} className={cn("flex-1 h-9 text-sm rounded-full", isListening && "border-primary ring-1 ring-primary")} disabled={isLoading} />
+          {supportsVoice && (
+            <Button type="button" size="icon" variant={isListening ? "default" : "outline"} className={cn("h-9 w-9 rounded-full shrink-0", isListening && "bg-destructive hover:bg-destructive/90 animate-pulse")} onClick={toggleVoice} disabled={isLoading}>
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </Button>
+          )}
           <Button type="submit" size="icon" className="h-9 w-9 rounded-full bg-primary shrink-0" disabled={!input.trim() || isLoading}>
             <Send className="w-4 h-4" />
           </Button>
