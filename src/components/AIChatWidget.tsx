@@ -56,6 +56,62 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const [activeSkill, setActiveSkill] = useState<SkillId>("general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+
+  const supportsVoice = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+
+  const toggleVoice = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({ title: "Voice not supported", description: "Your browser doesn't support speech recognition.", variant: "destructive" });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognitionRef.current = recognition;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      setInput(finalTranscript + interim);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      if (finalTranscript.trim()) {
+        sendMessage(finalTranscript.trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      setIsListening(false);
+      if (event.error !== "no-speech") {
+        toast({ title: "Voice error", description: event.error, variant: "destructive" });
+      }
+    };
+
+    recognition.start();
+    setIsListening(true);
+  };
 
   useEffect(() => {
     if (chatHistory.savedMessages.length > 0 && chatHistory.activeConversationId) {
