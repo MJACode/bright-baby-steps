@@ -135,6 +135,9 @@ export default function Dashboard() {
       {/* Today's Briefing */}
       <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
 
+      {/* AI Chat */}
+      <AIChatWidget />
+
       {/* Compact Today Summary */}
       <Card className="border-0 bg-secondary">
         <CardContent className="p-3">
