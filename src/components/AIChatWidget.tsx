@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2 } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Plus, ChevronLeft, Trash2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
+import { useChatHistory, type Message } from "@/hooks/useChatHistory";
+import { formatDistanceToNow } from "date-fns";
 
-type Message = { role: "user" | "assistant"; content: string };
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
 const SUGGESTIONS = [
@@ -23,17 +24,30 @@ interface AIChatWidgetProps {
   activeChildId?: string;
 }
 
+type View = "closed" | "history" | "chat";
+
 export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [isOpen, setIsOpen] = useState(false);
+  const chatHistory = useChatHistory(activeChildId);
+
+  const [view, setView] = useState<View>("closed");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
+  const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Load saved messages when opening an existing conversation
+  useEffect(() => {
+    if (chatHistory.savedMessages.length > 0 && chatHistory.activeConversationId) {
+      setMessages(chatHistory.savedMessages);
+      setCurrentConvoId(chatHistory.activeConversationId);
+    }
+  }, [chatHistory.savedMessages, chatHistory.activeConversationId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -42,15 +56,13 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   }, [messages, pendingAction]);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (view === "chat" && inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isOpen]);
+  }, [view]);
 
   const parseLogAction = (text: string): LogAction | null => {
     const lower = text.toLowerCase();
-
-    // Sleep patterns
     const sleepMatch = lower.match(/log\s+(?:a\s+)?(\d+\.?\d*)\s*(?:hr|hour|h)?\s*(\d+)?\s*(?:min|minute|m)?\s*(nap|night|sleep)?/);
     if (sleepMatch) {
       const hours = parseFloat(sleepMatch[1]) || 0;
@@ -65,8 +77,6 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         };
       }
     }
-
-    // Feeding patterns
     const feedMatch = lower.match(/log\s+(?:a\s+)?(?:(\d+\.?\d*)\s*(?:oz|ounce))?\s*(bottle|breast|formula|nursing|feed|solid)/);
     if (feedMatch) {
       const oz = feedMatch[1] || "";
@@ -81,8 +91,6 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         data: { feeding_type: feedingType, ...(oz ? { amount_oz: oz } : {}) },
       };
     }
-
-    // Diaper patterns
     const diaperMatch = lower.match(/log\s+(?:a\s+)?(wet|dirty|mixed|diaper)/);
     if (diaperMatch) {
       const dType = diaperMatch[1] === "diaper" ? "wet" : diaperMatch[1];
@@ -92,7 +100,6 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         data: { diaper_type: dType },
       };
     }
-
     return null;
   };
 
@@ -109,38 +116,33 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         const endedAt = now.toISOString();
         const startedAt = new Date(now.getTime() - durationMins * 60000).toISOString();
         const { error } = await supabase.from("sleep_logs").insert({
-          child_id: activeChildId,
-          parent_id: user.id,
-          sleep_type: action.data.sleep_type,
-          started_at: startedAt,
-          ended_at: endedAt,
+          child_id: activeChildId, parent_id: user.id,
+          sleep_type: action.data.sleep_type, started_at: startedAt, ended_at: endedAt,
         });
         if (error) throw error;
       } else if (action.type === "feeding") {
         const { error } = await supabase.from("feeding_logs").insert({
-          child_id: activeChildId,
-          parent_id: user.id,
+          child_id: activeChildId, parent_id: user.id,
           feeding_type: action.data.feeding_type,
           ...(action.data.amount_oz ? { amount_oz: parseFloat(action.data.amount_oz) } : {}),
         });
         if (error) throw error;
       } else if (action.type === "diaper") {
         const { error } = await supabase.from("diaper_logs").insert({
-          child_id: activeChildId,
-          parent_id: user.id,
-          diaper_type: action.data.diaper_type,
+          child_id: activeChildId, parent_id: user.id, diaper_type: action.data.diaper_type,
         });
         if (error) throw error;
       }
-      queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["today-sleep"] });
-      queryClient.invalidateQueries({ queryKey: ["today-feeds"] });
-      queryClient.invalidateQueries({ queryKey: ["today-diapers"] });
-      queryClient.invalidateQueries({ queryKey: ["streak"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-
+      ["sleep-logs", "today-sleep", "today-feeds", "today-diapers", "streak", "activity-feed"].forEach(
+        (key) => queryClient.invalidateQueries({ queryKey: [key] })
+      );
       setPendingAction(null);
-      setMessages((prev) => [...prev, { role: "assistant", content: `✅ Logged! ${action.label}` }]);
+      const confirmMsg: Message = { role: "assistant", content: `✅ Logged! ${action.label}` };
+      const newMessages = [...messages, confirmMsg];
+      setMessages(newMessages);
+      if (currentConvoId) {
+        await chatHistory.saveMessages(currentConvoId, [confirmMsg]);
+      }
       toast({ title: "Entry logged! ✅" });
     } catch (e) {
       toast({ title: "Failed to log entry", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
@@ -152,17 +154,24 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const sendMessage = async (text: string) => {
     if (!text.trim() || isLoading) return;
 
-    // Check if this is a log command
     const action = parseLogAction(text);
+    const userMsg: Message = { role: "user", content: text.trim() };
+
+    // Create conversation if needed
+    let convoId = currentConvoId;
+    if (!convoId) {
+      convoId = await chatHistory.createConversation(text.trim());
+      setCurrentConvoId(convoId);
+    }
+
     if (action) {
-      const userMsg: Message = { role: "user", content: text.trim() };
       setMessages((prev) => [...prev, userMsg]);
       setInput("");
       setPendingAction(action);
+      if (convoId) await chatHistory.saveMessages(convoId, [userMsg]);
       return;
     }
 
-    const userMsg: Message = { role: "user", content: text.trim() };
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInput("");
@@ -188,7 +197,6 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         const errData = await resp.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to get response");
       }
-
       if (!resp.body) throw new Error("No response body");
 
       const reader = resp.body.getReader();
@@ -209,19 +217,15 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         const { done, value } = await reader.read();
         if (done) break;
         textBuffer += decoder.decode(value, { stream: true });
-
         let newlineIndex: number;
         while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
           let line = textBuffer.slice(0, newlineIndex);
           textBuffer = textBuffer.slice(newlineIndex + 1);
-
           if (line.endsWith("\r")) line = line.slice(0, -1);
           if (line.startsWith(":") || line.trim() === "") continue;
           if (!line.startsWith("data: ")) continue;
-
           const jsonStr = line.slice(6).trim();
           if (jsonStr === "[DONE]") break;
-
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
@@ -235,6 +239,11 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
           }
         }
       }
+
+      // Save both messages to DB
+      if (convoId && assistantContent) {
+        await chatHistory.saveMessages(convoId, [userMsg, { role: "assistant", content: assistantContent }]);
+      }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : "Something went wrong";
       setMessages((prev) => [
@@ -246,16 +255,29 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     }
   };
 
+  const handleNewChat = () => {
+    chatHistory.startNewChat();
+    setCurrentConvoId(null);
+    setMessages([]);
+    setPendingAction(null);
+    setView("chat");
+  };
+
+  const handleOpenConversation = (id: string) => {
+    chatHistory.openConversation(id);
+    setView("chat");
+  };
+
   const actionIcon = (type: string) => {
     if (type === "sleep") return <Moon className="w-4 h-4 text-sleep" />;
     if (type === "feeding") return <UtensilsCrossed className="w-4 h-4 text-feeding" />;
     return <Droplets className="w-4 h-4 text-diapers" />;
   };
 
-  if (!isOpen) {
+  if (view === "closed") {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => setView("history")}
         className="flex items-center gap-2 w-full p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]"
       >
         <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
@@ -269,20 +291,82 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
     );
   }
 
+  if (view === "history") {
+    return (
+      <Card className="border-0 bg-card shadow-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Bot className="w-5 h-5 text-primary" />
+            <span className="text-sm font-semibold">Baby Steps AI</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNewChat}>
+              <Plus className="w-4 h-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        <div className="max-h-72 overflow-y-auto">
+          {chatHistory.conversations.length === 0 ? (
+            <div className="p-6 text-center">
+              <p className="text-sm text-muted-foreground mb-3">No conversations yet</p>
+              <Button size="sm" onClick={handleNewChat} className="gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Start a Chat
+              </Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {chatHistory.conversations.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors cursor-pointer group"
+                  onClick={() => handleOpenConversation(c.id)}
+                >
+                  <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(c.updated_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      chatHistory.deleteConversation(c.id);
+                    }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  // Chat view
   return (
     <Card className="border-0 bg-card shadow-lg overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("history"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
           <Bot className="w-5 h-5 text-primary" />
           <span className="text-sm font-semibold">Baby Steps AI</span>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsOpen(false)}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
           <X className="w-4 h-4" />
         </Button>
       </div>
 
-      {/* Messages */}
       <div ref={scrollRef} className="h-64 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
@@ -325,7 +409,6 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         )}
       </div>
 
-      {/* Pending action confirmation */}
       {pendingAction && (
         <div className="px-3 pb-2">
           <div className="rounded-xl bg-secondary/80 p-3 space-y-2">
@@ -334,22 +417,11 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
               <span className="text-sm font-medium">{pendingAction.label}</span>
             </div>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                className="flex-1 gap-1.5 h-8"
-                onClick={() => executeAction(pendingAction)}
-                disabled={actionSaving}
-              >
+              <Button size="sm" className="flex-1 gap-1.5 h-8" onClick={() => executeAction(pendingAction)} disabled={actionSaving}>
                 {actionSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                 Confirm
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8"
-                onClick={() => setPendingAction(null)}
-                disabled={actionSaving}
-              >
+              <Button size="sm" variant="ghost" className="h-8" onClick={() => setPendingAction(null)} disabled={actionSaving}>
                 Cancel
               </Button>
             </div>
@@ -357,15 +429,8 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         </div>
       )}
 
-      {/* Input */}
       <div className="p-3 border-t border-border">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            sendMessage(input);
-          }}
-          className="flex gap-2"
-        >
+        <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
           <Input
             ref={inputRef}
             value={input}
@@ -374,12 +439,7 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
             className="flex-1 h-9 text-sm rounded-full"
             disabled={isLoading}
           />
-          <Button
-            type="submit"
-            size="icon"
-            className="h-9 w-9 rounded-full bg-primary shrink-0"
-            disabled={!input.trim() || isLoading}
-          >
+          <Button type="submit" size="icon" className="h-9 w-9 rounded-full bg-primary shrink-0" disabled={!input.trim() || isLoading}>
             <Send className="w-4 h-4" />
           </Button>
         </form>
