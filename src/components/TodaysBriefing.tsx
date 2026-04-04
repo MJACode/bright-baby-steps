@@ -111,6 +111,19 @@ export function TodaysBriefing({ activeChild, todayFeeds }: TodaysBriefingProps)
   if (activeChild) {
     const hasData = todaySleepMin !== undefined || lastFeedAt !== undefined || todayDiapers !== undefined;
 
+    // Upcoming appointment tip
+    if (activeChild.next_appointment) {
+      const apptDate = new Date(activeChild.next_appointment + "T00:00:00");
+      const daysUntil = differenceInDays(apptDate, now);
+      if (daysUntil >= 0 && daysUntil <= 3) {
+        suggestions.push(
+          daysUntil === 0
+            ? "📋 Dr visit today — tap Visit Prep to review your notes!"
+            : `📋 Dr visit in ${daysUntil} day${daysUntil !== 1 ? "s" : ""} — tap Visit Prep to get ready`
+        );
+      }
+    }
+
     // Sleep insights
     if (todaySleepMin !== undefined) {
       if (todaySleepMin === 0) {
