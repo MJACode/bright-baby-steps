@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
+import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { cn } from "@/lib/utils";
 
 
@@ -93,6 +94,9 @@ export default function Dashboard() {
       {/* AI Chat */}
       <AIChatWidget activeChildId={activeChild?.id} />
 
+      {/* Visit Prep */}
+      <VisitPrepCard activeChild={activeChild} />
+
       {/* Streak */}
       <Card className="border-0 bg-primary/10">
         <CardContent className="p-4">
@@ -111,7 +115,6 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
-
 
       <QuickLogFAB />
     </div>

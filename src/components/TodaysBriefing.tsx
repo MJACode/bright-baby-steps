@@ -11,6 +11,7 @@ interface TodaysBriefingProps {
     date_of_birth: string;
     is_premature?: boolean | null;
     due_date?: string | null;
+    next_appointment?: string | null;
   } | null;
   todayFeeds: number;
 }

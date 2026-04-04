@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { format, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import { generatePediatricianReport } from "@/services/pdfReportBuilder";
+import { generateAndDownloadReport } from "@/services/reportDataService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -51,44 +51,12 @@ export default function ExportHistory() {
 
     setRegeneratingId(record.id);
     try {
-      const dateFrom = parseISO(record.date_range_start);
-      const dateTo = parseISO(record.date_range_end);
-      const from = startOfDay(dateFrom).toISOString();
-      const to = endOfDay(dateTo).toISOString();
-
-      const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, supplementRes, illnessRes, medicationRes] =
-        await Promise.all([
-          supabase.from("feeding_logs").select("*").eq("child_id", child.id).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false }),
-          supabase.from("diaper_logs").select("*").eq("child_id", child.id).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false }),
-          supabase.from("sleep_logs").select("*").eq("child_id", child.id).gte("started_at", from).lte("started_at", to).order("started_at", { ascending: false }),
-          supabase.from("child_speech").select("*, speech:milestone_id(name, category_id)").eq("child_id", child.id),
-          supabase.from("allergen_introductions").select("*, allergens(name)").eq("child_id", child.id),
-          supabase.from("speech_categories").select("*"),
-          supabase.from("supplements").select("*").eq("child_id", child.id),
-          supabase.from("illness_logs").select("*").eq("child_id", child.id).gte("start_date", format(dateFrom, "yyyy-MM-dd")).lte("start_date", format(dateTo, "yyyy-MM-dd")).order("start_date", { ascending: false }),
-          supabase.from("medication_logs").select("*").eq("child_id", child.id).gte("start_date", format(dateFrom, "yyyy-MM-dd")).lte("start_date", format(dateTo, "yyyy-MM-dd")).order("start_date", { ascending: false }),
-        ]);
-
-      const allSections = new Set(["speech", "allergens", "feeding", "diapers", "sleep", "illness"] as const);
-
-      const doc = generatePediatricianReport({
+      await generateAndDownloadReport(
         child,
-        dateFrom,
-        dateTo,
-        milestones: (milestoneRes.data as any[]) ?? [],
-        categories: (categoryRes.data as any[]) ?? [],
-        lastExportDate: record.created_at,
-        feedings: (feedingRes.data as any[]) ?? [],
-        supplements: (supplementRes.data as any[]) ?? [],
-        diapers: (diaperRes.data as any[]) ?? [],
-        sleeps: (sleepRes.data as any[]) ?? [],
-        allergens: (allergenRes.data as any[]) ?? [],
-        illnesses: (illnessRes.data as any[]) ?? [],
-        medications: (medicationRes.data as any[]) ?? [],
-        pediatricianNotes: "",
-      }, allSections);
-
-      doc.save(`${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`);
+        user.id,
+        parseISO(record.date_range_start),
+        parseISO(record.date_range_end),
+      );
       toast({ title: "Report re-generated! 📋" });
     } catch (err) {
       console.error(err);
