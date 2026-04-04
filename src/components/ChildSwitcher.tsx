@@ -49,7 +49,7 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
           </AvatarFallback>
         </Avatar>
         <span className="text-sm font-semibold">{activeChild.name}</span>
-        {hasMultiple && <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+        {children.length > 1 && <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
       </button>
 
       <Drawer open={open} onOpenChange={setOpen}>
