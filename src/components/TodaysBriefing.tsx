@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
-import { format, subHours, differenceInHours } from "date-fns";
+import { format, subHours, differenceInHours, differenceInDays } from "date-fns";
 import { getAgeInMonths } from "@/hooks/useChildren";
 
 interface TodaysBriefingProps {
