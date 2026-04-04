@@ -21,10 +21,15 @@ function getInitials(name: string) {
     .slice(0, 2);
 }
 
-export function ChildSwitcher() {
+export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { externalOpen?: boolean; onExternalOpenChange?: (open: boolean) => void }) {
   const { children, activeChild, setSelectedChildId } = useChildren();
-  const [open, setOpen] = useState(false);
-  const hasMultiple = children.length > 1;
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const open = externalOpen !== undefined ? externalOpen || internalOpen : internalOpen;
+  const setOpen = (v: boolean) => {
+    setInternalOpen(v);
+    onExternalOpenChange?.(v);
+  };
 
   if (!activeChild) return null;
 
@@ -32,11 +37,9 @@ export function ChildSwitcher() {
     <>
       <button
         type="button"
-        onClick={() => hasMultiple && setOpen(true)}
+        onClick={() => setOpen(true)}
         className={cn(
-          "flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 transition-colors",
-          hasMultiple && "hover:bg-secondary/80 active:scale-[0.97] cursor-pointer",
-          !hasMultiple && "cursor-default"
+          "flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 transition-colors hover:bg-secondary/80 active:scale-[0.97] cursor-pointer"
         )}
       >
         <Avatar className="h-6 w-6 text-[10px]">
@@ -46,7 +49,7 @@ export function ChildSwitcher() {
           </AvatarFallback>
         </Avatar>
         <span className="text-sm font-semibold">{activeChild.name}</span>
-        {hasMultiple && <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+        {children.length > 1 && <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
       </button>
 
       <Drawer open={open} onOpenChange={setOpen}>
