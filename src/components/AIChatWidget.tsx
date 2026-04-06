@@ -33,6 +33,7 @@ const SKILL_SUGGESTIONS: Record<SkillId, string[]> = {
   developmental: ["Tummy time tips for a hater", "When should baby start crawling?", "Best toys for 6 months", "Is my baby's pincer grasp on track?"],
   nutrition: ["When can I start solids?", "How to introduce peanuts safely", "Iron-rich foods for baby", "My toddler won't eat vegetables"],
   sleep: ["Wake windows for 4 months", "How to handle the 4-month regression", "When to drop to 2 naps?", "Safe sleep guidelines"],
+  onboarding: [],
 };
 
 interface AIChatWidgetProps {
