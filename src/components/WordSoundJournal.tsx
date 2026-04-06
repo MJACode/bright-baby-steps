@@ -18,7 +18,7 @@ interface WordSoundJournalProps {
   ageMonths?: number;
 }
 
-export function WordSoundJournal({ childId }: WordSoundJournalProps) {
+export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }: WordSoundJournalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [wordOrSound, setWordOrSound] = useState("");
