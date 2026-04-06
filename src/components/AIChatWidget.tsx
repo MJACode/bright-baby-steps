@@ -50,14 +50,16 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
   const chatHistory = useChatHistory(activeChildId);
   const { data: childContext } = useChildContext(activeChildId);
 
-  const [view, setView] = useState<View>("closed");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [view, setView] = useState<View>(forceOnboarding ? "chat" : "closed");
+  const [messages, setMessages] = useState<Message[]>(
+    forceOnboarding ? [{ role: "assistant", content: "Welcome to Baby Steps! 🎉 I'm here to help you get set up. What's your baby's name?" }] : []
+  );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
-  const [activeSkill, setActiveSkill] = useState<SkillId>("general");
+  const [activeSkill, setActiveSkill] = useState<SkillId>(forceOnboarding ? "onboarding" : "general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
