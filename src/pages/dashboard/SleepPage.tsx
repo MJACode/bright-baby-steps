@@ -545,82 +545,24 @@ export default function SleepPage() {
             </Tooltip>
           </TooltipProvider>
         </div>
+        <Button
+          size="icon"
+          onClick={() => {
+            setEditingId(null);
+            setEditSleepType("nap");
+            setEditStartedAt(new Date());
+            setEditEndedAt(new Date());
+            setEditDialogOpen(true);
+          }}
+          className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
       </div>
-
-      {/* Live Sleep Timer — Primary CTA */}
-      <Card className={cn(
-        "border-0 overflow-hidden transition-colors",
-        isTracking ? "bg-sleep/10 ring-2 ring-sleep/30" : "bg-sleep-bg"
-      )}>
-        <CardContent className="p-4 space-y-4">
-          {!isTracking ? (
-            <>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={sleepType === "nap" ? "default" : "outline"}
-                  onClick={() => setSleepType("nap")}
-                  className={cn("flex-1 touch-target gap-2 font-bold", sleepType === "nap" && "bg-sleep hover:bg-sleep/90")}
-                >
-                  <Sun className="w-5 h-5" /> Nap
-                </Button>
-                <Button
-                  type="button"
-                  variant={sleepType === "night" ? "default" : "outline"}
-                  onClick={() => setSleepType("night")}
-                  className={cn("flex-1 touch-target gap-2 font-bold", sleepType === "night" && "bg-sleep hover:bg-sleep/90")}
-                >
-                  <Moon className="w-5 h-5" /> Night
-                </Button>
-              </div>
-              <Button
-                onClick={handleStart}
-                className="w-full touch-target h-14 text-lg font-bold gap-3 bg-sleep hover:bg-sleep/90 text-white rounded-xl"
-              >
-                <Play className="w-6 h-6" /> Start {sleepType === "nap" ? "Nap" : "Night Sleep"}
-              </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingId(null);
-                  setEditSleepType("nap");
-                  setEditStartedAt(new Date());
-                  setEditEndedAt(new Date());
-                  setEditDialogOpen(true);
-                }}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
-              >
-                <Clock className="w-3 h-3" /> Add past sleep manually
-              </button>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-3 py-2">
-              <Badge className="bg-sleep/20 text-sleep border-0 font-semibold text-xs">
-                {sleepType === "nap" ? "☀️ Nap" : "🌙 Night"} in progress
-              </Badge>
-              <div className="font-mono text-5xl font-bold tracking-wider tabular-nums text-sleep">
-                {formatElapsed(elapsed)}
-              </div>
-              <p className="text-xs text-muted-foreground animate-pulse">
-                Started at {startTime ? format(startTime, "h:mm a") : ""}
-              </p>
-              <Button
-                onClick={handleStop}
-                disabled={addLog.isPending}
-                className="w-full touch-target h-14 text-lg font-bold gap-3 bg-destructive hover:bg-destructive/90 text-white rounded-xl mt-1"
-              >
-                <Square className="w-6 h-6" /> {addLog.isPending ? "Saving..." : "Stop & Save"}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Sleep Insights */}
       {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
 
-      {/* 7-Day Trends Chart */}
-      {activeChild && <SleepTrendsChart childId={activeChild.id} />}
 
 
       {/* Edit Dialog */}
