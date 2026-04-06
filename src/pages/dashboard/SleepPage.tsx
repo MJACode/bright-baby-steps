@@ -20,6 +20,7 @@ import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
+import SleepTimer from "@/components/sleep/SleepTimer";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
