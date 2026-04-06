@@ -165,8 +165,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-      <QuickLogFAB />
-    </div>
-  );
-}
