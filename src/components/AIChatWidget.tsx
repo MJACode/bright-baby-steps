@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
+import { useChildContext } from "@/hooks/useChildContext";
 import { toast } from "@/hooks/use-toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 
