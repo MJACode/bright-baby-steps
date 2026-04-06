@@ -13,7 +13,7 @@ import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
-export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep";
+export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep" | "onboarding";
 
 const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description: string; color: string }[] = [
   { id: "general", label: "General", icon: Bot, description: "Ask anything about parenting", color: "bg-primary/15 text-primary" },
@@ -37,11 +37,13 @@ const SKILL_SUGGESTIONS: Record<SkillId, string[]> = {
 
 interface AIChatWidgetProps {
   activeChildId?: string;
+  forceOnboarding?: boolean;
+  onOnboardingComplete?: () => void;
 }
 
 type View = "closed" | "skills" | "chat";
 
-export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
+export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
