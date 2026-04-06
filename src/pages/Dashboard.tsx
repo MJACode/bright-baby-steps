@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
@@ -16,7 +17,10 @@ import { cn } from "@/lib/utils";
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { activeChild } = useChildren();
+  const { activeChild, children, isLoading: childrenLoading } = useChildren();
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+  const isNewUser = !childrenLoading && (!children || children.length === 0) && !onboardingDismissed;
 
   const { data: todayFeeds } = useQuery({
     queryKey: ["today-feeds", activeChild?.id],
@@ -94,7 +98,7 @@ export default function Dashboard() {
       </div>
 
       {/* AI Chat */}
-      <AIChatWidget activeChildId={activeChild?.id} />
+      <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={isNewUser} onOnboardingComplete={() => setOnboardingDismissed(true)} />
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />

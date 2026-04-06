@@ -13,7 +13,7 @@ import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
-export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep";
+export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep" | "onboarding";
 
 const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description: string; color: string }[] = [
   { id: "general", label: "General", icon: Bot, description: "Ask anything about parenting", color: "bg-primary/15 text-primary" },
@@ -33,28 +33,33 @@ const SKILL_SUGGESTIONS: Record<SkillId, string[]> = {
   developmental: ["Tummy time tips for a hater", "When should baby start crawling?", "Best toys for 6 months", "Is my baby's pincer grasp on track?"],
   nutrition: ["When can I start solids?", "How to introduce peanuts safely", "Iron-rich foods for baby", "My toddler won't eat vegetables"],
   sleep: ["Wake windows for 4 months", "How to handle the 4-month regression", "When to drop to 2 naps?", "Safe sleep guidelines"],
+  onboarding: [],
 };
 
 interface AIChatWidgetProps {
   activeChildId?: string;
+  forceOnboarding?: boolean;
+  onOnboardingComplete?: () => void;
 }
 
 type View = "closed" | "skills" | "chat";
 
-export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
+export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
   const { data: childContext } = useChildContext(activeChildId);
 
-  const [view, setView] = useState<View>("closed");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [view, setView] = useState<View>(forceOnboarding ? "chat" : "closed");
+  const [messages, setMessages] = useState<Message[]>(
+    forceOnboarding ? [{ role: "assistant", content: "Welcome to Baby Steps! 🎉 I'm here to help you get set up. What's your baby's name?" }] : []
+  );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
-  const [activeSkill, setActiveSkill] = useState<SkillId>("general");
+  const [activeSkill, setActiveSkill] = useState<SkillId>(forceOnboarding ? "onboarding" : "general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -255,6 +260,31 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
             if (content) { assistantContent += content; upsertAssistant(assistantContent); }
           } catch { textBuffer = line + "\n" + textBuffer; break; }
+        }
+      }
+
+      // Check for onboarding child creation command
+      const createChildMatch = assistantContent.match(/:::CREATE_CHILD:::(.*?):::END:::/s);
+      if (createChildMatch && user) {
+        try {
+          const childData = JSON.parse(createChildMatch[1]);
+          const { error } = await supabase.from("children").insert({
+            parent_id: user.id,
+            name: childData.name,
+            date_of_birth: childData.date_of_birth,
+            is_premature: childData.is_premature || false,
+            due_date: childData.due_date || null,
+          });
+          if (!error) {
+            queryClient.invalidateQueries({ queryKey: ["children"] });
+            // Clean the create command from displayed message
+            const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
+            upsertAssistant(cleanContent);
+            assistantContent = cleanContent;
+            onOnboardingComplete?.();
+          }
+        } catch (parseErr) {
+          console.error("Failed to parse child creation:", parseErr);
         }
       }
 
