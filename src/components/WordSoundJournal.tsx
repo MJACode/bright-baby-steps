@@ -134,6 +134,14 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
         </Card>
       )}
 
+      <SpeechInsightsPanel
+        entries={entries}
+        totalCount={totalCount ?? 0}
+        ageMonths={ageMonths}
+        childId={childId}
+        childName={childName}
+      />
+
       {entries && entries.length > 0 ? (
         <div className="space-y-2">
           {entries.map((entry) => (
