@@ -367,24 +367,21 @@ export default function SleepPage() {
     setEditDialogOpen(true);
   };
 
-  const handleStart = () => {
-    setStartTime(new Date());
-    setIsTracking(true);
-    setElapsed(0);
-  };
-
-  const handleStop = useCallback(async () => {
-    if (!startTime) return;
+  const handleTimerComplete = useCallback(async (durationMinutes: number, sleepType: "nap" | "night") => {
+    setSavingTimer(true);
     const endTime = new Date();
-    await addLog.mutateAsync({
-      started_at: startTime.toISOString(),
-      ended_at: endTime.toISOString(),
-      sleep_type: sleepType,
-    });
-    setIsTracking(false);
-    setStartTime(null);
-    setElapsed(0);
-  }, [startTime, sleepType, addLog]);
+    const startTime = new Date(endTime.getTime() - durationMinutes * 60 * 1000);
+    try {
+      await addLog.mutateAsync({
+        started_at: startTime.toISOString(),
+        ended_at: endTime.toISOString(),
+        sleep_type: sleepType,
+      });
+      toast({ title: sleepType === "nap" ? "Nap logged! ☀️" : "Sleep logged! 🌙" });
+    } finally {
+      setSavingTimer(false);
+    }
+  }, [addLog]);
 
   const formatElapsed = (mins: number) => {
     const h = Math.floor(mins / 60);
