@@ -185,18 +185,35 @@ Guidelines:
 function buildContextMessage(context: {
   childName: string;
   childAge: string;
+  childAgeWeeks?: number;
+  isPremature?: boolean;
   twoCaregiversActive: boolean;
   recentActivity: string;
+  confirmedAllergens?: string[];
+  activeIllnesses?: string[];
+  nextAppointment?: string | null;
 }): string {
   let block = `[CHILD CONTEXT]
-Child: ${context.childName}, ${context.childAge}
+Child: ${context.childName}, ${context.childAge}${context.isPremature ? " (premature)" : " (full term)"}
 `;
 
   if (context.twoCaregiversActive) {
     block += `⚡ Two caregivers active — data from both parents included. Entries tagged "(you)" were logged by the current user; "(partner)" by their co-parent.\n`;
   }
 
-  block += `\nRecent activity (last 24h):\n${context.recentActivity}\n[/CHILD CONTEXT]`;
+  if (context.confirmedAllergens && context.confirmedAllergens.length > 0) {
+    block += `\n🚨 Allergens: ${context.confirmedAllergens.join(", ")}`;
+  }
+
+  if (context.activeIllnesses && context.activeIllnesses.length > 0) {
+    block += `\n🤒 Active illnesses: ${context.activeIllnesses.join(", ")}`;
+  }
+
+  if (context.nextAppointment) {
+    block += `\n📅 Next pediatrician appointment: ${context.nextAppointment}`;
+  }
+
+  block += `\n\nRecent activity (last 24h):\n${context.recentActivity}\n[/CHILD CONTEXT]`;
   return block;
 }
 
