@@ -6,8 +6,13 @@ import { format, subHours } from "date-fns";
 export interface ChildContext {
   childName: string;
   childAge: string;
+  childAgeWeeks: number;
+  isPremature: boolean;
   twoCaregiversActive: boolean;
   recentActivity: string;
+  confirmedAllergens: string[];
+  activeIllnesses: string[];
+  nextAppointment: string | null;
 }
 
 export function useChildContext(childId?: string) {
@@ -21,7 +26,7 @@ export function useChildContext(childId?: string) {
       // 1. Get child info
       const { data: child } = await supabase
         .from("children")
-        .select("name, date_of_birth, parent_id")
+        .select("name, date_of_birth, parent_id, is_premature, next_appointment")
         .eq("id", childId)
         .single();
 
@@ -54,7 +59,9 @@ export function useChildContext(childId?: string) {
       // 3. Calculate child age
       const dob = new Date(child.date_of_birth);
       const now = new Date();
-      const ageMonths = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+      const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
+      const ageWeeks = Math.floor(ageDays / 7);
+      const ageMonths = Math.floor(ageDays / 30.44);
       const childAge = ageMonths < 24
         ? `${ageMonths} months old`
         : `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months old`;
@@ -62,7 +69,7 @@ export function useChildContext(childId?: string) {
       // 4. Fetch recent logs (last 24h) — RLS handles access for both parent & partner
       const since = subHours(now, 24).toISOString();
 
-      const [sleepRes, feedRes, diaperRes] = await Promise.all([
+      const [sleepRes, feedRes, diaperRes, allergenRes, illnessRes] = await Promise.all([
         supabase
           .from("sleep_logs")
           .select("sleep_type, duration_minutes, started_at, parent_id")
@@ -84,6 +91,16 @@ export function useChildContext(childId?: string) {
           .gte("logged_at", since)
           .order("logged_at", { ascending: false })
           .limit(10),
+        supabase
+          .from("allergen_introductions")
+          .select("status, allergen_id, allergens(name)")
+          .eq("child_id", childId)
+          .in("status", ["introduced", "monitoring"]),
+        supabase
+          .from("illness_logs")
+          .select("illness_name")
+          .eq("child_id", childId)
+          .is("end_date", null),
       ]);
 
       // 5. Build activity summary with attribution
@@ -114,11 +131,24 @@ export function useChildContext(childId?: string) {
         lines.push(`🧷 ${d.diaper_type} diaper at ${time}${tag(d.parent_id)}`);
       });
 
+      // 6. Extract allergens & illnesses
+      const confirmedAllergens = (allergenRes.data || [])
+        .map((a: any) => `${a.allergens?.name || "Unknown"} (${a.status})`)
+        .filter(Boolean);
+
+      const activeIllnesses = (illnessRes.data || [])
+        .map((i) => i.illness_name);
+
       return {
         childName: child.name,
         childAge,
+        childAgeWeeks: ageWeeks,
+        isPremature: child.is_premature || false,
         twoCaregiversActive,
         recentActivity: lines.length > 0 ? lines.join("\n") : "No activity logged in the last 24 hours.",
+        confirmedAllergens,
+        activeIllnesses,
+        nextAppointment: child.next_appointment,
       };
     },
     enabled: !!childId && !!user,
