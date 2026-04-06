@@ -396,26 +396,30 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
   }
 
   // CHAT VIEW
-  return (
-    <Card className="border-0 bg-card shadow-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          {activeSkillInfo && (
-            <button onClick={() => setView("skills")} className={cn("flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium", activeSkillInfo.color)}>
-              <activeSkillInfo.icon className="w-3.5 h-3.5" />
-              {activeSkillInfo.label}
-            </button>
-          )}
-        </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
+  const isOnboardingChat = forceOnboarding && activeSkill === "onboarding";
 
-      <div ref={scrollRef} className="h-64 overflow-y-auto p-3 space-y-3">
+  return (
+    <Card className={cn("border-0 bg-card shadow-lg overflow-hidden", isOnboardingChat && "shadow-none")}>
+      {!isOnboardingChat && (
+        <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            {activeSkillInfo && (
+              <button onClick={() => setView("skills")} className={cn("flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium", activeSkillInfo.color)}>
+                <activeSkillInfo.icon className="w-3.5 h-3.5" />
+                {activeSkillInfo.label}
+              </button>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
+      <div ref={scrollRef} className={cn("overflow-y-auto p-3 space-y-3", isOnboardingChat ? "h-[45vh]" : "h-64")}>
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center py-2">
