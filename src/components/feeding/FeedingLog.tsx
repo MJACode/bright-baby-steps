@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ import { format, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
+import NursingTimer from "@/components/feeding/NursingTimer";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -222,7 +223,16 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
                 ))}
               </div>
 
-              {(feedType === "breast" || feedType === "pump") && (
+              {feedType === "breast" && (
+                <NursingTimer
+                  side={side}
+                  onSideChange={setSide}
+                  onDurationChange={handleTimerDuration}
+                  initialMinutes={durationMin ? Number(durationMin) : undefined}
+                />
+              )}
+
+              {feedType === "pump" && (
                 <div className="space-y-2">
                   <Label>Side</Label>
                   <div className="flex gap-2">
@@ -259,7 +269,7 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
                 </div>
               )}
 
-              {(feedType === "breast" || feedType === "bottle") && (
+              {feedType === "bottle" && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Duration (min)</Label>
