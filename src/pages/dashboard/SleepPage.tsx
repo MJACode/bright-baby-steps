@@ -20,6 +20,7 @@ import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
+import SleepTimer from "@/components/sleep/SleepTimer";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -275,10 +276,6 @@ export default function SleepPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
-  const [isTracking, setIsTracking] = useState(false);
-  const [sleepType, setSleepType] = useState<"nap" | "night">("nap");
-  const [startTime, setStartTime] = useState<Date | null>(null);
-  const [elapsed, setElapsed] = useState(0);
 
   // Edit state
   const [showAll, setShowAll] = useState(false);
@@ -287,12 +284,7 @@ export default function SleepPage() {
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
   const [editStartedAt, setEditStartedAt] = useState<Date>(new Date());
   const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
-
-  useEffect(() => {
-    if (!isTracking || !startTime) return;
-    const interval = setInterval(() => setElapsed(differenceInMinutes(new Date(), startTime)), 1000);
-    return () => clearInterval(interval);
-  }, [isTracking, startTime]);
+  const [savingTimer, setSavingTimer] = useState(false);
 
   const { data: logs } = useQuery({
     queryKey: ["sleep-logs", activeChild?.id],
@@ -375,24 +367,21 @@ export default function SleepPage() {
     setEditDialogOpen(true);
   };
 
-  const handleStart = () => {
-    setStartTime(new Date());
-    setIsTracking(true);
-    setElapsed(0);
-  };
-
-  const handleStop = useCallback(async () => {
-    if (!startTime) return;
+  const handleTimerComplete = useCallback(async (durationMinutes: number, sleepType: "nap" | "night") => {
+    setSavingTimer(true);
     const endTime = new Date();
-    await addLog.mutateAsync({
-      started_at: startTime.toISOString(),
-      ended_at: endTime.toISOString(),
-      sleep_type: sleepType,
-    });
-    setIsTracking(false);
-    setStartTime(null);
-    setElapsed(0);
-  }, [startTime, sleepType, addLog]);
+    const startTime = new Date(endTime.getTime() - durationMinutes * 60 * 1000);
+    try {
+      await addLog.mutateAsync({
+        started_at: startTime.toISOString(),
+        ended_at: endTime.toISOString(),
+        sleep_type: sleepType,
+      });
+      toast({ title: sleepType === "nap" ? "Nap logged! ☀️" : "Sleep logged! 🌙" });
+    } finally {
+      setSavingTimer(false);
+    }
+  }, [addLog]);
 
   const formatElapsed = (mins: number) => {
     const h = Math.floor(mins / 60);
@@ -545,20 +534,14 @@ export default function SleepPage() {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <Button
-          size="icon"
-          onClick={() => {
-            setEditingId(null);
-            setEditSleepType("nap");
-            setEditStartedAt(new Date());
-            setEditEndedAt(new Date());
-            setEditDialogOpen(true);
-          }}
-          className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
-        >
-          <Plus className="w-6 h-6" />
-        </Button>
       </div>
+
+      {/* Live Sleep Timer — Primary CTA */}
+      <Card className="border-0 bg-sleep-bg/60">
+        <CardContent className="p-4">
+          <SleepTimer onSleepComplete={handleTimerComplete} isSaving={savingTimer} />
+        </CardContent>
+      </Card>
 
       {/* Sleep Insights */}
       {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
