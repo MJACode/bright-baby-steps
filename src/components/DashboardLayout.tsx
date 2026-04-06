@@ -5,6 +5,7 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { Footprints, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
