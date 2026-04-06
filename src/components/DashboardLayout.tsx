@@ -5,6 +5,7 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { Footprints, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
@@ -38,11 +39,14 @@ export default function DashboardLayout() {
             <Footprints className="w-6 h-6 text-primary" />
             <span className="font-display font-bold text-lg">Baby Steps</span>
           </button>
-          <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
-            <Link to="/dashboard/profile">
-              <UserCircle className="w-5 h-5" />
-            </Link>
-          </Button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+              <Link to="/dashboard/profile">
+                <UserCircle className="w-5 h-5" />
+              </Link>
+            </Button>
+          </div>
         </div>
         <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
           <ChildSwitcher externalOpen={childSwitcherOpen} onExternalOpenChange={setChildSwitcherOpen} />
