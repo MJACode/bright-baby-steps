@@ -263,6 +263,31 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
         }
       }
 
+      // Check for onboarding child creation command
+      const createChildMatch = assistantContent.match(/:::CREATE_CHILD:::(.*?):::END:::/s);
+      if (createChildMatch && user) {
+        try {
+          const childData = JSON.parse(createChildMatch[1]);
+          const { error } = await supabase.from("children").insert({
+            parent_id: user.id,
+            name: childData.name,
+            date_of_birth: childData.date_of_birth,
+            is_premature: childData.is_premature || false,
+            due_date: childData.due_date || null,
+          });
+          if (!error) {
+            queryClient.invalidateQueries({ queryKey: ["children"] });
+            // Clean the create command from displayed message
+            const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
+            upsertAssistant(cleanContent);
+            assistantContent = cleanContent;
+            onOnboardingComplete?.();
+          }
+        } catch (parseErr) {
+          console.error("Failed to parse child creation:", parseErr);
+        }
+      }
+
       if (convoId && assistantContent) {
         await chatHistory.saveMessages(convoId, [userMsg, { role: "assistant", content: assistantContent }]);
       }
