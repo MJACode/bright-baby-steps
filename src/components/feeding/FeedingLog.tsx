@@ -213,12 +213,6 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
               <DialogTitle className="font-display">{editingId ? "Edit Feed" : "Log a Feed"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <MobileDateTimePicker
-                label="Date & Time"
-                value={loggedAt}
-                onChange={setLoggedAt}
-                maxDate={new Date()}
-              />
               <div className="grid grid-cols-4 gap-2">
                 {feedingTypes.map((ft) => (
                   <Button key={ft.value} type="button" variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
