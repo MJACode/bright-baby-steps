@@ -558,7 +558,7 @@ export default function MilestonesPage() {
                 </DialogContent>
               </Dialog>
 
-              <WordSoundJournal childId={activeChild.id} />
+              <WordSoundJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
             </>
           )}
         </TabsContent>
