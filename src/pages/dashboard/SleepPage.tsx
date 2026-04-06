@@ -534,20 +534,14 @@ export default function SleepPage() {
             </Tooltip>
           </TooltipProvider>
         </div>
-        <Button
-          size="icon"
-          onClick={() => {
-            setEditingId(null);
-            setEditSleepType("nap");
-            setEditStartedAt(new Date());
-            setEditEndedAt(new Date());
-            setEditDialogOpen(true);
-          }}
-          className="rounded-full bg-sleep hover:bg-sleep/90 text-white touch-target w-12 h-12"
-        >
-          <Plus className="w-6 h-6" />
-        </Button>
       </div>
+
+      {/* Live Sleep Timer — Primary CTA */}
+      <Card className="border-0 bg-sleep-bg/60">
+        <CardContent className="p-4">
+          <SleepTimer onSleepComplete={handleTimerComplete} isSaving={savingTimer} />
+        </CardContent>
+      </Card>
 
       {/* Sleep Insights */}
       {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
