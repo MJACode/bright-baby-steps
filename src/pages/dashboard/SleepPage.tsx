@@ -276,10 +276,6 @@ export default function SleepPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
-  const [isTracking, setIsTracking] = useState(false);
-  const [sleepType, setSleepType] = useState<"nap" | "night">("nap");
-  const [startTime, setStartTime] = useState<Date | null>(null);
-  const [elapsed, setElapsed] = useState(0);
 
   // Edit state
   const [showAll, setShowAll] = useState(false);
@@ -288,12 +284,7 @@ export default function SleepPage() {
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
   const [editStartedAt, setEditStartedAt] = useState<Date>(new Date());
   const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
-
-  useEffect(() => {
-    if (!isTracking || !startTime) return;
-    const interval = setInterval(() => setElapsed(differenceInMinutes(new Date(), startTime)), 1000);
-    return () => clearInterval(interval);
-  }, [isTracking, startTime]);
+  const [savingTimer, setSavingTimer] = useState(false);
 
   const { data: logs } = useQuery({
     queryKey: ["sleep-logs", activeChild?.id],
