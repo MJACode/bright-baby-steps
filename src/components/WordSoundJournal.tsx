@@ -10,9 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { BookHeart, Plus, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { SpeechInsightsPanel } from "@/components/SpeechInsightsPanel";
 
 interface WordSoundJournalProps {
   childId: string;
+  childName?: string;
+  ageMonths?: number;
 }
 
 export function WordSoundJournal({ childId }: WordSoundJournalProps) {
