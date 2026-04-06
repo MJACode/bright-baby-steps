@@ -10,12 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { BookHeart, Plus, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
+import { SpeechInsightsPanel } from "@/components/SpeechInsightsPanel";
 
 interface WordSoundJournalProps {
   childId: string;
+  childName?: string;
+  ageMonths?: number;
 }
 
-export function WordSoundJournal({ childId }: WordSoundJournalProps) {
+export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }: WordSoundJournalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [wordOrSound, setWordOrSound] = useState("");
@@ -130,6 +133,14 @@ export function WordSoundJournal({ childId }: WordSoundJournalProps) {
           </CardContent>
         </Card>
       )}
+
+      <SpeechInsightsPanel
+        entries={entries}
+        totalCount={totalCount ?? 0}
+        ageMonths={ageMonths}
+        childId={childId}
+        childName={childName}
+      />
 
       {entries && entries.length > 0 ? (
         <div className="space-y-2">
