@@ -96,6 +96,10 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
   const [notes, setNotes] = useState("");
   const [loggedAt, setLoggedAt] = useState<Date>(new Date());
 
+  const handleTimerDuration = useCallback((minutes: number) => {
+    setDurationMin(minutes > 0 ? String(minutes) : "");
+  }, []);
+
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
     queryFn: async () => {
