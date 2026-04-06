@@ -45,6 +45,7 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
+  const { data: childContext } = useChildContext(activeChildId);
 
   const [view, setView] = useState<View>("closed");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -217,7 +218,7 @@ export function AIChatWidget({ activeChildId }: AIChatWidgetProps) {
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlldXpuYnZ2d2R2aHRpcnp3a2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5OTIzODQsImV4cCI6MjA4ODU2ODM4NH0.04dxqjtlwWujfWTSM8fm2Y6EXGqIpOZisvBcN4eETEc"}` },
-          body: JSON.stringify({ messages: updatedMessages, skill: activeSkill }),
+          body: JSON.stringify({ messages: updatedMessages, skill: activeSkill, context: childContext || undefined }),
         }
       );
 
