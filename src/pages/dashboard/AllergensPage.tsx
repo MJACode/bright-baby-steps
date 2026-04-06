@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { AllergenInsightCard } from "@/components/allergens/AllergenInsightCard";
 
 const severityLevels = ["none", "mild", "moderate", "severe"];
 const symptomOptions = ["rash", "hives", "vomiting", "swelling", "breathing difficulty", "diarrhea", "fussiness"];
@@ -210,6 +211,9 @@ export default function AllergensPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Cross-referenced reaction insights */}
+      <AllergenInsightCard childId={activeChild.id} childName={activeChild.name} />
 
       {/* Search / filter */}
       <div className="relative">
