@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Link } from "react-router-dom";
+import { Navigate, Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
@@ -11,8 +11,11 @@ import { useState } from "react";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
-  const { children } = useChildren();
+  const { children, isLoading: childrenLoading } = useChildren();
   const [childSwitcherOpen, setChildSwitcherOpen] = useState(false);
+  const location = useLocation();
+
+  const isOnboarding = !childrenLoading && (!children || children.length === 0);
 
   if (loading) {
     return (
@@ -27,6 +30,10 @@ export default function DashboardLayout() {
     return <Navigate to="/auth" replace />;
   }
 
+  if (isOnboarding && location.pathname !== "/dashboard") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Top header */}
@@ -39,27 +46,31 @@ export default function DashboardLayout() {
             <Footprints className="w-6 h-6 text-primary" />
             <span className="font-display font-bold text-lg">Baby Steps</span>
           </button>
-          <div className="flex items-center gap-1">
-            <NotificationBell />
-            <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
-              <Link to="/dashboard/profile">
-                <UserCircle className="w-5 h-5" />
-              </Link>
-            </Button>
+          {!isOnboarding && (
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+                <Link to="/dashboard/profile">
+                  <UserCircle className="w-5 h-5" />
+                </Link>
+              </Button>
+            </div>
+          )}
+        </div>
+        {!isOnboarding && (
+          <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
+            <ChildSwitcher externalOpen={childSwitcherOpen} onExternalOpenChange={setChildSwitcherOpen} />
           </div>
-        </div>
-        <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
-          <ChildSwitcher externalOpen={childSwitcherOpen} onExternalOpenChange={setChildSwitcherOpen} />
-        </div>
+        )}
       </header>
 
       {/* Main content */}
-      <main className={cn("flex-1 px-4 py-5 max-w-lg mx-auto w-full pb-tab-bar")}>
+      <main className={cn("flex-1 px-4 py-5 max-w-lg mx-auto w-full", !isOnboarding && "pb-tab-bar")}>
         <Outlet />
       </main>
 
       {/* Bottom tabs */}
-      <BottomTabBar />
+      {!isOnboarding && <BottomTabBar />}
     </div>
   );
 }
