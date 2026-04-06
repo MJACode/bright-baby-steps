@@ -4,7 +4,7 @@ import { useChildren, getAge } from "@/hooks/useChildren";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, Brain, Flame } from "lucide-react";
+import { Moon, Droplets, UtensilsCrossed, Brain, Flame, Footprints } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
@@ -65,6 +65,33 @@ export default function Dashboard() {
     { label: "Milestones", icon: Brain, path: "/dashboard/milestones", color: "bg-milestones text-white" },
   ];
 
+  // Full-screen onboarding for new users
+  if (isNewUser) {
+    return (
+      <div className="flex flex-col items-center min-h-[70vh]">
+        {/* Welcome hero */}
+        <div className="text-center pt-6 pb-4 px-4">
+          <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center mx-auto mb-4">
+            <Footprints className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="font-display text-2xl font-bold mb-1">Welcome to Baby Steps!</h1>
+          <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+            Let's get to know your little one. Our AI assistant will walk you through setup in under a minute.
+          </p>
+        </div>
+
+        {/* Full-width onboarding chat */}
+        <div className="w-full flex-1">
+          <AIChatWidget
+            activeChildId={activeChild?.id}
+            forceOnboarding={true}
+            onOnboardingComplete={() => setOnboardingDismissed(true)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Greeting */}
@@ -98,7 +125,7 @@ export default function Dashboard() {
       </div>
 
       {/* AI Chat */}
-      <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={isNewUser} onOnboardingComplete={() => setOnboardingDismissed(true)} />
+      <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={false} onOnboardingComplete={() => setOnboardingDismissed(true)} />
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />
@@ -133,6 +160,11 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <QuickLogFAB />
+    </div>
+  );
+}
 
       <QuickLogFAB />
     </div>
