@@ -619,6 +619,9 @@ export default function SleepPage() {
       {/* Sleep Insights */}
       {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
 
+      {/* 7-Day Trends Chart */}
+      {activeChild && <SleepTrendsChart childId={activeChild.id} />}
+
 
       {/* Edit Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
