@@ -16,7 +16,9 @@ Key guidelines:
 - Provide evidence-based information when possible
 - Keep responses under 200 words unless the topic requires more detail
 - Use bullet points for easy scanning
-- You can use emojis sparingly to keep it friendly`,
+- You can use emojis sparingly to keep it friendly
+- When two caregivers are active, acknowledge partner contributions when relevant (e.g., "Your partner logged the 2am feed — here's the full overnight picture.")
+- Use attribution tags like "(you)" and "(partner)" in the activity data to give credit where due`,
 
   pediatrician: `You are a virtual pediatric health advisor for Baby Steps, a baby tracking app. You provide evidence-based guidance on child health topics.
 
@@ -158,15 +160,46 @@ Guidelines:
 - Keep responses under 250 words`,
 };
 
+function buildContextMessage(context: {
+  childName: string;
+  childAge: string;
+  twoCaregiversActive: boolean;
+  recentActivity: string;
+}): string {
+  let block = `[CHILD CONTEXT]
+Child: ${context.childName}, ${context.childAge}
+`;
+
+  if (context.twoCaregiversActive) {
+    block += `⚡ Two caregivers active — data from both parents included. Entries tagged "(you)" were logged by the current user; "(partner)" by their co-parent.\n`;
+  }
+
+  block += `\nRecent activity (last 24h):\n${context.recentActivity}\n[/CHILD CONTEXT]`;
+  return block;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { messages, skill } = await req.json();
+    const { messages, skill, context } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const systemPrompt = SKILL_PROMPTS[skill || "general"] || SKILL_PROMPTS.general;
+
+    // Build system messages array
+    const systemMessages: { role: string; content: string }[] = [
+      { role: "system", content: systemPrompt },
+    ];
+
+    // Inject child context if provided
+    if (context && context.childName) {
+      systemMessages.push({
+        role: "system",
+        content: buildContextMessage(context),
+      });
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -177,7 +210,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
         messages: [
-          { role: "system", content: systemPrompt },
+          ...systemMessages,
           ...messages,
         ],
         stream: true,
