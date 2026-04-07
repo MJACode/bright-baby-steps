@@ -9,7 +9,7 @@ import {
   DrawerTitle,
   DrawerDescription,
 } from "@/components/ui/drawer";
-import { ChevronDown, Plus, Check } from "lucide-react";
+import { ChevronDown, Plus, Check, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function getInitials(name: string) {
@@ -24,6 +24,7 @@ function getInitials(name: string) {
 export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { externalOpen?: boolean; onExternalOpenChange?: (open: boolean) => void }) {
   const { children, activeChild, setSelectedChildId } = useChildren();
   const [internalOpen, setInternalOpen] = useState(false);
+  const [editingChild, setEditingChild] = useState<(typeof children)[0] | null>(null);
 
   const open = externalOpen !== undefined ? externalOpen || internalOpen : internalOpen;
   const setOpen = (v: boolean) => {
@@ -59,39 +60,53 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
             <DrawerDescription>Select which child to view</DrawerDescription>
           </DrawerHeader>
           <div className="px-4 pb-2 space-y-1">
-            {children.map((child) => (
-              <button
-                key={child.id}
-                type="button"
-                onClick={() => {
-                  setSelectedChildId(child.id);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-3 rounded-xl p-3 transition-colors text-left",
-                  child.id === activeChild.id
-                    ? "bg-primary/10"
-                    : "hover:bg-secondary"
-                )}
-              >
-                <Avatar className="h-10 w-10">
-                  {child.photo_url && <AvatarImage src={child.photo_url} alt={child.name} />}
-                  <AvatarFallback className="bg-primary/20 text-primary font-bold">
-                    {getInitials(child.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{child.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {getAge(child.date_of_birth, child.is_premature ?? false, child.due_date)} old
-                    {child.is_premature ? " (adjusted)" : ""}
-                  </p>
+            {children.map((child) => {
+              const ageStr = getAge(child.date_of_birth, child.is_premature ?? false, child.due_date);
+              const isExpected = (child as any).is_expected;
+              return (
+                <div key={child.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedChildId(child.id);
+                      setOpen(false);
+                    }}
+                    className={cn(
+                      "flex-1 flex items-center gap-3 rounded-xl p-3 transition-colors text-left",
+                      child.id === activeChild.id
+                        ? "bg-primary/10"
+                        : "hover:bg-secondary"
+                    )}
+                  >
+                    <Avatar className="h-10 w-10">
+                      {child.photo_url && <AvatarImage src={child.photo_url} alt={child.name} />}
+                      <AvatarFallback className="bg-primary/20 text-primary font-bold">
+                        {getInitials(child.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{child.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isExpected
+                          ? ageStr
+                          : `${ageStr} old${child.is_premature ? " (adjusted)" : ""}`}
+                      </p>
+                    </div>
+                    {child.id === activeChild.id && (
+                      <Check className="w-5 h-5 text-primary shrink-0" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingChild(child)}
+                    className="h-10 w-10 rounded-xl flex items-center justify-center hover:bg-secondary transition-colors shrink-0"
+                    aria-label={`Edit ${child.name}`}
+                  >
+                    <Pencil className="w-4 h-4 text-muted-foreground" />
+                  </button>
                 </div>
-                {child.id === activeChild.id && (
-                  <Check className="w-5 h-5 text-primary shrink-0" />
-                )}
-              </button>
-            ))}
+              );
+            })}
           </div>
           <div className="px-4 pb-6 pt-1">
             <AddChildDialog
@@ -110,6 +125,15 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
           </div>
         </DrawerContent>
       </Drawer>
+
+      {/* Edit child dialog — rendered outside the Drawer so it can open on top */}
+      {editingChild && (
+        <AddChildDialog
+          child={editingChild}
+          open={!!editingChild}
+          onOpenChange={(v) => { if (!v) setEditingChild(null); }}
+        />
+      )}
     </>
   );
 }

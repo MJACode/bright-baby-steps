@@ -53,7 +53,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
 
   const [view, setView] = useState<View>(forceOnboarding ? "chat" : "closed");
   const [messages, setMessages] = useState<Message[]>(
-    forceOnboarding ? [{ role: "assistant", content: "Welcome to Baby Steps! 🎉 I'm here to help you get set up. What's your baby's name?" }] : []
+    forceOnboarding ? [{ role: "assistant", content: "Welcome to Baby Steps! 🎉 I'm here to help you get set up.\n\nIs your little one already here, or are you still expecting?" }] : []
   );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -275,6 +275,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
             date_of_birth: childData.date_of_birth,
             is_premature: childData.is_premature || false,
             due_date: childData.due_date || null,
+            is_expected: childData.is_expected || false,
           });
           if (!error) {
             queryClient.invalidateQueries({ queryKey: ["children"] });
