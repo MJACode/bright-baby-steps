@@ -19,7 +19,7 @@ export default function DashboardLayout() {
 
   const isOnboarding = !childrenLoading && (!children || children.length === 0);
 
-  if (loading) {
+  if (loading || childrenLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <Footprints className="w-10 h-10 text-primary animate-pulse" />
