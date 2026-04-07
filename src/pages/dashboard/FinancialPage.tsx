@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useChildren } from "@/hooks/useChildren";
+import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { DollarSign, ExternalLink, CheckCircle2, BookOpen, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X } from "lucide-react";
+import { DollarSign, ExternalLink, CheckCircle2, BookOpen, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X, Lightbulb } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -15,7 +15,7 @@ import { useState } from "react";
 
 function getFinancialPrompt(ageMonths: number) {
   if (ageMonths < 3) return {
-    message: "Now is a great time to add your baby to your health insurance — most plans have a 30-day enrollment window.",
+    message: "Now is a great time to add your baby to your health insurance — most plans have a 30-day special enrollment window.",
     icon: Shield, key: "fin-prompt-0-3",
   };
   if (ageMonths < 6) return {
@@ -61,10 +61,36 @@ function AgePromptBanner({ ageMonths }: { ageMonths: number }) {
 }
 
 const lessonCards = [
-  { title: "Why 529 Plans Matter", desc: "Tax-advantaged savings for education. Start early for compound growth.", icon: "🎓" },
-  { title: "UTMA/UGMA Basics", desc: "Custodial accounts for investing in your child's name.", icon: "📈" },
-  { title: "Insurance for New Parents", desc: "Life, health, and disability coverage every parent needs.", icon: "🛡️" },
-  { title: "The Power of Starting Early", desc: "Even $25/month adds up significantly over 18 years.", icon: "💰" },
+  {
+    title: "Why 529 Plans Matter",
+    desc: "$25/month from birth grows to ~$11,000 by age 18 at 7%. Earnings are tax-free for qualified education costs.",
+    icon: "🎓",
+  },
+  {
+    title: "UTMA/UGMA Accounts",
+    desc: "Custodial brokerage accounts with no contribution limits. Flexible — funds can be used for anything, not just education.",
+    icon: "📈",
+  },
+  {
+    title: "Insurance Essentials",
+    desc: "A 20-year term life policy can cost under $25/month. Short-term disability protects your income if you can't work.",
+    icon: "🛡️",
+  },
+  {
+    title: "Start Early, Win Big",
+    desc: "$100/month from birth = ~$45,000 at age 18 (7% avg return). Every month of delay costs compound growth.",
+    icon: "💰",
+  },
+];
+
+// Category display order
+const CATEGORY_ORDER = [
+  "Immediate Steps",
+  "Insurance",
+  "Education Savings (529)",
+  "Investing for Your Child",
+  "Tax Benefits for Parents",
+  "Estate Planning",
 ];
 
 export default function FinancialPage() {
@@ -117,7 +143,8 @@ export default function FinancialPage() {
     },
   });
 
-  const isCompleted = (itemId: string) => parentChecklist?.find((pc) => pc.checklist_item_id === itemId)?.status === "completed";
+  const isCompleted = (itemId: string) =>
+    parentChecklist?.find((pc) => pc.checklist_item_id === itemId)?.status === "completed";
 
   const groupedByCategory = items?.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = [];
@@ -125,13 +152,27 @@ export default function FinancialPage() {
     return acc;
   }, {} as Record<string, typeof items>);
 
+  // Sort categories in the defined order; unknown categories go last
+  const sortedCategories = groupedByCategory
+    ? Object.entries(groupedByCategory).sort(([a], [b]) => {
+        const ai = CATEGORY_ORDER.indexOf(a);
+        const bi = CATEGORY_ORDER.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      })
+    : [];
+
   const totalItems = items?.length ?? 0;
   const completedCount = parentChecklist?.filter((pc) => pc.status === "completed").length ?? 0;
   const progressPct = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
 
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  // Open "Immediate Steps" by default
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ "Immediate Steps": true });
   const isSectionOpen = (key: string) => openSections[key] === true;
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const ageMonths = activeChild
+    ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -147,10 +188,7 @@ export default function FinancialPage() {
         </p>
       </div>
 
-      {activeChild && (() => {
-        const ageMonths = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 30.44));
-        return <AgePromptBanner ageMonths={ageMonths} />;
-      })()}
+      {activeChild && <AgePromptBanner ageMonths={ageMonths} />}
 
       <Card className="border-0 bg-finance-bg">
         <CardContent className="p-4 space-y-2">
@@ -190,7 +228,7 @@ export default function FinancialPage() {
         <p className="text-sm text-muted-foreground">Loading checklist...</p>
       ) : (
         <div className="space-y-4">
-          {groupedByCategory && Object.entries(groupedByCategory).map(([category, categoryItems]) => {
+          {sortedCategories.map(([category, categoryItems]) => {
             const catCompleted = categoryItems?.filter((i) => isCompleted(i.id)).length ?? 0;
             const catTotal = categoryItems?.length ?? 0;
             return (
@@ -215,7 +253,7 @@ export default function FinancialPage() {
                               className="mt-0.5 touch-target"
                               aria-label={`Mark ${item.title} as ${completed ? "incomplete" : "complete"}`}
                             />
-                            <div className="flex-1 space-y-1">
+                            <div className="flex-1 space-y-1.5">
                               <p className={cn("text-sm font-semibold", completed && "line-through text-muted-foreground")}>{item.title}</p>
                               {item.recommended_timing && (
                                 <Badge variant="secondary" className="text-xs">{item.recommended_timing}</Badge>
@@ -224,13 +262,35 @@ export default function FinancialPage() {
                               {item.why_it_matters && (
                                 <p className="text-xs text-muted-foreground"><strong>Why:</strong> {item.why_it_matters}</p>
                               )}
+                              {item.annual_limit_note && (
+                                <div className="flex items-start gap-1.5 rounded-md bg-background/60 px-2.5 py-1.5">
+                                  <Lightbulb className="w-3 h-3 mt-0.5 shrink-0 text-finance" />
+                                  <p className="text-xs text-foreground/80">{item.annual_limit_note}</p>
+                                </div>
+                              )}
                               {item.external_resource_url && (
                                 <a href={item.external_resource_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary flex items-center gap-1 hover:underline touch-target">
                                   <ExternalLink className="w-3 h-3" /> Learn more
                                 </a>
                               )}
+                              {/* Sponsor CTA — renders when a finance firm is linked to this item */}
+                              {(item as any).is_sponsored && (item as any).sponsor_name && (
+                                <div className="mt-1 flex items-center justify-between rounded-lg bg-background/60 px-3 py-2 border border-border/50">
+                                  <p className="text-xs text-muted-foreground">Sponsored by {(item as any).sponsor_name}</p>
+                                  {(item as any).sponsor_cta_url && (
+                                    <a
+                                      href={(item as any).sponsor_cta_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer sponsored"
+                                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                                    >
+                                      {(item as any).sponsor_cta_label ?? "Learn more"} <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            {completed && <CheckCircle2 className="w-5 h-5 text-success shrink-0" />}
+                            {completed && <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" />}
                           </div>
                         </CardContent>
                       </Card>
