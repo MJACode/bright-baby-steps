@@ -90,32 +90,52 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
       const wordList = entries?.slice(0, 30).map((e) => e.word_or_sound).join(", ") ?? "";
       const prompt = `Analyze this baby's speech development. Child: ${childName}, age: ${ageMonths} months. Total vocabulary logged: ${totalCount} words/sounds. Words this week: ${stats?.recentCount ?? 0}. Weekly rate: ${stats?.weeklyRate ?? 0}. Recent words: ${wordList}. Age benchmark: ${benchmark.label}. Give a brief, warm, encouraging 2-3 sentence insight about their language development progress. Include one specific activity suggestion.`;
 
-      const { data, error } = await supabase.functions.invoke("chat", {
-        body: {
-          messages: [{ role: "user", content: prompt }],
-          skillId: "slp",
-          childId,
-        },
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch(
+        "https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlldXpuYnZ2d2R2aHRpcnp3a2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5OTIzODQsImV4cCI6MjA4ODU2ODM4NH0.04dxqjtlwWujfWTSM8fm2Y6EXGqIpOZisvBcN4eETEc"}`,
+          },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: prompt }],
+            skill: "slp",
+          }),
+        }
+      );
 
-      if (error) throw error;
+      if (!resp.ok) throw new Error("Request failed");
+      if (!resp.body) throw new Error("No response body");
 
-      // Parse streamed response
-      const text = typeof data === "string" ? data : await new Response(data).text();
-      // Extract just the text content from potential SSE format
-      const cleaned = text.replace(/^data: /gm, "").replace(/\[DONE\]/g, "").trim();
-      // Try to parse as JSON chunks or use as-is
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
       let result = "";
-      for (const line of cleaned.split("\n")) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          result += parsed.choices?.[0]?.delta?.content ?? "";
-        } catch {
-          result += line;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) result += content;
+          } catch { /* skip malformed chunk */ }
         }
       }
-      setAiInsight(result || cleaned);
+
+      setAiInsight(result || "No insight available right now.");
     } catch {
       setAiInsight("Couldn't generate insight right now. Try again later!");
     } finally {

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { BookHeart, Plus, Sparkles } from "lucide-react";
+import { BookHeart, Plus, Sparkles, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { SpeechInsightsPanel } from "@/components/SpeechInsightsPanel";
@@ -24,6 +24,9 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
   const [wordOrSound, setWordOrSound] = useState("");
   const [context, setContext] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editWord, setEditWord] = useState("");
+  const [editContext, setEditContext] = useState("");
 
   const { data: entries } = useQuery({
     queryKey: ["speech-journal", childId],
@@ -74,6 +77,33 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
     },
   });
 
+  const updateEntry = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("speech_journal" as any)
+        .update({ word_or_sound: editWord.trim(), context: editContext.trim() || null })
+        .eq("id", editingId!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["speech-journal", childId] });
+      setEditingId(null);
+      setEditWord("");
+      setEditContext("");
+      toast({ title: "Entry updated!" });
+    },
+    onError: () => {
+      toast({ title: "Couldn't update entry", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const openEdit = (entry: any) => {
+    setEditingId(entry.id);
+    setEditWord(entry.word_or_sound);
+    setEditContext(entry.context || "");
+    setShowForm(false);
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -91,7 +121,7 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
             size="sm"
             variant="outline"
             className="touch-target"
-            onClick={() => setShowForm(!showForm)}
+            onClick={() => { setShowForm(!showForm); setEditingId(null); }}
           >
             <Plus className="w-4 h-4 mr-1" /> Log
           </Button>
@@ -147,17 +177,61 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
           {entries.map((entry) => (
             <Card key={entry.id} className="border-0 bg-secondary">
               <CardContent className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm">"{entry.word_or_sound}"</p>
-                    {entry.context && (
-                      <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{entry.context}</p>
-                    )}
+                {editingId === entry.id ? (
+                  <div className="space-y-2">
+                    <Input
+                      value={editWord}
+                      onChange={(e) => setEditWord(e.target.value)}
+                      maxLength={100}
+                    />
+                    <Textarea
+                      placeholder="Context (optional)"
+                      value={editContext}
+                      onChange={(e) => setEditContext(e.target.value)}
+                      maxLength={500}
+                      rows={2}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => updateEntry.mutate()}
+                        disabled={!editWord.trim() || updateEntry.isPending}
+                      >
+                        {updateEntry.isPending ? "Saving..." : "Save"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => { setEditingId(null); setEditWord(""); setEditContext(""); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(new Date(entry.entry_date), "MMM d")}
-                  </span>
-                </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm">"{entry.word_or_sound}"</p>
+                      {entry.context && (
+                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{entry.context}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {format(new Date(entry.entry_date), "MMM d")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-milestones"
+                        onClick={() => openEdit(entry)}
+                        aria-label="Edit entry"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
