@@ -40,11 +40,12 @@ interface AIChatWidgetProps {
   activeChildId?: string;
   forceOnboarding?: boolean;
   onOnboardingComplete?: () => void;
+  defaultSkill?: SkillId;
 }
 
 type View = "closed" | "skills" | "chat";
 
-export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete }: AIChatWidgetProps) {
+export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete, defaultSkill }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
@@ -59,7 +60,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
-  const [activeSkill, setActiveSkill] = useState<SkillId>(forceOnboarding ? "onboarding" : "general");
+  const [activeSkill, setActiveSkill] = useState<SkillId>(forceOnboarding ? "onboarding" : (defaultSkill ?? "general"));
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
