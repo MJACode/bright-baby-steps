@@ -1,9 +1,11 @@
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { usePreferences } from "@/hooks/usePreferences";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { User, LogOut, Baby, ClipboardList, ChevronDown } from "lucide-react";
+import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, Sparkles } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
@@ -12,6 +14,7 @@ import { FeedbackDialog } from "@/components/FeedbackDialog";
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const { children } = useChildren();
+  const { prefs, setPrefs } = usePreferences();
 
   return (
     <div className="space-y-5">
@@ -61,6 +64,39 @@ export default function ProfilePage() {
 
       {/* Partner Management */}
       <PartnerManagement />
+
+      {/* Preferences */}
+      <Card className="border-0 bg-muted/50">
+        <CardContent className="p-4 space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preferences</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Today's Briefing</p>
+                <p className="text-xs text-muted-foreground">AI daily summary on home screen</p>
+              </div>
+            </div>
+            <Switch
+              checked={prefs.showBriefing}
+              onCheckedChange={(checked) => setPrefs({ showBriefing: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Notifications</p>
+                <p className="text-xs text-muted-foreground">Bell icon and reminders</p>
+              </div>
+            </div>
+            <Switch
+              checked={prefs.showNotifications}
+              onCheckedChange={(checked) => setPrefs({ showNotifications: checked })}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Feedback */}
       <FeedbackDialog />

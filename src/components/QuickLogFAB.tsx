@@ -1,4 +1,4 @@
-import { Plus, Moon, UtensilsCrossed, Droplets } from "lucide-react";
+import { Plus, Moon, UtensilsCrossed, Droplets, Brain } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ const quickActions = [
   { label: "Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep text-white" },
   { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding text-white" },
   { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers text-white", openModal: true },
+  { label: "Milestones", icon: Brain, path: "/dashboard/milestones", color: "bg-milestones text-white" },
 ];
 
 export function QuickLogFAB() {

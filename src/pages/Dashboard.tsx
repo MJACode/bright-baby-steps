@@ -1,23 +1,22 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAge } from "@/hooks/useChildren";
+import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Moon, Droplets, UtensilsCrossed, Brain, Flame, Footprints } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Flame, Footprints } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
-import { cn } from "@/lib/utils";
 
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { activeChild, children, isLoading: childrenLoading } = useChildren();
+  const { prefs } = usePreferences();
   const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
   const isNewUser = !childrenLoading && (!children || children.length === 0) && !onboardingDismissed;
@@ -57,13 +56,6 @@ export default function Dashboard() {
   });
 
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
-
-  const quickActions = [
-    { label: "Log Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep text-white" },
-    { label: "Log Feed", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding text-white" },
-    { label: "Log Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers text-white" },
-    { label: "Milestones", icon: Brain, path: "/dashboard/milestones", color: "bg-milestones text-white" },
-  ];
 
   // Full-screen onboarding for new users
   if (isNewUser) {
@@ -105,24 +97,7 @@ export default function Dashboard() {
       </div>
 
       {/* Today's Briefing */}
-      <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />
-
-      {/* Quick Actions Row */}
-      <div className="grid grid-cols-4 gap-2">
-        {quickActions.map((action) => (
-          <button
-            key={action.label}
-            onClick={() => navigate(action.path)}
-            className={cn(
-              "flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl font-semibold text-xs transition-all active:scale-95 touch-target shadow-sm",
-              action.color
-            )}
-          >
-            <action.icon className="w-6 h-6" />
-            <span className="leading-tight text-center">{action.label}</span>
-          </button>
-        ))}
-      </div>
+      {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
       {/* AI Chat */}
       <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={false} onOnboardingComplete={() => setOnboardingDismissed(true)} />

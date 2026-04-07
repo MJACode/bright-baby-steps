@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
+import { usePreferences } from "@/hooks/usePreferences";
 import { Footprints, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -12,6 +13,7 @@ import { useState } from "react";
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
   const { children, isLoading: childrenLoading } = useChildren();
+  const { prefs } = usePreferences();
   const [childSwitcherOpen, setChildSwitcherOpen] = useState(false);
   const location = useLocation();
 
@@ -48,7 +50,7 @@ export default function DashboardLayout() {
           </button>
           {!isOnboarding && (
             <div className="flex items-center gap-1">
-              <NotificationBell />
+              {prefs.showNotifications && <NotificationBell />}
               <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
                 <Link to="/dashboard/profile">
                   <UserCircle className="w-5 h-5" />

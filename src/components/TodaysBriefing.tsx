@@ -47,31 +47,31 @@ export function TodaysBriefing({ activeChild }: TodaysBriefingProps) {
     : null;
 
   return (
-    <Card className="border-0 bg-accent/40">
+    <Card className="border-0 bg-primary/8 border border-primary/15">
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-accent-foreground/70" />
-          <span className="text-xs font-bold uppercase tracking-wide text-accent-foreground/70">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <span className="text-xs font-bold uppercase tracking-wide text-primary">
             Today's Briefing
           </span>
         </div>
 
         {isLoading ? (
           <div className="flex items-center gap-2 py-2">
-            <Loader2 className="w-4 h-4 animate-spin text-accent-foreground/50" />
-            <span className="text-sm text-accent-foreground/60">Generating your briefing…</span>
+            <Loader2 className="w-4 h-4 animate-spin text-primary/60" />
+            <span className="text-sm text-muted-foreground">Generating your briefing…</span>
           </div>
         ) : items ? (
           <ul className="space-y-2">
             {items.map((item, i) => (
               <li key={i} className="flex items-start gap-2">
-                <item.icon className="w-3.5 h-3.5 mt-0.5 text-accent-foreground/50 shrink-0" />
-                <span className="text-sm text-accent-foreground/90 leading-snug">{item.text}</span>
+                <item.icon className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                <span className="text-sm text-foreground leading-snug">{item.text}</span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-accent-foreground/70">
+          <p className="text-sm text-muted-foreground">
             Log some activities to unlock your daily AI briefing 💛
           </p>
         )}
