@@ -26,10 +26,24 @@ export function useChildren() {
   });
 
   const addChild = useMutation({
-    mutationFn: async (child: { name: string; date_of_birth: string; gender?: string; is_premature?: boolean; due_date?: string }) => {
+    mutationFn: async (child: { name: string; date_of_birth: string; gender?: string; is_premature?: boolean; due_date?: string; is_expected?: boolean }) => {
       const { data, error } = await supabase
         .from("children")
         .insert({ ...child, parent_id: user!.id })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["children"] }),
+  });
+
+  const updateChild = useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; date_of_birth?: string; gender?: string; is_premature?: boolean; due_date?: string; is_expected?: boolean }) => {
+      const { data, error } = await supabase
+        .from("children")
+        .update(updates)
+        .eq("id", id)
         .select()
         .single();
       if (error) throw error;
@@ -49,12 +63,21 @@ export function useChildren() {
     return found ?? children[0];
   }, [children, selectedChildId]);
 
-  return { children: children ?? [], isLoading, addChild, activeChild, setSelectedChildId };
+  return { children: children ?? [], isLoading, addChild, updateChild, activeChild, setSelectedChildId };
 }
 
 export function getAge(dob: string, isPremature?: boolean, dueDate?: string | null) {
   const birthDate = new Date(dob);
   const now = new Date();
+
+  // Future date = expected baby
+  if (birthDate > now) {
+    const weeksUntil = differenceInWeeks(birthDate, now);
+    const daysUntil = differenceInDays(birthDate, now);
+    if (daysUntil <= 7) return "Due soon";
+    return `Due in ${weeksUntil}w`;
+  }
+
   const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
   const months = differenceInMonths(now, adjustedDate);
   const weeks = differenceInWeeks(now, adjustedDate);
@@ -66,6 +89,10 @@ export function getAge(dob: string, isPremature?: boolean, dueDate?: string | nu
 }
 
 export function getAgeInMonths(dob: string, isPremature?: boolean, dueDate?: string | null) {
-  const adjustedDate = isPremature && dueDate ? new Date(dueDate) : new Date(dob);
-  return differenceInMonths(new Date(), adjustedDate);
+  const birthDate = new Date(dob);
+  const now = new Date();
+  // Return 0 for expected babies (not yet born)
+  if (birthDate > now) return 0;
+  const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
+  return differenceInMonths(now, adjustedDate);
 }
