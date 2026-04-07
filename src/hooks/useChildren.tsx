@@ -11,7 +11,7 @@ export function useChildren() {
     try { return localStorage.getItem("active-child-id"); } catch { return null; }
   });
 
-  const { data: children, isLoading } = useQuery({
+  const { data: children, isLoading, isFetching } = useQuery({
     queryKey: ["children"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -63,7 +63,7 @@ export function useChildren() {
     return found ?? children[0];
   }, [children, selectedChildId]);
 
-  return { children: children ?? [], isLoading, addChild, updateChild, activeChild, setSelectedChildId };
+  return { children: children ?? [], isLoading, isFetching, addChild, updateChild, activeChild, setSelectedChildId };
 }
 
 export function getAge(dob: string, isPremature?: boolean, dueDate?: string | null) {

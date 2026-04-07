@@ -12,14 +12,16 @@ import { useState } from "react";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
-  const { children, isLoading: childrenLoading } = useChildren();
+  const { children, isLoading: childrenLoading, isFetching: childrenFetching } = useChildren();
   const { prefs } = usePreferences();
   const [childSwitcherOpen, setChildSwitcherOpen] = useState(false);
   const location = useLocation();
 
-  const isOnboarding = !childrenLoading && (!children || children.length === 0);
+  // Treat an in-progress refetch the same as initial load — prevents a stuck
+  // state where children is still [] while the post-onboarding refetch runs
+  const isOnboarding = !childrenLoading && !childrenFetching && (!children || children.length === 0);
 
-  if (loading || childrenLoading) {
+  if (loading || childrenLoading || (childrenFetching && children.length === 0)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <Footprints className="w-10 h-10 text-primary animate-pulse" />
