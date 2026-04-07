@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { DollarSign, ExternalLink, CheckCircle2, BookOpen, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X, Lightbulb } from "lucide-react";
+import { DollarSign, ExternalLink, CheckCircle2, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X, Lightbulb, ArrowRight, Sparkles } from "lucide-react";
+import { AIChatWidget } from "@/components/AIChatWidget";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -60,31 +61,9 @@ function AgePromptBanner({ ageMonths }: { ageMonths: number }) {
   );
 }
 
-const lessonCards = [
-  {
-    title: "Why 529 Plans Matter",
-    desc: "$25/month from birth grows to ~$11,000 by age 18 at 7%. Earnings are tax-free for qualified education costs.",
-    icon: "🎓",
-  },
-  {
-    title: "UTMA/UGMA Accounts",
-    desc: "Custodial brokerage accounts with no contribution limits. Flexible — funds can be used for anything, not just education.",
-    icon: "📈",
-  },
-  {
-    title: "Insurance Essentials",
-    desc: "A 20-year term life policy can cost under $25/month. Short-term disability protects your income if you can't work.",
-    icon: "🛡️",
-  },
-  {
-    title: "Start Early, Win Big",
-    desc: "$100/month from birth = ~$45,000 at age 18 (7% avg return). Every month of delay costs compound growth.",
-    icon: "💰",
-  },
-];
-
 // Category display order
 const CATEGORY_ORDER = [
+  "Government Programs",
   "Immediate Steps",
   "Insurance",
   "Education Savings (529)",
@@ -165,8 +144,14 @@ export default function FinancialPage() {
   const completedCount = parentChecklist?.filter((pc) => pc.status === "completed").length ?? 0;
   const progressPct = totalItems > 0 ? Math.round((completedCount / totalItems) * 100) : 0;
 
-  // Open "Immediate Steps" by default
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ "Immediate Steps": true });
+  // First uncompleted item across all categories (used for Next Step card)
+  const nextAction = items?.find((item) => !isCompleted(item.id)) ?? null;
+
+  // Open "Government Programs" and "Immediate Steps" by default
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    "Government Programs": true,
+    "Immediate Steps": true,
+  });
   const isSectionOpen = (key: string) => openSections[key] === true;
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
@@ -200,28 +185,31 @@ export default function FinancialPage() {
         </CardContent>
       </Card>
 
-      {/* Lesson cards */}
-      <Collapsible open={isSectionOpen("learn")} onOpenChange={() => toggleSection("learn")}>
-        <CollapsibleTrigger className="flex items-center justify-between w-full touch-target py-1">
-          <h2 className="font-display font-bold text-sm flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-finance" /> Learn
-          </h2>
-          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", isSectionOpen("learn") && "rotate-180")} />
-        </CollapsibleTrigger>
-        <CollapsibleContent className="mt-2">
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x">
-            {lessonCards.map((card) => (
-              <Card key={card.title} className="border-0 bg-finance-bg min-w-[240px] snap-start shrink-0">
-                <CardContent className="p-4">
-                  <p className="text-2xl mb-2">{card.icon}</p>
-                  <p className="font-bold text-sm">{card.title}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{card.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      {/* Next Best Action */}
+      {nextAction && (
+        <Card className="border-0 bg-finance-bg">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <ArrowRight className="w-4 h-4 text-finance shrink-0" />
+              <p className="text-xs font-bold uppercase tracking-wide text-finance">Next Step</p>
+            </div>
+            <p className="text-sm font-semibold">{nextAction.title}</p>
+            {nextAction.recommended_timing && (
+              <Badge variant="secondary" className="text-xs">{nextAction.recommended_timing}</Badge>
+            )}
+            <p className="text-xs text-muted-foreground">{nextAction.description}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ask the Financial AI */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-finance" />
+          <p className="text-xs font-bold uppercase tracking-wide text-finance">Ask the Financial AI</p>
+        </div>
+        <AIChatWidget activeChildId={activeChild?.id} defaultSkill="financial" />
+      </div>
 
       {/* Checklist */}
       {isLoading ? (
