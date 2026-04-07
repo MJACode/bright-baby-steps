@@ -33,6 +33,7 @@ export default function DiapersPage() {
   const [notes, setNotes] = useState("");
   const [flag, setFlag] = useState(false);
   const [logTime, setLogTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [diaperType, setDiaperType] = useState<"wet" | "dirty">("dirty");
 
   const { data: logs } = useQuery({
     queryKey: ["diaper-logs", activeChild?.id],
@@ -51,6 +52,7 @@ export default function DiapersPage() {
 
   const resetForm = () => {
     setEditingId(null);
+    setDiaperType("dirty");
     setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
@@ -65,6 +67,7 @@ export default function DiapersPage() {
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
+    setDiaperType((log.diaper_type as "wet" | "dirty") ?? "dirty");
     setSelectedColor(log.color || "");
     setSelectedConsistency(log.consistency || "");
     setNotes(log.notes || "");
@@ -76,6 +79,7 @@ export default function DiapersPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = {
+        diaper_type: diaperType,
         color: selectedColor || null,
         consistency: selectedConsistency || null,
         notes: notes || null,
@@ -90,7 +94,6 @@ export default function DiapersPage() {
           ...payload,
           child_id: activeChild!.id,
           parent_id: user!.id,
-          diaper_type: "dirty",
         });
         if (error) throw error;
       }
@@ -184,61 +187,77 @@ export default function DiapersPage() {
       <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Detailed Diaper"}</DialogTitle>
-            <DialogDescription>Use this for abnormal diapers — log color, consistency, and any concerns.</DialogDescription>
+            <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Diaper"}</DialogTitle>
+            <DialogDescription>Log a wet or dirty diaper with optional details.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">Time <span className="text-destructive">*</span></Label>
-              <Input
-                type="datetime-local"
-                value={logTime}
-                onChange={(e) => setLogTime(e.target.value)}
-                max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
-              />
-              <p className="text-[10px] text-muted-foreground">Defaults to now — change if logging a past diaper</p>
+            {/* Wet / Dirty toggle */}
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={diaperType === "wet" ? "default" : "outline"}
+                onClick={() => setDiaperType("wet")}
+                className="flex-1 touch-target h-11"
+              >
+                💧 Wet
+              </Button>
+              <Button
+                type="button"
+                variant={diaperType === "dirty" ? "default" : "outline"}
+                onClick={() => setDiaperType("dirty")}
+                className="flex-1 touch-target h-11"
+              >
+                💩 Dirty
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">Color <span className="text-destructive">*</span></Label>
-              <div className="flex gap-2 flex-wrap">
-                {colors.map((c) => (
-                  <button
-                    type="button"
-                    key={c}
-                    onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
-                    className={cn(
-                      "w-10 h-10 rounded-full border-2 touch-target transition-all",
-                      selectedColor === c ? "border-foreground scale-110 ring-2 ring-foreground/20" : "border-transparent",
-                      c === "yellow" && "bg-yellow-300",
-                      c === "green" && "bg-green-500",
-                      c === "brown" && "bg-amber-700",
-                      c === "dark-brown" && "bg-amber-900",
-                      c === "black" && "bg-gray-900",
-                      c === "red" && "bg-red-500",
-                    )}
-                    aria-label={`Color: ${c}`}
-                  />
-                ))}
-              </div>
-              {selectedColor && <p className="text-xs text-muted-foreground capitalize">Selected: {selectedColor}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold">Consistency <span className="text-destructive">*</span></Label>
-              <div className="flex gap-2 flex-wrap">
-                {consistencies.map((c) => (
-                  <Button
-                    type="button"
-                    key={c}
-                    variant={selectedConsistency === c ? "default" : "outline"}
-                    size="sm"
-                    className="capitalize touch-target"
-                    onClick={() => setSelectedConsistency(selectedConsistency === c ? "" : c)}
-                  >
-                    {c}
-                  </Button>
-                ))}
-              </div>
-            </div>
+
+            {/* Color + Consistency — only for dirty */}
+            {diaperType === "dirty" && (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Color <span className="text-destructive">*</span></Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {colors.map((c) => (
+                      <button
+                        type="button"
+                        key={c}
+                        onClick={() => setSelectedColor(selectedColor === c ? "" : c)}
+                        className={cn(
+                          "w-10 h-10 rounded-full border-2 touch-target transition-all",
+                          selectedColor === c ? "border-foreground scale-110 ring-2 ring-foreground/20" : "border-transparent",
+                          c === "yellow" && "bg-yellow-300",
+                          c === "green" && "bg-green-500",
+                          c === "brown" && "bg-amber-700",
+                          c === "dark-brown" && "bg-amber-900",
+                          c === "black" && "bg-gray-900",
+                          c === "red" && "bg-red-500",
+                        )}
+                        aria-label={`Color: ${c}`}
+                      />
+                    ))}
+                  </div>
+                  {selectedColor && <p className="text-xs text-muted-foreground capitalize">Selected: {selectedColor}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold">Consistency <span className="text-destructive">*</span></Label>
+                  <div className="flex gap-2 flex-wrap">
+                    {consistencies.map((c) => (
+                      <Button
+                        type="button"
+                        key={c}
+                        variant={selectedConsistency === c ? "default" : "outline"}
+                        size="sm"
+                        className="capitalize touch-target"
+                        onClick={() => setSelectedConsistency(selectedConsistency === c ? "" : c)}
+                      >
+                        {c}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
             <div className="space-y-1">
               <Label className="text-xs font-semibold">Notes</Label>
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any concerns..." />
@@ -248,11 +267,28 @@ export default function DiapersPage() {
                 <AlertTriangle className="w-4 h-4 mr-1" /> {flag ? "Flagged" : "Flag for attention"}
               </Button>
             </div>
+
+            {/* Time — compact row at bottom */}
+            <div className="flex items-center gap-3 pt-1">
+              <Label className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">Time</Label>
+              <Input
+                type="datetime-local"
+                value={logTime}
+                onChange={(e) => setLogTime(e.target.value)}
+                max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
+                className="h-8 text-xs flex-1"
+              />
+            </div>
+
             <Button
               type="button"
               onClick={() => {
-                if (!logTime || !selectedColor || !selectedConsistency) {
-                  toast({ title: "Please fill in all required fields", description: "Date, color, and consistency are required.", variant: "destructive" });
+                if (!logTime) {
+                  toast({ title: "Please set a time", variant: "destructive" });
+                  return;
+                }
+                if (diaperType === "dirty" && (!selectedColor || !selectedConsistency)) {
+                  toast({ title: "Please fill in all required fields", description: "Color and consistency are required for dirty diapers.", variant: "destructive" });
                   return;
                 }
                 saveMutation.mutate();
@@ -333,10 +369,14 @@ export default function DiapersPage() {
           <Card key={log.id} className="border-0 bg-diapers-bg">
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="text-xs">💩 dirty</Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {log.diaper_type === "wet" ? "💧 wet" : "💩 dirty"}
+                </Badge>
                 <div>
                   <p className="text-sm font-semibold">
-                    {[log.color, log.consistency].filter(Boolean).join(" · ") || "Dirty diaper"}
+                    {log.diaper_type === "wet"
+                      ? "Wet diaper"
+                      : [log.color, log.consistency].filter(Boolean).join(" · ") || "Dirty diaper"}
                   </p>
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
                 </div>
