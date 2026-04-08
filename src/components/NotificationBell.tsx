@@ -63,6 +63,7 @@ export function NotificationBell() {
     sleep_reminder: "🌙",
     milestone_age: "🎂",
     appointment_reminder: "📋",
+    pumping_reminder: "🧴",
   };
 
   return (

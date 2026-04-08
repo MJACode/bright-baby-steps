@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UtensilsCrossed, ShieldAlert, Pill } from "lucide-react";
+import { UtensilsCrossed, ShieldAlert, Pill, Baby } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import FeedingLog from "@/components/feeding/FeedingLog";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 import SupplementTracker from "@/components/feeding/SupplementTracker";
+import PumpingSchedule from "@/components/feeding/PumpingSchedule";
 
 export default function FeedingPage() {
   const [tab, setTab] = useState("feeding");
@@ -45,7 +46,7 @@ export default function FeedingPage() {
   return (
     <div className="space-y-4">
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-14 p-1 bg-muted/60">
+        <TabsList className="grid w-full grid-cols-4 h-14 p-1 bg-muted/60">
           <TabsTrigger
             value="feeding"
             className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
@@ -57,6 +58,12 @@ export default function FeedingPage() {
             className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <Pill className="w-4 h-4" /> Supps
+          </TabsTrigger>
+          <TabsTrigger
+            value="pumping"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <Baby className="w-4 h-4" /> Pump
           </TabsTrigger>
           <TabsTrigger
             value="allergens"
@@ -78,6 +85,9 @@ export default function FeedingPage() {
         </TabsList>
         <TabsContent value="feeding" className="mt-4">
           <FeedingLog onNavigateToAllergens={() => setTab("allergens")} />
+        </TabsContent>
+        <TabsContent value="pumping" className="mt-4">
+          <PumpingSchedule onNavigateToLog={() => setTab("feeding")} />
         </TabsContent>
         <TabsContent value="supplements" className="mt-4">
           <SupplementTracker />
