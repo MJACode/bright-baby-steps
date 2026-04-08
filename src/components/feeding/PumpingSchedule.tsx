@@ -23,6 +23,7 @@ interface PumpingSchedule {
   day_start_time: string;
   day_end_time: string;
   is_active: boolean;
+  pump_notifications_enabled: boolean;
   notes: string | null;
 }
 
@@ -80,6 +81,7 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("22:00");
   const [isActive, setIsActive] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [scheduleNotes, setScheduleNotes] = useState("");
 
   // Fetch schedule for active child
@@ -102,6 +104,7 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
         setStartTime(data.day_start_time.slice(0, 5));
         setEndTime(data.day_end_time.slice(0, 5));
         setIsActive(data.is_active);
+        setNotificationsEnabled(data.pump_notifications_enabled);
         setScheduleNotes(data.notes ?? "");
       }
     },
@@ -156,6 +159,7 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
         day_start_time: startTime,
         day_end_time: endTime,
         is_active: isActive,
+        pump_notifications_enabled: notificationsEnabled,
         notes: scheduleNotes || null,
         updated_at: new Date().toISOString(),
       };
@@ -310,6 +314,7 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
           <p className="text-xs text-muted-foreground">
             Every {schedule.frequency_hours % 1 === 0 ? `${schedule.frequency_hours}h` : `${Math.floor(schedule.frequency_hours)}h ${(schedule.frequency_hours % 1) * 60}m`} · {schedule.day_start_time.slice(0, 5)} – {schedule.day_end_time.slice(0, 5)}
             {!schedule.is_active && " · Paused"}
+            {schedule.pump_notifications_enabled ? " · 🔔 Reminders on" : " · 🔕 Reminders off"}
           </p>
           <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={() => setEditingSchedule(true)}>
             Edit schedule
@@ -365,6 +370,21 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
             <div className="flex items-center justify-between">
               <Label className="text-xs">Schedule active</Label>
               <Switch checked={isActive} onCheckedChange={setIsActive} />
+            </div>
+
+            <div className="rounded-xl bg-primary/6 border border-primary/15 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs font-semibold">Pump reminders</Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Notify me when it's time to pump
+                  </p>
+                </div>
+                <Switch checked={notificationsEnabled} onCheckedChange={setNotificationsEnabled} />
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                📱 Full lock screen &amp; background alerts activate when you move to the mobile app.
+              </p>
             </div>
 
             <div className="flex gap-2">
