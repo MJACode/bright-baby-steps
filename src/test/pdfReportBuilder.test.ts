@@ -65,7 +65,7 @@ describe("generatePediatricianReport", () => {
     // doc.text() is called with either a string (direct calls) or string[] (via bodyText→splitTextToSize)
     const flatten = (v: unknown): string => Array.isArray(v) ? v.join(" ") : String(v);
     const textCalls = mockDoc.text.mock.calls.map((c) => flatten(c[0]));
-    expect(textCalls.some((t) => t.includes("Baby Steps"))).toBe(true);
+    expect(textCalls.some((t) => t.includes("Grace Flare"))).toBe(true);
     expect(textCalls.some((t) => t.includes("Test Baby"))).toBe(true);
   });
 

@@ -1,0 +1,114 @@
+workflows:
+  ios-release:
+    name: iOS App Store
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.graceflare.app
+      vars:
+        BUNDLE_ID: com.graceflare.app
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+        # --- Set these in Codemagic UI → Environment variables ---
+        # APP_STORE_CONNECT_ISSUER_ID     (App Store Connect API key issuer ID)
+        # APP_STORE_CONNECT_KEY_IDENTIFIER (App Store Connect API key ID)
+        # APP_STORE_CONNECT_PRIVATE_KEY   (Contents of the .p8 key file)
+        # CERTIFICATE_PRIVATE_KEY         (RSA private key for your distribution cert)
+        # VITE_APP_URL                    (Your production HTTPS URL, once you have one)
+      node: 20
+      xcode: latest
+      cocoapods: default
+
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: npm run build
+        # VITE_APP_URL comes from Codemagic env vars once you have a domain.
+        # Until then it falls back to window.location.origin = graceflare://localhost.
+
+      - name: Add iOS platform
+        script: |
+          # Always start clean — ios/ is not committed to git
+          rm -rf ios/
+          npx cap add ios
+
+      - name: Sync Capacitor
+        # Copies dist/ into the native project and installs pod dependencies
+        script: npx cap sync ios
+
+      - name: Inject Info.plist permission strings
+        # Apple rejects any app that uses a protected API without a usage description.
+        # These four keys cover camera, Face ID, speech recognition, and microphone.
+        script: |
+          PLIST="ios/App/App/Info.plist"
+
+          add_or_set() {
+            /usr/libexec/PlistBuddy -c "Add :$1 string '$2'" "$PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Set :$1 '$2'" "$PLIST"
+          }
+
+          add_or_set "NSCameraUsageDescription" \
+            "Grace Flare uses the camera to capture milestone photos."
+
+          add_or_set "NSFaceIDUsageDescription" \
+            "Grace Flare uses Face ID for quick, secure sign-in."
+
+          add_or_set "NSSpeechRecognitionUsageDescription" \
+            "Grace Flare uses speech recognition so you can log entries hands-free."
+
+          add_or_set "NSMicrophoneUsageDescription" \
+            "Grace Flare uses the microphone to capture your voice for hands-free logging."
+
+      - name: Register deep link URL scheme (graceflare://)
+        # Supabase auth redirects (password reset, email confirmation) open via this scheme.
+        # Add graceflare://localhost to your Supabase Auth → Redirect URLs list.
+        script: |
+          PLIST="ios/App/App/Info.plist"
+
+          # Remove any existing entry to avoid duplicates on re-runs
+          /usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$PLIST" 2>/dev/null || true
+
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string $BUNDLE_ID" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string graceflare" "$PLIST"
+
+      - name: Set up code signing
+        script: xcode-project use-profiles
+
+      - name: Build and export IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Uploads to TestFlight automatically on every successful build.
+        # Promote to App Store manually from App Store Connect once ready.
+        submit_to_testflight: true
+        cancel_previous_submissions: true
+      email:
+        recipients:
+          - $CM_SUBMITTER  # Codemagic sends build status to the triggering user
+        notify:
+          success: true
+          failure: true

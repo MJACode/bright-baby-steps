@@ -132,7 +132,12 @@
 
   /* Safe area for bottom tab bar */
   .pb-tab-bar {
-    padding-bottom: var(--tab-bar-height);
+    padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom));
+  }
+
+  /* Applied to the tab bar nav itself so it clears the home indicator */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -67,8 +67,8 @@ export function NotificationBell() {
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpen}>
-      <PopoverTrigger asChild>
+    <Sheet open={open} onOpenChange={handleOpen}>
+      <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="relative touch-target text-muted-foreground">
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
@@ -77,36 +77,38 @@ export function NotificationBell() {
             </span>
           )}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 p-0 max-h-96 overflow-y-auto">
-        <div className="p-3 border-b border-border">
-          <h3 className="font-semibold text-sm">Notifications</h3>
+      </SheetTrigger>
+      <SheetContent side="bottom" className="max-h-[70vh] p-0 rounded-t-2xl">
+        <SheetHeader className="p-4 border-b border-border">
+          <SheetTitle className="text-sm">Notifications</SheetTitle>
+        </SheetHeader>
+        <div className="overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground text-sm">
+              No notifications yet ✨
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "p-4 text-sm transition-colors",
+                    !n.read && "bg-primary/5"
+                  )}
+                >
+                  <p className="leading-snug">
+                    {typeIcon[n.type] || "🔔"} {n.message}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        {notifications.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">
-            No notifications yet ✨
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {notifications.map((n) => (
-              <div
-                key={n.id}
-                className={cn(
-                  "p-3 text-sm transition-colors",
-                  !n.read && "bg-primary/5"
-                )}
-              >
-                <p className="leading-snug">
-                  {typeIcon[n.type] || "🔔"} {n.message}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+      </SheetContent>
+    </Sheet>
   );
 }

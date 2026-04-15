@@ -48,7 +48,7 @@ export default function DashboardLayout() {
             className="flex items-center gap-2 active:scale-95 transition-transform"
           >
             <Footprints className="w-6 h-6 text-primary" />
-            <span className="font-display font-bold text-lg">Baby Steps</span>
+            <span className="font-display font-bold text-lg">Grace Flare</span>
           </button>
           {!isOnboarding && (
             <div className="flex items-center gap-1">

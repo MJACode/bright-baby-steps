@@ -18,8 +18,9 @@ export default function AcceptInvite() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      // Store invite code and redirect to auth
-      sessionStorage.setItem("pending_invite", code ?? "");
+      // Store invite code in localStorage so it survives a cold-start deep link
+      // (sessionStorage is wiped when the WebView is created fresh from a deep link)
+      localStorage.setItem("pending_invite", code ?? "");
       navigate("/auth");
       return;
     }

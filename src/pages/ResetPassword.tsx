@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +12,17 @@ export default function ResetPassword() {
   const [submitting, setSubmitting] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes("type=recovery")) {
+    // Web: Supabase appends #type=recovery to the redirect URL
+    const hashRecovery = window.location.hash.includes("type=recovery");
+    // Native (Capacitor): DeepLinkHandler sets the session and passes state via navigate()
+    const stateRecovery = location.state?.isRecovery === true;
+    if (hashRecovery || stateRecovery) {
       setIsRecovery(true);
     }
-  }, []);
+  }, [location.state]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

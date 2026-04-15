@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { generatePediatricianReport, ReportData } from "@/services/pdfReportBuilder";
+import { Capacitor } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
 
 const ALL_SECTIONS = new Set(["speech", "allergens", "feeding", "diapers", "sleep", "illness"] as const);
 
@@ -92,5 +95,23 @@ export async function generateAndDownloadReport(
     date_range_end: format(dateTo, "yyyy-MM-dd"),
   });
 
-  doc.save(`${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`);
+  const filename = `${child.name.replace(/\s+/g, "_")}_report_${format(dateFrom, "yyyyMMdd")}-${format(dateTo, "yyyyMMdd")}.pdf`;
+
+  if (Capacitor.isNativePlatform()) {
+    // On iOS, programmatic anchor-download doesn't work in WKWebView.
+    // Write the PDF to the app's cache directory then open the native share sheet.
+    const base64 = doc.output("datauristring").split(",")[1];
+    const file = await Filesystem.writeFile({
+      path: filename,
+      data: base64,
+      directory: Directory.Cache,
+    });
+    await Share.share({
+      title: `${child.name} Health Report`,
+      url: file.uri,
+      dialogTitle: "Save or share report",
+    });
+  } else {
+    doc.save(filename);
+  }
 }
