@@ -187,8 +187,9 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
 
         {/* AI insight */}
         {aiInsight ? (
-          <div className="rounded-lg bg-background/60 p-3">
+          <div className="rounded-lg bg-background/60 p-3 space-y-2">
             <p className="text-xs leading-relaxed">{aiInsight}</p>
+            <p className="text-[10px] text-muted-foreground">AI-generated — for informational purposes only. Consult a speech-language pathologist for professional assessment.</p>
           </div>
         ) : (
           <Button

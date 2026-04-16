@@ -39,3 +39,16 @@ Before creating a new component, hook, utility, or migration, check whether some
 - Preferences that don't need to sync across devices use `localStorage` via `usePreferences`
 - AI chat uses SSE streaming — never use `supabase.functions.invoke` for streaming calls; use `fetch` with a `ReadableStream` reader
 - The `:::CREATE_CHILD:::{JSON}:::END:::` marker pattern is used by the onboarding AI skill to trigger child creation client-side
+
+---
+
+## Legal Review Required
+
+The following items have first-pass implementations but **must be reviewed and approved by legal counsel before public launch**:
+
+- **Privacy Policy** (`src/pages/PrivacyPage.tsx`) — especially the COPPA section, AI data processor relationship, data retention periods, and right-to-deletion language. Both pages carry a "Draft — pending legal review" badge until cleared.
+- **Terms of Service** (`src/pages/TermsPage.tsx`) — liability limitations, "not medical advice" language, acceptable use, governing law/jurisdiction.
+- **FAQ support email** (`src/pages/FAQPage.tsx`) — confirm the correct contact address before launch.
+- **COPPA verifiable parental consent** — the current checkbox on signup may not meet the FTC's "verifiable parental consent" standard for apps collecting data on under-13s. Legal should assess whether a stronger mechanism (e.g. email confirmation loop, credit card verification) is required.
+- **Data Processing Agreement with AI provider** — confirm a DPA is in place since child health data (name, age, health notes, milestones) is sent to the AI service for processing.
+- **`delete_user_account()` RPC** (`supabase/migrations/20260416000000_compliance_security.sql`) — the SECURITY DEFINER function deletes from `auth.users`; verify with Supabase support that this approach is supported in your deployment tier and test thoroughly in staging before enabling in production.

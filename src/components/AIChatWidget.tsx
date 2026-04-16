@@ -2,8 +2,11 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link } from "react-router-dom";
+
+const HEALTH_SKILLS = new Set(["pediatrician", "slp", "developmental", "nutrition", "sleep"]);
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -426,6 +429,19 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
         </div>
       )}
 
+      {HEALTH_SKILLS.has(activeSkill) && (
+        <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>For general information only — not medical advice or diagnosis. For emergencies, <strong>call 911</strong>. Always consult your healthcare provider.</span>
+        </div>
+      )}
+      {activeSkill === "financial" && (
+        <div className="flex items-start gap-2 px-3 py-2 bg-muted/60 border-b border-border text-xs text-muted-foreground">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>General information only. Consult a licensed financial advisor for personalised advice.</span>
+        </div>
+      )}
+
       <div ref={scrollRef} className={cn("overflow-y-auto p-3 space-y-3", isOnboardingChat ? "h-[45vh]" : "h-64")}>
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
@@ -474,7 +490,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
         </div>
       )}
 
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border space-y-2">
         <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
           <Input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={isListening ? "Listening..." : "Ask a question or log an entry..."} className={cn("flex-1 h-9 text-sm rounded-full", isListening && "border-primary ring-1 ring-primary")} disabled={isLoading} />
           {supportsVoice && (
@@ -486,6 +502,10 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
             <Send className="w-4 h-4" />
           </Button>
         </form>
+        <p className="text-[10px] text-muted-foreground text-center">
+          AI-generated using your child's tracked data.{" "}
+          <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
+        </p>
       </div>
     </Card>
   );

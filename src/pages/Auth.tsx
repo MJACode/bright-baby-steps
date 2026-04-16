@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Baby } from "lucide-react";
@@ -15,6 +16,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (loading) {
@@ -49,7 +51,7 @@ export default function Auth() {
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { full_name: fullName },
+            data: { full_name: fullName, data_consent_version: "1.0" },
           },
         });
         if (error) throw error;
@@ -113,10 +115,30 @@ export default function Auth() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                minLength={6}
+                minLength={8}
               />
+              {!isLogin && (
+                <p className="text-xs text-muted-foreground">Minimum 8 characters.</p>
+              )}
             </div>
-            <Button type="submit" className="w-full" disabled={submitting}>
+            {!isLogin && (
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="terms"
+                  checked={agreedToTerms}
+                  onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="terms" className="text-xs text-muted-foreground font-normal leading-snug cursor-pointer">
+                  I agree to the{" "}
+                  <Link to="/terms" target="_blank" className="text-primary underline">Terms of Service</Link>
+                  {" "}and{" "}
+                  <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>
+                  , and confirm I am the parent or legal guardian of any child whose data I add.
+                </Label>
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={submitting || (!isLogin && !agreedToTerms)}>
               {submitting ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
             </Button>
           </form>

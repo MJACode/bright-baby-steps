@@ -200,6 +200,9 @@ export default function WeeklyInsightsPage() {
       {/* Insight sections */}
       {digest && (
         <div className="space-y-3">
+          <p className="text-[11px] text-muted-foreground">
+            AI-generated summary — for informational purposes only. Not a substitute for professional advice.
+          </p>
           {sections.map(({ key, label, icon: Icon, color }) => (
             <Card key={key} className="border-0 bg-secondary">
               <CardContent className="p-4 space-y-2">
