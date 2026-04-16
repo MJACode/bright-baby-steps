@@ -153,7 +153,7 @@ Last 48 hours summary:
     }
 
     // Call LLM
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "API key not configured" }), {
         status: 500,
@@ -175,25 +175,21 @@ Rules:
 - Return ONLY valid JSON, no markdown, no code fences
 - If an illness is active, mention it in the watch field`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: contextBlock },
-          ],
-          temperature: 0.7,
-          max_tokens: 300,
-        }),
-      }
-    );
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: contextBlock }],
+        temperature: 0.7,
+        max_tokens: 300,
+      }),
+    });
 
     if (!response.ok) {
       const errText = await response.text();
@@ -205,7 +201,7 @@ Rules:
     }
 
     const llmData = await response.json();
-    const content = llmData.choices?.[0]?.message?.content || "";
+    const content = llmData.content?.[0]?.text || "";
 
     // Parse JSON from response (handle possible markdown fences)
     let briefing;
