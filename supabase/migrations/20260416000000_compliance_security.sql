@@ -4,8 +4,10 @@
 -- 3. Add delete_user_account() RPC for GDPR right to erasure
 
 -- ── Consent columns ──────────────────────────────────────────────────────────
--- Columns (data_consent_given_at, data_consent_version) already exist on profiles.
--- Populate them via trigger when a new user signs up.
+-- Add columns if they don't exist, then populate via trigger on signup.
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS data_consent_given_at timestamptz,
+  ADD COLUMN IF NOT EXISTS data_consent_version  text;
 
 CREATE OR REPLACE FUNCTION public.handle_new_user_consent()
 RETURNS TRIGGER
