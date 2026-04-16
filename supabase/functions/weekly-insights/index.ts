@@ -165,7 +165,7 @@ Weekly summary (last 7 days):
       context += `\n- Active illnesses: ${illnesses.map(i => i.illness_name).join(", ")}`;
     }
 
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "API key not configured" }), {
         status: 500,
@@ -188,18 +188,17 @@ Rules:
 - If data is limited in a category, acknowledge it warmly and encourage logging
 - Return ONLY valid JSON, no markdown, no code fences`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: context },
-        ],
+        model: "claude-haiku-4-5-20251001",
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: context }],
         temperature: 0.7,
         max_tokens: 600,
       }),
@@ -215,7 +214,7 @@ Rules:
     }
 
     const llmData = await response.json();
-    const content2 = llmData.choices?.[0]?.message?.content || "";
+    const content2 = llmData.content?.[0]?.text || "";
 
     let digest;
     try {

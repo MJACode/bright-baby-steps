@@ -222,37 +222,32 @@ serve(async (req) => {
 
   try {
     const { messages, skill, context } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+    if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
     const systemPrompt = SKILL_PROMPTS[skill || "general"] || SKILL_PROMPTS.general;
 
-    // Build system messages array
-    const systemMessages: { role: string; content: string }[] = [
-      { role: "system", content: systemPrompt },
+    // Static skill prompt is cached; dynamic child context is not (changes per child)
+    const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
+      { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
     ];
-
-    // Inject child context if provided
     if (context && context.childName) {
-      systemMessages.push({
-        role: "system",
-        content: buildContextMessage(context),
-      });
+      systemContent.push({ type: "text", text: buildContextMessage(context) });
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          ...systemMessages,
-          ...messages,
-        ],
+        model: "claude-haiku-4-5-20251001",
+        system: systemContent,
+        messages,
         stream: true,
+        max_tokens: 1024,
       }),
     });
 
@@ -263,21 +258,61 @@ serve(async (req) => {
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 529) {
         return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please try again later." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI service temporarily overloaded. Please try again in a moment." }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      console.error("Anthropic API error:", response.status, t);
       return new Response(
         JSON.stringify({ error: "AI service temporarily unavailable." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    return new Response(response.body, {
+    // Re-encode Anthropic SSE → OpenAI-compatible SSE (frontend parses OpenAI format)
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
+
+    (async () => {
+      try {
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let newlineIndex: number;
+          while ((newlineIndex = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, newlineIndex);
+            buffer = buffer.slice(newlineIndex + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+            // deno-lint-ignore no-explicit-any
+            let parsed: any;
+            try { parsed = JSON.parse(jsonStr); } catch { continue; }
+            if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+              const chunk = JSON.stringify({ choices: [{ delta: { content: parsed.delta.text } }] });
+              await writer.write(encoder.encode(`data: ${chunk}\n\n`));
+            } else if (parsed.type === "message_stop") {
+              await writer.write(encoder.encode("data: [DONE]\n\n"));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Stream re-encoding error:", err);
+      } finally {
+        await writer.close();
+      }
+    })();
+
+    return new Response(readable, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
