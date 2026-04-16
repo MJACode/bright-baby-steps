@@ -4,32 +4,10 @@
 -- 3. Add delete_user_account() RPC for GDPR right to erasure
 
 -- ── Consent columns ──────────────────────────────────────────────────────────
--- Add columns if they don't exist, then populate via trigger on signup.
+-- Add columns if they don't exist. Populated from the client after signup.
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS data_consent_given_at timestamptz,
   ADD COLUMN IF NOT EXISTS data_consent_version  text;
-
-CREATE OR REPLACE FUNCTION public.handle_new_user_consent()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  UPDATE public.profiles
-  SET
-    data_consent_given_at = NOW(),
-    data_consent_version  = COALESCE(NEW.raw_user_meta_data->>'data_consent_version', '1.0')
-  WHERE id = NEW.id;
-  RETURN NEW;
-END;
-$$;
-
--- Fire after handle_new_user creates the profile row
-CREATE OR REPLACE TRIGGER on_auth_user_consent
-  AFTER INSERT ON auth.users
-  FOR EACH ROW
-  EXECUTE FUNCTION public.handle_new_user_consent();
 
 -- ── Feedback screenshots: remove public read, add authenticated-only ─────────
 DROP POLICY IF EXISTS "Public read access for feedback screenshots" ON storage.objects;

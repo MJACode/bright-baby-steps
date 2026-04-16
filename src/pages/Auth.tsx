@@ -46,15 +46,21 @@ export default function Auth() {
         if (error) throw error;
         toast.success("Welcome back!");
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: window.location.origin,
-            data: { full_name: fullName, data_consent_version: "1.0" },
+            data: { full_name: fullName },
           },
         });
         if (error) throw error;
+        if (signUpData.user) {
+          await supabase.from("profiles").update({
+            data_consent_given_at: new Date().toISOString(),
+            data_consent_version: "1.0",
+          }).eq("id", signUpData.user.id);
+        }
         toast.success("Check your email to confirm your account!");
       }
     } catch (error: unknown) {
