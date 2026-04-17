@@ -1,18 +1,24 @@
 name: Pre-launch setup
 
 # Run once before launch to:
-# 1. Enable email confirmation in Supabase Auth
-# 2. Set sender name to "Grace Flare" for all auth emails
-# 3. Apply a branded password-reset email template
+# 1. Configure custom SMTP so emails send from hello@graceflare.com
+# 2. Enable email confirmation
+# 3. Apply the Grace Flare branded password-reset email template
 # 4. Clear all test users and their data
 #
 # Required GitHub secrets:
 #   SUPABASE_ACCESS_TOKEN  – personal access token from app.supabase.com/account/tokens
 #   SUPABASE_PROJECT_REF   – project ref (e.g. ieuznbvvwdvhtirzwkly)
 #   SUPABASE_DB_PASSWORD   – database password from Supabase → Settings → Database
+#   SMTP_HOST              – SMTP server hostname (e.g. smtp.resend.com)
+#   SMTP_PORT              – SMTP port (e.g. 465)
+#   SMTP_USER              – SMTP username (e.g. resend)
+#   SMTP_PASS              – SMTP password / API key
 #
-# Note: the sender address will still show as Supabase's infrastructure address unless
-# you configure a custom SMTP provider in Supabase → Auth → SMTP Settings.
+# Recommended SMTP provider: Resend (resend.com)
+#   1. Add and verify graceflare.com in Resend → Domains
+#   2. Create an API key → use as SMTP_PASS, username is literally "resend"
+#   3. Host: smtp.resend.com  Port: 465
 
 on:
   workflow_dispatch:
@@ -27,10 +33,14 @@ jobs:
         with:
           version: latest
 
-      - name: Configure auth — enable confirmations, set Grace Flare branding, apply reset email template
+      - name: Configure auth — SMTP, branding, confirmations, reset email template
         env:
           PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
         run: |
           RECOVERY_TEMPLATE='<!DOCTYPE html>
           <html lang="en">
@@ -72,14 +82,23 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$(jq -n \
               --arg tmpl "$RECOVERY_TEMPLATE" \
+              --arg host "$SMTP_HOST" \
+              --argjson port "$SMTP_PORT" \
+              --arg user "$SMTP_USER" \
+              --arg pass "$SMTP_PASS" \
               '{
                 mailer_autoconfirm: false,
                 smtp_sender_name: "Grace Flare",
+                smtp_admin_email: "hello@graceflare.com",
+                smtp_host: $host,
+                smtp_port: $port,
+                smtp_user: $user,
+                smtp_pass: $pass,
                 mailer_templates: {
                   recovery: { content: $tmpl }
                 }
               }')"
-          echo "Auth config updated."
+          echo "Auth config updated — emails will send from hello@graceflare.com."
 
       - name: Push cleanup migration
         run: |
