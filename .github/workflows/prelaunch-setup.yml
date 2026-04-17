@@ -1,0 +1,39 @@
+name: Pre-launch setup
+
+# Run once before launch to:
+# 1. Enable email confirmation in Supabase Auth
+# 2. Clear all test users and their data
+#
+# Required GitHub secrets:
+#   SUPABASE_ACCESS_TOKEN  – personal access token from app.supabase.com/account/tokens
+#   SUPABASE_PROJECT_REF   – project ref (e.g. ieuznbvvwdvhtirzwkly)
+#   SUPABASE_DB_PASSWORD   – database password from Supabase dashboard → Settings → Database
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Enable email confirmation
+        run: |
+          curl -sf -X PATCH \
+            "https://api.supabase.com/v1/projects/${{ secrets.SUPABASE_PROJECT_REF }}/config/auth" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"mailer_autoconfirm": false}'
+          echo "Email confirmation enabled."
+
+      - name: Push cleanup migration
+        run: |
+          supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+          supabase db push --password ${{ secrets.SUPABASE_DB_PASSWORD }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
