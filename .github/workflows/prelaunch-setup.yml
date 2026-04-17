@@ -9,9 +9,6 @@ name: Pre-launch setup
 # Required GitHub secrets:
 #   SUPABASE_ACCESS_TOKEN  – personal access token from app.supabase.com/account/tokens
 #   SUPABASE_PROJECT_REF   – project ref from Supabase → Project Settings → General
-#   SUPABASE_DB_URL        – Session-mode pooler URL from Supabase → Project Settings →
-#                            Database → Connection pooling → Session mode → URI
-#                            Looks like: postgresql://postgres.xxxx:PASSWORD@aws-0-us-east-1.pooler.supabase.com:5432/postgres
 #   SMTP_HOST              – SMTP server hostname (e.g. smtp.resend.com)
 #   SMTP_PORT              – SMTP port (e.g. 465)
 #   SMTP_USER              – SMTP username (e.g. resend)
@@ -109,9 +106,20 @@ jobs:
 
       - name: Clear all test users and data
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          psql "$SUPABASE_DB_URL" \
-            -v ON_ERROR_STOP=1 \
-            -f supabase/migrations/20260417000001_clear_all_users.sql
+          SQL=$(cat supabase/migrations/20260417000001_clear_all_users.sql)
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --arg sql "$SQL" '{query: $sql}')")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE: $BODY"
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Data cleanup failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
           echo "All test data cleared."
