@@ -71,7 +71,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">11. Contact</h2>
-          <p>support@babysteps.app</p>
+          <p>support@graceflare.com</p>
         </section>
 
       </div>

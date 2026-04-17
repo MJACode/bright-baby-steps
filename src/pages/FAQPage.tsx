@@ -38,7 +38,7 @@ const FAQS = [
   },
   {
     q: "Who can I contact with questions or concerns?",
-    a: "Email us at support@babysteps.app.",
+    a: "Email us at support@graceflare.com.",
   },
 ];
 
@@ -80,7 +80,7 @@ export default function FAQPage() {
 
       <p className="text-xs text-muted-foreground mt-6 text-center">
         Still have questions?{" "}
-        <a href="mailto:support@babysteps.app" className="text-primary underline">Contact us</a>
+        <a href="mailto:support@graceflare.com" className="text-primary underline">Contact us</a>
         {" · "}
         <Link to="/privacy" className="text-primary underline">Privacy Policy</Link>
         {" · "}

@@ -21,7 +21,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">1. Who we are</h2>
-          <p>Baby Steps is operated by [COMPANY NAME], [REGISTERED ADDRESS]. If you have questions about this policy, contact us at support@babysteps.app.</p>
+          <p>Baby Steps is operated by Grace Flare (graceflare.com). If you have questions about this policy, contact us at support@graceflare.com.</p>
         </section>
 
         <section>
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">11. Contact</h2>
-          <p>support@babysteps.app</p>
+          <p>support@graceflare.com</p>
         </section>
 
       </div>
