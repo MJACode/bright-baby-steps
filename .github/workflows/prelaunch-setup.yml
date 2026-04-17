@@ -8,8 +8,10 @@ name: Pre-launch setup
 #
 # Required GitHub secrets:
 #   SUPABASE_ACCESS_TOKEN  – personal access token from app.supabase.com/account/tokens
-#   SUPABASE_PROJECT_REF   – project ref (e.g. ieuznbvvwdvhtirzwkly)
-#   SUPABASE_DB_PASSWORD   – database password from Supabase → Settings → Database
+#   SUPABASE_PROJECT_REF   – project ref from Supabase → Project Settings → General
+#   SUPABASE_DB_URL        – Session-mode pooler URL from Supabase → Project Settings →
+#                            Database → Connection pooling → Session mode → URI
+#                            Looks like: postgresql://postgres.xxxx:PASSWORD@aws-0-us-east-1.pooler.supabase.com:5432/postgres
 #   SMTP_HOST              – SMTP server hostname (e.g. smtp.resend.com)
 #   SMTP_PORT              – SMTP port (e.g. 465)
 #   SMTP_USER              – SMTP username (e.g. resend)
@@ -107,11 +109,9 @@ jobs:
 
       - name: Clear all test users and data
         env:
-          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          psql \
-            "postgresql://postgres:${PGPASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres" \
+          psql "$SUPABASE_DB_URL" \
             -v ON_ERROR_STOP=1 \
             -f supabase/migrations/20260417000001_clear_all_users.sql
           echo "All test data cleared."
