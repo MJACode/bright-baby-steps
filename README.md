@@ -1,73 +1,64 @@
-# Welcome to your Lovable project
+# Baby Steps — Parenting & Baby Tracker
 
-## Project info
+A smart baby tracking app for new parents. Log sleep, feeding, diapers, and milestones, and get AI-powered insights from specialized parenting experts.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech Stack
 
-## How can I edit this code?
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI**: shadcn/ui + Tailwind CSS
+- **Backend**: Supabase (Postgres, Auth, Storage, Edge Functions)
+- **AI**: Anthropic Claude API (claude-haiku-4-5) via Supabase Edge Functions
+- **State**: TanStack React Query
+- **Routing**: React Router v6
 
-There are several ways of editing your application.
+## AI Features
 
-**Use Lovable**
+The app includes 8 specialized AI skills powered by Claude:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- **General** — Parenting Q&A
+- **Pediatrician** — Health, vaccines, illness guidance
+- **Sleep** — Sleep schedules, training, regressions
+- **Nutrition** — Feeding, solids, allergen introduction
+- **Developmental** — Motor, sensory, cognitive milestones
+- **Speech (SLP)** — Language development tracking
+- **Financial** — 529s, tax credits, childcare budgeting
+- **Onboarding** — Conversational child profile setup
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Local Development
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repo
 git clone <YOUR_GIT_URL>
+cd bright-baby-steps
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Set up environment variables
+cp .env.example .env
+# Fill in your Supabase URL and anon key
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the dev server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Environment Variables
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Variable | Description |
+|---|---|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/publishable key |
 
-**Use GitHub Codespaces**
+## Supabase Edge Functions
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The AI features run as Supabase Edge Functions. They require the following secret set in your Supabase project:
 
-## What technologies are used for this project?
+| Secret | Description |
+|---|---|
+| `ANTHROPIC_API_KEY` | Anthropic API key from console.anthropic.com |
 
-This project is built with:
+Edge functions are automatically deployed to Supabase via GitHub Actions on every push to `main` that touches `supabase/functions/`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deployment
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Push to `main` — GitHub Actions handles deploying edge functions automatically. For the frontend, connect your Supabase project to your preferred hosting provider (Vercel, Netlify, etc.).
