@@ -1,30 +1,50 @@
 -- Pre-launch cleanup: delete all test users and their data.
--- Run order mirrors delete_user_account() to respect FK dependencies.
--- Tables with ON DELETE CASCADE from children are deleted implicitly
--- when the children rows are removed, but we delete them explicitly
--- here for clarity and to avoid any constraint ordering surprises.
+-- Uses dynamic SQL so missing tables are skipped rather than failing.
 
-DELETE FROM public.chat_messages;
-DELETE FROM public.chat_conversations;
-DELETE FROM public.notifications;
-DELETE FROM public.partner_invitations;
-DELETE FROM public.partner_access;
-DELETE FROM public.feedback;
-DELETE FROM public.parent_financial_checklist;
-DELETE FROM public.pediatrician_exports;
-DELETE FROM public.pediatrician_reminders;
-DELETE FROM public.allergen_exposure_logs;
-DELETE FROM public.allergen_introductions;
-DELETE FROM public.allergen_reactions;
-DELETE FROM public.diaper_logs;
-DELETE FROM public.feeding_logs;
-DELETE FROM public.sleep_logs;
-DELETE FROM public.illness_logs;
-DELETE FROM public.medication_logs;
-DELETE FROM public.supplement_logs;
-DELETE FROM public.speech_journal;
-DELETE FROM public.custom_milestones;
-DELETE FROM public.pumping_schedules;
-DELETE FROM public.children;
-DELETE FROM public.profiles;
-DELETE FROM auth.users;
+DO $$
+DECLARE
+  tbl text;
+BEGIN
+  -- Delete from public tables in dependency order (leaves before roots)
+  FOREACH tbl IN ARRAY ARRAY[
+    'chat_messages',
+    'chat_conversations',
+    'notifications',
+    'partner_invitations',
+    'partner_access',
+    'feedback',
+    'parent_financial_checklist',
+    'pediatrician_exports',
+    'pediatrician_reminders',
+    'allergen_exposure_logs',
+    'allergen_introductions',
+    'allergen_reactions',
+    'diaper_logs',
+    'feeding_logs',
+    'sleep_logs',
+    'illness_logs',
+    'medication_logs',
+    'supplement_logs',
+    'speech_journal',
+    'custom_milestones',
+    'pumping_schedules',
+    'children',
+    'profiles'
+  ]
+  LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = tbl
+    ) THEN
+      EXECUTE 'DELETE FROM public.' || quote_ident(tbl);
+      RAISE NOTICE 'Deleted from public.%', tbl;
+    ELSE
+      RAISE NOTICE 'Skipped public.% (does not exist)', tbl;
+    END IF;
+  END LOOP;
+
+  -- Remove auth users last
+  DELETE FROM auth.users;
+  RAISE NOTICE 'Deleted from auth.users';
+END;
+$$;
