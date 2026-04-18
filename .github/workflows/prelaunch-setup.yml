@@ -1,7 +1,7 @@
 name: Pre-launch setup
 
 # Run once before launch to:
-# 1. Configure custom SMTP so emails send from hello@graceflare.com
+# 1. Configure custom SMTP so emails send from support@graceflare.com
 # 2. Enable email confirmation
 # 3. Apply the Grace Flare branded password-reset email template
 # 4. Clear all test users and their data
@@ -88,7 +88,7 @@ jobs:
               '{
                 mailer_autoconfirm: false,
                 smtp_sender_name: "Grace Flare",
-                smtp_admin_email: "hello@graceflare.com",
+                smtp_admin_email: "support@graceflare.com",
                 smtp_host: $host,
                 smtp_port: $port,
                 smtp_user: $user,
@@ -102,7 +102,7 @@ jobs:
             echo "::error::Supabase auth config update failed with HTTP $HTTP_CODE"
             exit 1
           fi
-          echo "Auth config updated — emails will send from hello@graceflare.com."
+          echo "Auth config updated — emails will send from support@graceflare.com."
 
       - name: Clear all test users and data
         env:
