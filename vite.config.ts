@@ -19,12 +19,15 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
         manualChunks: {
           vendor: ["react", "react-dom", "react-router-dom"],
           supabase: ["@supabase/supabase-js"],
           query: ["@tanstack/react-query"],
+          icons: ["lucide-react"],
+          dates: ["date-fns"],
         },
       },
     },
