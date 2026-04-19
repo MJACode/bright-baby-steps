@@ -31,6 +31,7 @@ export default function Auth() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (view !== "pending") return;
@@ -44,12 +45,27 @@ export default function Auth() {
   }, [resendCooldown]);
 
   const handleResend = async () => {
-    const { error } = await supabase.auth.resend({ type: "signup", email });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success("Confirmation email resent!");
-      setResendCooldown(60);
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth` },
+      });
+      if (error) {
+        if (error.message.toLowerCase().includes("rate limit")) {
+          toast.error("Too many emails sent — please wait a few minutes before trying again.");
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.success("Confirmation email resent! Check your inbox.");
+        setResendCooldown(60);
+      }
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -149,9 +165,10 @@ export default function Auth() {
                   Didn't get it?{" "}
                   <button
                     onClick={handleResend}
-                    className="text-primary font-medium hover:underline"
+                    disabled={resending}
+                    className="text-primary font-medium hover:underline disabled:opacity-50"
                   >
-                    Send again
+                    {resending ? "Sending…" : "Send again"}
                   </button>
                 </p>
               )}
