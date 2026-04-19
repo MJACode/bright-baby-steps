@@ -15,12 +15,18 @@ type View = "login" | "signup" | "forgot" | "pending";
 export default function Auth() {
   const { session, loading } = useAuth();
   const [view, setView] = useState<View>("login");
+  const [verifying, setVerifying] = useState(
+    () => !!new URLSearchParams(window.location.search).get("code")
+  );
 
   useEffect(() => {
     const code = new URLSearchParams(window.location.search).get("code");
     if (!code) return;
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) toast.error("This confirmation link is invalid or has expired.");
+      if (error) {
+        toast.error("This confirmation link is invalid or has expired.");
+        setVerifying(false);
+      }
       window.history.replaceState({}, "", window.location.pathname);
     });
   }, []);
@@ -69,10 +75,12 @@ export default function Auth() {
     }
   };
 
-  if (loading) {
+  if (loading || verifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="animate-pulse text-muted-foreground">
+          {verifying ? "Verifying your email…" : "Loading..."}
+        </div>
       </div>
     );
   }
