@@ -119,7 +119,12 @@ export default function Auth() {
             data_consent_version: "1.0",
           }).eq("id", signUpData.user.id);
         }
-        setView("pending");
+        // With email confirmation disabled, signUp returns a session immediately.
+        // onAuthStateChange will fire and redirect to /dashboard automatically.
+        // Only show the pending view when confirmation is required (no session yet).
+        if (!signUpData.session) {
+          setView("pending");
+        }
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,

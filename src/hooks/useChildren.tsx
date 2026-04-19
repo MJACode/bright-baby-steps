@@ -23,6 +23,7 @@ export function useChildren() {
       return data;
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 
   const addChild = useMutation({

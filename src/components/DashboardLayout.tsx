@@ -17,11 +17,9 @@ export default function DashboardLayout() {
   const [childSwitcherOpen, setChildSwitcherOpen] = useState(false);
   const location = useLocation();
 
-  // Treat an in-progress refetch the same as initial load — prevents a stuck
-  // state where children is still [] while the post-onboarding refetch runs
-  const isOnboarding = !childrenLoading && !childrenFetching && (!children || children.length === 0);
+  const isOnboarding = !childrenLoading && (!children || children.length === 0);
 
-  if (loading || childrenLoading || (childrenFetching && children.length === 0)) {
+  if (loading || childrenLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
         <Footprints className="w-10 h-10 text-primary animate-pulse" />
