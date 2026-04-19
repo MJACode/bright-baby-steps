@@ -269,7 +269,7 @@ serve(async (req) => {
       const t = await response.text();
       console.error("Anthropic API error:", response.status, t);
       return new Response(
-        JSON.stringify({ error: "AI service temporarily unavailable." }),
+        JSON.stringify({ error: `Anthropic error ${response.status}: ${t}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
