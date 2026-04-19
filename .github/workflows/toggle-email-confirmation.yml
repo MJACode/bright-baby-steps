@@ -1,0 +1,49 @@
+name: Toggle email confirmation
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Enable or disable email confirmation"
+        required: true
+        default: "disable"
+        type: choice
+        options:
+          - disable
+          - enable
+
+jobs:
+  toggle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Supabase auth config
+        env:
+          PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "disable" ]; then
+            AUTOCONFIRM=true
+          else
+            AUTOCONFIRM=false
+          fi
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X PATCH \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/config/auth" \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"mailer_autoconfirm\": ${AUTOCONFIRM}}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "HTTP $HTTP_CODE: $BODY"
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Failed to update auth config (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+
+          if [ "${{ github.event.inputs.mode }}" = "disable" ]; then
+            echo "Email confirmation DISABLED — new signups skip verification and go straight to onboarding."
+          else
+            echo "Email confirmation ENABLED — new signups must verify their email before continuing."
+          fi
