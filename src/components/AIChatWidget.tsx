@@ -231,7 +231,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
         }
       );
 
-      if (!resp.ok) { const errData = await resp.json().catch(() => ({})); throw new Error(errData.error || "Failed to get response"); }
+      if (!resp.ok) { const errData = await resp.json().catch(() => ({})); throw new Error(errData.error || errData.message || `HTTP ${resp.status}`); }
       if (!resp.body) throw new Error("No response body");
 
       const reader = resp.body.getReader();
