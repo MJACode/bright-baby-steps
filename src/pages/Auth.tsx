@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,11 +10,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Baby } from "lucide-react";
 
-type View = "login" | "signup" | "forgot";
+type View = "login" | "signup" | "forgot" | "pending";
 
 export default function Auth() {
   const { session, loading } = useAuth();
   const [view, setView] = useState<View>("login");
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!code) return;
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) toast.error("This confirmation link is invalid or has expired.");
+      window.history.replaceState({}, "", window.location.pathname);
+    });
+  }, []);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -63,7 +73,7 @@ export default function Auth() {
             data_consent_version: "1.0",
           }).eq("id", signUpData.user.id);
         }
-        toast.success("Check your email to confirm your account!");
+        setView("pending");
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`,
@@ -84,12 +94,14 @@ export default function Auth() {
     login: "Welcome back",
     signup: "Create your account",
     forgot: "Reset your password",
+    pending: "Check your inbox",
   };
 
   const descriptions: Record<View, string> = {
     login: "Sign in to access your baby tracking dashboard",
     signup: "Start tracking your baby's growth and speech development",
     forgot: "Enter your email and we'll send you a reset link.",
+    pending: `We sent a confirmation link to ${email}. Click it to activate your account.`,
   };
 
   return (
@@ -103,6 +115,19 @@ export default function Auth() {
           <CardDescription>{descriptions[view]}</CardDescription>
         </CardHeader>
         <CardContent>
+          {view === "pending" ? (
+            <div className="text-center space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Didn't receive it?{" "}
+                <button
+                  onClick={() => setView("signup")}
+                  className="text-primary font-medium hover:underline"
+                >
+                  Try again
+                </button>
+              </p>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             {view === "signup" && (
               <div className="space-y-2">
@@ -230,6 +255,7 @@ export default function Auth() {
               </>
             )}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>
