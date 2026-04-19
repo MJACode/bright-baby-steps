@@ -30,6 +30,28 @@ export default function Auth() {
   const [fullName, setFullName] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (view !== "pending") return;
+    setResendCooldown(60);
+  }, [view]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  const handleResend = async () => {
+    const { error } = await supabase.auth.resend({ type: "signup", email });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Confirmation email resent!");
+      setResendCooldown(60);
+    }
+  };
 
   if (loading) {
     return (
@@ -117,13 +139,29 @@ export default function Auth() {
         <CardContent>
           {view === "pending" ? (
             <div className="text-center space-y-4">
+              {resendCooldown > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Didn't get it? You can resend in{" "}
+                  <span className="tabular-nums font-medium text-foreground">{resendCooldown}s</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Didn't get it?{" "}
+                  <button
+                    onClick={handleResend}
+                    className="text-primary font-medium hover:underline"
+                  >
+                    Send again
+                  </button>
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
-                Didn't receive it?{" "}
+                Wrong email?{" "}
                 <button
                   onClick={() => setView("signup")}
                   className="text-primary font-medium hover:underline"
                 >
-                  Try again
+                  Start over
                 </button>
               </p>
             </div>
