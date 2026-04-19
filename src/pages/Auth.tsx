@@ -128,6 +128,7 @@ export default function Auth() {
               </p>
             </div>
           ) : (
+          <>
           <form onSubmit={handleSubmit} className="space-y-4">
             {view === "signup" && (
               <div className="space-y-2">
@@ -255,6 +256,7 @@ export default function Auth() {
               </>
             )}
           </div>
+          </>
           )}
         </CardContent>
       </Card>
