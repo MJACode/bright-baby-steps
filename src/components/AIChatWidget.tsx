@@ -287,15 +287,18 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
           });
           if (!error) {
             queryClient.invalidateQueries({ queryKey: ["children"] });
-            // Clean the create command from displayed message
-            const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
-            upsertAssistant(cleanContent);
-            assistantContent = cleanContent;
             onOnboardingComplete?.();
+          } else {
+            toast({ title: "Couldn't save your child's details", description: "Please try again or use 'Skip for now' to continue.", variant: "destructive" });
           }
         } catch (parseErr) {
           console.error("Failed to parse child creation:", parseErr);
+          toast({ title: "Setup error", description: "Please try again or use 'Skip for now' to continue.", variant: "destructive" });
         }
+        // Always strip the marker from display and saved content, regardless of success or failure
+        const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
+        upsertAssistant(cleanContent);
+        assistantContent = cleanContent;
       }
 
       if (convoId && assistantContent) {

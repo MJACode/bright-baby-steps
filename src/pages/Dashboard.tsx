@@ -80,6 +80,12 @@ export default function Dashboard() {
             onOnboardingComplete={() => setOnboardingDismissed(true)}
           />
         </div>
+        <button
+          onClick={() => setOnboardingDismissed(true)}
+          className="text-xs text-muted-foreground underline mt-3 self-center"
+        >
+          Skip for now
+        </button>
       </div>
     );
   }
