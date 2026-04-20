@@ -287,15 +287,18 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
           });
           if (!error) {
             queryClient.invalidateQueries({ queryKey: ["children"] });
-            // Clean the create command from displayed message
-            const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
-            upsertAssistant(cleanContent);
-            assistantContent = cleanContent;
-            onOnboardingComplete?.();
+          } else {
+            toast({ title: "Couldn't save your child's details", description: "You can add them in Settings.", variant: "destructive" });
           }
         } catch (parseErr) {
           console.error("Failed to parse child creation:", parseErr);
+          toast({ title: "Setup error", description: "You can add your child in Settings.", variant: "destructive" });
         }
+        // Always strip the marker and always advance — user should never be left on the onboarding screen
+        const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
+        upsertAssistant(cleanContent);
+        assistantContent = cleanContent;
+        onOnboardingComplete?.();
       }
 
       if (convoId && assistantContent) {
