@@ -1074,8 +1074,10 @@ export type Database = {
           data_consent_version: string | null
           email: string
           full_name: string | null
+          has_partner: boolean | null
           id: string
           onboarding_completed_at: string | null
+          primary_interest: string | null
           updated_at: string
         }
         Insert: {
@@ -1085,8 +1087,10 @@ export type Database = {
           data_consent_version?: string | null
           email: string
           full_name?: string | null
+          has_partner?: boolean | null
           id: string
           onboarding_completed_at?: string | null
+          primary_interest?: string | null
           updated_at?: string
         }
         Update: {
@@ -1096,8 +1100,10 @@ export type Database = {
           data_consent_version?: string | null
           email?: string
           full_name?: string | null
+          has_partner?: boolean | null
           id?: string
           onboarding_completed_at?: string | null
+          primary_interest?: string | null
           updated_at?: string
         }
         Relationships: []

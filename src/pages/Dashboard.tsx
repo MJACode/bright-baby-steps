@@ -1,25 +1,24 @@
-import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAge } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Flame, Footprints } from "lucide-react";
+import { Flame } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { activeChild, children, isLoading: childrenLoading } = useChildren();
   const { prefs } = usePreferences();
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
-  const isNewUser = !childrenLoading && (!children || children.length === 0) && !onboardingDismissed;
+  const isNewUser = !childrenLoading && (!children || children.length === 0);
 
   const { data: todayFeeds } = useQuery({
     queryKey: ["today-feeds", activeChild?.id],
@@ -57,37 +56,8 @@ export default function Dashboard() {
 
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
 
-  // Full-screen onboarding for new users
   if (isNewUser) {
-    return (
-      <div className="flex flex-col items-center min-h-[70vh]">
-        {/* Welcome hero */}
-        <div className="text-center pt-6 pb-4 px-4">
-          <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center mx-auto mb-4">
-            <Footprints className="w-8 h-8 text-primary" />
-          </div>
-          <h1 className="font-display text-2xl font-bold mb-1">Welcome to Baby Steps!</h1>
-          <p className="text-muted-foreground text-sm max-w-xs mx-auto">
-            Let's get to know your little one. Our AI assistant will walk you through setup in under a minute.
-          </p>
-        </div>
-
-        {/* Full-width onboarding chat */}
-        <div className="w-full flex-1">
-          <AIChatWidget
-            activeChildId={activeChild?.id}
-            forceOnboarding={true}
-            onOnboardingComplete={() => setOnboardingDismissed(true)}
-          />
-        </div>
-        <button
-          onClick={() => setOnboardingDismissed(true)}
-          className="text-xs text-muted-foreground underline mt-3 self-center"
-        >
-          Skip for now
-        </button>
-      </div>
-    );
+    return <OnboardingWizard />;
   }
 
   return (
@@ -106,7 +76,7 @@ export default function Dashboard() {
       {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
       {/* AI Quick Log */}
-      <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={false} onOnboardingComplete={() => setOnboardingDismissed(true)} quickLogMode />
+      <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />
