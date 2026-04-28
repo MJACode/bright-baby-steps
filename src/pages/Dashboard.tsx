@@ -105,8 +105,8 @@ export default function Dashboard() {
       {/* Today's Briefing */}
       {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
-      {/* AI Chat */}
-      <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={false} onOnboardingComplete={() => setOnboardingDismissed(true)} />
+      {/* AI Quick Log */}
+      <AIChatWidget activeChildId={activeChild?.id} forceOnboarding={false} onOnboardingComplete={() => setOnboardingDismissed(true)} quickLogMode />
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />
