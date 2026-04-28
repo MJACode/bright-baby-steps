@@ -4,7 +4,7 @@ import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
-import { Footprints, UserCircle } from "lucide-react";
+import { Footprints, UserCircle, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,11 @@ export default function DashboardLayout() {
           {!isOnboarding && (
             <div className="flex items-center gap-1">
               {prefs.showNotifications && <NotificationBell />}
+              <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+                <Link to="/dashboard/analytics" aria-label="Analytics">
+                  <BarChart3 className="w-5 h-5" />
+                </Link>
+              </Button>
               <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
                 <Link to="/dashboard/profile">
                   <UserCircle className="w-5 h-5" />
