@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
@@ -44,11 +44,19 @@ interface AIChatWidgetProps {
   forceOnboarding?: boolean;
   onOnboardingComplete?: () => void;
   defaultSkill?: SkillId;
+  quickLogMode?: boolean;
 }
+
+const QUICK_LOG_SUGGESTIONS = [
+  "Log a 90 min nap",
+  "Log a 4oz bottle",
+  "Log a wet diaper",
+  "Log a 2 hour night sleep",
+];
 
 type View = "closed" | "skills" | "chat";
 
-export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete, defaultSkill }: AIChatWidgetProps) {
+export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete, defaultSkill, quickLogMode }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
@@ -346,8 +354,46 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
 
   const activeSkillInfo = SKILLS.find(s => s.id === activeSkill);
 
+  const openQuickLogChat = () => {
+    setActiveSkill("general");
+    setView("chat");
+  };
+
   // CLOSED — AI button + voice mic side by side
   if (view === "closed") {
+    if (quickLogMode) {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <button onClick={openQuickLogChat} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-semibold">Quick Log with AI</p>
+                <p className="text-xs text-muted-foreground">Say or type "fed her 4oz" or "90 min nap"</p>
+              </div>
+            </button>
+            {supportsVoice && (
+              <button
+                onClick={handleVoiceFromOutside}
+                aria-label="Quick log by voice"
+                className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+              >
+                <Mic className="w-5 h-5 text-primary" />
+              </button>
+            )}
+          </div>
+          <button
+            onClick={() => setView("skills")}
+            className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline px-1"
+          >
+            Or ask an expert →
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center gap-2">
         <button onClick={() => setView("skills")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
@@ -449,10 +495,14 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center py-2">
-              {activeSkillInfo ? `Ask your ${activeSkillInfo.label.toLowerCase()} questions! 👶` : "Ask questions or log entries naturally! 👶"}
+              {quickLogMode
+                ? "Say or type what happened — I'll log it. 👶"
+                : activeSkillInfo
+                  ? `Ask your ${activeSkillInfo.label.toLowerCase()} questions! 👶`
+                  : "Ask questions or log entries naturally! 👶"}
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {(SKILL_SUGGESTIONS[activeSkill] || SKILL_SUGGESTIONS.general).map((s) => (
+              {(quickLogMode ? QUICK_LOG_SUGGESTIONS : (SKILL_SUGGESTIONS[activeSkill] || SKILL_SUGGESTIONS.general)).map((s) => (
                 <button key={s} onClick={() => sendMessage(s)} className="text-xs px-2.5 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-foreground transition-colors">
                   {s}
                 </button>
