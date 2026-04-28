@@ -17,6 +17,7 @@ import MilestonesPage from "./pages/dashboard/MilestonesPage";
 import ProfilePage from "./pages/dashboard/ProfilePage";
 import NotFound from "./pages/NotFound";
 import WeeklyInsightsPage from "./pages/dashboard/WeeklyInsightsPage";
+import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import FAQPage from "./pages/FAQPage";
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="financial" element={<Navigate to="/dashboard/milestones?tab=financial" replace />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="weekly" element={<WeeklyInsightsPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
             </Route>
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
