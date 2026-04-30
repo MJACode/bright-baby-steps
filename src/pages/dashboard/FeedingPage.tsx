@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UtensilsCrossed, ShieldAlert, Pill, Baby } from "lucide-react";
+import { UtensilsCrossed, ShieldAlert, Pill, Baby, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
 import { Badge } from "@/components/ui/badge";
-import FeedingLog from "@/components/feeding/FeedingLog";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import FeedingLog, { type SolidFeedDraft } from "@/components/feeding/FeedingLog";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 import SupplementTracker from "@/components/feeding/SupplementTracker";
 import PumpingSchedule from "@/components/feeding/PumpingSchedule";
@@ -13,6 +15,20 @@ import PumpingSchedule from "@/components/feeding/PumpingSchedule";
 export default function FeedingPage() {
   const [tab, setTab] = useState("feeding");
   const { activeChild } = useChildren();
+  const [solidDraft, setSolidDraft] = useState<SolidFeedDraft | null>(null);
+  const [pendingResume, setPendingResume] = useState<SolidFeedDraft | null>(null);
+
+  const handleNavigateToAllergens = (draft?: SolidFeedDraft) => {
+    if (draft) setSolidDraft(draft);
+    setTab("allergens");
+  };
+
+  const handleResume = () => {
+    if (!solidDraft) return;
+    setPendingResume(solidDraft);
+    setSolidDraft(null);
+    setTab("feeding");
+  };
 
   const { data: introductions } = useQuery({
     queryKey: ["allergen-introductions", activeChild?.id],
@@ -84,7 +100,11 @@ export default function FeedingPage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="feeding" className="mt-4">
-          <FeedingLog onNavigateToAllergens={() => setTab("allergens")} />
+          <FeedingLog
+            onNavigateToAllergens={handleNavigateToAllergens}
+            pendingResume={pendingResume}
+            onConsumeResume={() => setPendingResume(null)}
+          />
         </TabsContent>
         <TabsContent value="pumping" className="mt-4">
           <PumpingSchedule onNavigateToLog={() => setTab("feeding")} />
@@ -92,7 +112,20 @@ export default function FeedingPage() {
         <TabsContent value="supplements" className="mt-4">
           <SupplementTracker />
         </TabsContent>
-        <TabsContent value="allergens" className="mt-4">
+        <TabsContent value="allergens" className="mt-4 space-y-3">
+          {solidDraft && (
+            <Card className="border-feeding/30 bg-feeding/5">
+              <CardContent className="p-3 flex items-center gap-3">
+                <p className="text-sm flex-1 leading-snug">
+                  You have a feed in progress
+                  {solidDraft.foodDesc ? <> — <span className="font-semibold">{solidDraft.foodDesc}</span></> : null}.
+                </p>
+                <Button size="sm" variant="default" className="bg-feeding hover:bg-feeding/90 gap-1.5 touch-target shrink-0" onClick={handleResume}>
+                  <ArrowLeft className="w-4 h-4" /> Back to feed
+                </Button>
+              </CardContent>
+            </Card>
+          )}
           <AllergenTracker />
         </TabsContent>
       </Tabs>

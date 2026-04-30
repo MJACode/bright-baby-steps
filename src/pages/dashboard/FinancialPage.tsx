@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { DollarSign, ExternalLink, CheckCircle2, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X, Lightbulb, ArrowRight, Sparkles } from "lucide-react";
-import { AIChatWidget } from "@/components/AIChatWidget";
+import { DollarSign, ExternalLink, CheckCircle2, ChevronDown, Heart, PiggyBank, GraduationCap, Shield, X, Lightbulb, ArrowRight } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -201,15 +200,6 @@ export default function FinancialPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Ask the Financial AI */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-finance" />
-          <p className="text-xs font-bold uppercase tracking-wide text-finance">Ask the Financial AI</p>
-        </div>
-        <AIChatWidget activeChildId={activeChild?.id} defaultSkill="financial" />
-      </div>
 
       {/* Checklist */}
       {isLoading ? (

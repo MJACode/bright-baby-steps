@@ -15,7 +15,12 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
+import { MilestoneFlags } from "@/components/milestones/MilestoneFlags";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import { PhotoMilestoneDetector } from "@/components/PhotoMilestoneDetector";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { usePremium } from "@/hooks/usePremium";
 import { format } from "date-fns";
 import FinancialContent from "./FinancialPage";
 
@@ -74,7 +79,10 @@ export default function MilestonesPage() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") === "financial" ? "financial" : "development";
+  const { isPremium } = usePremium();
   const [showConfetti, setShowConfetti] = useState(false);
+  const [photoDetectorOpen, setPhotoDetectorOpen] = useState(false);
+  const [photoUpsellOpen, setPhotoUpsellOpen] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -376,6 +384,38 @@ export default function MilestonesPage() {
                 ⚠️ Every child develops at their own pace. Consult your pediatrician with concerns.
               </p>
 
+              {user && activeChild && (
+                <MilestoneFlags
+                  categories={categories}
+                  milestoneStatuses={milestoneStatuses}
+                  childId={activeChild.id}
+                  parentId={user.id}
+                  ageMonths={ageMonths}
+                />
+              )}
+
+              <button
+                onClick={() => isPremium ? setPhotoDetectorOpen(true) : setPhotoUpsellOpen(true)}
+                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-milestones/5 border border-milestones/20 active:scale-[0.99] transition-transform text-left touch-target"
+              >
+                <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
+                  <Camera className="w-5 h-5 text-milestones" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm flex items-center gap-2">
+                    Detect from a photo
+                    {!isPremium && (
+                      <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-milestones/15 text-milestones uppercase font-mono">
+                        Plus
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Snap a moment — we'll suggest what milestone it is.
+                  </p>
+                </div>
+              </button>
+
               {/* Progress ring */}
               <Card className="border-0 bg-milestones-bg">
                 <CardContent className="p-4">
@@ -567,6 +607,19 @@ export default function MilestonesPage() {
           <FinancialContent />
         </TabsContent>
       </Tabs>
+
+      <Drawer open={photoDetectorOpen} onOpenChange={setPhotoDetectorOpen}>
+        <DrawerContent>
+          <div className="px-4 pt-2 pb-8">
+            <PhotoMilestoneDetector onClose={() => setPhotoDetectorOpen(false)} />
+          </div>
+        </DrawerContent>
+      </Drawer>
+      <UpgradeSheet
+        open={photoUpsellOpen}
+        onOpenChange={setPhotoUpsellOpen}
+        feature="photo-milestones"
+      />
     </div>
   );
 }
