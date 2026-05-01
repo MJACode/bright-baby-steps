@@ -1,4 +1,4 @@
-# Baby Steps — Parenting & Baby Tracker
+# Grace Flare — Parenting & Baby Tracker
 
 A smart baby tracking app for new parents. Log sleep, feeding, diapers, and milestones, and get AI-powered insights from specialized parenting experts.
 

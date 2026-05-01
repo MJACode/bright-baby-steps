@@ -21,7 +21,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">1. Acceptance</h2>
-          <p>By creating an account, you agree to these Terms. If you do not agree, do not use Baby Steps.</p>
+          <p>By creating an account, you agree to these Terms. If you do not agree, do not use Grace Flare.</p>
         </section>
 
         <section>
@@ -31,12 +31,12 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">3. Not medical advice</h2>
-          <p>Baby Steps is an informational tool only. <strong>Nothing in this app — including AI-generated chat responses, briefings, insights, or any other content — constitutes medical advice, diagnosis, or treatment.</strong> Always seek the guidance of your child's physician or other qualified healthcare provider with any questions you have regarding a medical condition. In a medical emergency, call 911 or go to your nearest emergency room.</p>
+          <p>Grace Flare is an informational tool only. <strong>Nothing in this app — including AI-generated chat responses, briefings, insights, or any other content — constitutes medical advice, diagnosis, or treatment.</strong> Always seek the guidance of your child's physician or other qualified healthcare provider with any questions you have regarding a medical condition. In a medical emergency, call 911 or go to your nearest emergency room.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">4. Not financial advice</h2>
-          <p>Financial information provided by Baby Steps is for general informational purposes only and does not constitute personalised financial, tax, or legal advice. Consult a licensed financial advisor before making financial decisions.</p>
+          <p>Financial information provided by Grace Flare is for general informational purposes only and does not constitute personalised financial, tax, or legal advice. Consult a licensed financial advisor before making financial decisions.</p>
         </section>
 
         <section>
@@ -46,7 +46,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">6. Your content</h2>
-          <p>You own the data you enter. By using Baby Steps you grant us a limited licence to process that data to provide the service, as described in our <Link to="/privacy" className="text-primary underline">Privacy Policy</Link>.</p>
+          <p>You own the data you enter. By using Grace Flare you grant us a limited licence to process that data to provide the service, as described in our <Link to="/privacy" className="text-primary underline">Privacy Policy</Link>.</p>
         </section>
 
         <section>
@@ -56,12 +56,12 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">8. Disclaimer of warranties</h2>
-          <p>Baby Steps is provided "as is" without warranties of any kind. We do not warrant that the service will be uninterrupted or error-free, or that AI-generated content will be accurate or complete.</p>
+          <p>Grace Flare is provided "as is" without warranties of any kind. We do not warrant that the service will be uninterrupted or error-free, or that AI-generated content will be accurate or complete.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">9. Limitation of liability</h2>
-          <p>To the fullest extent permitted by law, Baby Steps and its operators shall not be liable for any indirect, incidental, or consequential damages arising from your use of the service.</p>
+          <p>To the fullest extent permitted by law, Grace Flare and its operators shall not be liable for any indirect, incidental, or consequential damages arising from your use of the service.</p>
         </section>
 
         <section>

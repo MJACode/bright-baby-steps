@@ -21,7 +21,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">1. Who we are</h2>
-          <p>Baby Steps is operated by Grace Flare (graceflare.com). If you have questions about this policy, contact us at support@graceflare.com.</p>
+          <p>Grace Flare (graceflare.com) is the operator of this service. If you have questions about this policy, contact us at support@graceflare.com.</p>
         </section>
 
         <section>
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
           <h2 className="font-semibold text-foreground mb-2">3. How we use your data</h2>
           <p>We use your data to:</p>
           <ul className="list-disc pl-5 space-y-1 mt-1">
-            <li>Provide the Baby Steps tracking and AI features.</li>
+            <li>Provide the Grace Flare tracking and AI features.</li>
             <li>Generate daily briefings, weekly insights, and chat responses using your child's logged activity.</li>
             <li>Send you optional reminders and notifications.</li>
             <li>Improve the app.</li>
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">4. AI processing</h2>
-          <p>Baby Steps uses an AI service provider to power chat responses, daily briefings, and weekly insights. Your child's activity data (including name, age, sleep, feeding, and health notes) is transmitted to this provider for processing. We have a data processing agreement in place with our AI provider. Your data is not used to train AI models.</p>
+          <p>Grace Flare uses an AI service provider to power chat responses, daily briefings, and weekly insights. Your child's activity data (including name, age, sleep, feeding, and health notes) is transmitted to this provider for processing. We have a data processing agreement in place with our AI provider. Your data is not used to train AI models.</p>
         </section>
 
         <section>
@@ -57,13 +57,13 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1 mt-1">
             <li>Our AI service provider (as described above).</li>
             <li>Co-parents or caregivers you explicitly invite via the Partner Access feature.</li>
-            <li>Service providers who help us operate Baby Steps (e.g. our database host), under data processing agreements.</li>
+            <li>Service providers who help us operate Grace Flare (e.g. our database host), under data processing agreements.</li>
           </ul>
         </section>
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">6. Children's data (COPPA)</h2>
-          <p>Baby Steps is intended for use by parents and legal guardians to track their own children's development. By creating an account and adding a child profile, you confirm that you are the parent or legal guardian of the child and that you consent to the collection and use of your child's data as described in this policy.</p>
+          <p>Grace Flare is intended for use by parents and legal guardians to track their own children's development. By creating an account and adding a child profile, you confirm that you are the parent or legal guardian of the child and that you consent to the collection and use of your child's data as described in this policy.</p>
         </section>
 
         <section>

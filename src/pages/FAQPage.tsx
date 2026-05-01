@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 
 const FAQS = [
   {
-    q: "Is Baby Steps a medical app?",
-    a: "No. Baby Steps is an informational tracking and reference tool. Nothing in this app constitutes medical advice, diagnosis, or treatment. Always consult your child's pediatrician or a qualified healthcare provider with any health questions or concerns.",
+    q: "Is Grace Flare a medical app?",
+    a: "No. Grace Flare is an informational tracking and reference tool. Nothing in this app constitutes medical advice, diagnosis, or treatment. Always consult your child's pediatrician or a qualified healthcare provider with any health questions or concerns.",
   },
   {
     q: "What does the AI assistant do?",
@@ -17,7 +17,7 @@ const FAQS = [
     a: "Call 911 or go to your nearest emergency room if your child is having difficulty breathing, is unresponsive, is having a seizure, has severe swelling of the face or throat after eating, or if you are concerned about any life-threatening situation. Do not rely on this app in an emergency.",
   },
   {
-    q: "What data does Baby Steps store?",
+    q: "What data does Grace Flare store?",
     a: "We store the information you enter: your child's name, date of birth, feeding, sleep, diaper, allergen, milestone, and health logs. We also store your account email and any notes you add. See our Privacy Policy for full details.",
   },
   {
@@ -33,8 +33,8 @@ const FAQS = [
     a: "Go to Profile → Delete Account. This will permanently delete your account and all tracking data for all children. This action cannot be undone.",
   },
   {
-    q: "Is Baby Steps suitable if my child has a diagnosed medical condition?",
-    a: "Baby Steps is designed for general tracking and informational guidance. If your child has a diagnosed or suspected medical condition, please work closely with your healthcare team. This app should not be your primary resource for managing any medical condition.",
+    q: "Is Grace Flare suitable if my child has a diagnosed medical condition?",
+    a: "Grace Flare is designed for general tracking and informational guidance. If your child has a diagnosed or suspected medical condition, please work closely with your healthcare team. This app should not be your primary resource for managing any medical condition.",
   },
   {
     q: "Who can I contact with questions or concerns?",
@@ -69,7 +69,7 @@ export default function FAQPage() {
 
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold">Frequently Asked Questions</h1>
-        <p className="text-sm text-muted-foreground mt-1">Common questions about Baby Steps, AI features, and your data.</p>
+        <p className="text-sm text-muted-foreground mt-1">Common questions about Grace Flare, AI features, and your data.</p>
       </div>
 
       <div className="rounded-xl border border-border bg-card px-4">
