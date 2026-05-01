@@ -1,4 +1,4 @@
-import { Plus, Moon, UtensilsCrossed, Droplets, Brain, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Moon, UtensilsCrossed, Droplets, Brain, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
@@ -70,6 +70,16 @@ export function QuickLogFAB() {
             >
               Milestones
               <Brain className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate("/dashboard/growth");
+              }}
+              className="flex items-center gap-2 pl-4 pr-3 py-2.5 rounded-full shadow-lg touch-target font-semibold text-sm transition-transform active:scale-95 bg-primary text-primary-foreground"
+            >
+              Growth
+              <TrendingUp className="w-5 h-5" />
             </button>
           </div>
         )}

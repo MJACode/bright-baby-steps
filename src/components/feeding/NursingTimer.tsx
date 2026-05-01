@@ -3,157 +3,178 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Play, Pause, RotateCcw, ChevronDown, Clock } from "lucide-react";
+import { RotateCcw, ChevronDown, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NursingTimerProps {
-  side: string;
-  onSideChange: (side: string) => void;
-  onDurationChange: (minutes: number) => void;
-  initialMinutes?: number;
+  onDurationChange: (leftMinutes: number, rightMinutes: number) => void;
+  initialMinutesLeft?: number;
+  initialMinutesRight?: number;
 }
 
-export default function NursingTimer({ side, onSideChange, onDurationChange, initialMinutes }: NursingTimerProps) {
-  const [isRunning, setIsRunning] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(initialMinutes ? initialMinutes * 60 : 0);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualMinutes, setManualMinutes] = useState("");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
-  const stopTimer = useCallback(() => {
-    setIsRunning(false);
+export default function NursingTimer({ onDurationChange, initialMinutesLeft, initialMinutesRight }: NursingTimerProps) {
+  const [leftSeconds, setLeftSeconds] = useState(initialMinutesLeft ? initialMinutesLeft * 60 : 0);
+  const [rightSeconds, setRightSeconds] = useState(initialMinutesRight ? initialMinutesRight * 60 : 0);
+  const [activeSide, setActiveSide] = useState<"left" | "right" | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualLeft, setManualLeft] = useState("");
+  const [manualRight, setManualRight] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeSideRef = useRef<"left" | "right" | null>(null);
+
+  useEffect(() => { activeSideRef.current = activeSide; }, [activeSide]);
+
+  const clearTick = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
   }, []);
 
-  const startTimer = useCallback(() => {
-    setIsRunning(true);
+  const startTick = useCallback(() => {
+    clearTick();
     intervalRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      if (activeSideRef.current === "left") {
+        setLeftSeconds((s) => s + 1);
+      } else if (activeSideRef.current === "right") {
+        setRightSeconds((s) => s + 1);
+      }
     }, 1000);
-  }, []);
+  }, [clearTick]);
 
   useEffect(() => {
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, []);
+    return () => clearTick();
+  }, [clearTick]);
 
   useEffect(() => {
-    onDurationChange(Math.round(elapsedSeconds / 60));
-  }, [elapsedSeconds, onDurationChange]);
+    onDurationChange(Math.round(leftSeconds / 60), Math.round(rightSeconds / 60));
+  }, [leftSeconds, rightSeconds, onDurationChange]);
 
-  const handleToggle = () => {
-    if (isRunning) {
-      stopTimer();
+  const handleSideTap = (side: "left" | "right") => {
+    if (isRunning && activeSide === side) {
+      setIsRunning(false);
+      clearTick();
+    } else if (isRunning && activeSide !== side) {
+      // Switch sides without stopping the interval
+      setActiveSide(side);
+      activeSideRef.current = side;
     } else {
-      if (!side) onSideChange("left");
-      startTimer();
+      setActiveSide(side);
+      activeSideRef.current = side;
+      setIsRunning(true);
+      startTick();
     }
   };
 
   const handleReset = () => {
-    stopTimer();
-    setElapsedSeconds(0);
-    onDurationChange(0);
-  };
-
-  const handleSideSwitch = (newSide: string) => {
-    onSideChange(newSide);
+    setIsRunning(false);
+    clearTick();
+    setActiveSide(null);
+    activeSideRef.current = null;
+    setLeftSeconds(0);
+    setRightSeconds(0);
+    onDurationChange(0, 0);
   };
 
   const handleManualApply = () => {
-    const mins = Number(manualMinutes);
-    if (mins > 0) {
-      stopTimer();
-      setElapsedSeconds(mins * 60);
-      onDurationChange(mins);
+    const left = Number(manualLeft);
+    const right = Number(manualRight);
+    if (left > 0 || right > 0) {
+      setIsRunning(false);
+      clearTick();
+      if (left > 0) setLeftSeconds(left * 60);
+      if (right > 0) setRightSeconds(right * 60);
+      onDurationChange(
+        left > 0 ? left : Math.round(leftSeconds / 60),
+        right > 0 ? right : Math.round(rightSeconds / 60)
+      );
       setManualOpen(false);
-      setManualMinutes("");
+      setManualLeft("");
+      setManualRight("");
     }
   };
 
-  const mins = Math.floor(elapsedSeconds / 60);
-  const secs = elapsedSeconds % 60;
-  const display = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  const totalSeconds = leftSeconds + rightSeconds;
 
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
-        {["left", "right", "both"].map((s) => (
-          <Button
-            key={s}
-            type="button"
-            variant={side === s ? "default" : "outline"}
-            size="sm"
-            className={cn(
-              "flex-1 capitalize touch-target font-bold",
-              side === s && isRunning && "ring-2 ring-feeding/40"
-            )}
-            onClick={() => handleSideSwitch(s)}
-          >
-            {s === "left" ? "◀ Left" : s === "right" ? "Right ▶" : "Both"}
-          </Button>
-        ))}
+      {/* Two-panel timer */}
+      <div className="grid grid-cols-2 gap-2">
+        {(["left", "right"] as const).map((side) => {
+          const isActive = activeSide === side;
+          const seconds = side === "left" ? leftSeconds : rightSeconds;
+          return (
+            <button
+              key={side}
+              type="button"
+              onClick={() => handleSideTap(side)}
+              className={cn(
+                "flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all",
+                isActive && isRunning
+                  ? "border-feeding bg-feeding/10 shadow-sm"
+                  : isActive && !isRunning
+                  ? "border-feeding/40 bg-feeding/5"
+                  : "border-border bg-muted/30 hover:bg-muted/50"
+              )}
+            >
+              <span
+                className={cn(
+                  "text-xs font-semibold uppercase tracking-wide",
+                  isActive ? "text-feeding" : "text-muted-foreground"
+                )}
+              >
+                {side === "left" ? "◀ Left" : "Right ▶"}
+              </span>
+              <span
+                className={cn(
+                  "font-mono text-3xl font-bold tabular-nums",
+                  isActive && isRunning ? "text-feeding" : "text-foreground"
+                )}
+              >
+                {formatTime(seconds)}
+              </span>
+              <span className="text-xs text-muted-foreground h-4">
+                {isActive && isRunning
+                  ? "tap to pause"
+                  : isActive && !isRunning && seconds > 0
+                  ? "tap to resume"
+                  : seconds === 0
+                  ? "tap to start"
+                  : "tap to switch"}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Timer display */}
-      <div className="flex flex-col items-center gap-2 py-3">
-        <div
-          className={cn(
-            "font-mono text-4xl font-bold tracking-wider tabular-nums transition-colors",
-            isRunning ? "text-feeding" : "text-foreground"
-          )}
-        >
-          {display}
-        </div>
-        {isRunning && (
-          <span className="text-xs text-muted-foreground animate-pulse">
-            Nursing on {side || "left"} side...
-          </span>
-        )}
-      </div>
+      {/* Running status */}
+      {isRunning && activeSide && (
+        <p className="text-xs text-center text-feeding animate-pulse">
+          Timing {activeSide} side...
+        </p>
+      )}
 
-      {/* Controls */}
-      <div className="flex gap-2 justify-center">
-        <Button
-          type="button"
-          variant={isRunning ? "outline" : "default"}
-          size="lg"
-          className={cn(
-            "flex-1 max-w-[160px] touch-target gap-2 font-bold",
-            !isRunning && "bg-feeding hover:bg-feeding/90"
-          )}
-          onClick={handleToggle}
-        >
-          {isRunning ? (
-            <>
-              <Pause className="w-5 h-5" /> Pause
-            </>
-          ) : elapsedSeconds > 0 ? (
-            <>
-              <Play className="w-5 h-5" /> Resume
-            </>
-          ) : (
-            <>
-              <Play className="w-5 h-5" /> Start
-            </>
-          )}
-        </Button>
-        {elapsedSeconds > 0 && (
+      {/* Reset */}
+      {totalSeconds > 0 && !isRunning && (
+        <div className="flex justify-center">
           <Button
             type="button"
             variant="ghost"
-            size="lg"
-            className="touch-target text-muted-foreground"
+            size="sm"
+            className="text-muted-foreground gap-1.5 text-xs"
             onClick={handleReset}
           >
-            <RotateCcw className="w-5 h-5" />
+            <RotateCcw className="w-3.5 h-3.5" /> Reset both
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Manual duration entry */}
       {!isRunning && (
@@ -168,36 +189,46 @@ export default function NursingTimer({ side, onSideChange, onDurationChange, ini
               <ChevronDown className={cn("w-3 h-3 transition-transform", manualOpen && "rotate-180")} />
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2">
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Minutes</Label>
+          <CollapsibleContent className="pt-2 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Left (min)</Label>
                 <Input
                   type="number"
-                  value={manualMinutes}
-                  onChange={(e) => setManualMinutes(e.target.value)}
-                  placeholder="e.g. 15"
+                  value={manualLeft}
+                  onChange={(e) => setManualLeft(e.target.value)}
+                  placeholder="e.g. 10"
                   className="h-8 text-sm"
                 />
               </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 bg-feeding hover:bg-feeding/90 text-xs"
-                onClick={handleManualApply}
-                disabled={!manualMinutes || Number(manualMinutes) <= 0}
-              >
-                Apply
-              </Button>
+              <div className="space-y-1">
+                <Label className="text-xs">Right (min)</Label>
+                <Input
+                  type="number"
+                  value={manualRight}
+                  onChange={(e) => setManualRight(e.target.value)}
+                  placeholder="e.g. 8"
+                  className="h-8 text-sm"
+                />
+              </div>
             </div>
+            <Button
+              type="button"
+              size="sm"
+              className="w-full h-8 bg-feeding hover:bg-feeding/90 text-xs"
+              onClick={handleManualApply}
+              disabled={!manualLeft && !manualRight}
+            >
+              Apply
+            </Button>
           </CollapsibleContent>
         </Collapsible>
       )}
 
       {/* Hint */}
-      {!isRunning && elapsedSeconds === 0 && !manualOpen && (
+      {!isRunning && totalSeconds === 0 && !manualOpen && (
         <p className="text-xs text-center text-muted-foreground">
-          Tap Start to time, or enter duration manually
+          Tap a side to start timing
         </p>
       )}
     </div>
