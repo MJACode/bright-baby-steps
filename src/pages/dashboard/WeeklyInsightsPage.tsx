@@ -62,7 +62,7 @@ function exportWeeklyPdf(digest: WeeklyDigest, childName: string) {
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(100);
-  doc.text(`Generated ${format(new Date(digest.generatedAt), "MMMM d, yyyy")}  •  Baby Steps`, m, y);
+  doc.text(`Generated ${format(new Date(digest.generatedAt), "MMMM d, yyyy")}  •  Grace Flare`, m, y);
   y += 10;
   doc.setTextColor(40);
 

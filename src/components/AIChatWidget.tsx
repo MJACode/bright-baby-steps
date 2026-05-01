@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useChildContext } from "@/hooks/useChildContext";
 import { toast } from "@/hooks/use-toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
@@ -69,61 +70,15 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
   const [activeSkill, setActiveSkill] = useState<SkillId>(defaultSkill ?? "general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const [isListening, setIsListening] = useState(false);
 
-  const supportsVoice = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
+  const { isListening, isSupported: supportsVoice, start: startVoice, stop: stopVoice } = useSpeechRecognition({
+    onResult: (transcript) => sendMessage(transcript),
+    onInterim: (transcript) => setInput(transcript),
+  });
 
   const toggleVoice = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast({ title: "Voice not supported", description: "Your browser doesn't support speech recognition.", variant: "destructive" });
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognitionRef.current = recognition;
-
-    let finalTranscript = "";
-
-    recognition.onresult = (event: any) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-      setInput(finalTranscript + interim);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      if (finalTranscript.trim()) {
-        sendMessage(finalTranscript.trim());
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      setIsListening(false);
-      if (event.error !== "no-speech") {
-        toast({ title: "Voice error", description: event.error, variant: "destructive" });
-      }
-    };
-
-    recognition.start();
-    setIsListening(true);
+    if (isListening) stopVoice();
+    else startVoice();
   };
 
   useEffect(() => {
@@ -225,11 +180,12 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Not authenticated");
       const resp = await fetch(
         `https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/chat`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlldXpuYnZ2d2R2aHRpcnp3a2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5OTIzODQsImV4cCI6MjA4ODU2ODM4NH0.04dxqjtlwWujfWTSM8fm2Y6EXGqIpOZisvBcN4eETEc"}` },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({ messages: updatedMessages, skill: activeSkill, context: childContext || undefined }),
         }
       );
@@ -363,7 +319,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
             <Bot className="w-5 h-5 text-primary" />
           </div>
           <div className="text-left">
-            <p className="text-sm font-semibold">Ask Baby Steps AI</p>
+            <p className="text-sm font-semibold">Ask Grace Flare AI</p>
             <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
           </div>
         </button>

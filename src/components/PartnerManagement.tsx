@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { APP_URL } from "@/lib/appUrl";
+import { Capacitor } from "@capacitor/core";
+import { Clipboard } from "@capacitor/clipboard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,7 +73,7 @@ export default function PartnerManagement() {
       return data;
     },
     onSuccess: (data) => {
-      const link = `${window.location.origin}/invite/${data.invite_code}`;
+      const link = `${APP_URL}/invite/${data.invite_code}`;
       setInviteLink(link);
       queryClient.invalidateQueries({ queryKey: ["partner_invitations"] });
       toast({ title: "Invite link created!" });
@@ -93,11 +96,14 @@ export default function PartnerManagement() {
     },
   });
 
-  const copyLink = () => {
-    if (inviteLink) {
-      navigator.clipboard.writeText(inviteLink);
-      toast({ title: "Link copied to clipboard! 📋" });
+  const copyLink = async () => {
+    if (!inviteLink) return;
+    if (Capacitor.isNativePlatform()) {
+      await Clipboard.write({ string: inviteLink });
+    } else {
+      await navigator.clipboard.writeText(inviteLink);
     }
+    toast({ title: "Link copied to clipboard! 📋" });
   };
 
   return (

@@ -9,6 +9,7 @@ import ResetPassword from "./pages/ResetPassword";
 import AcceptInvite from "./pages/AcceptInvite";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
+import { DeepLinkHandler } from "./components/DeepLinkHandler";
 import SleepPage from "./pages/dashboard/SleepPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
@@ -33,6 +34,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <DeepLinkHandler />
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/auth" element={<Auth />} />

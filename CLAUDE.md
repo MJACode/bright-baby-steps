@@ -1,4 +1,4 @@
-# Claude Code Guidelines — Baby Steps
+# Claude Code Guidelines — Grace Flare
 
 ## Reuse Before You Build
 
