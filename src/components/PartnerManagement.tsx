@@ -125,7 +125,12 @@ export default function PartnerManagement() {
             {partners.map((p: any) => (
               <div key={p.id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2">
                 <div>
-                  <p className="text-sm">{p.partner?.email ?? "Unknown"}</p>
+                  <p className="text-sm flex items-center gap-2">
+                    {p.partner?.email ?? "Unknown"}
+                    <span className="text-[10px] font-mono uppercase text-muted-foreground">
+                      {p.role ?? "coparent"}
+                    </span>
+                  </p>
                   <p className="text-[10px] text-muted-foreground">
                     Added {format(new Date(p.created_at), "MMM d, yyyy")}
                   </p>

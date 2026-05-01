@@ -32,3 +32,6 @@ android/
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code harness state (per-developer, not shared)
+.claude/

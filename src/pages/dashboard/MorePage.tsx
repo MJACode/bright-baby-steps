@@ -1,73 +1,108 @@
-import { Link } from "react-router-dom";
-import { Brain, TrendingUp, BarChart2, UserCircle, ChevronRight, Banknote } from "lucide-react";
+// "More" — secondary navigation surfaced from the bottom tab bar.
+// Lists everything that doesn't have a dedicated bar tab: Records,
+// Milestones, Cry insights, Weekly insights, Profile.
 
-const sections = [
+import { Link } from "react-router-dom";
+import { ChevronRight, FileText, Brain, Ear, TrendingUp, User, Sparkles } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import { usePremium } from "@/hooks/usePremium";
+
+interface ToolItem {
+  label: string;
+  description: string;
+  icon: typeof FileText;
+  path: string;
+  colorClass: string;
+  iconClass: string;
+  premium?: boolean;
+}
+
+const tools: ToolItem[] = [
   {
     label: "Milestones",
-    description: "Development tracking & word journal",
+    description: "Track development and add custom moments",
     icon: Brain,
     path: "/dashboard/milestones",
     colorClass: "bg-milestones/10",
     iconClass: "text-milestones",
   },
   {
-    label: "Growth",
-    description: "Weight, height & percentile charts",
-    icon: TrendingUp,
-    path: "/dashboard/growth",
+    label: "Records",
+    description: "Medical, insurance, financial, EI",
+    icon: FileText,
+    path: "/dashboard/records",
     colorClass: "bg-primary/10",
     iconClass: "text-primary",
   },
   {
+    label: "Cry insights",
+    description: "Hold the phone near baby — get a suggestion in seconds",
+    icon: Ear,
+    path: "/dashboard/cry-analyzer",
+    colorClass: "bg-foreground/10",
+    iconClass: "text-foreground",
+    premium: true,
+  },
+  {
     label: "Weekly insights",
-    description: "Trends and patterns from the past week",
-    icon: BarChart2,
+    description: "Patterns and trends across sleep, feeding, diapers",
+    icon: TrendingUp,
     path: "/dashboard/weekly",
-    colorClass: "bg-feeding/10",
-    iconClass: "text-feeding",
+    colorClass: "bg-accent/40",
+    iconClass: "text-accent-foreground",
   },
   {
-    label: "Financial",
-    description: "Baby expense tracking",
-    icon: Banknote,
-    path: "/dashboard/milestones?tab=financial",
-    colorClass: "bg-sleep/10",
-    iconClass: "text-sleep",
-  },
-  {
-    label: "Settings & profile",
-    description: "Account, partner, exports & preferences",
-    icon: UserCircle,
+    label: "Profile",
+    description: "Children, partners, account",
+    icon: User,
     path: "/dashboard/profile",
-    colorClass: "bg-secondary",
-    iconClass: "text-muted-foreground",
+    colorClass: "bg-muted",
+    iconClass: "text-foreground",
   },
 ];
 
 export default function MorePage() {
+  const { isPremium } = usePremium();
+
   return (
-    <div className="space-y-4">
-      <div className="pt-1">
+    <div className="space-y-5 pb-24">
+      <div>
         <h1 className="font-display text-2xl font-bold">More</h1>
+        <p className="text-muted-foreground text-sm mt-1">Everything else that doesn't fit on the tab bar.</p>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {sections.map((section) => (
-          <Link
-            key={section.path}
-            to={section.path}
-            className="flex items-center gap-4 p-4 bg-card rounded-2xl border border-border active:scale-[0.98] transition-transform"
-          >
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${section.colorClass}`}>
-              <section.icon className={`w-5 h-5 ${section.iconClass}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm">{section.label}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{section.description}</p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-          </Link>
-        ))}
+      <div className="space-y-2">
+        {tools.map((tool) => {
+          const Icon = tool.icon;
+          return (
+            <Card key={tool.path} className="border-0 bg-card">
+              <CardContent className="p-0">
+                <Link
+                  to={tool.path}
+                  className="flex items-center gap-3 p-4 active:scale-[0.99] transition-transform touch-target"
+                >
+                  <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center shrink-0", tool.colorClass)}>
+                    <Icon className={cn("w-5 h-5", tool.iconClass)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm flex items-center gap-2">
+                      {tool.label}
+                      {tool.premium && !isPremium && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-foreground text-warning uppercase font-mono">
+                          <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
+                          Plus
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{tool.description}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                </Link>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

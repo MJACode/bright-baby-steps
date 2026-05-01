@@ -1,4 +1,12 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+
+export type SolidFeedDraft = {
+  foodDesc: string;
+  foodCategory: string;
+  reactionNoted: boolean;
+  reactionDescription: string;
+  notes: string;
+};
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +28,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
+import BottleTimer from "@/components/feeding/BottleTimer";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -76,7 +85,13 @@ const feedingTypes = [
   { value: "solid", label: "🥣 Solid" },
 ];
 
-export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAllergens?: () => void }) {
+interface FeedingLogProps {
+  onNavigateToAllergens?: (draft?: SolidFeedDraft) => void;
+  pendingResume?: SolidFeedDraft | null;
+  onConsumeResume?: () => void;
+}
+
+export default function FeedingLog({ onNavigateToAllergens, pendingResume, onConsumeResume }: FeedingLogProps) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
@@ -99,6 +114,21 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
   const handleTimerDuration = useCallback((minutes: number) => {
     setDurationMin(minutes > 0 ? String(minutes) : "");
   }, []);
+
+  // Resume the in-progress solid feed when the user comes back from the
+  // Allergen Tracker via the "← Back to your feed log" banner.
+  useEffect(() => {
+    if (pendingResume && !dialogOpen) {
+      setFeedType("solid");
+      setFoodDesc(pendingResume.foodDesc);
+      setFoodCategory(pendingResume.foodCategory);
+      setReactionNoted(pendingResume.reactionNoted);
+      setReactionDescription(pendingResume.reactionDescription);
+      setNotes(pendingResume.notes);
+      setDialogOpen(true);
+      onConsumeResume?.();
+    }
+  }, [pendingResume, dialogOpen, onConsumeResume]);
 
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
@@ -268,11 +298,11 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
               )}
 
               {feedType === "bottle" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Duration (min)</Label>
-                    <Input type="number" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="15" />
-                  </div>
+                <div className="space-y-3">
+                  <BottleTimer
+                    onDurationChange={handleTimerDuration}
+                    initialMinutes={durationMin ? Number(durationMin) : undefined}
+                  />
                   <div className="space-y-1">
                     <Label>Amount (oz)</Label>
                     <Input type="number" step="0.5" value={amountOz} onChange={(e) => setAmountOz(e.target.value)} placeholder="4" />
@@ -331,7 +361,10 @@ export default function FeedingLog({ onNavigateToAllergens }: { onNavigateToAlle
                       variant="ghost"
                       size="sm"
                       className="gap-1.5 text-xs text-feeding hover:text-feeding/80 px-0"
-                      onClick={() => { setDialogOpen(false); onNavigateToAllergens(); }}
+                      onClick={() => {
+                        onNavigateToAllergens({ foodDesc, foodCategory, reactionNoted, reactionDescription, notes });
+                        setDialogOpen(false);
+                      }}
                     >
                       <ShieldAlert className="w-3.5 h-3.5" />
                       View Allergen Tracker →

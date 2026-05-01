@@ -20,6 +20,10 @@ import ProfilePage from "./pages/dashboard/ProfilePage";
 import NotFound from "./pages/NotFound";
 import WeeklyInsightsPage from "./pages/dashboard/WeeklyInsightsPage";
 import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
+import RecordsPage from "./pages/dashboard/RecordsPage";
+import CryAnalyzerPage from "./pages/dashboard/CryAnalyzerPage";
+import MorePage from "./pages/dashboard/MorePage";
+import Upgrade from "@/pages/Upgrade";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import FAQPage from "./pages/FAQPage";
@@ -40,6 +44,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/invite/:code" element={<AcceptInvite />} />
+            <Route path="/upgrade" element={<Upgrade />} />
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Dashboard />} />
               <Route path="sleep" element={<SleepPage />} />
@@ -52,6 +57,8 @@ const App = () => (
               <Route path="profile" element={<ProfilePage />} />
               <Route path="weekly" element={<WeeklyInsightsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="records" element={<RecordsPage />} />
+              <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
               <Route path="more" element={<MorePage />} />
             </Route>
             <Route path="/privacy" element={<PrivacyPage />} />

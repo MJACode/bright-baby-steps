@@ -1,5 +1,5 @@
 import {
-  Moon, Baby, Droplets, UtensilsCrossed, Brain, DollarSign, LayoutDashboard, LogOut, TrendingUp, Scale,
+  Moon, Baby, Droplets, UtensilsCrossed, Brain, DollarSign, LayoutDashboard, LogOut, TrendingUp, Scale, FileText,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -25,6 +25,7 @@ const trackingItems = [
   { title: "Feeding", url: "/dashboard/feeding", icon: UtensilsCrossed },
   { title: "Allergens", url: "/dashboard/allergens", icon: UtensilsCrossed },
   { title: "Milestones", url: "/dashboard/milestones", icon: Brain },
+  { title: "Records", url: "/dashboard/records", icon: FileText },
   { title: "Financial", url: "/dashboard/financial", icon: DollarSign },
   { title: "Growth", url: "/dashboard/growth", icon: Scale },
   { title: "Weekly Insights", url: "/dashboard/weekly", icon: TrendingUp },

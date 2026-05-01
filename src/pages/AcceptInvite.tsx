@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { Users, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { ROLE_COPY, type PartnerRole } from "@/lib/partnerInvite";
 
 export default function AcceptInvite() {
   const { code } = useParams<{ code: string }>();
@@ -37,7 +38,14 @@ export default function AcceptInvite() {
 
     if (error || !data) { setStatus("error"); return; }
 
-    const invite = data as { id: string; owner_id: string; status: string; expires_at: string };
+    const invite = data as {
+      id: string;
+      owner_id: string;
+      status: string;
+      expires_at: string;
+      role?: PartnerRole;
+      invitee_label?: string | null;
+    };
 
     if (invite.status !== "pending" || new Date(invite.expires_at) < new Date()) {
       setStatus("expired");
@@ -95,9 +103,16 @@ export default function AcceptInvite() {
 
           {status === "ready" && (
             <>
-              <p className="text-sm">
-                You've been invited to share access to a baby tracking account. Accept to view and log data together.
-              </p>
+              {invite?.role && ROLE_COPY[invite.role as PartnerRole] ? (
+                <p className="text-sm">
+                  You've been invited as a <b>{ROLE_COPY[invite.role as PartnerRole].title.toLowerCase()}</b>.{" "}
+                  {ROLE_COPY[invite.role as PartnerRole].desc}
+                </p>
+              ) : (
+                <p className="text-sm">
+                  You've been invited to share access to a baby tracking account. Accept to view and log data together.
+                </p>
+              )}
               <Button onClick={acceptInvite} disabled={accepting} className="w-full gap-2">
                 {accepting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                 Accept Invite
