@@ -16,7 +16,7 @@ import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
-export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep" | "onboarding";
+export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep";
 
 const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description: string; color: string }[] = [
   { id: "general", label: "General", icon: Bot, description: "Ask anything about parenting", color: "bg-primary/15 text-primary" },
@@ -36,13 +36,10 @@ const SKILL_SUGGESTIONS: Record<SkillId, string[]> = {
   developmental: ["Tummy time tips for a hater", "When should baby start crawling?", "Best toys for 6 months", "Is my baby's pincer grasp on track?"],
   nutrition: ["When can I start solids?", "How to introduce peanuts safely", "Iron-rich foods for baby", "My toddler won't eat vegetables"],
   sleep: ["Wake windows for 4 months", "How to handle the 4-month regression", "When to drop to 2 naps?", "Safe sleep guidelines"],
-  onboarding: [],
 };
 
 interface AIChatWidgetProps {
   activeChildId?: string;
-  forceOnboarding?: boolean;
-  onOnboardingComplete?: () => void;
   defaultSkill?: SkillId;
   quickLogMode?: boolean;
 }
@@ -56,22 +53,20 @@ const QUICK_LOG_SUGGESTIONS = [
 
 type View = "closed" | "skills" | "chat";
 
-export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingComplete, defaultSkill, quickLogMode }: AIChatWidgetProps) {
+export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AIChatWidgetProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
   const { data: childContext } = useChildContext(activeChildId);
 
-  const [view, setView] = useState<View>(forceOnboarding ? "chat" : "closed");
-  const [messages, setMessages] = useState<Message[]>(
-    forceOnboarding ? [{ role: "assistant", content: "Welcome to Baby Steps! 🎉 I'm here to help you get set up.\n\nIs your little one already here, or are you still expecting?" }] : []
-  );
+  const [view, setView] = useState<View>("closed");
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
-  const [activeSkill, setActiveSkill] = useState<SkillId>(forceOnboarding ? "onboarding" : (defaultSkill ?? "general"));
+  const [activeSkill, setActiveSkill] = useState<SkillId>(defaultSkill ?? "general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -247,11 +242,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
       let textBuffer = "";
 
       const upsertAssistant = (content: string) => {
-        // Strip the CREATE_CHILD command block from the displayed message (both mid-stream and final)
-        const displayContent = content
-          .replace(/:::CREATE_CHILD:::.*?:::END:::/s, "")
-          .replace(/:::CREATE_CHILD:::.*/s, "") // partial marker still streaming
-          .trim();
+        const displayContent = content.trim();
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: displayContent } : m));
@@ -278,35 +269,6 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
             if (content) { assistantContent += content; upsertAssistant(assistantContent); }
           } catch { textBuffer = line + "\n" + textBuffer; break; }
         }
-      }
-
-      // Check for onboarding child creation command
-      const createChildMatch = assistantContent.match(/:::CREATE_CHILD:::(.*?):::END:::/s);
-      if (createChildMatch && user) {
-        try {
-          const childData = JSON.parse(createChildMatch[1]);
-          const { error } = await supabase.from("children").insert({
-            parent_id: user.id,
-            name: childData.name,
-            date_of_birth: childData.date_of_birth,
-            is_premature: childData.is_premature || false,
-            due_date: childData.due_date || null,
-            is_expected: childData.is_expected || false,
-          });
-          if (!error) {
-            queryClient.invalidateQueries({ queryKey: ["children"] });
-          } else {
-            toast({ title: "Couldn't save your child's details", description: "You can add them in Settings.", variant: "destructive" });
-          }
-        } catch (parseErr) {
-          console.error("Failed to parse child creation:", parseErr);
-          toast({ title: "Setup error", description: "You can add your child in Settings.", variant: "destructive" });
-        }
-        // Always strip the marker and always advance — user should never be left on the onboarding screen
-        const cleanContent = assistantContent.replace(/:::CREATE_CHILD:::.*?:::END:::/s, "").trim();
-        upsertAssistant(cleanContent);
-        assistantContent = cleanContent;
-        onOnboardingComplete?.();
       }
 
       if (convoId && assistantContent) {
@@ -455,28 +417,24 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
   }
 
   // CHAT VIEW
-  const isOnboardingChat = forceOnboarding && activeSkill === "onboarding";
-
   return (
-    <Card className={cn("border-0 bg-card shadow-lg overflow-hidden", isOnboardingChat && "shadow-none")}>
-      {!isOnboardingChat && (
-        <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            {activeSkillInfo && (
-              <button onClick={() => setView("skills")} className={cn("flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium", activeSkillInfo.color)}>
-                <activeSkillInfo.icon className="w-3.5 h-3.5" />
-                {activeSkillInfo.label}
-              </button>
-            )}
-          </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-            <X className="w-4 h-4" />
+    <Card className="border-0 bg-card shadow-lg overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
+            <ChevronLeft className="w-4 h-4" />
           </Button>
+          {activeSkillInfo && (
+            <button onClick={() => setView("skills")} className={cn("flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium", activeSkillInfo.color)}>
+              <activeSkillInfo.icon className="w-3.5 h-3.5" />
+              {activeSkillInfo.label}
+            </button>
+          )}
         </div>
-      )}
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
 
       {HEALTH_SKILLS.has(activeSkill) && (
         <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
@@ -491,7 +449,7 @@ export function AIChatWidget({ activeChildId, forceOnboarding, onOnboardingCompl
         </div>
       )}
 
-      <div ref={scrollRef} className={cn("overflow-y-auto p-3 space-y-3", isOnboardingChat ? "h-[45vh]" : "h-64")}>
+      <div ref={scrollRef} className="overflow-y-auto p-3 space-y-3 h-[40dvh] max-h-64">
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center py-2">

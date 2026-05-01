@@ -14,6 +14,7 @@ import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
 
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
+import GrowthPage from "./pages/dashboard/GrowthPage";
 import ProfilePage from "./pages/dashboard/ProfilePage";
 import NotFound from "./pages/NotFound";
 import WeeklyInsightsPage from "./pages/dashboard/WeeklyInsightsPage";
@@ -21,6 +22,7 @@ import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import FAQPage from "./pages/FAQPage";
+import MorePage from "./pages/dashboard/MorePage";
 
 const queryClient = new QueryClient();
 
@@ -43,10 +45,12 @@ const App = () => (
               <Route path="feeding" element={<FeedingPage />} />
               <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
               <Route path="milestones" element={<MilestonesPage />} />
+              <Route path="growth" element={<GrowthPage />} />
               <Route path="financial" element={<Navigate to="/dashboard/milestones?tab=financial" replace />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="weekly" element={<WeeklyInsightsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="more" element={<MorePage />} />
             </Route>
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/terms" element={<TermsPage />} />
