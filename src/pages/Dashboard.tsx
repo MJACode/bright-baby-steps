@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flame } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
@@ -112,7 +111,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <QuickLogFAB />
     </div>
   );
 }

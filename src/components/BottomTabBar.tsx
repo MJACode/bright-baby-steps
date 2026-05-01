@@ -1,4 +1,4 @@
-import { Moon, UtensilsCrossed, Droplets, Brain, Home } from "lucide-react";
+import { Moon, UtensilsCrossed, Droplets, MoreHorizontal, Home } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -7,7 +7,7 @@ const tabs = [
   { label: "Food", path: "/dashboard/feeding", icon: UtensilsCrossed, colorClass: "text-feeding" },
   { label: "Home", path: "/dashboard", icon: Home, colorClass: "text-primary", isHome: true },
   { label: "Diapers", path: "/dashboard/diapers", icon: Droplets, colorClass: "text-diapers" },
-  { label: "Milestones", path: "/dashboard/milestones", icon: Brain, colorClass: "text-milestones" },
+  { label: "More", path: "/dashboard/more", icon: MoreHorizontal, colorClass: "text-primary" },
 ];
 
 export function BottomTabBar() {

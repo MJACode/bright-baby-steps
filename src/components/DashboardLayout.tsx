@@ -7,14 +7,13 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { Footprints, UserCircle, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
+import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
   const { children, isLoading: childrenLoading, isFetching: childrenFetching } = useChildren();
   const { prefs } = usePreferences();
-  const [childSwitcherOpen, setChildSwitcherOpen] = useState(false);
   const location = useLocation();
 
   const isOnboarding = !childrenLoading && (!children || children.length === 0);
@@ -38,16 +37,13 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      {/* Top header */}
+      {/* Top header — single row */}
       <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
-          <button
-            onClick={() => setChildSwitcherOpen(true)}
-            className="flex items-center gap-2 active:scale-95 transition-transform"
-          >
-            <Footprints className="w-6 h-6 text-primary" />
-            <span className="font-display font-bold text-lg">Baby Steps</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <Footprints className="w-5 h-5 text-primary shrink-0" />
+            {!isOnboarding && <ChildSwitcher />}
+          </div>
           {!isOnboarding && (
             <div className="flex items-center gap-1">
               {prefs.showNotifications && <NotificationBell />}
@@ -64,11 +60,6 @@ export default function DashboardLayout() {
             </div>
           )}
         </div>
-        {!isOnboarding && (
-          <div className="flex items-center h-10 px-4 max-w-lg mx-auto">
-            <ChildSwitcher externalOpen={childSwitcherOpen} onExternalOpenChange={setChildSwitcherOpen} />
-          </div>
-        )}
       </header>
 
       {/* Main content */}
@@ -78,6 +69,9 @@ export default function DashboardLayout() {
 
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}
+
+      {/* Quick log FAB — available on all pages */}
+      {!isOnboarding && <QuickLogFAB />}
     </div>
   );
 }

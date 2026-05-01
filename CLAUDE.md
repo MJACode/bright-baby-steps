@@ -38,7 +38,8 @@ Before creating a new component, hook, utility, or migration, check whether some
 - Supabase schema changes go in `supabase/migrations/` with a timestamp prefix
 - Preferences that don't need to sync across devices use `localStorage` via `usePreferences`
 - AI chat uses SSE streaming — never use `supabase.functions.invoke` for streaming calls; use `fetch` with a `ReadableStream` reader
-- The `:::CREATE_CHILD:::{JSON}:::END:::` marker pattern is used by the onboarding AI skill to trigger child creation client-side
+- Onboarding is a deterministic 5-step wizard (`src/components/OnboardingWizard.tsx`) — no AI, no LLM calls. It creates the child row and writes `primary_interest` + `has_partner` + `onboarding_completed_at` to the `profiles` table on completion. Partner invites are generated via `partner_invitations` insert using the same pattern as `PartnerManagement.tsx`.
+- There is no `onboarding` AI skill. The `:::CREATE_CHILD:::` marker pattern has been removed. Do not reintroduce it.
 
 ---
 
