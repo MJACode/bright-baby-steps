@@ -242,11 +242,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
       let textBuffer = "";
 
       const upsertAssistant = (content: string) => {
-        // Strip the CREATE_CHILD command block from the displayed message (both mid-stream and final)
-        const displayContent = content
-          .replace(/:::CREATE_CHILD:::.*?:::END:::/s, "")
-          .replace(/:::CREATE_CHILD:::.*/s, "") // partial marker still streaming
-          .trim();
+        const displayContent = content.trim();
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: displayContent } : m));
