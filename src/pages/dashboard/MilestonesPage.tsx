@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
@@ -9,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X, DollarSign } from "lucide-react";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
@@ -22,7 +21,6 @@ import { PhotoMilestoneDetector } from "@/components/PhotoMilestoneDetector";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { usePremium } from "@/hooks/usePremium";
 import { format } from "date-fns";
-import FinancialContent from "./FinancialPage";
 
 function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
   milestone: any;
@@ -77,8 +75,6 @@ export default function MilestonesPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-  const defaultTab = searchParams.get("tab") === "financial" ? "financial" : "development";
   const { isPremium } = usePremium();
   const [showConfetti, setShowConfetti] = useState(false);
   const [photoDetectorOpen, setPhotoDetectorOpen] = useState(false);
@@ -365,16 +361,7 @@ export default function MilestonesPage() {
         </p>
       </div>
 
-      <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-2">
-          <TabsTrigger value="development" className="gap-1.5">
-            <Brain className="w-4 h-4" /> Development
-          </TabsTrigger>
-          <TabsTrigger value="financial" className="gap-1.5">
-            <DollarSign className="w-4 h-4" /> Financial
-          </TabsTrigger>
-        </TabsList>
-
+      <Tabs defaultValue="development" className="w-full">
         <TabsContent value="development" className="mt-4 space-y-5">
           {!activeChild ? (
             <AddChildDialog />
@@ -601,10 +588,6 @@ export default function MilestonesPage() {
               <WordSoundJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
             </>
           )}
-        </TabsContent>
-
-        <TabsContent value="financial" className="mt-4">
-          <FinancialContent />
         </TabsContent>
       </Tabs>
 

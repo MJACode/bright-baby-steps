@@ -40,7 +40,7 @@ const INTEREST_CTA: Record<PrimaryInterest, { label: string; route: string }> = 
   sleep_feeding: { label: "Log first feed", route: "/dashboard/feeding" },
   developmental: { label: "See milestones", route: "/dashboard/milestones" },
   speech: { label: "Open Word & Sound Journal", route: "/dashboard/milestones" },
-  financial: { label: "Open Financial Checklist", route: "/dashboard/milestones?tab=financial" },
+  financial: { label: "Open Financial Checklist", route: "/dashboard/records?tab=financial" },
 };
 
 const INTEREST_FEATURES: Record<PrimaryInterest, string[]> = {

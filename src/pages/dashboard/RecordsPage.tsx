@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
@@ -9,9 +10,16 @@ import { EarlyInterventionTab } from "@/components/records/EarlyInterventionTab"
 import { NewBabyChecklistTab } from "@/components/records/NewBabyChecklistTab";
 import FinancialPage from "@/pages/dashboard/FinancialPage";
 
+const VALID_TABS = ["newbaby", "medical", "insurance", "financial", "ei"] as const;
+
 export default function RecordsPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const defaultTab = VALID_TABS.includes(requestedTab as typeof VALID_TABS[number])
+    ? (requestedTab as string)
+    : "newbaby";
 
   if (!activeChild) {
     return (
@@ -40,7 +48,7 @@ export default function RecordsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="newbaby" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="newbaby" className="gap-1 text-[10px] px-1">
             <Sparkles className="w-3.5 h-3.5" /> New Baby

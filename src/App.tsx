@@ -52,7 +52,7 @@ const App = () => (
               <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
               <Route path="milestones" element={<MilestonesPage />} />
               <Route path="growth" element={<GrowthPage />} />
-              <Route path="financial" element={<Navigate to="/dashboard/milestones?tab=financial" replace />} />
+              <Route path="financial" element={<Navigate to="/dashboard/records?tab=financial" replace />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="weekly" element={<WeeklyInsightsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
