@@ -18,7 +18,6 @@ DECLARE
     'pediatrician_exports',
     'illness_logs',
     'medication_logs',
-    'supplement_logs',
     'supplements',
     'journal_entries',
     'custom_milestones',
@@ -78,6 +77,6 @@ WHERE schemaname = 'public'
   AND tablename = ANY (ARRAY[
     'children','feeding_logs','diaper_logs','sleep_logs','child_speech',
     'allergen_introductions','allergen_exposure_logs','allergen_reactions',
-    'pediatrician_exports','illness_logs','medication_logs','supplement_logs',
+    'pediatrician_exports','illness_logs','medication_logs',
     'supplements','journal_entries','custom_milestones','reminders','milestone_flags'
   ]);
