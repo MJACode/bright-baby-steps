@@ -27,6 +27,11 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
+    -- Skip tables that don't exist in this database
+    IF to_regclass(format('public.%I', t)) IS NULL THEN
+      CONTINUE;
+    END IF;
+
     -- Drop legacy "FOR ALL" policies (various naming conventions across migrations)
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I',
       'Parents can manage own ' || replace(t, '_', ' '), t);
