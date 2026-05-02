@@ -10,6 +10,8 @@ import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
+import { FamilyMomentsCard } from "@/components/FamilyMomentsCard";
+import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
 
 export default function Dashboard() {
@@ -53,6 +55,8 @@ export default function Dashboard() {
     enabled: !!activeChild,
   });
 
+  usePartnerLogToast(activeChild?.id);
+
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
 
   if (isNewUser) {
@@ -79,6 +83,9 @@ export default function Dashboard() {
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />
+
+      {/* Family moments feed */}
+      <FamilyMomentsCard childId={activeChild?.id} />
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">

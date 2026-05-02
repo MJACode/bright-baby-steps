@@ -1,18 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { Capacitor } from "@capacitor/core";
-import { Clipboard } from "@capacitor/clipboard";
-import { format, differenceInMonths, differenceInWeeks, differenceInDays, isValid, parseISO } from "date-fns";
+import { differenceInMonths, differenceInWeeks, differenceInDays, isValid, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { APP_URL } from "@/lib/appUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
-import { Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PartnerStep } from "@/components/onboarding/PartnerStep";
+import { LivePairingScreen } from "@/components/onboarding/LivePairingScreen";
+import type { SyncChoice } from "@/components/onboarding/PartnerRolePicker";
 
 type PrimaryInterest = "sleep_feeding" | "developmental" | "speech" | "financial";
 
@@ -22,30 +21,19 @@ interface WizardState {
   isPremature: boolean | null;
   dueDate: string;
   interest: PrimaryInterest | null;
-  hasPartner: boolean | null;
+  sync: SyncChoice | null;
+  inviteCode: string | null;
 }
 
 const INTEREST_OPTIONS: { id: PrimaryInterest; label: string; preview: string }[] = [
-  {
-    id: "sleep_feeding",
-    label: "Sleep and feeding",
-    preview: "Track feeds, sleep, and diapers — and surface patterns to help you rest more and stress less.",
-  },
-  {
-    id: "developmental",
-    label: "Developmental milestones",
-    preview: "Map every milestone by age, see what's coming next, and get expert guidance when you need it.",
-  },
-  {
-    id: "speech",
-    label: "Speech and language",
-    preview: "The Word & Sound Journal tracks language development from babbles to sentences, with SLP-backed context at every stage.",
-  },
-  {
-    id: "financial",
-    label: "Financial planning",
-    preview: "Walk through 529s, the Child Tax Credit, dependent care FSAs, and childcare cost planning — step by step.",
-  },
+  { id: "sleep_feeding", label: "Sleep and feeding",
+    preview: "Track feeds, sleep, and diapers — and surface patterns to help you rest more and stress less." },
+  { id: "developmental", label: "Developmental milestones",
+    preview: "Map every milestone by age, see what's coming next, and get expert guidance when you need it." },
+  { id: "speech", label: "Speech and language",
+    preview: "The Word & Sound Journal tracks language development from babbles to sentences, with SLP-backed context." },
+  { id: "financial", label: "Financial planning",
+    preview: "Walk through 529s, the Child Tax Credit, dependent care FSAs, and childcare cost planning — step by step." },
 ];
 
 const INTEREST_CTA: Record<PrimaryInterest, { label: string; route: string }> = {
@@ -87,19 +75,18 @@ export function OnboardingWizard() {
 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [pairingActive, setPairingActive] = useState(false);
   const [state, setState] = useState<WizardState>({
     name: "",
     dob: "",
     isPremature: null,
     dueDate: "",
     interest: null,
-    hasPartner: null,
+    sync: null,
+    inviteCode: null,
   });
 
-  const TOTAL_STEPS = 5; // steps 1-5; step 6 is the welcome screen
+  const TOTAL_STEPS = 5;
 
   async function saveAndAdvance() {
     if (!user) return;
@@ -118,7 +105,7 @@ export function OnboardingWizard() {
         .from("profiles")
         .update({
           primary_interest: state.interest,
-          has_partner: state.hasPartner ?? false,
+          has_partner: state.sync?.kind === "invite",
           onboarding_completed_at: new Date().toISOString(),
         })
         .eq("id", user.id);
@@ -131,35 +118,6 @@ export function OnboardingWizard() {
     }
   }
 
-  async function generateInvite() {
-    if (!user || inviteLink) return;
-    setInviteLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("partner_invitations")
-        .insert({ owner_id: user.id })
-        .select()
-        .single();
-      if (error) throw error;
-      setInviteLink(`${APP_URL}/invite/${data.invite_code}`);
-    } catch {
-      toast({ title: "Couldn't create invite link. Try again.", variant: "destructive" });
-    } finally {
-      setInviteLoading(false);
-    }
-  }
-
-  async function copyInvite() {
-    if (!inviteLink) return;
-    if (Capacitor.isNativePlatform()) {
-      await Clipboard.write({ string: inviteLink });
-    } else {
-      await navigator.clipboard.writeText(inviteLink);
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   function handleFinish() {
     queryClient.invalidateQueries({ queryKey: ["children"] });
     const cta = state.interest ? INTEREST_CTA[state.interest] : null;
@@ -168,6 +126,20 @@ export function OnboardingWizard() {
 
   const firstName = state.name.trim() || "your little one";
   const computedAge = computeAge(state.dob);
+
+  // Live pairing overlay — shown as a full-screen takeover between steps 2 and 3
+  if (step === 2 && pairingActive && state.inviteCode && state.sync?.kind === "invite") {
+    return (
+      <div className="fixed inset-0 z-40 bg-background flex flex-col">
+        <LivePairingScreen
+          inviteCode={state.inviteCode}
+          role={state.sync.role}
+          babyName={firstName}
+          onContinue={() => { setPairingActive(false); setStep(3); }}
+        />
+      </div>
+    );
+  }
 
   // Step 6: personalized welcome
   if (step === 6 && state.interest) {
@@ -178,23 +150,20 @@ export function OnboardingWizard() {
         <div className="w-16 h-16 rounded-full bg-primary/15 flex items-center justify-center mx-auto mb-5">
           <span className="text-3xl">🎉</span>
         </div>
-        <h2 className="font-display text-2xl font-bold mb-2">
-          {state.name.trim()} is all set.
-        </h2>
+        <h2 className="font-display text-2xl font-bold mb-2">{state.name.trim()} is all set.</h2>
         <p className="text-muted-foreground text-sm mb-8 max-w-xs">
           Here's what Grace Flare will help you with most:
         </p>
         <ul className="w-full max-w-xs text-left space-y-3 mb-10">
           {features.map((f) => (
             <li key={f} className="flex items-start gap-2 text-sm">
-              <span className="text-primary mt-0.5">✓</span>
-              <span>{f}</span>
+              <span className="text-primary mt-0.5">✓</span><span>{f}</span>
             </li>
           ))}
         </ul>
-        {state.hasPartner && inviteLink && (
+        {state.sync?.kind === "invite" && state.inviteCode && (
           <p className="text-xs text-muted-foreground mb-6 max-w-xs">
-            Your partner can join using the invite link you copied.
+            Your {state.sync.role === "coparent" ? "co-parent" : state.sync.role} can join using the invite you sent.
           </p>
         )}
         <Button className="w-full max-w-xs" onClick={handleFinish}>
@@ -206,7 +175,6 @@ export function OnboardingWizard() {
 
   return (
     <div className="flex flex-col min-h-[60vh] px-6 pt-8 pb-8 max-w-sm mx-auto">
-      {/* Progress */}
       <div className="mb-8">
         <Progress value={(step / TOTAL_STEPS) * 100} className="h-1.5" />
         <p className="text-xs text-muted-foreground mt-2 text-right">{step} of {TOTAL_STEPS}</p>
@@ -217,134 +185,92 @@ export function OnboardingWizard() {
         <div className="flex flex-col flex-1">
           <h2 className="font-display text-2xl font-bold mb-2">Who are we setting up a profile for?</h2>
           <p className="text-muted-foreground text-sm mb-8">This personalizes everything in the app.</p>
-          <Input
-            autoFocus
-            placeholder="Baby's name"
-            value={state.name}
+          <Input autoFocus placeholder="Baby's name" value={state.name}
             onChange={(e) => setState((s) => ({ ...s, name: e.target.value }))}
             className="text-lg h-12"
             onKeyDown={(e) => { if (e.key === "Enter" && state.name.trim()) setStep(2); }}
           />
           <div className="mt-auto pt-8">
-            <Button
-              className="w-full"
-              disabled={!state.name.trim()}
-              onClick={() => setStep(2)}
-            >
-              Continue
-            </Button>
+            <Button className="w-full" disabled={!state.name.trim()} onClick={() => setStep(2)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {/* Step 2: Date of birth */}
-      {step === 2 && (
+      {/* Step 2: Partner step */}
+      {step === 2 && !pairingActive && (
+        <PartnerStep
+          babyName={firstName}
+          onBack={() => setStep(1)}
+          onContinue={(c) => {
+            setState((s) => ({ ...s, sync: c, inviteCode: c.inviteCode ?? null }));
+            if (c.kind === "invite" && c.inviteCode) setPairingActive(true);
+            else setStep(3);
+          }}
+        />
+      )}
+
+      {/* Step 3: Date of birth */}
+      {step === 3 && (
         <div className="flex flex-col flex-1">
           <h2 className="font-display text-2xl font-bold mb-2">When was {firstName} born?</h2>
           <p className="text-muted-foreground text-sm mb-8">We use this to calibrate milestones and tracking to the right age.</p>
-          <Input
-            autoFocus
-            type="date"
-            value={state.dob}
-            onChange={(e) => setState((s) => ({ ...s, dob: e.target.value }))}
-            className="text-base h-12"
-          />
-          {computedAge && (
-            <p className="text-primary text-sm font-medium mt-3">
-              {firstName} is {computedAge}
-            </p>
-          )}
+          <Input autoFocus type="date" value={state.dob}
+            onChange={(e) => setState((s) => ({ ...s, dob: e.target.value }))} className="text-base h-12" />
+          {computedAge && <p className="text-primary text-sm font-medium mt-3">{firstName} is {computedAge}</p>}
           <div className="mt-auto pt-8 flex gap-3">
-            <Button variant="outline" onClick={() => setStep(1)} className="flex-1">Back</Button>
-            <Button
-              className="flex-1"
-              disabled={!state.dob || !computedAge}
-              onClick={() => setStep(3)}
-            >
-              Continue
-            </Button>
+            <Button variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
+            <Button className="flex-1" disabled={!state.dob || !computedAge} onClick={() => setStep(4)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {/* Step 3: Born early? */}
-      {step === 3 && (
+      {/* Step 4: Born early */}
+      {step === 4 && (
         <div className="flex flex-col flex-1">
           <h2 className="font-display text-2xl font-bold mb-2">Was {firstName} born early?</h2>
           <p className="text-muted-foreground text-sm mb-8">
             If {firstName} was premature, we use corrected age for all milestone guidance — the way pediatricians do.
           </p>
           <div className="grid grid-cols-2 gap-3 mb-6">
-            <button
-              onClick={() => setState((s) => ({ ...s, isPremature: true }))}
-              className={cn(
-                "rounded-xl border-2 py-4 text-sm font-medium transition-colors",
-                state.isPremature === true
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-card text-foreground"
-              )}
-            >
+            <button onClick={() => setState((s) => ({ ...s, isPremature: true }))}
+              className={cn("rounded-xl border-2 py-4 text-sm font-medium transition-colors",
+                state.isPremature === true ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-foreground")}>
               Yes, born early
             </button>
-            <button
-              onClick={() => setState((s) => ({ ...s, isPremature: false, dueDate: "" }))}
-              className={cn(
-                "rounded-xl border-2 py-4 text-sm font-medium transition-colors",
-                state.isPremature === false
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-card text-foreground"
-              )}
-            >
+            <button onClick={() => setState((s) => ({ ...s, isPremature: false, dueDate: "" }))}
+              className={cn("rounded-xl border-2 py-4 text-sm font-medium transition-colors",
+                state.isPremature === false ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-foreground")}>
               No, full term
             </button>
           </div>
           {state.isPremature && (
             <div>
               <p className="text-sm text-muted-foreground mb-2">What was the original due date?</p>
-              <Input
-                type="date"
-                value={state.dueDate}
-                onChange={(e) => setState((s) => ({ ...s, dueDate: e.target.value }))}
-                className="h-12"
-              />
+              <Input type="date" value={state.dueDate}
+                onChange={(e) => setState((s) => ({ ...s, dueDate: e.target.value }))} className="h-12" />
             </div>
           )}
           <div className="mt-auto pt-8 flex gap-3">
-            <Button variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
-            <Button
-              className="flex-1"
-              disabled={
-                state.isPremature === null ||
-                (state.isPremature === true && !state.dueDate)
-              }
-              onClick={() => setStep(4)}
-            >
-              Continue
-            </Button>
+            <Button variant="outline" onClick={() => setStep(3)} className="flex-1">Back</Button>
+            <Button className="flex-1"
+              disabled={state.isPremature === null || (state.isPremature === true && !state.dueDate)}
+              onClick={() => setStep(5)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {/* Step 4: What matters most */}
-      {step === 4 && (
+      {/* Step 5: What matters most — also finishes setup */}
+      {step === 5 && (
         <div className="flex flex-col flex-1">
           <h2 className="font-display text-2xl font-bold mb-2">What matters most to you right now?</h2>
           <p className="text-muted-foreground text-sm mb-6">Pick one — you can explore everything once you're in.</p>
           <div className="space-y-3 mb-4">
             {INTEREST_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => setState((s) => ({ ...s, interest: opt.id }))}
-                className={cn(
-                  "w-full rounded-xl border-2 px-4 py-3.5 text-left transition-colors",
-                  state.interest === opt.id
-                    ? "border-primary bg-primary/10"
-                    : "border-border bg-card"
-                )}
-              >
-                <span className={cn("text-sm font-medium", state.interest === opt.id ? "text-primary" : "text-foreground")}>
-                  {opt.label}
-                </span>
+              <button key={opt.id} onClick={() => setState((s) => ({ ...s, interest: opt.id }))}
+                className={cn("w-full rounded-xl border-2 px-4 py-3.5 text-left transition-colors",
+                  state.interest === opt.id ? "border-primary bg-primary/10" : "border-border bg-card")}>
+                <span className={cn("text-sm font-medium",
+                  state.interest === opt.id ? "text-primary" : "text-foreground")}>{opt.label}</span>
               </button>
             ))}
           </div>
@@ -354,84 +280,8 @@ export function OnboardingWizard() {
             </p>
           )}
           <div className="mt-auto pt-6 flex gap-3">
-            <Button variant="outline" onClick={() => setStep(3)} className="flex-1">Back</Button>
-            <Button
-              className="flex-1"
-              disabled={!state.interest}
-              onClick={() => setStep(5)}
-            >
-              Continue
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Step 5: Partner invite */}
-      {step === 5 && (
-        <div className="flex flex-col flex-1">
-          <h2 className="font-display text-2xl font-bold mb-2">Anyone else tracking with you?</h2>
-          <p className="text-muted-foreground text-sm mb-8">
-            Partners see the same data in real time — every feed, sleep, and milestone logged by either of you.
-          </p>
-          <div className="grid grid-cols-2 gap-3 mb-6">
-            <button
-              onClick={() => setState((s) => ({ ...s, hasPartner: true }))}
-              className={cn(
-                "rounded-xl border-2 py-4 text-sm font-medium transition-colors",
-                state.hasPartner === true
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-card text-foreground"
-              )}
-            >
-              Yes
-            </button>
-            <button
-              onClick={() => setState((s) => ({ ...s, hasPartner: false }))}
-              className={cn(
-                "rounded-xl border-2 py-4 text-sm font-medium transition-colors",
-                state.hasPartner === false
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-card text-foreground"
-              )}
-            >
-              Just me
-            </button>
-          </div>
-          {state.hasPartner && (
-            <div className="space-y-3">
-              {!inviteLink ? (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={generateInvite}
-                  disabled={inviteLoading}
-                >
-                  {inviteLoading ? "Creating link..." : "Generate invite link"}
-                </Button>
-              ) : (
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2">
-                  <span className="flex-1 text-xs text-muted-foreground truncate">{inviteLink}</span>
-                  <button
-                    onClick={copyInvite}
-                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Copy invite link"
-                  >
-                    {copied ? <Check className="w-4 h-4 text-primary" /> : <Copy className="w-4 h-4" />}
-                  </button>
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                They'll create their own account and get full access to {firstName}'s profile.
-              </p>
-            </div>
-          )}
-          <div className="mt-auto pt-8 flex gap-3">
             <Button variant="outline" onClick={() => setStep(4)} className="flex-1">Back</Button>
-            <Button
-              className="flex-1"
-              disabled={state.hasPartner === null || saving}
-              onClick={saveAndAdvance}
-            >
+            <Button className="flex-1" disabled={!state.interest || saving} onClick={saveAndAdvance}>
               {saving ? "Setting up..." : "Finish setup"}
             </Button>
           </div>

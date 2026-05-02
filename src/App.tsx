@@ -27,7 +27,6 @@ import Upgrade from "@/pages/Upgrade";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import FAQPage from "./pages/FAQPage";
-import MorePage from "./pages/dashboard/MorePage";
 
 const queryClient = new QueryClient();
 
