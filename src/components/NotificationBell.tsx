@@ -64,6 +64,7 @@ export function NotificationBell() {
     milestone_age: "🎂",
     appointment_reminder: "📋",
     pumping_reminder: "🧴",
+    reactivation: "👋",
   };
 
   return (

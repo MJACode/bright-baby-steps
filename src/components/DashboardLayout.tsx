@@ -3,18 +3,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
+import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
 import { Footprints, UserCircle, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
+import CaregiverHome from "@/pages/CaregiverHome";
 import { cn } from "@/lib/utils";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
-  const { children, isLoading: childrenLoading, isFetching: childrenFetching } = useChildren();
+  const { children, activeChild, isLoading: childrenLoading } = useChildren();
   const { prefs } = usePreferences();
   const location = useLocation();
+  const role = useCurrentRole(activeChild?.id);
 
   const isOnboarding = !childrenLoading && (!children || children.length === 0);
 
@@ -33,6 +36,11 @@ export default function DashboardLayout() {
 
   if (isOnboarding && location.pathname !== "/dashboard") {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  // Caregiver-role partners get a purpose-built UI (no tabs, briefing, or analytics)
+  if (!isOnboarding && role === "caregiver") {
+    return <CaregiverHome />;
   }
 
   return (

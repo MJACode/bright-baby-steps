@@ -35,3 +35,7 @@ android/
 
 # Claude Code harness state (per-developer, not shared)
 .claude/
+
+# Supabase CLI local cache (per-developer)
+supabase/.temp/
+supabase/.branches/

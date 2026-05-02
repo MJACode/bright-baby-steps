@@ -11,6 +11,7 @@ import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { FamilyMomentsCard } from "@/components/FamilyMomentsCard";
+import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
 
@@ -83,6 +84,9 @@ export default function Dashboard() {
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />
+
+      {/* Sleep Coach (Flare+) */}
+      <SleepCoachCard activeChild={activeChild} />
 
       {/* Family moments feed */}
       <FamilyMomentsCard childId={activeChild?.id} />
