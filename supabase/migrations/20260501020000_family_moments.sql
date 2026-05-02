@@ -17,7 +17,7 @@ END$$;
 CREATE OR REPLACE VIEW public.family_moments AS
   SELECT id, child_id, parent_id AS author_id, logged_at AS occurred_at,
          'feed'::text AS kind,
-         jsonb_build_object('amount_oz', amount_oz, 'method', method) AS payload,
+         jsonb_build_object('amount_oz', amount_oz, 'method', feeding_type) AS payload,
          source
     FROM public.feeding_logs
   UNION ALL
@@ -30,7 +30,7 @@ CREATE OR REPLACE VIEW public.family_moments AS
   UNION ALL
   SELECT id, child_id, parent_id, logged_at,
          'diaper'::text,
-         jsonb_build_object('type', type),
+         jsonb_build_object('type', diaper_type),
          source
     FROM public.diaper_logs;
 
