@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 import WeeklyInsightsPage from "./pages/dashboard/WeeklyInsightsPage";
 import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
 import RecordsPage from "./pages/dashboard/RecordsPage";
+import CalendarPage from "./pages/dashboard/CalendarPage";
 import CryAnalyzerPage from "./pages/dashboard/CryAnalyzerPage";
 import MorePage from "./pages/dashboard/MorePage";
 import Upgrade from "@/pages/Upgrade";
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="weekly" element={<WeeklyInsightsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="records" element={<RecordsPage />} />
+              <Route path="calendar" element={<CalendarPage />} />
               <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
               <Route path="more" element={<MorePage />} />
             </Route>
