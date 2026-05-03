@@ -85,8 +85,8 @@ export default function DashboardLayout() {
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}
 
-      {/* Quick log FAB — available on all pages */}
-      {!isOnboarding && <QuickLogFAB />}
+      {/* Quick log FAB — only on Home and More; the dedicated log pages have their own log entry UIs */}
+      {!isOnboarding && (location.pathname === "/dashboard" || location.pathname === "/dashboard/more") && <QuickLogFAB />}
     </div>
   );
 }
