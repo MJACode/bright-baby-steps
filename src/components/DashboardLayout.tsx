@@ -5,7 +5,7 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
-import { Footprints, UserCircle, BarChart3, Home, CalendarDays } from "lucide-react";
+import { Footprints, UserCircle, Home, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
@@ -66,11 +66,6 @@ export default function DashboardLayout() {
                 </Link>
               </Button>
               {prefs.showNotifications && <NotificationBell />}
-              <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
-                <Link to="/dashboard/analytics" aria-label="Analytics">
-                  <BarChart3 className="w-5 h-5" />
-                </Link>
-              </Button>
               <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
                 <Link to="/dashboard/profile">
                   <UserCircle className="w-5 h-5" />
