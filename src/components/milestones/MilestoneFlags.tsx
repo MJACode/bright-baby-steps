@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle, ExternalLink, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type Severity = "watch" | "concern" | "act";
@@ -64,6 +64,16 @@ export function MilestoneFlags({ categories, milestoneStatuses, childId, parentI
   const queryClient = useQueryClient();
   const [dismissingMilestone, setDismissingMilestone] = useState<MilestoneRow | null>(null);
   const [selectedReason, setSelectedReason] = useState<string>(DISMISS_REASONS[0]);
+  // Expanded flag cards — collapsed by default to keep the section scannable.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const { data: flagRecords } = useQuery({
     queryKey: ["milestone-flags", childId],
@@ -146,55 +156,65 @@ export function MilestoneFlags({ categories, milestoneStatuses, childId, parentI
         These are SLP-reviewed prompts based on milestones not yet observed. They're conversation starters with your pediatrician — not diagnoses.
       </p>
 
-      {activeFlags.map((m) => {
-        const sev = (m.flag_severity as Severity) ?? "watch";
-        const styles = severityStyles[sev];
-        return (
-          <Card key={m.id} className={`border ${styles.container}`}>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1 flex-1 min-w-0">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${styles.badge}`}>
-                    {styles.label}
-                  </span>
-                  <p className="font-semibold text-sm">{m.name}</p>
-                </div>
-              </div>
+      <div className="space-y-2">
+        {activeFlags.map((m) => {
+          const sev = (m.flag_severity as Severity) ?? "watch";
+          const styles = severityStyles[sev];
+          const isExpanded = expandedIds.has(m.id);
+          return (
+            <Card key={m.id} className={`border ${styles.container}`}>
+              {/* Compact header — tap to expand */}
+              <button
+                type="button"
+                onClick={() => toggleExpanded(m.id)}
+                aria-expanded={isExpanded}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left active:scale-[0.99] transition-transform"
+              >
+                <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide shrink-0 ${styles.badge}`}>
+                  {styles.label}
+                </span>
+                <span className="font-semibold text-sm flex-1 min-w-0 truncate">{m.name}</span>
+                <ChevronDown className={`w-4 h-4 text-foreground/60 shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+              </button>
 
-              {m.concern_flag_language && (
-                <p className="text-sm leading-relaxed text-foreground/90">{m.concern_flag_language}</p>
+              {/* Expanded body */}
+              {isExpanded && (
+                <CardContent className="px-3 pb-3 pt-0 space-y-3">
+                  {m.concern_flag_language && (
+                    <p className="text-sm leading-relaxed text-foreground/90">{m.concern_flag_language}</p>
+                  )}
+                  <div className="flex items-center justify-between gap-2">
+                    {m.clinical_source_url ? (
+                      <a
+                        href={m.clinical_source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground inline-flex items-center gap-1 hover:underline"
+                      >
+                        Source: {m.clinical_source}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Source: {m.clinical_source}</span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="touch-target"
+                      onClick={() => {
+                        setSelectedReason(DISMISS_REASONS[0]);
+                        setDismissingMilestone(m);
+                      }}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </CardContent>
               )}
-
-              <div className="flex items-center justify-between gap-2 pt-1">
-                {m.clinical_source_url ? (
-                  <a
-                    href={m.clinical_source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-muted-foreground inline-flex items-center gap-1 hover:underline"
-                  >
-                    Source: {m.clinical_source}
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                ) : (
-                  <span className="text-xs text-muted-foreground">Source: {m.clinical_source}</span>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="touch-target"
-                  onClick={() => {
-                    setSelectedReason(DISMISS_REASONS[0]);
-                    setDismissingMilestone(m);
-                  }}
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+            </Card>
+          );
+        })}
+      </div>
 
       <Sheet open={!!dismissingMilestone} onOpenChange={(open) => !open && setDismissingMilestone(null)}>
         <SheetContent side="bottom" className="rounded-t-2xl">
