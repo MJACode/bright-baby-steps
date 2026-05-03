@@ -5,7 +5,7 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
-import { Footprints, UserCircle, BarChart3 } from "lucide-react";
+import { Footprints, UserCircle, BarChart3, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
@@ -49,11 +49,18 @@ export default function DashboardLayout() {
       <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
-            <Footprints className="w-5 h-5 text-primary shrink-0" />
+            <Link to="/dashboard" aria-label="Home" className="shrink-0">
+              <Footprints className="w-5 h-5 text-primary" />
+            </Link>
             {!isOnboarding && <ChildSwitcher />}
           </div>
           {!isOnboarding && (
             <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
+                <Link to="/dashboard" aria-label="Home">
+                  <Home className="w-5 h-5" />
+                </Link>
+              </Button>
               {prefs.showNotifications && <NotificationBell />}
               <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
                 <Link to="/dashboard/analytics" aria-label="Analytics">
