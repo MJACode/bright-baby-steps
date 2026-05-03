@@ -1,9 +1,9 @@
 // "More" — secondary navigation surfaced from the bottom tab bar.
 // Lists everything that doesn't have a dedicated bar tab: Records,
-// Milestones, Cry insights, Weekly insights, Profile.
+// Cry insights, Weekly insights, Profile.
 
 import { Link } from "react-router-dom";
-import { ChevronRight, FileText, Brain, Ear, TrendingUp, User, Sparkles } from "lucide-react";
+import { ChevronRight, FileText, Ear, TrendingUp, User, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -19,14 +19,6 @@ interface ToolItem {
 }
 
 const tools: ToolItem[] = [
-  {
-    label: "Milestones",
-    description: "Track development and add custom moments",
-    icon: Brain,
-    path: "/dashboard/milestones",
-    colorClass: "bg-milestones/10",
-    iconClass: "text-milestones",
-  },
   {
     label: "Records",
     description: "Medical, insurance, financial, EI",
