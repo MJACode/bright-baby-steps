@@ -363,6 +363,26 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
             {voiceTranscript || (isListening ? <span className="text-muted-foreground">…</span> : <span className="text-muted-foreground italic">No transcript yet</span>)}
           </p>
         </div>
+
+        {/* Example prompts — fade out once the user starts speaking */}
+        {!voiceTranscript && (
+          <div className="w-full max-w-md space-y-2">
+            <p className="text-xs text-muted-foreground text-center uppercase tracking-wide font-semibold">Try saying</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {QUICK_LOG_SUGGESTIONS.map((s) => (
+                <span
+                  key={s}
+                  className="text-xs px-3 py-1.5 rounded-full bg-muted text-muted-foreground"
+                >
+                  "{s}"
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground text-center pt-1">
+              Or ask a question — "is 11h sleep normal at 4 months?"
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Action button */}
