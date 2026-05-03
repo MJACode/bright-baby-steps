@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flame, UtensilsCrossed, Moon, Droplets, Brain } from "lucide-react";
 import { Link } from "react-router-dom";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
@@ -111,36 +111,23 @@ export default function Dashboard() {
       {/* Sleep Coach (Flare+) */}
       <SleepCoachCard activeChild={activeChild} />
 
-      {/* Streak */}
-      <Card className="border-0 bg-primary/10">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-              <Flame className="w-5 h-5 text-primary" />
+      {/* Streak — celebrate active streaks only. The lapsed and never-logged
+          nudges now live in TodaysBriefing's "watch" field. */}
+      {(streakData?.streak ?? 0) > 0 && (
+        <Card className="border-0 bg-primary/10">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                <Flame className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
+                <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
+              </div>
             </div>
-            <div>
-              {(streakData?.streak ?? 0) > 0 ? (
-                <>
-                  <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
-                  <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
-                </>
-              ) : streakData?.lastLogDate ? (
-                <>
-                  <p className="font-bold text-sm">Time to log again!</p>
-                  <p className="text-xs text-muted-foreground">
-                    Last entry was {formatDistanceToNow(streakData.lastLogDate, { addSuffix: true })}. Pick up where you left off!
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-bold text-sm">Start your tracking streak!</p>
-                  <p className="text-xs text-muted-foreground">Log your first entry to begin.</p>
-                </>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
     </div>
   );

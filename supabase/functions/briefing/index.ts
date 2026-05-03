@@ -119,11 +119,29 @@ serve(async (req) => {
     const wetCount = diaperLogs.filter((d) => d.diaper_type === "wet").length;
     const dirtyCount = diaperLogs.filter((d) => d.diaper_type === "dirty" || d.diaper_type === "both").length;
 
+    // Hours since the most recent log across all three categories — drives the
+    // "time to log again" nudge that used to live in the home-screen streak card.
+    const lastTimestamps = [
+      sleepLogs[0]?.started_at,
+      feedLogs[0]?.logged_at,
+      diaperLogs[0]?.logged_at,
+    ]
+      .filter((t): t is string => Boolean(t))
+      .map((t) => new Date(t).getTime());
+    const mostRecentMs = lastTimestamps.length ? Math.max(...lastTimestamps) : null;
+    const hoursSinceLastLog = mostRecentMs !== null
+      ? (now.getTime() - mostRecentMs) / (1000 * 60 * 60)
+      : null;
+
     let contextBlock = `Child: ${child.name}, ${ageStr}${child.is_premature ? " (premature)" : ""}.
 Last 48 hours summary:
 - Sleep: ${totalSleepHrs}h total (${napCount} naps, ${nightCount} night sleeps)
 - Feeds: ${feedCount} feeds (types: ${feedTypes.join(", ") || "none"})
 - Diapers: ${diaperCount} total (${wetCount} wet, ${dirtyCount} dirty)`;
+
+    if (hoursSinceLastLog !== null) {
+      contextBlock += `\n- Hours since last log of any kind: ${hoursSinceLastLog.toFixed(1)}`;
+    }
 
     if (illnesses.length > 0) {
       contextBlock += `\n- Active illnesses: ${illnesses.map((i) => i.illness_name).join(", ")}`;
@@ -174,7 +192,8 @@ Rules:
 - Be warm, supportive, never alarming
 - Use emojis sparingly (1 per field max)
 - Return ONLY valid JSON, no markdown, no code fences
-- If an illness is active, mention it in the watch field`;
+- If an illness is active, mention it in the watch field
+- If "Hours since last log" is greater than 6, gently nudge in the watch field (e.g., "It's been about 8 hours since your last entry — a quick log keeps the patterns accurate."). Do NOT mention it when 6 or under.`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
