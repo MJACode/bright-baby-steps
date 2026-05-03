@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
@@ -71,9 +71,22 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Full-screen voice mode (opens from the mic button; routes transcript into
+  // its own state so the small input field doesn't double as the display).
+  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const voiceModeOpenRef = useRef(false);
+  useEffect(() => { voiceModeOpenRef.current = voiceModeOpen; }, [voiceModeOpen]);
+
   const { isListening, isSupported: supportsVoice, start: startVoice, stop: stopVoice } = useSpeechRecognition({
-    onResult: (transcript) => sendMessage(transcript),
-    onInterim: (transcript) => setInput(transcript),
+    onResult: (transcript) => {
+      if (voiceModeOpenRef.current) setVoiceTranscript(transcript);
+      else sendMessage(transcript);
+    },
+    onInterim: (transcript) => {
+      if (voiceModeOpenRef.current) setVoiceTranscript(transcript);
+      else setInput(transcript);
+    },
   });
 
   const toggleVoice = () => {
@@ -254,6 +267,35 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
     setTimeout(() => toggleVoice(), 300);
   };
 
+  const openVoiceMode = () => {
+    setActiveSkill("general");
+    setMessages([]);
+    setCurrentConvoId(null);
+    chatHistory.startNewChat();
+    setVoiceTranscript("");
+    setVoiceModeOpen(true);
+    // Brief delay so the overlay renders before the recognition prompt fires
+    setTimeout(() => startVoice(), 150);
+  };
+
+  const cancelVoiceMode = () => {
+    if (isListening) stopVoice();
+    setVoiceTranscript("");
+    setVoiceModeOpen(false);
+  };
+
+  const sendVoiceTranscript = () => {
+    const text = voiceTranscript.trim();
+    if (isListening) stopVoice();
+    setVoiceTranscript("");
+    setVoiceModeOpen(false);
+    if (text) {
+      setView("chat");
+      // Let the chat view mount before the message stream kicks off
+      setTimeout(() => sendMessage(text), 50);
+    }
+  };
+
   const handleSelectSkill = (skillId: SkillId) => {
     setActiveSkill(skillId);
     setView("chat");
@@ -277,55 +319,131 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
     setView("chat");
   };
 
+  // Full-screen voice overlay rendered above the closed-view UI when active.
+  const voiceOverlay = voiceModeOpen ? (
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      {/* Top bar — cancel */}
+      <div className="flex items-center justify-between p-4">
+        <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Voice quick log
+        </span>
+        <button
+          onClick={cancelVoiceMode}
+          aria-label="Cancel voice"
+          className="w-10 h-10 rounded-full bg-muted hover:bg-muted/80 flex items-center justify-center active:scale-95 transition-transform"
+        >
+          <X className="w-5 h-5 text-foreground" />
+        </button>
+      </div>
+
+      {/* Mic + transcript */}
+      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-10">
+        <div className="relative w-40 h-40 flex items-center justify-center">
+          {isListening && (
+            <>
+              <span className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+              <span className="absolute -inset-4 rounded-full bg-primary/10 animate-pulse" />
+            </>
+          )}
+          <div className="relative w-32 h-32 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-2xl">
+            <Mic className="w-16 h-16" />
+          </div>
+        </div>
+
+        <p className="text-sm text-muted-foreground text-center min-h-[20px]">
+          {isListening
+            ? "Listening — speak naturally, then tap stop."
+            : voiceTranscript
+              ? "Tap send to log it, or cancel to discard."
+              : "Tap stop if nothing was captured."}
+        </p>
+
+        <div className="w-full max-w-md min-h-[100px] px-2">
+          <p className="text-lg text-center text-foreground leading-relaxed">
+            {voiceTranscript || (isListening ? <span className="text-muted-foreground">…</span> : <span className="text-muted-foreground italic">No transcript yet</span>)}
+          </p>
+        </div>
+      </div>
+
+      {/* Action button */}
+      <div className="p-8 flex justify-center">
+        {isListening ? (
+          <button
+            onClick={() => stopVoice()}
+            aria-label="Stop recording"
+            className="w-20 h-20 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-xl active:scale-95 transition-transform"
+          >
+            <Square className="w-8 h-8" fill="currentColor" />
+          </button>
+        ) : (
+          <button
+            onClick={sendVoiceTranscript}
+            disabled={!voiceTranscript.trim()}
+            aria-label="Send transcript"
+            className="w-20 h-20 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xl active:scale-95 transition-transform disabled:opacity-40 disabled:active:scale-100"
+          >
+            <Send className="w-8 h-8" />
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   // CLOSED — AI button + voice mic side by side
   if (view === "closed") {
     if (quickLogMode) {
       return (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <button onClick={openQuickLogChat} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
-              <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5 text-primary" />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-semibold">Quick Log with AI</p>
-                <p className="text-xs text-muted-foreground">Say or type "fed her 4oz" or "90 min nap"</p>
-              </div>
-            </button>
-            {supportsVoice && (
-              <button
-                onClick={handleVoiceFromOutside}
-                aria-label="Quick log by voice"
-                className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
-              >
-                <Mic className="w-5 h-5 text-primary" />
+        <>
+          {voiceOverlay}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <button onClick={openQuickLogChat} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+                <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold">Quick Log with AI</p>
+                  <p className="text-xs text-muted-foreground">Say or type "fed her 4oz" or "90 min nap"</p>
+                </div>
               </button>
-            )}
+              {supportsVoice && (
+                <button
+                  onClick={openVoiceMode}
+                  aria-label="Quick log by voice"
+                  className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+                >
+                  <Mic className="w-5 h-5 text-primary" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       );
     }
 
     return (
-      <div className="flex items-center gap-2">
-        <button onClick={() => setView("skills")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
-          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-            <Bot className="w-5 h-5 text-primary" />
-          </div>
-          <div className="text-left">
-            <p className="text-sm font-semibold">Ask Grace Flare AI</p>
-            <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
-          </div>
-        </button>
-        {supportsVoice && (
-          <button
-            onClick={handleVoiceFromOutside}
-            className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
-          >
-            <Mic className="w-5 h-5 text-primary" />
+      <>
+        {voiceOverlay}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setView("skills")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+            <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+              <Bot className="w-5 h-5 text-primary" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold">Ask Grace Flare AI</p>
+              <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
+            </div>
           </button>
-        )}
-      </div>
+          {supportsVoice && (
+            <button
+              onClick={openVoiceMode}
+              className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+            >
+              <Mic className="w-5 h-5 text-primary" />
+            </button>
+          )}
+        </div>
+      </>
     );
   }
 
