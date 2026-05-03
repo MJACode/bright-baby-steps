@@ -4,15 +4,22 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Flame } from "lucide-react";
+import { Flame, UtensilsCrossed, Moon, Droplets, Brain } from "lucide-react";
+import { Link } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
-import { FamilyMomentsCard } from "@/components/FamilyMomentsCard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
+
+const QUICK_NAV = [
+  { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding/15 text-feeding" },
+  { label: "Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep/15 text-sleep" },
+  { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers/15 text-diapers" },
+  { label: "Milestone", icon: Brain, path: "/dashboard/milestones", color: "bg-milestones/15 text-milestones" },
+] as const;
 
 
 export default function Dashboard() {
@@ -79,6 +86,22 @@ export default function Dashboard() {
       {/* Today's Briefing */}
       {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
+      {/* Quick nav grid — primary log entry points */}
+      <div className="grid grid-cols-4 gap-2">
+        {QUICK_NAV.map((item) => (
+          <Link
+            key={item.label}
+            to={item.path}
+            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-card border border-border active:scale-[0.97] transition-transform touch-target"
+          >
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${item.color}`}>
+              <item.icon className="w-6 h-6" strokeWidth={2} />
+            </div>
+            <span className="text-xs font-semibold">{item.label}</span>
+          </Link>
+        ))}
+      </div>
+
       {/* AI Quick Log */}
       <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
 
@@ -87,9 +110,6 @@ export default function Dashboard() {
 
       {/* Sleep Coach (Flare+) */}
       <SleepCoachCard activeChild={activeChild} />
-
-      {/* Family moments feed */}
-      <FamilyMomentsCard childId={activeChild?.id} />
 
       {/* Streak */}
       <Card className="border-0 bg-primary/10">

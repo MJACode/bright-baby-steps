@@ -33,7 +33,7 @@ export default function DiapersPage() {
   const [notes, setNotes] = useState("");
   const [flag, setFlag] = useState(false);
   const [logTime, setLogTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
-  const [diaperType, setDiaperType] = useState<"wet" | "dirty">("dirty");
+  const [diaperType, setDiaperType] = useState<"wet" | "dirty" | "both">("dirty");
 
   const { data: logs } = useQuery({
     queryKey: ["diaper-logs", activeChild?.id],
@@ -67,7 +67,7 @@ export default function DiapersPage() {
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
-    setDiaperType((log.diaper_type as "wet" | "dirty") ?? "dirty");
+    setDiaperType((log.diaper_type as "wet" | "dirty" | "both") ?? "dirty");
     setSelectedColor(log.color || "");
     setSelectedConsistency(log.consistency || "");
     setNotes(log.notes || "");
@@ -108,23 +108,30 @@ export default function DiapersPage() {
   });
 
   const quickLogMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (type: "wet" | "dirty" | "both") => {
+      // Wet-only logs skip color/consistency entirely; dirty and both default to a normal brown/soft entry.
+      const isWetOnly = type === "wet";
       const { error } = await supabase.from("diaper_logs").insert({
-        color: "brown",
-        consistency: "soft",
+        color: isWetOnly ? null : "brown",
+        consistency: isWetOnly ? null : "soft",
         notes: null,
         flag_for_attention: false,
         logged_at: new Date().toISOString(),
         child_id: activeChild!.id,
         parent_id: user!.id,
-        diaper_type: "dirty",
+        diaper_type: type,
       });
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, type) => {
       queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-      toast({ title: "Normal diaper logged! 💩" });
+      const labels: Record<typeof type, string> = {
+        wet: "Wet diaper logged! 💧",
+        dirty: "Dirty diaper logged! 💩",
+        both: "Wet + dirty logged! 💧💩",
+      };
+      toast({ title: labels[type] });
     },
   });
 
@@ -151,8 +158,9 @@ export default function DiapersPage() {
   const weekData = weekDays.map((day) => {
     const dayEnd = addDays(day, 1);
     const dayLogs = logs?.filter(l => isWithinInterval(new Date(l.logged_at), { start: day, end: dayEnd })) ?? [];
-    const wet = dayLogs.filter(l => l.diaper_type === "wet").length;
-    const dirty = dayLogs.length - wet; // everything else counts as dirty
+    // "both" diapers count toward both wet and dirty totals; total is still distinct logs.
+    const wet = dayLogs.filter(l => l.diaper_type === "wet" || l.diaper_type === "both").length;
+    const dirty = dayLogs.filter(l => l.diaper_type === "dirty" || l.diaper_type === "both").length;
     return { day: format(day, "EEE"), wet, dirty, total: dayLogs.length };
   });
 
@@ -165,33 +173,50 @@ export default function DiapersPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s diaper log</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={() => quickLogMutation.mutate()}
-            disabled={quickLogMutation.isPending}
-            className="rounded-full bg-diapers hover:bg-diapers/90 text-white touch-target h-12 px-5 text-sm font-bold"
-          >
-            {quickLogMutation.isPending ? "..." : "💩 Normal"}
-          </Button>
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={() => { resetForm(); setModalOpen(true); }}
-            className="rounded-full border-diapers text-diapers hover:bg-diapers/10 touch-target w-12 h-12"
-          >
-            <Plus className="w-6 h-6" />
-          </Button>
-        </div>
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={() => { resetForm(); setModalOpen(true); }}
+          className="rounded-full border-diapers text-diapers hover:bg-diapers/10 touch-target w-12 h-12"
+          aria-label="Log diaper with details"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+      </div>
+
+      {/* Three quick-add buttons: wet, dirty, both — for one-tap logging */}
+      <div className="grid grid-cols-3 gap-2">
+        <Button
+          onClick={() => quickLogMutation.mutate("wet")}
+          disabled={quickLogMutation.isPending}
+          className="bg-diapers/15 hover:bg-diapers/25 text-diapers font-bold touch-target h-14 rounded-xl"
+        >
+          💧 Wet
+        </Button>
+        <Button
+          onClick={() => quickLogMutation.mutate("dirty")}
+          disabled={quickLogMutation.isPending}
+          className="bg-diapers hover:bg-diapers/90 text-white font-bold touch-target h-14 rounded-xl"
+        >
+          💩 Dirty
+        </Button>
+        <Button
+          onClick={() => quickLogMutation.mutate("both")}
+          disabled={quickLogMutation.isPending}
+          className="bg-diapers/40 hover:bg-diapers/50 text-diapers-foreground font-bold touch-target h-14 rounded-xl"
+        >
+          💧💩 Both
+        </Button>
       </div>
 
       <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Diaper Log" : "Log Diaper"}</DialogTitle>
-            <DialogDescription>Log a wet or dirty diaper with optional details.</DialogDescription>
+            <DialogDescription>Log a wet, dirty, or both diaper with optional details.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Wet / Dirty toggle */}
+            {/* Wet / Dirty / Both toggle */}
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -209,10 +234,18 @@ export default function DiapersPage() {
               >
                 💩 Dirty
               </Button>
+              <Button
+                type="button"
+                variant={diaperType === "both" ? "default" : "outline"}
+                onClick={() => setDiaperType("both")}
+                className="flex-1 touch-target h-11"
+              >
+                💧💩 Both
+              </Button>
             </div>
 
-            {/* Color + Consistency — only for dirty */}
-            {diaperType === "dirty" && (
+            {/* Color + Consistency — for dirty or both */}
+            {diaperType !== "wet" && (
               <>
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold">Color <span className="text-destructive">*</span></Label>
@@ -287,8 +320,8 @@ export default function DiapersPage() {
                   toast({ title: "Please set a time", variant: "destructive" });
                   return;
                 }
-                if (diaperType === "dirty" && (!selectedColor || !selectedConsistency)) {
-                  toast({ title: "Please fill in all required fields", description: "Color and consistency are required for dirty diapers.", variant: "destructive" });
+                if (diaperType !== "wet" && (!selectedColor || !selectedConsistency)) {
+                  toast({ title: "Please fill in all required fields", description: "Color and consistency are required for dirty or both diapers.", variant: "destructive" });
                   return;
                 }
                 saveMutation.mutate();
@@ -370,13 +403,13 @@ export default function DiapersPage() {
             <CardContent className="p-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Badge variant="secondary" className="text-xs">
-                  {log.diaper_type === "wet" ? "💧 wet" : "💩 dirty"}
+                  {log.diaper_type === "wet" ? "💧 wet" : log.diaper_type === "both" ? "💧💩 both" : "💩 dirty"}
                 </Badge>
                 <div>
                   <p className="text-sm font-semibold">
                     {log.diaper_type === "wet"
                       ? "Wet diaper"
-                      : [log.color, log.consistency].filter(Boolean).join(" · ") || "Dirty diaper"}
+                      : [log.color, log.consistency].filter(Boolean).join(" · ") || (log.diaper_type === "both" ? "Wet + dirty diaper" : "Dirty diaper")}
                   </p>
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
                 </div>

@@ -302,12 +302,6 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
               </button>
             )}
           </div>
-          <button
-            onClick={() => setView("skills")}
-            className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline px-1"
-          >
-            Or ask an expert →
-          </button>
         </div>
       );
     }

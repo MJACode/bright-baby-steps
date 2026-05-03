@@ -8,7 +8,6 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { Footprints, UserCircle, BarChart3, Home, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
-import { QuickLogFAB } from "@/components/QuickLogFAB";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { cn } from "@/lib/utils";
 
@@ -89,9 +88,6 @@ export default function DashboardLayout() {
 
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}
-
-      {/* Quick log FAB — only on Home and More; the dedicated log pages have their own log entry UIs */}
-      {!isOnboarding && (location.pathname === "/dashboard" || location.pathname === "/dashboard/more") && <QuickLogFAB />}
     </div>
   );
 }

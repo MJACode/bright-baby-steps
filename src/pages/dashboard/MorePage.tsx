@@ -1,9 +1,9 @@
 // "More" — secondary navigation surfaced from the bottom tab bar.
 // Lists everything that doesn't have a dedicated bar tab: Records,
-// Cry insights, Weekly insights, Profile.
+// Growth, Cry insights, Weekly insights, Profile.
 
 import { Link } from "react-router-dom";
-import { ChevronRight, FileText, Ear, TrendingUp, User, Sparkles } from "lucide-react";
+import { ChevronRight, FileText, Ear, TrendingUp, User, Sparkles, Scale } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -24,6 +24,14 @@ const tools: ToolItem[] = [
     description: "Medical, insurance, financial, EI",
     icon: FileText,
     path: "/dashboard/records",
+    colorClass: "bg-primary/10",
+    iconClass: "text-primary",
+  },
+  {
+    label: "Growth",
+    description: "Weight and height tracking",
+    icon: Scale,
+    path: "/dashboard/growth",
     colorClass: "bg-primary/10",
     iconClass: "text-primary",
   },
