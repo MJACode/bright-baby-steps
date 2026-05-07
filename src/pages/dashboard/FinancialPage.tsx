@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { KidSavingsComparison } from "@/components/financial/KidSavingsComparison";
 
 function getFinancialPrompt(ageMonths: number) {
   if (ageMonths < 3) return {
@@ -23,7 +24,7 @@ function getFinancialPrompt(ageMonths: number) {
     icon: PiggyBank, key: "fin-prompt-3-6",
   };
   if (ageMonths < 12) return {
-    message: "Consider opening a 529 college savings account — the earlier you start, the more time it has to grow.",
+    message: "Time to think about saving for your child — see the comparison below for 529, UGMA/UTMA, custodial Roth, ESA, and HYSA.",
     icon: GraduationCap, key: "fin-prompt-6-12",
   };
   return {
@@ -200,6 +201,8 @@ export default function FinancialPage() {
           </CardContent>
         </Card>
       )}
+
+      <KidSavingsComparison />
 
       {/* Checklist */}
       {isLoading ? (
