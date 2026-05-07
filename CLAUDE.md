@@ -53,3 +53,95 @@ The following items have first-pass implementations but **must be reviewed and a
 - **COPPA verifiable parental consent** — the current checkbox on signup may not meet the FTC's "verifiable parental consent" standard for apps collecting data on under-13s. Legal should assess whether a stronger mechanism (e.g. email confirmation loop, credit card verification) is required.
 - **Data Processing Agreement with AI provider** — confirm a DPA is in place since child health data (name, age, health notes, milestones) is sent to the AI service for processing.
 - **`delete_user_account()` RPC** (`supabase/migrations/20260416000000_compliance_security.sql`) — the SECURITY DEFINER function deletes from `auth.users`; verify with Supabase support that this approach is supported in your deployment tier and test thoroughly in staging before enabling in production.
+
+---
+
+## Workflow Orchestration
+
+### 1. Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### 2. Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### 3. Self-Improvement Loop
+- After ANY correction from the user: update tasks/lessons.md with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### 4. Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### 5. Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes -- don't over-engineer
+- Challenge your own work before presenting it
+
+### 6. Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests -- then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Task Management
+
+1. **Plan First**: Write plan to tasks/todo.md with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to tasks/todo.md
+6. **Capture Lessons**: Update tasks/lessons.md after corrections
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Only touch what's necessary. No side effects with new bugs.
+
+---
+
+## `.claude/` Folder Reference
+
+Canonical layout of every file Claude Code reads. CLAUDE.md is advisory; hooks are deterministic; skills load on demand.
+
+```
+your-project/                       Project root for Claude Code
+├── CLAUDE.md                       Project rules, < 200 lines
+├── CLAUDE.local.md                 Personal overrides, gitignored
+├── .gitignore                      Ignores *.local.* and secrets
+├── .mcp.json                       MCP servers, MUST be at root
+└── .claude/                        Where Claude Code looks first
+    ├── hooks/                      Deterministic, fires every time
+    │   ├── PostToolUse.sh          Auto-commit NM-XXX after edits
+    │   ├── SessionStart.sh         Load project context on startup
+    │   └── PreCompact.sh           Save state before compaction
+    ├── commands/                   Slash commands (legacy, still works)
+    │   └── ship.md                 Build, lint, deploy in one go
+    ├── skills/                     Canonical home, model-invokable
+    │   ├── carousel/               Auto-factory for IG carousels
+    │   └── drill/                  Generates pacing drills
+    ├── agents/                     Subagents, isolated context window
+    │   ├── code-reviewer.md        Reviews diffs, returns summary
+    │   ├── researcher.md           Web fetch and synthesis
+    │   └── log-analyzer.md         Parses errors and crash logs
+    ├── output-styles/              Custom response formats
+    │   └── terse.md                Code-only, no prose
+    ├── plugins/                    First-class in 2026, /plugin:command
+    │   └── vercel/                 Bundled commands, agents, MCP
+    ├── rules/                      Path-scoped, loads on glob match
+    │   └── api.md                  Loads only for src/api/**
+    ├── statusline                  Bottom-bar display config
+    ├── settings.json               Permissions, model, hook registry
+    └── settings.local.json         Personal, gitignored
+```

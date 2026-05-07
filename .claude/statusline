@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Status line — printed in the bottom bar of Claude Code.
+# Wire it up in .claude/settings.json with: "statusLine": { "type": "command", "command": ".claude/statusline" }
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$repo_root"
+
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '-')"
+dirty_count="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+dirty_marker=""
+[ "$dirty_count" -gt 0 ] && dirty_marker=" *${dirty_count}"
+
+printf 'graceflare | %s%s' "$branch" "$dirty_marker"
