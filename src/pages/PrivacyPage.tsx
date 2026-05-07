@@ -89,7 +89,7 @@ export default function PrivacyPage() {
             <li><strong>Withdraw consent:</strong> withdraw consent at any time without affecting the lawfulness of prior processing.</li>
             <li><strong>EU/EEA users</strong> may also lodge a complaint with their local data protection authority.</li>
           </ul>
-          <p className="mt-2"><strong>How to exercise a right:</strong> email <a href="mailto:privacy@graceflare.com" className="text-primary underline">privacy@graceflare.com</a>. We will acknowledge within 10 days and respond within 30 days (extendable once by up to 60 days for complex requests, with notice). We verify your identity by confirming control of the email on file plus one additional account-specific data point; we will not ask for more information than is necessary to verify.</p>
+          <p className="mt-2"><strong>How to exercise a right:</strong> use the <Link to="/rights-request" className="text-primary underline">privacy request form</Link>, or email <a href="mailto:privacy@graceflare.com" className="text-primary underline">privacy@graceflare.com</a>. We will acknowledge within 10 days and respond within 30 days (extendable once by up to 60 days for complex requests, with notice). We verify your identity by confirming control of the email on file plus one additional account-specific data point; we will not ask for more information than is necessary to verify.</p>
         </section>
 
         <section>

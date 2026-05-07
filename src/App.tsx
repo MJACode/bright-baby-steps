@@ -30,6 +30,7 @@ import TermsPage from "./pages/TermsPage";
 import FAQPage from "./pages/FAQPage";
 import VpcConfirmPage from "./pages/VpcConfirmPage";
 import SubprocessorsPage from "./pages/SubprocessorsPage";
+import RightsRequestPage from "./pages/RightsRequestPage";
 
 const queryClient = new QueryClient();
 
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/faq" element={<FAQPage />} />
             <Route path="/subprocessors" element={<SubprocessorsPage />} />
+            <Route path="/rights-request" element={<RightsRequestPage />} />
             <Route path="/vpc-confirm" element={<VpcConfirmPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
