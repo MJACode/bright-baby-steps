@@ -2,18 +2,20 @@ import { useState, useEffect } from "react";
 import { Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useGeoBlock } from "@/hooks/useGeoBlock";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Baby } from "lucide-react";
+import { Baby, Globe } from "lucide-react";
 
 type View = "login" | "signup" | "forgot" | "pending";
 
 export default function Auth() {
   const { session, loading } = useAuth();
+  const geo = useGeoBlock();
   const [view, setView] = useState<View>("login");
   const [verifying, setVerifying] = useState(
     () => !!new URLSearchParams(window.location.search).get("code")
@@ -143,16 +145,20 @@ export default function Auth() {
     }
   };
 
+  const isGeoBlocked = view === "signup" && geo.blocked;
+
   const titles: Record<View, string> = {
     login: "Welcome back",
-    signup: "Create your account",
+    signup: isGeoBlocked ? "Not yet in your region" : "Create your account",
     forgot: "Reset your password",
     pending: "Check your inbox",
   };
 
   const descriptions: Record<View, string> = {
     login: "Sign in to access your baby tracking dashboard",
-    signup: "Start tracking your baby's growth and speech development",
+    signup: isGeoBlocked
+      ? "Grace Flare is not currently available in the EEA or UK."
+      : "Start tracking your baby's growth and speech development",
     forgot: "Enter your email and we'll send you a reset link.",
     pending: `We sent a confirmation link to ${email}. Click it to activate your account.`,
   };
@@ -196,6 +202,33 @@ export default function Auth() {
                   Start over
                 </button>
               </p>
+            </div>
+          ) : view === "signup" && geo.blocked ? (
+            <div className="text-center space-y-4">
+              <div className="mx-auto w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+                <Globe className="w-5 h-5 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Not yet available in your region</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Grace Flare is not currently offered in the European Economic Area or the
+                  United Kingdom. We're working on it. In the meantime,{" "}
+                  <a href="mailto:support@graceflare.com" className="text-primary underline">
+                    let us know
+                  </a>{" "}
+                  if you'd like to be notified when we launch in your country.
+                </p>
+              </div>
+              <button
+                onClick={() => setView("login")}
+                className="text-xs text-primary font-medium hover:underline"
+              >
+                Already have an account? Sign in
+              </button>
+            </div>
+          ) : view === "signup" && geo.loading ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="animate-pulse text-xs text-muted-foreground">Checking availability…</div>
             </div>
           ) : (
           <>
