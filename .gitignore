@@ -33,8 +33,10 @@ android/
 *.sln
 *.sw?
 
-# Claude Code harness state (per-developer, not shared)
-.claude/
+# Claude Code — share team-level config; ignore per-developer overrides
+.claude/settings.local.json
+CLAUDE.local.md
+*.local.md
 
 # Supabase CLI local cache (per-developer)
 supabase/.temp/
