@@ -8,8 +8,10 @@ import { useChildren } from "@/hooks/useChildren";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
 import { VpcGateMessage } from "@/components/VpcGateMessage";
+import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
 
 interface ChildData {
   id: string;
@@ -46,9 +48,28 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
   const [isExpected, setIsExpected] = useState(false);
   const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [checkingVpc, setCheckingVpc] = useState(false);
+  const [directNoticeAck, setDirectNoticeAck] = useState<boolean | null>(null);
 
   const { addChild, updateChild } = useChildren();
   const { user } = useAuth();
+
+  // Read whether the parent has already acknowledged the COPPA direct notice
+  // (16 CFR § 312.4(c)). Required only when adding a new child; edit mode skips.
+  useEffect(() => {
+    if (!open || isEditMode || !user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("coppa_direct_notice_acknowledged_at")
+        .eq("id", user.id)
+        .maybeSingle<{ coppa_direct_notice_acknowledged_at: string | null }>();
+      if (!cancelled) setDirectNoticeAck(!!data?.coppa_direct_notice_acknowledged_at);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEditMode, user]);
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -120,11 +141,21 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
 
   const isFutureDob = dob ? new Date(dob) > new Date() : false;
 
+  const showDirectNotice = !isEditMode && user && directNoticeAck === false;
+
   const content = (
     <DialogContent className="max-w-sm mx-auto">
       <DialogHeader>
         <DialogTitle className="font-display">{isEditMode ? "Edit Child" : "Add a Child"}</DialogTitle>
       </DialogHeader>
+      {showDirectNotice ? (
+        <CoppaDirectNotice
+          userId={user.id}
+          onAcknowledged={() => setDirectNoticeAck(true)}
+          onCancel={() => setOpen(false)}
+        />
+      ) : (
+      <>
       {vpcStatus && vpcStatus.kind !== "completed" && (
         <div className="mb-2">
           <VpcGateMessage status={vpcStatus} onDismiss={() => setVpcStatus(null)} />
@@ -171,6 +202,8 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
           {checkingVpc ? "Verifying parental consent…" : (addChild.isPending || updateChild.isPending) ? "Saving..." : isEditMode ? "Save Changes" : "Add Child"}
         </Button>
       </form>
+      </>
+      )}
     </DialogContent>
   );
 

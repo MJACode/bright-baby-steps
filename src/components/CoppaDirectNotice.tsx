@@ -1,0 +1,104 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { Shield } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+
+interface Props {
+  userId: string;
+  onAcknowledged: () => void;
+  onCancel?: () => void;
+}
+
+export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
+  const [saving, setSaving] = useState(false);
+
+  const handleConfirm = async () => {
+    setSaving(true);
+    const { error } = await supabase
+      .from("profiles")
+      .update({ coppa_direct_notice_acknowledged_at: new Date().toISOString() })
+      .eq("id", userId);
+    setSaving(false);
+    if (error) {
+      toast({ title: "Could not save your acknowledgement.", description: error.message, variant: "destructive" });
+      return;
+    }
+    onAcknowledged();
+  };
+
+  return (
+    <div className="space-y-4 text-sm leading-relaxed text-foreground/85">
+      <div className="flex items-center gap-2 text-foreground">
+        <Shield className="w-5 h-5 text-primary" />
+        <h3 className="font-display font-semibold">Before we add your child</h3>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        U.S. children's privacy law (COPPA, 16 CFR § 312.4(c)) requires us to give
+        you a direct notice before collecting information about your child.
+        Please read this and confirm to continue.
+      </p>
+
+      <div className="space-y-3 text-xs">
+        <div>
+          <p className="font-medium text-foreground">What we collect</p>
+          <p className="text-foreground/80">
+            Your child's name, date of birth, optional gender and photo, and any
+            tracking data you log (sleep, feeding, diaper, allergens, milestones,
+            illnesses, medications, supplements).
+          </p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">How we use it</p>
+          <p className="text-foreground/80">
+            To provide tracking features, generate AI-assisted briefings and chat
+            responses, and produce charts and milestone progress for you. We do
+            not use your child's data to train AI models or for advertising.
+          </p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">Who we share it with</p>
+          <p className="text-foreground/80">
+            Only the operational service providers listed at{" "}
+            <Link to="/subprocessors" target="_blank" className="text-primary underline">
+              /subprocessors
+            </Link>{" "}
+            (currently Supabase for hosting, Anthropic for AI, Resend for email),
+            each under a written data-processing agreement, plus any co-parent or
+            caregiver you explicitly invite via Partner Access. We do not sell or
+            share your child's data for advertising.
+          </p>
+        </div>
+        <div>
+          <p className="font-medium text-foreground">Your rights as a parent</p>
+          <p className="text-foreground/80">
+            You can review, delete, or stop further collection of your child's
+            data at any time. Manage from Profile → Manage Child Data, or email{" "}
+            <a href="mailto:coppa@graceflare.com" className="text-primary underline">
+              coppa@graceflare.com
+            </a>
+            .
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Full details are in our{" "}
+        <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>.
+      </p>
+
+      <div className="flex gap-2 pt-1">
+        {onCancel && (
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={saving}>
+            Not now
+          </Button>
+        )}
+        <Button type="button" className="flex-1" onClick={handleConfirm} disabled={saving}>
+          {saving ? "Saving…" : "I'm the parent or legal guardian — continue"}
+        </Button>
+      </div>
+    </div>
+  );
+}
