@@ -108,3 +108,40 @@ The following items have first-pass implementations but **must be reviewed and a
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Only touch what's necessary. No side effects with new bugs.
+
+---
+
+## `.claude/` Folder Reference
+
+Canonical layout of every file Claude Code reads. CLAUDE.md is advisory; hooks are deterministic; skills load on demand.
+
+```
+your-project/                       Project root for Claude Code
+├── CLAUDE.md                       Project rules, < 200 lines
+├── CLAUDE.local.md                 Personal overrides, gitignored
+├── .gitignore                      Ignores *.local.* and secrets
+├── .mcp.json                       MCP servers, MUST be at root
+└── .claude/                        Where Claude Code looks first
+    ├── hooks/                      Deterministic, fires every time
+    │   ├── PostToolUse.sh          Auto-commit NM-XXX after edits
+    │   ├── SessionStart.sh         Load project context on startup
+    │   └── PreCompact.sh           Save state before compaction
+    ├── commands/                   Slash commands (legacy, still works)
+    │   └── ship.md                 Build, lint, deploy in one go
+    ├── skills/                     Canonical home, model-invokable
+    │   ├── carousel/               Auto-factory for IG carousels
+    │   └── drill/                  Generates pacing drills
+    ├── agents/                     Subagents, isolated context window
+    │   ├── code-reviewer.md        Reviews diffs, returns summary
+    │   ├── researcher.md           Web fetch and synthesis
+    │   └── log-analyzer.md         Parses errors and crash logs
+    ├── output-styles/              Custom response formats
+    │   └── terse.md                Code-only, no prose
+    ├── plugins/                    First-class in 2026, /plugin:command
+    │   └── vercel/                 Bundled commands, agents, MCP
+    ├── rules/                      Path-scoped, loads on glob match
+    │   └── api.md                  Loads only for src/api/**
+    ├── statusline                  Bottom-bar display config
+    ├── settings.json               Permissions, model, hook registry
+    └── settings.local.json         Personal, gitignored
+```
