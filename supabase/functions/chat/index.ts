@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS, type PersonaKey } from "../_shared/personas.ts";
+
+// Free tier: 10 expert messages / UTC day. Flare+ (subscriptions.tier='plus',
+// status in ('active','trialing')) is unlimited. Keep in sync with the
+// FREE_DAILY_LIMIT constant in src/hooks/useChatUsage.tsx.
+const FREE_DAILY_LIMIT = 10;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +52,64 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("tier, status")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const isPremium =
+      sub?.tier === "plus" && (sub?.status === "active" || sub?.status === "trialing");
+
+    if (!isPremium) {
+      const startOfDayUtc = new Date();
+      startOfDayUtc.setUTCHours(0, 0, 0, 0);
+
+      const { count: usedToday } = await supabase
+        .from("chat_messages")
+        .select("id, chat_conversations!inner(user_id)", { count: "exact", head: true })
+        .eq("chat_conversations.user_id", userId)
+        .eq("role", "user")
+        .gte("created_at", startOfDayUtc.toISOString());
+
+      const used = usedToday ?? 0;
+      if (used >= FREE_DAILY_LIMIT) {
+        return new Response(
+          JSON.stringify({
+            error: "daily_limit_reached",
+            limit: FREE_DAILY_LIMIT,
+            used,
+            upgradeUrl: "/upgrade",
+            message: `You've used all ${FREE_DAILY_LIMIT} free expert messages today. Upgrade to Flare+ for unlimited access.`,
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const { messages, skill, context } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");

@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const HEALTH_SKILLS = new Set(["pediatrician", "slp", "developmental", "nutrition", "sleep"]);
 import { supabase } from "@/integrations/supabase/client";
@@ -12,8 +12,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChildContext } from "@/hooks/useChildContext";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useChatUsage } from "@/hooks/useChatUsage";
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
@@ -56,9 +58,11 @@ type View = "closed" | "skills" | "chat";
 
 export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AIChatWidgetProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const chatHistory = useChatHistory(activeChildId);
   const { data: childContext } = useChildContext(activeChildId);
+  const usage = useChatUsage();
 
   const [view, setView] = useState<View>("closed");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -185,6 +189,20 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
       return;
     }
 
+    if (!usage.isUnlimited && usage.remaining <= 0) {
+      toast({
+        title: "Daily limit reached",
+        description: `You've used all ${usage.limit} free expert messages today. Upgrade to Flare+ for unlimited access.`,
+        variant: "destructive",
+        action: (
+          <ToastAction altText="Upgrade to Flare+" onClick={() => navigate("/upgrade")}>
+            Upgrade
+          </ToastAction>
+        ),
+      });
+      return;
+    }
+
     const updatedMessages = [...messages, userMsg];
     setMessages(updatedMessages);
     setInput("");
@@ -203,7 +221,28 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
         }
       );
 
-      if (!resp.ok) { const errData = await resp.json().catch(() => ({})); throw new Error(errData.error || errData.message || `HTTP ${resp.status}`); }
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        if (resp.status === 429 && errData.error === "daily_limit_reached") {
+          toast({
+            title: "Daily limit reached",
+            description: errData.message ?? `You've used all ${usage.limit} free expert messages today. Upgrade to Flare+ for unlimited access.`,
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => navigate("/upgrade")}
+                className="text-xs font-semibold underline"
+              >
+                Upgrade
+              </button>
+            ),
+          });
+          queryClient.invalidateQueries({ queryKey: ["chat-usage"] });
+          setMessages((prev) => prev.slice(0, -1));
+          return;
+        }
+        throw new Error(errData.error || errData.message || `HTTP ${resp.status}`);
+      }
       if (!resp.body) throw new Error("No response body");
 
       const reader = resp.body.getReader();
@@ -242,6 +281,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
 
       if (convoId && assistantContent) {
         await chatHistory.saveMessages(convoId, [userMsg, { role: "assistant", content: assistantContent }]);
+        queryClient.invalidateQueries({ queryKey: ["chat-usage"] });
       }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : "Something went wrong";
@@ -524,6 +564,27 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
         </Button>
       </div>
 
+      {!usage.isUnlimited && !usage.isLoading && (
+        <button
+          onClick={() => navigate("/upgrade")}
+          className={cn(
+            "w-full flex items-center justify-between gap-2 px-3 py-2 border-b border-border text-xs transition-colors",
+            usage.remaining === 0
+              ? "bg-destructive/10 text-destructive hover:bg-destructive/15"
+              : usage.remaining <= 2
+                ? "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/50"
+                : "bg-muted/60 text-muted-foreground hover:bg-muted",
+          )}
+        >
+          <span className="flex items-center gap-1.5">
+            <Zap className="w-3.5 h-3.5" />
+            {usage.remaining === 0
+              ? `Daily limit reached (${usage.limit}/${usage.limit})`
+              : `${usage.remaining} of ${usage.limit} free expert messages left today`}
+          </span>
+          <span className="font-semibold underline">Upgrade to Flare+</span>
+        </button>
+      )}
       {HEALTH_SKILLS.has(activeSkill) && (
         <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
