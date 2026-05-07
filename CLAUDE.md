@@ -66,23 +66,18 @@ A clause-by-clause legal pre-review (May 2026) has been completed by the in-hous
 **Production deploy status (May 7, 2026):**
 - ✅ All 5 May-2026 migrations applied to live via Supabase MCP (versions 20260507151109 through 20260507151347 in `supabase_migrations.schema_migrations`). Local files in `supabase/migrations/20260507000000_*.sql` through `20260507040000_*.sql` are idempotent — `supabase db push` from local is a no-op against the now-applied schema.
 - ✅ Edge functions `send-vpc-email` and `inactive-account-purge` deployed (both v1, ACTIVE).
-- ⚠️ Pre-existing finding: `app.supabase_url` and `app.service_role_key` are NOT set at the database level on this project, which means the existing cron jobs (`reactivate-nudge-3x-daily`, `check-notifications-every-3h`) plus the new `inactive-account-purge-daily` are silently no-op-ing on every fire. Setting these requires superuser via the SQL editor — see "Remaining manual steps" below.
+- ✅ `app_supabase_url` and `app_service_role_key` stored in Supabase Vault. Cron jobs `inactive-account-purge-daily` and `reactivate-nudge-3x-daily` rescheduled (migration `20260507050000_cron_jobs_use_vault.sql`) to read from `vault.decrypted_secrets` instead of `current_setting()`. Hosted Supabase projects don't grant ALTER DATABASE to the SQL editor role, which is why the original `current_setting()` approach silently failed; Vault is the supported alternative.
+- ⚠️ `check-notifications-every-3h` cron still uses a hardcoded LEGACY anon JWT in its command body. If the JWT secret has been rotated (recommended after the May-2026 service_role leak), that cron is now broken too. Fix is the same pattern: switch to Vault — but the simpler path is to rewrite that cron to call its edge function with the same Vault-based service_role pattern as the other two.
 
 **Remaining manual steps before VPC actually gates production traffic:**
-1. **In the Supabase SQL editor** (logged in as superuser), run:
-   ```sql
-   ALTER DATABASE postgres SET app.supabase_url = 'https://ieuznbvvwdvhtirzwkly.supabase.co';
-   ALTER DATABASE postgres SET app.service_role_key = '<service-role-jwt>';
-   ```
-   This unblocks all three cron jobs (the two pre-existing + the new inactive-purge).
-2. **Set edge-function secrets** in Supabase dashboard → Edge Functions → Secrets:
+1. **Set edge-function secrets** in Supabase dashboard → Edge Functions → Secrets:
    - `RESEND_API_KEY` — from your Resend account.
    - `VPC_FROM_EMAIL` — e.g. `Grace Flare <noreply@graceflare.com>` (must use a Resend-verified domain).
    - `APP_URL` — deployed frontend origin (e.g. `https://graceflare.com`).
-3. **Verify the sending domain on Resend** — DNS records on `graceflare.com` (or whatever sending domain you pick).
-4. **In Supabase Auth → Email → enable "Confirm email"** so signup returns no session until the user clicks the first confirmation link. Without this flip, the first VPC confirmation never fires and `vpc_first_confirmation_at` stays null — meaning email #2 will never go out.
+2. **Verify the sending domain on Resend** — DNS records on `graceflare.com` (or whatever sending domain you pick).
+3. **In Supabase Auth → Email → enable "Confirm email"** so signup returns no session until the user clicks the first confirmation link. Without this flip, the first VPC confirmation never fires and `vpc_first_confirmation_at` stays null — meaning email #2 will never go out.
 
-After steps 1–4, the gate works as: signup → confirm email #1 (Supabase) → 24h dwell → tap Add Child → `send-vpc-email` fires email #2 → click `/vpc-confirm?token=...` → `vpc_completed_at` stamped → child INSERT unlocked. Existing accounts are grandfathered (`vpc_method = 'grandfathered_v1_checkbox'`) by the migration.
+After these three steps, the gate works as: signup → confirm email #1 (Supabase) → 24h dwell → tap Add Child → `send-vpc-email` fires email #2 → click `/vpc-confirm?token=...` → `vpc_completed_at` stamped → child INSERT unlocked. Existing accounts are grandfathered (`vpc_method = 'grandfathered_v1_checkbox'`) by the migration.
 - A `BEFORE INSERT` trigger on `public.children` enforces the gate at the DB level for the primary parent (`parent_id = auth.uid()`); partner inserts go through the existing `has_partner_access` path.
 - **Direct-notice modal at Add Child** — required by 16 CFR § 312.4(c). Implemented in `src/components/CoppaDirectNotice.tsx`, wired into `AddChildDialog.tsx` (shown once per profile before the form) and `OnboardingWizard.tsx` (shown on step 5 before child INSERT). Acknowledgement stamps `profiles.coppa_direct_notice_acknowledged_at`.
 - **Partner-invitee consent moment** — implemented in `supabase/migrations/20260507020000_partner_invitee_consent.sql` + `src/pages/AcceptInvite.tsx`. The accept flow now requires the invitee to check a Privacy/Terms consent box and the `accept_partner_invitation` RPC stamps `partner_access.consent_acknowledged_at`. Existing `partner_access` rows are backfilled with `created_at`.
