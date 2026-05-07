@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { PartnerStep } from "@/components/onboarding/PartnerStep";
 import { LivePairingScreen } from "@/components/onboarding/LivePairingScreen";
 import type { SyncChoice } from "@/components/onboarding/PartnerRolePicker";
+import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
+import { VpcGateMessage } from "@/components/VpcGateMessage";
 
 type PrimaryInterest = "sleep_feeding" | "developmental" | "speech" | "financial";
 
@@ -76,6 +78,7 @@ export function OnboardingWizard() {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [pairingActive, setPairingActive] = useState(false);
+  const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [state, setState] = useState<WizardState>({
     name: "",
     dob: "",
@@ -92,6 +95,14 @@ export function OnboardingWizard() {
     if (!user) return;
     setSaving(true);
     try {
+      // COPPA email-plus VPC gate. Block child INSERT until vpc_completed_at is set.
+      const status = await checkAndRequestVpc(user.id);
+      if (status.kind !== "completed") {
+        setVpcStatus(status);
+        setSaving(false);
+        return;
+      }
+
       const { error: childError } = await supabase.from("children").insert({
         parent_id: user.id,
         name: state.name.trim(),
@@ -278,6 +289,11 @@ export function OnboardingWizard() {
             <p className="text-xs text-muted-foreground px-1 min-h-[2.5rem]">
               {INTEREST_OPTIONS.find((o) => o.id === state.interest)?.preview}
             </p>
+          )}
+          {vpcStatus && vpcStatus.kind !== "completed" && (
+            <div className="mt-4">
+              <VpcGateMessage status={vpcStatus} onDismiss={() => setVpcStatus(null)} />
+            </div>
           )}
           <div className="mt-auto pt-6 flex gap-3">
             <Button variant="outline" onClick={() => setStep(4)} className="flex-1">Back</Button>

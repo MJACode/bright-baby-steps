@@ -119,9 +119,11 @@ export default function Auth() {
             data_consent_version: "1.0",
           }).eq("id", signUpData.user.id);
         }
-        // With email confirmation disabled, signUp returns a session immediately.
-        // onAuthStateChange will fire and redirect to /dashboard automatically.
-        // Only show the pending view when confirmation is required (no session yet).
+        // First half of COPPA email-plus VPC. Requires Supabase Auth's "Confirm
+        // email" setting to be ON; when it is, signUpData.session is null and we
+        // flip to the "pending" view. The auth.users trigger
+        // sync_email_confirmation_to_vpc mirrors email_confirmed_at into
+        // profiles.vpc_first_confirmation_at when the parent clicks the link.
         if (!signUpData.session) {
           setView("pending");
         }

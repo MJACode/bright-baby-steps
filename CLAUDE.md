@@ -64,7 +64,13 @@ A clause-by-clause legal pre-review (May 2026) has been completed by the in-hous
 - Confirm the 30-day backup window matches the actual Supabase project rotation.
 
 **Implementation gaps (FTC Section 5 exposure — copy promises something the code does NOT yet deliver):**
-- **VPC email-plus flow** — `PrivacyPage.tsx` § 6 promises email-plus before any child-data write. Currently signup is a single checkbox + `data_consent_given_at` timestamp. Build: `vpc_method`, `vpc_first_confirmation_at`, `vpc_second_confirmation_at`, `vpc_completed_at` columns on `profiles`; `supabase/functions/send-vpc-email/` edge function; RLS on `children` blocking insert until `vpc_completed_at IS NOT NULL`.
+- **VPC email-plus flow** — code is now in place but **requires four manual deploy steps** before it actually gates anything in production:
+  1. Apply migration `20260507000000_vpc_email_plus.sql` (`supabase db push` or via the dashboard).
+  2. Deploy edge function `supabase/functions/send-vpc-email/` and set secrets `RESEND_API_KEY`, `VPC_FROM_EMAIL` (e.g. `Grace Flare <noreply@graceflare.com>`), and `APP_URL` (the deployed frontend origin).
+  3. Verify `graceflare.com` (or whatever sending domain you choose) on Resend.
+  4. **In Supabase Auth → Email Auth → enable "Confirm email"** so signup returns no session until the user clicks the first confirmation link. Without this flip, the first confirmation never fires and `vpc_first_confirmation_at` stays null — meaning email #2 will never go out.
+- After the four deploy steps, the gate works as: signup → confirm email #1 (Supabase) → 24h dwell → tap Add Child → `send-vpc-email` fires email #2 → click `/vpc-confirm?token=...` → `vpc_completed_at` stamped → child INSERT unlocked. Existing accounts are grandfathered (`vpc_method = 'grandfathered_v1_checkbox'`) by the migration.
+- A `BEFORE INSERT` trigger on `public.children` enforces the gate at the DB level for the primary parent (`parent_id = auth.uid()`); partner inserts go through the existing `has_partner_access` path.
 - **Direct-notice modal at Add Child** — required by 16 CFR § 312.4(c). Extend `AddChildDialog.tsx` per "Reuse Before You Build". Record `coppa_direct_notice_acknowledged_at`.
 - **Partner-invitee consent moment** — invited co-parent needs their own consent confirmation. Add to the existing `partner_invitations` flow.
 - **Subprocessor list page** — `PrivacyPage.tsx` § 5 and `FAQPage.tsx` link to `/subprocessors` but the route does not yet exist. Create `src/pages/SubprocessorsPage.tsx` and add it to the router.

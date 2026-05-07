@@ -5,8 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useChildren } from "@/hooks/useChildren";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
+import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
+import { VpcGateMessage } from "@/components/VpcGateMessage";
 
 interface ChildData {
   id: string;
@@ -41,8 +44,11 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
   const [isPremature, setIsPremature] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [isExpected, setIsExpected] = useState(false);
+  const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
+  const [checkingVpc, setCheckingVpc] = useState(false);
 
   const { addChild, updateChild } = useChildren();
+  const { user } = useAuth();
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -59,6 +65,22 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !dob) return;
+
+    // COPPA email-plus VPC gate: only required when CREATING a new child.
+    // Edit mode bypasses (the child already exists; the original VPC covers it).
+    if (!isEditMode && user) {
+      setCheckingVpc(true);
+      try {
+        const status = await checkAndRequestVpc(user.id);
+        if (status.kind !== "completed") {
+          setVpcStatus(status);
+          setCheckingVpc(false);
+          return;
+        }
+      } finally {
+        setCheckingVpc(false);
+      }
+    }
 
     // Determine if the entered date is in the future → auto-set is_expected
     const isDateInFuture = new Date(dob) > new Date();
@@ -103,6 +125,11 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       <DialogHeader>
         <DialogTitle className="font-display">{isEditMode ? "Edit Child" : "Add a Child"}</DialogTitle>
       </DialogHeader>
+      {vpcStatus && vpcStatus.kind !== "completed" && (
+        <div className="mb-2">
+          <VpcGateMessage status={vpcStatus} onDismiss={() => setVpcStatus(null)} />
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Name</Label>
@@ -140,8 +167,8 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
             <p className="text-xs text-muted-foreground">Used to calculate adjusted age for milestones.</p>
           </div>
         )}
-        <Button type="submit" className="w-full touch-target" disabled={addChild.isPending || updateChild.isPending}>
-          {(addChild.isPending || updateChild.isPending) ? "Saving..." : isEditMode ? "Save Changes" : "Add Child"}
+        <Button type="submit" className="w-full touch-target" disabled={addChild.isPending || updateChild.isPending || checkingVpc}>
+          {checkingVpc ? "Verifying parental consent…" : (addChild.isPending || updateChild.isPending) ? "Saving..." : isEditMode ? "Save Changes" : "Add Child"}
         </Button>
       </form>
     </DialogContent>
