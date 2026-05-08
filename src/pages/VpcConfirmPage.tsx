@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
-import { CheckCircle2, AlertCircle, Clock, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 type Status =
   | { kind: "loading" }
   | { kind: "success"; alreadyCompleted?: boolean }
-  | { kind: "too_soon"; waitUntil?: string }
   | { kind: "expired" }
   | { kind: "missing_first" }
   | { kind: "error"; message: string };
@@ -36,7 +35,7 @@ export default function VpcConfirmPage() {
         return;
       }
 
-      const result = data as { ok: boolean; already_completed?: boolean; error?: string; wait_until?: string } | null;
+      const result = data as { ok: boolean; already_completed?: boolean; error?: string } | null;
 
       if (!result) {
         setStatus({ kind: "error", message: "Empty response from server." });
@@ -52,9 +51,6 @@ export default function VpcConfirmPage() {
         case "invalid_or_expired_token":
         case "invalid_token":
           setStatus({ kind: "expired" });
-          break;
-        case "too_soon":
-          setStatus({ kind: "too_soon", waitUntil: result.wait_until });
           break;
         case "first_confirmation_missing":
           setStatus({ kind: "missing_first" });
@@ -97,21 +93,6 @@ export default function VpcConfirmPage() {
             >
               Continue to Grace Flare
             </button>
-          </div>
-        )}
-
-        {status.kind === "too_soon" && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Clock className="w-8 h-8 text-amber-600" />
-              <h1 className="font-display text-xl font-bold">A little early</h1>
-            </div>
-            <p className="text-sm text-foreground/80 leading-relaxed">
-              U.S. children's-privacy law (COPPA) asks us to wait 24 hours between
-              your first email confirmation and this second one. Please come back
-              {status.waitUntil ? ` after ${new Date(status.waitUntil).toLocaleString()}` : " in a bit"}{" "}
-              and click the link again.
-            </p>
           </div>
         )}
 

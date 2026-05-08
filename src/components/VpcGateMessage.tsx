@@ -1,4 +1,4 @@
-import { AlertCircle, Clock, MailCheck } from "lucide-react";
+import { AlertCircle, MailCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { VpcGateStatus } from "@/lib/vpcGate";
 
@@ -7,10 +7,9 @@ interface Props {
   onDismiss?: () => void;
 }
 
-function formatWaitUntil(iso: string): string {
+function formatExpiresIn(iso: string): string {
   const d = new Date(iso);
-  const now = Date.now();
-  const ms = d.getTime() - now;
+  const ms = d.getTime() - Date.now();
   if (ms <= 0) return "now";
   const hours = Math.ceil(ms / (60 * 60 * 1000));
   return `in about ${hours} hour${hours === 1 ? "" : "s"}`;
@@ -40,28 +39,6 @@ export function VpcGateMessage({ status, onDismiss }: Props) {
     );
   }
 
-  if (status.kind === "too_soon") {
-    return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
-        <div className="flex items-start gap-3">
-          <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-medium text-sm text-amber-900">Come back tomorrow</p>
-            <p className="text-xs text-amber-800 leading-relaxed">
-              Children's-privacy law requires a 24-hour wait between your first email confirmation
-              and the second, before we can store data about a child. Please come back{" "}
-              <strong>{formatWaitUntil(status.waitUntil)}</strong> ({new Date(status.waitUntil).toLocaleString()})
-              and tap Add Child again — we'll email you the second confirmation link then.
-            </p>
-          </div>
-        </div>
-        {onDismiss && (
-          <Button variant="outline" size="sm" onClick={onDismiss} className="w-full">Close</Button>
-        )}
-      </div>
-    );
-  }
-
   if (status.kind === "second_email_sent") {
     return (
       <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-3">
@@ -72,7 +49,7 @@ export function VpcGateMessage({ status, onDismiss }: Props) {
             <p className="text-xs text-emerald-800 leading-relaxed">
               We just sent the second parental-consent email to your inbox. Click the link to
               finish verifying your account; once that's done, return here and add your child.
-              The link expires {formatWaitUntil(status.expiresAt)}.
+              The link expires {formatExpiresIn(status.expiresAt)}.
             </p>
           </div>
         </div>

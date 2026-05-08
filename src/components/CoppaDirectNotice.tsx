@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -13,12 +16,25 @@ interface Props {
 
 export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
   const [saving, setSaving] = useState(false);
+  const [signedName, setSignedName] = useState("");
+  const [isGuardian, setIsGuardian] = useState(false);
+  const [isAdult, setIsAdult] = useState(false);
+
+  const trimmedName = signedName.trim();
+  const isNameValid = trimmedName.split(/\s+/).filter(Boolean).length >= 2;
+  const canSubmit = isGuardian && isAdult && isNameValid && !saving;
 
   const handleConfirm = async () => {
+    if (!canSubmit) return;
     setSaving(true);
+    const now = new Date().toISOString();
     const { error } = await supabase
       .from("profiles")
-      .update({ coppa_direct_notice_acknowledged_at: new Date().toISOString() })
+      .update({
+        coppa_direct_notice_acknowledged_at: now,
+        coppa_attestation_signed_name: trimmedName,
+        coppa_attestation_signed_at: now,
+      })
       .eq("id", userId);
     setSaving(false);
     if (error) {
@@ -86,8 +102,47 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
 
       <p className="text-xs text-muted-foreground">
         Full details are in our{" "}
-        <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>.
+        <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>
+        {" and "}
+        <Link to="/terms" target="_blank" className="text-primary underline">Terms</Link>.
       </p>
+
+      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+        <div className="space-y-1">
+          <Label htmlFor="coppa-signed-name" className="text-xs font-medium">
+            Type your full legal name as your digital signature
+          </Label>
+          <Input
+            id="coppa-signed-name"
+            value={signedName}
+            onChange={(e) => setSignedName(e.target.value)}
+            placeholder="e.g. Jane A. Doe"
+            autoComplete="name"
+            disabled={saving}
+            aria-invalid={signedName.length > 0 && !isNameValid}
+          />
+        </div>
+
+        <label className="flex items-start gap-2 text-xs cursor-pointer">
+          <Checkbox
+            checked={isGuardian}
+            onCheckedChange={(v) => setIsGuardian(v === true)}
+            disabled={saving}
+            className="mt-0.5"
+          />
+          <span>I am the parent or legal guardian of this child.</span>
+        </label>
+
+        <label className="flex items-start gap-2 text-xs cursor-pointer">
+          <Checkbox
+            checked={isAdult}
+            onCheckedChange={(v) => setIsAdult(v === true)}
+            disabled={saving}
+            className="mt-0.5"
+          />
+          <span>I am 18 years of age or older.</span>
+        </label>
+      </div>
 
       <div className="flex gap-2 pt-1">
         {onCancel && (
@@ -95,8 +150,8 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
             Not now
           </Button>
         )}
-        <Button type="button" className="flex-1" onClick={handleConfirm} disabled={saving}>
-          {saving ? "Saving…" : "I'm the parent or legal guardian — continue"}
+        <Button type="button" className="flex-1" onClick={handleConfirm} disabled={!canSubmit}>
+          {saving ? "Saving…" : "Sign and continue"}
         </Button>
       </div>
     </div>
