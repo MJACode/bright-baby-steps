@@ -21,7 +21,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">1. Who we are</h2>
-          <p>Grace Flare (graceflare.com) is operated by <strong>Grace Flare LLC</strong>, a Delaware limited liability company, located at <strong>[REGISTERED AGENT ADDRESS — TBD]</strong>. For privacy questions, contact <a href="mailto:privacy@graceflare.com" className="text-primary underline">privacy@graceflare.com</a>. For children's-privacy (COPPA) requests, contact <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a>. General support: <a href="mailto:support@graceflare.com" className="text-primary underline">support@graceflare.com</a>.</p>
+          <p>Grace Flare (graceflare.com) is operated by <strong>Grace Flare LLC</strong>, a Delaware limited liability company, with a registered office c/o Northwest Registered Agent at <strong>8 The Green, Suite A, Dover, DE 19901</strong>. For privacy questions, contact <a href="mailto:privacy@graceflare.com" className="text-primary underline">privacy@graceflare.com</a>. For children's-privacy (COPPA) requests, contact <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a>. General support: <a href="mailto:support@graceflare.com" className="text-primary underline">support@graceflare.com</a>.</p>
         </section>
 
         <section>
