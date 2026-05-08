@@ -22,7 +22,7 @@ const FAQS = [
   },
   {
     q: "Is my child's data sent to third parties?",
-    a: "Your child's activity data is processed by our AI service provider to generate chat responses, daily briefings, and weekly insights. It is not sold to advertisers or shared with other third parties. See our Privacy Policy for details on our AI data processor relationship.",
+    a: "Your child's activity data is processed by Anthropic, our AI service provider, to generate chat responses, daily briefings, and weekly insights, under a written Data Processing Addendum that prohibits training on your data. We do not sell your data and we do not share it for cross-context behavioural advertising. We also use a small number of operational service providers (hosting, transactional email) listed at /subprocessors. See our Privacy Policy for full details.",
   },
   {
     q: "Can I share access with my partner or caregiver?",
@@ -30,7 +30,7 @@ const FAQS = [
   },
   {
     q: "How do I delete my account and data?",
-    a: "Go to Profile → Delete Account. This will permanently delete your account and all tracking data for all children. This action cannot be undone.",
+    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our 30-day backup-rotation cycle. Anthropic deletes its copy of your AI inputs and outputs within 30 days. We send a confirmation email when deletion completes. This action cannot be undone. See § 8 of our Privacy Policy for full detail.",
   },
   {
     q: "Is Grace Flare suitable if my child has a diagnosed medical condition?",
@@ -38,7 +38,7 @@ const FAQS = [
   },
   {
     q: "Who can I contact with questions or concerns?",
-    a: "Email us at support@graceflare.com.",
+    a: "General support: support@graceflare.com. Privacy questions: privacy@graceflare.com. Children's-privacy (COPPA) requests: coppa@graceflare.com.",
   },
 ];
 

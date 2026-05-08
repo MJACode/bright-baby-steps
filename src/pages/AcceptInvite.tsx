@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { Users, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Users, CheckCircle, XCircle, Loader2, ShieldCheck } from "lucide-react";
 import { ROLE_COPY, type PartnerRole } from "@/lib/partnerInvite";
 
 export default function AcceptInvite() {
@@ -15,6 +17,7 @@ export default function AcceptInvite() {
   const [status, setStatus] = useState<"loading" | "ready" | "accepted" | "error" | "expired" | "self">("loading");
   const [invite, setInvite] = useState<any>(null);
   const [accepting, setAccepting] = useState(false);
+  const [consentAcknowledged, setConsentAcknowledged] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -113,7 +116,50 @@ export default function AcceptInvite() {
                   You've been invited to share access to a baby tracking account. Accept to view and log data together.
                 </p>
               )}
-              <Button onClick={acceptInvite} disabled={accepting} className="w-full gap-2">
+
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-left space-y-2">
+                <div className="flex items-center gap-2 text-foreground">
+                  <ShieldCheck className="w-4 h-4 text-primary" />
+                  <p className="text-xs font-medium">What you'll have access to</p>
+                </div>
+                <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4 leading-relaxed">
+                  <li>The child's name, date of birth, photo, and prematurity status.</li>
+                  <li>All sleep, feeding, diaper, allergen, milestone, illness, medication, and supplement records the family logs.</li>
+                  <li>AI-generated briefings, weekly insights, and chat that use the child's data.</li>
+                </ul>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  By accepting, you become a co-controller of this child's data alongside the inviting parent.
+                  We do not sell or share data for advertising. Full details:{" "}
+                  <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>
+                  {" · "}
+                  <Link to="/subprocessors" target="_blank" className="text-primary underline">Subprocessors</Link>
+                  .
+                </p>
+              </div>
+
+              <div className="flex items-start gap-2.5 text-left">
+                <Checkbox
+                  id="partnerConsent"
+                  checked={consentAcknowledged}
+                  onCheckedChange={(checked) => setConsentAcknowledged(checked === true)}
+                  className="mt-0.5"
+                />
+                <Label
+                  htmlFor="partnerConsent"
+                  className="text-xs text-muted-foreground font-normal leading-snug cursor-pointer"
+                >
+                  I confirm I am a parent, legal guardian, or invited caregiver of this child, and I agree to the{" "}
+                  <Link to="/terms" target="_blank" className="text-primary underline">Terms of Service</Link>{" "}
+                  and{" "}
+                  <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>.
+                </Label>
+              </div>
+
+              <Button
+                onClick={acceptInvite}
+                disabled={accepting || !consentAcknowledged}
+                className="w-full gap-2"
+              >
                 {accepting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                 Accept Invite
               </Button>

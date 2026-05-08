@@ -45,14 +45,48 @@ Before creating a new component, hook, utility, or migration, check whether some
 
 ## Legal Review Required
 
-The following items have first-pass implementations but **must be reviewed and approved by legal counsel before public launch**:
+A clause-by-clause legal pre-review (May 2026) has been completed by the in-house `legal` agent and the resulting redlines have been applied to `PrivacyPage.tsx`, `TermsPage.tsx`, and `FAQPage.tsx`. Both legal pages still carry a "Draft — pending legal review" badge — keep it until outside counsel signs off.
 
-- **Privacy Policy** (`src/pages/PrivacyPage.tsx`) — especially the COPPA section, AI data processor relationship, data retention periods, and right-to-deletion language. Both pages carry a "Draft — pending legal review" badge until cleared.
-- **Terms of Service** (`src/pages/TermsPage.tsx`) — liability limitations, "not medical advice" language, acceptable use, governing law/jurisdiction.
-- **FAQ support email** (`src/pages/FAQPage.tsx`) — confirm the correct contact address before launch.
-- **COPPA verifiable parental consent** — the current checkbox on signup may not meet the FTC's "verifiable parental consent" standard for apps collecting data on under-13s. Legal should assess whether a stronger mechanism (e.g. email confirmation loop, credit card verification) is required.
-- **Data Processing Agreement with AI provider** — confirm a DPA is in place since child health data (name, age, health notes, milestones) is sent to the AI service for processing.
-- **`delete_user_account()` RPC** (`supabase/migrations/20260416000000_compliance_security.sql`) — the SECURITY DEFINER function deletes from `auth.users`; verify with Supabase support that this approach is supported in your deployment tier and test thoroughly in staging before enabling in production.
+**Locked decisions (May 2026):**
+- Legal entity: **Grace Flare LLC**, Delaware. Postal address still `[REGISTERED AGENT ADDRESS — TBD]` placeholder in `PrivacyPage.tsx` § 1 and `TermsPage.tsx` § 14 — fill before launch.
+- COPPA Verifiable Parental Consent method: **email-plus** (confirm-link + 24h second-confirmation email). Currently described in `PrivacyPage.tsx` § 6 but **NOT YET IMPLEMENTED** in code.
+- AI provider: **Anthropic**, 30-day abuse-monitoring window, no training. DPA must be on file before launch.
+- Liability cap: greater of $100 or fees paid in last 12 months (`TermsPage.tsx` § 9).
+- Governing law: Delaware (`TermsPage.tsx` § 12). Venue: New Castle County, DE.
+- Dispute resolution: AAA consumer arbitration with class-action waiver and 30-day opt-out (`TermsPage.tsx` § 11). Informal-resolution + opt-out emails go to `legal@graceflare.com`.
+- EU/UK: **geo-block** at signup for v1; no Art. 27 representative appointed.
+- Inactive-account auto-purge: 24 months (`PrivacyPage.tsx` § 8).
+- Backup retention: 30 days (`PrivacyPage.tsx` § 8). Verify Supabase project tier matches.
+
+**Pending counsel sign-off before public launch:**
+- Outside counsel review of `PrivacyPage.tsx` and `TermsPage.tsx` end-to-end.
+- Confirm AAA arbitration + class-action-waiver enforceability in every state where users sign up.
+- Confirm the 30-day backup window matches the actual Supabase project rotation.
+
+**Production deploy status (May 7, 2026):**
+- ✅ All 5 May-2026 migrations applied to live via Supabase MCP (versions 20260507151109 through 20260507151347 in `supabase_migrations.schema_migrations`). Local files in `supabase/migrations/20260507000000_*.sql` through `20260507040000_*.sql` are idempotent — `supabase db push` from local is a no-op against the now-applied schema.
+- ✅ Edge functions `send-vpc-email` and `inactive-account-purge` deployed (both v1, ACTIVE).
+- ✅ `app_supabase_url` and `app_service_role_key` stored in Supabase Vault. Cron jobs `inactive-account-purge-daily` and `reactivate-nudge-3x-daily` rescheduled (migration `20260507050000_cron_jobs_use_vault.sql`) to read from `vault.decrypted_secrets` instead of `current_setting()`. Hosted Supabase projects don't grant ALTER DATABASE to the SQL editor role, which is why the original `current_setting()` approach silently failed; Vault is the supported alternative.
+- ⚠️ `check-notifications-every-3h` cron still uses a hardcoded LEGACY anon JWT in its command body. If the JWT secret has been rotated (recommended after the May-2026 service_role leak), that cron is now broken too. Fix is the same pattern: switch to Vault — but the simpler path is to rewrite that cron to call its edge function with the same Vault-based service_role pattern as the other two.
+
+**Remaining manual steps before VPC actually gates production traffic:**
+1. **Set edge-function secrets** in Supabase dashboard → Edge Functions → Secrets:
+   - `RESEND_API_KEY` — from your Resend account.
+   - `VPC_FROM_EMAIL` — e.g. `Grace Flare <noreply@graceflare.com>` (must use a Resend-verified domain).
+   - `APP_URL` — deployed frontend origin (e.g. `https://graceflare.com`).
+2. **Verify the sending domain on Resend** — DNS records on `graceflare.com` (or whatever sending domain you pick).
+3. **In Supabase Auth → Email → enable "Confirm email"** so signup returns no session until the user clicks the first confirmation link. Without this flip, the first VPC confirmation never fires and `vpc_first_confirmation_at` stays null — meaning email #2 will never go out.
+
+After these three steps, the gate works as: signup → confirm email #1 (Supabase) → 24h dwell → tap Add Child → `send-vpc-email` fires email #2 → click `/vpc-confirm?token=...` → `vpc_completed_at` stamped → child INSERT unlocked. Existing accounts are grandfathered (`vpc_method = 'grandfathered_v1_checkbox'`) by the migration.
+- A `BEFORE INSERT` trigger on `public.children` enforces the gate at the DB level for the primary parent (`parent_id = auth.uid()`); partner inserts go through the existing `has_partner_access` path.
+- **Direct-notice modal at Add Child** — required by 16 CFR § 312.4(c). Implemented in `src/components/CoppaDirectNotice.tsx`, wired into `AddChildDialog.tsx` (shown once per profile before the form) and `OnboardingWizard.tsx` (shown on step 5 before child INSERT). Acknowledgement stamps `profiles.coppa_direct_notice_acknowledged_at`.
+- **Partner-invitee consent moment** — implemented in `supabase/migrations/20260507020000_partner_invitee_consent.sql` + `src/pages/AcceptInvite.tsx`. The accept flow now requires the invitee to check a Privacy/Terms consent box and the `accept_partner_invitation` RPC stamps `partner_access.consent_acknowledged_at`. Existing `partner_access` rows are backfilled with `created_at`.
+- **Subprocessor list page** — `src/pages/SubprocessorsPage.tsx` is now live at `/subprocessors`, listing Supabase, Anthropic, and Resend. Update the file when subprocessors change and email subscribers 30 days in advance per Privacy § 5.
+- **Rights-request inbox + 30-day SLA** — `supabase/migrations/20260507030000_rights_requests.sql` adds the `rights_requests` audit table with public INSERT and per-requester SELECT RLS. `src/pages/RightsRequestPage.tsx` (linked from PrivacyPage § 7) is the public submit form. v1 triage uses the Supabase dashboard; a custom admin UI and automated acknowledgement email are follow-ups.
+- **Inactive-account auto-purge cron** — `supabase/migrations/20260507040000_inactive_account_purge.sql` refactors the deletion logic into a private `_purge_user_data(uid)` helper, adds the admin-only `purge_inactive_account(uid)` RPC, and schedules `inactive-account-purge-daily` via pg_cron at 02:30 UTC. Edge function `supabase/functions/inactive-account-purge/` runs the two-stage flow: warn at 24-month inactivity, purge 30 days after warning. **Deploy steps**: deploy the edge function and confirm `app.supabase_url` + `app.service_role_key` are set at the database level (same convention as `reactivate-nudge`).
+- **`delete_user_account()` audit** — addressed in `supabase/migrations/20260507010000_audit_delete_user_account.sql`. The RPC now deletes from every parent_id-referencing table (15 records-tables that previously would have caused FK violations on the final profiles delete), then purges Storage objects under `{uid}/` in `feedback-screenshots` and `milestone-photos`, then deletes `profiles` and `auth.users`. **Still pending**: end-to-end test asserting Storage deletion in dev, and confirmation with Supabase support that SECURITY DEFINER `auth.users` deletion is supported on the project's tier. Email-confirmation of completion (Privacy § 8 promise) requires a Resend send-email step from a follow-up edge function — not done yet.
+- **Geo-block EEA/UK at signup** — implemented in `src/lib/geoBlock.ts` + `src/hooks/useGeoBlock.ts`, surfaced in `src/pages/Auth.tsx`. Best-effort client-side IP geolocation via api.country.is. Blocks the signup form only; login still works for any pre-existing EEA/UK account so they can export and delete their data. PrivacyPage § 11 documents the position in plain text as a fallback.
+- **Anthropic DPA verification** — confirm executed DPA covers (a) no-training, (b) 30-day abuse-monitoring max, (c) SCCs (2021/914), (d) breach notification ≤72h. Store the executed PDF and log the date.
 
 ---
 
