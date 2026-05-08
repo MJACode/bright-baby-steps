@@ -26,9 +26,16 @@ export default function Auth() {
     if (!code) return;
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       if (error) {
-        toast.error("This confirmation link is invalid or has expired.");
-        setVerifying(false);
+        // Supabase's /verify endpoint already flipped email_confirmed_at before
+        // redirecting here, so the email is confirmed even when this exchange
+        // fails. The common cause is the link being opened on a different
+        // browser than the one that initiated signup (e.g. Gmail's in-app
+        // browser): PKCE's code_verifier lives in localStorage on the original
+        // device, so the exchange can't complete on the opener. Telling the
+        // user the link "expired" is wrong and scary — point them at sign-in.
+        toast.success("Email confirmed! Please sign in below to continue.");
       }
+      setVerifying(false);
       window.history.replaceState({}, "", window.location.pathname);
     });
   }, []);
