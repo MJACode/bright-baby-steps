@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 export default function TermsPage() {
   return (
@@ -11,10 +10,9 @@ export default function TermsPage() {
 
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Terms of Service</h1>
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-muted-foreground">Last updated: May 2026</p>
-          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Draft — pending legal review</Badge>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Effective: May 8, 2026 · Last reviewed: May 8, 2026
+        </p>
       </div>
 
       <div className="space-y-6 text-sm leading-relaxed text-foreground/80">

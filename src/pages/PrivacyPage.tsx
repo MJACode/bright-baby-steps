@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 export default function PrivacyPage() {
   return (
@@ -11,10 +10,10 @@ export default function PrivacyPage() {
 
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-muted-foreground">Last updated: May 2026</p>
-          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Draft — pending legal review</Badge>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Effective: May 8, 2026 · Last reviewed: May 8, 2026 ·{" "}
+          <Link to="/subprocessors" className="underline">Subprocessors</Link>
+        </p>
       </div>
 
       <div className="space-y-6 text-sm leading-relaxed text-foreground/80">
@@ -50,7 +49,8 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">4. AI processing</h2>
-          <p>Grace Flare uses <strong>Anthropic</strong> as its AI service provider to power chat responses, daily briefings, and weekly insights. The data transmitted to Anthropic is limited to your child's first name, age, and the relevant logged activity needed to answer your prompt. We have a written Data Processing Addendum with Anthropic that contractually prohibits use of your data to train, fine-tune, or improve any general-purpose model. Inputs and outputs are retained by Anthropic for abuse-monitoring purposes for no more than <strong>30 days</strong> and are then deleted. For users in the EU/EEA and UK, transfers to the United States are governed by the European Commission's Standard Contractual Clauses (Decision 2021/914) and the UK International Data Transfer Addendum.</p>
+          <p>Grace Flare uses <strong>Anthropic, PBC</strong> as its AI service provider to power chat responses, daily briefings, weekly insights, voice-note transcription parsing, and (for parents who use the optional photo-milestone feature) photo-based milestone detection. The data transmitted to Anthropic depends on the feature: for chat, briefings, and insights, we send your child's first name, age, and the relevant logged activity needed to answer your prompt; for voice-note parsing, we send the transcript of the note you record; for photo milestone detection, we send a temporary, expiring URL pointing at the photo you uploaded.</p>
+          <p className="mt-2">We have requested a written Data Processing Addendum from Anthropic that we expect to confirm: (a) your data will not be used to train, fine-tune, or improve any general-purpose model; (b) inputs and outputs will be retained by Anthropic for abuse-monitoring purposes for no longer than <strong>30 days</strong> and then deleted; (c) cross-border transfers (including to the United States) will be governed by the European Commission's Standard Contractual Clauses (Decision 2021/914) and the UK International Data Transfer Addendum where applicable; and (d) Anthropic will notify us of any security incident affecting your data without undue delay and in any event within 72 hours of becoming aware. We will update this section to reflect the executed agreement as soon as it is in place; see <Link to="/subprocessors" className="text-primary underline">/subprocessors</Link> for the current execution status.</p>
         </section>
 
         <section>
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
           <p>Grace Flare is a parent-facing service. Accounts are only for adults age 18 or older who are the parent or legal guardian of the child whose data is logged. <strong>Children may not create their own accounts and Grace Flare is not directed to children under 13.</strong></p>
           <p className="mt-2">Because Grace Flare collects personal information <strong>about children under 13</strong> (their name, date of birth, photo, and health observations) from their parents, we follow the U.S. Children's Online Privacy Protection Act (COPPA, 15 U.S.C. § 6501–6506; 16 CFR Part 312):</p>
           <ul className="list-disc pl-5 space-y-1 mt-2">
-            <li><strong>Verifiable Parental Consent.</strong> Before we collect or store identifiable information about your child, we obtain verifiable parental consent using the <strong>"email-plus" method described in 16 CFR § 312.5(b)(2)(ii)</strong>. The process has three steps: (i) at signup, you confirm a unique link sent to the email address on your account; (ii) when you first add a child, you confirm in writing — including a typed-name digital signature — that you are the parent or legal guardian of that child, are at least 18 years old, and have read this Privacy Policy and our <Link to="/terms" className="text-primary underline">Terms</Link>; and (iii) we then send a second, separately-actionable confirmation email to the address on file, which you must click before any child record is unlocked. We retain a dated record of all three steps. You can withdraw consent at any time by deleting the child record or your account, or by emailing <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a>.</li>
+            <li><strong>Verifiable Parental Consent.</strong> Before we collect or store identifiable information about your child, we obtain verifiable parental consent using the <strong>"email-plus" method described in 16 CFR § 312.5(b)(2)(ii)</strong>. The process has three steps: (i) at signup, you confirm a unique link sent to the email address on your account; (ii) when you first add a child, you confirm in writing — including a typed-name digital signature — that you are the parent or legal guardian of that child and are at least 18 years old, after we present a separate direct notice with links to this Privacy Policy and our <Link to="/terms" className="text-primary underline">Terms</Link>; and (iii) we then send a second, separately-actionable confirmation email to the address on file, which you must click before any child record is unlocked. We retain a dated record of all three steps. You can withdraw consent at any time by deleting the child record or your account, or by emailing <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a>.</li>
             <li><strong>Direct notice.</strong> Before you add a child, we show a separate direct notice that summarises what we collect, how we use it, that we do not disclose it to third parties beyond the processors listed in § 5, and your parental rights below — distinct from this general policy.</li>
             <li><strong>Parental rights.</strong> You may at any time (i) review the personal information we have collected about your child, (ii) delete it, and (iii) refuse to permit further collection. Use Profile → Manage Child Data, or email <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a>.</li>
             <li><strong>No conditioning.</strong> We do not require a child to provide more personal information than is reasonably necessary to use a feature.</li>
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">8. Data retention</h2>
-          <p>We retain your data while your account is active. When you delete your account or a child's record, primary database records are removed within <strong>7 days</strong>. Files in object storage are deleted within <strong>30 days</strong>. Encrypted database backups containing the data are overwritten on our standard 30-day backup-rotation cycle and are accessed during that window only for disaster-recovery purposes. AI-provider logs at Anthropic are deleted on the schedule described in § 4 (no more than 30 days). Aggregated, de-identified statistics that contain no personal information may be retained indefinitely.</p>
+          <p>We retain your data while your account is active. When you delete your account or a child's record, primary database records are removed within <strong>7 days</strong>. Files in object storage are deleted within <strong>30 days</strong>. Encrypted database backups containing the data are overwritten on our standard backup-rotation cycle (no longer than 30 days) and are accessed during that window only for disaster-recovery purposes. AI-provider logs at Anthropic are deleted on the schedule described in § 4 (no more than 30 days). Aggregated, de-identified statistics that contain no personal information may be retained indefinitely.</p>
           <p className="mt-2"><strong>Inactive accounts:</strong> if you do not sign in for 24 consecutive months, we will email you a 30-day deletion warning. If you do not sign in within that window, your account and all child records will be deleted on the same schedule above.</p>
         </section>
 
@@ -114,7 +114,7 @@ export default function PrivacyPage() {
           <p><strong>General privacy questions:</strong> <a href="mailto:privacy@graceflare.com" className="text-primary underline">privacy@graceflare.com</a></p>
           <p><strong>Children's privacy / COPPA requests:</strong> <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a></p>
           <p><strong>General support:</strong> <a href="mailto:support@graceflare.com" className="text-primary underline">support@graceflare.com</a></p>
-          <p className="mt-2 text-xs text-muted-foreground">Grace Flare is not currently offered to users in the European Economic Area or the United Kingdom; an EU/UK representative under GDPR Art. 27 is therefore not appointed at this time. If you believe you have signed up from those regions, please contact us so we can address your account.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Grace Flare is not currently offered to users in the European Economic Area or the United Kingdom; an EU/UK representative under GDPR Art. 27 is therefore not appointed at this time. If you believe you have signed up from those regions, please contact us so we can address your account. To apply this geographic restriction, Grace Flare performs a one-time, anonymous IP-country lookup through <a href="https://api.country.is" target="_blank" rel="noopener noreferrer" className="text-primary underline">api.country.is</a> when you visit the signup page. No cookie or persistent identifier is set; the country code is held in your browser session only. See <Link to="/subprocessors" className="text-primary underline">/subprocessors</Link> for details.</p>
         </section>
 
       </div>

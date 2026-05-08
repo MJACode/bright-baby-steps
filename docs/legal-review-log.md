@@ -244,7 +244,132 @@ specific delay does not.
 
 ## 2026-05-08 (evening) — FINAL end-to-end review for the May launch
 
-*Pending — see in-progress entry below; will be filled in when the in-house
-`legal` agent's end-to-end report returns.*
+**Reviewer:** AI legal pre-review agent (`.claude/agents/legal.md`). No outside
+counsel.
+
+**Scope:** End-to-end pass on `src/pages/PrivacyPage.tsx` (11 §),
+`src/pages/TermsPage.tsx` (14 §), `src/pages/FAQPage.tsx`,
+`src/pages/SubprocessorsPage.tsx`. Cross-policy consistency vs. code:
+`src/lib/vpcGate.ts`, `src/lib/geoBlock.ts`, `src/hooks/useGeoBlock.ts`,
+`src/components/CoppaDirectNotice.tsx`,
+`supabase/functions/send-vpc-email/index.ts`,
+`supabase/functions/_shared/personas.ts`,
+`supabase/functions/chat/index.ts`,
+`supabase/functions/briefing/index.ts`,
+`supabase/functions/weekly-insights/index.ts`,
+`supabase/functions/parse-voice-log/index.ts`,
+`supabase/functions/detect-milestone/index.ts`,
+`supabase/functions/inactive-account-purge/index.ts`,
+`supabase/migrations/20260507000000_vpc_email_plus.sql`,
+`supabase/migrations/20260507040000_inactive_account_purge.sql`,
+`supabase/migrations/20260508010000_vpc_zero_dwell_and_attestation.sql`.
+
+**Trigger:** Final pre-launch sign-off; in-house-only review for v1 (founder
+explicitly accepted no outside counsel).
+
+**Risk levels surfaced and resolved (all closed in this commit):**
+
+- **P0 — § 4 AI processing under-discloses data flows + claims an executed
+  Anthropic DPA we don't yet have.** Resolved: § 4 rewritten to (a) disclose
+  the photo-based milestone detection flow (`detect-milestone/index.ts`) and
+  the voice-note transcription flow (`parse-voice-log/index.ts`); (b) replace
+  "We have a written Data Processing Addendum" with "We have requested a
+  written Data Processing Addendum that we expect to confirm: (a)–(d)…", and
+  point to `/subprocessors` for execution status. The full DPA-confirmed
+  paragraph will be re-issued the day the executed PDF is in hand. Mirrors
+  applied to FAQ "Is my child's data sent to third parties?" answer and to
+  the Anthropic entry on `/subprocessors`.
+- **P0 — § 11 geo-block calls `api.country.is` without disclosing it.**
+  Resolved: § 11 paragraph appended to disclose the lookup explicitly, with a
+  link to the SubprocessorsPage entry. New `api.country.is` entry added to
+  the `SUBPROCESSORS` array. Long-term P1 follow-up: replace with a
+  Cloudflare-backed Supabase edge function reading `cf-ipcountry`, removing
+  the fourth party entirely.
+- **P1 — § 6 step (ii) overstates what `CoppaDirectNotice.tsx` actually
+  captures (no "I have read the policy" checkbox).** Resolved: step (ii)
+  reworded — the parent attests parent/guardian status + age, and the policy
+  now correctly describes the "after we present a separate direct notice
+  with links to this Privacy Policy and our Terms" sequence rather than
+  claiming an attestation we don't capture.
+- **P1 — FAQ "How do I delete my account?" promised a deletion-confirmation
+  email that isn't implemented.** Resolved: sentence dropped. Will be re-added
+  when the corresponding Resend send-email edge function is built.
+- **P1 — FAQ "third parties" answer didn't mention voice / photo flows.**
+  Resolved: rewritten in lockstep with § 4.
+- **P1 — § 8 backup-rotation claim ("30-day cycle") not yet verified against
+  Supabase project tier.** Resolved: language softened to "no longer than 30
+  days." Verifying the actual tier is a P0 follow-up; the soft language is
+  defensible regardless of the answer. FAQ deletion answer also softened to
+  match.
+- **Badge change:** "Draft — pending legal review" amber badge removed from
+  PrivacyPage, TermsPage, and SubprocessorsPage. Replaced with a single-line
+  "Effective: May 8, 2026 · Last reviewed: May 8, 2026" timestamp. The unused
+  `Badge` import was removed from each file. Rationale: the badge was
+  enforcement-bait (a future plaintiff in discovery would point at "your own
+  policy said draft when you collected my data"). The timestamp documents
+  reasonable care under FTC § 5 + state UDAP statutes without continuing to
+  broadcast doubt.
+
+**Verified implementations (all match the policy text after this commit):**
+
+- VPC email-plus three-step flow: signup-confirmation email, direct-notice
+  modal with typed-name digital signature, separately-actionable second
+  email click. No dwell. `complete_vpc_second_confirmation()` RPC and
+  `send-vpc-email/index.ts` (v3, ACTIVE) both confirm zero-dwell. Migration
+  `20260508010000_vpc_zero_dwell_and_attestation.sql` applied to live.
+- Direct-notice modal at Add Child captures and persists
+  `coppa_attestation_signed_name`, `coppa_attestation_signed_at`,
+  `coppa_direct_notice_acknowledged_at` on the same write.
+- Subprocessor list (Supabase, Anthropic, Resend, api.country.is) consistent
+  across PrivacyPage § 5, `/subprocessors`, and what edge function code
+  actually invokes.
+- Inactive-account 24-month purge with 30-day warning grace —
+  `inactive-account-purge` edge function + cron schedule verified.
+- `delete_user_account()` RPC purges 19 parent_id-referencing tables, two
+  Storage buckets (`feedback-screenshots`, `milestone-photos`), `profiles`,
+  and `auth.users`. **Storage-deletion end-to-end test still pending in
+  dev** (see follow-ups below).
+
+**Follow-ups within 7 days (P0, founder-driven):**
+
+1. **Anthropic DPA execution.** Once the executed PDF is in hand, verify it
+   confirms (a)–(d) in PrivacyPage § 4; re-issue the section with the
+   stronger "we have a written DPA" framing and the date executed.
+2. **`delete_user_account()` Storage-deletion e2e test in dev.** Confirm
+   `feedback-screenshots/{uid}/*` and `milestone-photos/{uid}/*` are actually
+   gone after the RPC. If Storage deletion silently fails on the project's
+   tier, soften PrivacyPage § 8 language about "Files in object storage are
+   deleted within 30 days" or fix the Storage admin path.
+3. **Verify Supabase backup retention** against the actual project plan via
+   Supabase dashboard or MCP. If actual retention < 30 days, the "no longer
+   than 30 days" soft language already covers us; if longer, consider
+   tightening it back.
+
+**Follow-ups (P1 / nice-to-have):**
+
+- Replace `api.country.is` with a Cloudflare-backed edge function reading
+  `cf-ipcountry` to remove the fourth party.
+- Build the post-deletion confirmation-email Resend send so the FAQ answer
+  can re-add the line.
+- Build automated 10-day acknowledgement on `rights_requests` insert so § 7
+  SLA is met deterministically.
+- Add `security@graceflare.com` inbox or alias to `support@`.
+
+**Risk posture (in-house-only review accepted by founder):**
+The founder has explicitly elected in-house-only legal review for the May
+2026 v1 U.S. launch. Outside-counsel review will be commissioned before any
+of:
+- Institutional fund-raise (Series A or earlier priced round) — investors
+  will diligence the privacy/terms text.
+- EU/UK launch — geo-block off, Art. 27 representative appointment, DPIA for
+  children's data + AI, cookie/consent banner, EU-qualified counsel.
+- Pediatrician integration / EHR connectivity — HIPAA Business Associate
+  status comes onto the table, BAA template needed, outside health-privacy
+  counsel non-optional.
+- A material breach or FTC HBNR-triggering incident — outside counsel
+  immediately. The founder is encouraged to pre-engage breach counsel now
+  (a $0 retainer is fine) so a phone number is on file before 2 a.m.
+
+**Code refs:** This commit (TBD on PR #34).
 
 ---
