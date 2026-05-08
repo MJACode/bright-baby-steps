@@ -1,12 +1,12 @@
-// Sends the second (delayed-confirmation) email for COPPA Verifiable Parental
-// Consent under the email-plus methodology (16 CFR § 312.5(b)(2)(ii)).
+// Sends the second confirmation email for COPPA Verifiable Parental Consent
+// under the email-plus methodology (16 CFR § 312.5(b)(2)(ii)).
 //
 // Flow:
 //   1. Client (the Add Child gate) calls this function with the user's JWT.
 //   2. We verify the user, look up their profile, and require:
 //        - vpc_first_confirmation_at IS NOT NULL
-//        - 24 hours has elapsed since vpc_first_confirmation_at
 //        - vpc_completed_at IS NULL
+//      No minimum dwell is enforced — the regulation does not specify one.
 //   3. We mint a token, write it to profiles.vpc_second_token + expiry,
 //      and email a link to {APP_URL}/vpc-confirm?token=...
 //   4. The user clicks the link. The /vpc-confirm route calls the
@@ -26,7 +26,6 @@ const corsHeaders = {
 };
 
 const TOKEN_TTL_HOURS = 72;
-const MIN_DELAY_HOURS = 24;
 
 function generateToken(): string {
   const bytes = new Uint8Array(32);
@@ -46,9 +45,9 @@ function emailHtml(confirmUrl: string): string {
 <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
   <h1 style="font-size: 20px; margin: 0 0 16px;">Confirm parental consent</h1>
   <p style="font-size: 15px; line-height: 1.5; margin: 0 0 16px;">
-    You signed up for Grace Flare and confirmed your email address yesterday.
-    Before you can add a child profile, U.S. children's-privacy law (COPPA) asks
-    us to confirm a second time that you are the parent or legal guardian.
+    Before you can add a child profile to Grace Flare, U.S. children's-privacy
+    law (COPPA) asks us to confirm a second time, on a separate click, that you
+    are the parent or legal guardian.
   </p>
   <p style="margin: 24px 0;">
     <a href="${confirmUrl}" style="display: inline-block; padding: 12px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: 600;">Confirm parental consent</a>
@@ -68,7 +67,7 @@ function emailText(confirmUrl: string): string {
   return [
     "Confirm parental consent",
     "",
-    "You signed up for Grace Flare and confirmed your email yesterday. Before you can add a child profile, U.S. children's-privacy law (COPPA) asks us to confirm a second time that you are the parent or legal guardian.",
+    "Before you can add a child profile to Grace Flare, U.S. children's-privacy law (COPPA) asks us to confirm a second time, on a separate click, that you are the parent or legal guardian.",
     "",
     `Confirm here: ${confirmUrl}`,
     "",
@@ -122,13 +121,11 @@ serve(async (req) => {
       return jsonResponse({ error: "first_confirmation_required" }, 409);
     }
 
-    const firstAt = new Date(profile.vpc_first_confirmation_at).getTime();
-    const elapsedMs = Date.now() - firstAt;
-    const requiredMs = MIN_DELAY_HOURS * 60 * 60 * 1000;
-    if (elapsedMs < requiredMs) {
-      const waitUntil = new Date(firstAt + requiredMs).toISOString();
-      return jsonResponse({ error: "too_soon", wait_until: waitUntil }, 409);
-    }
+    // No dwell check: 16 CFR § 312.5(b)(2)(ii) does not specify a minimum
+    // delay between the two email confirmations. The "plus" step is the
+    // separately-actionable second click, plus the typed-name attestation
+    // captured in the Add Child direct-notice modal before this function is
+    // invoked.
 
     const token = generateToken();
     const expiresAt = new Date(Date.now() + TOKEN_TTL_HOURS * 60 * 60 * 1000).toISOString();
