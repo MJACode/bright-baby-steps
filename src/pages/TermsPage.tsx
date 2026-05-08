@@ -92,7 +92,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">14. Contact</h2>
-          <p><strong>Grace Flare LLC</strong><br />[REGISTERED AGENT ADDRESS — TBD]<br />Legal: <a href="mailto:legal@graceflare.com" className="text-primary underline">legal@graceflare.com</a><br />Support: <a href="mailto:support@graceflare.com" className="text-primary underline">support@graceflare.com</a></p>
+          <p><strong>Grace Flare LLC</strong><br />c/o Northwest Registered Agent<br />8 The Green, Suite A<br />Dover, DE 19901<br />Legal: <a href="mailto:legal@graceflare.com" className="text-primary underline">legal@graceflare.com</a><br />Support: <a href="mailto:support@graceflare.com" className="text-primary underline">support@graceflare.com</a></p>
         </section>
 
       </div>

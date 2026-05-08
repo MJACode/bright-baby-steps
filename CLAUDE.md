@@ -48,7 +48,7 @@ Before creating a new component, hook, utility, or migration, check whether some
 A clause-by-clause legal pre-review (May 2026) has been completed by the in-house `legal` agent and the resulting redlines have been applied to `PrivacyPage.tsx`, `TermsPage.tsx`, and `FAQPage.tsx`. Both legal pages still carry a "Draft — pending legal review" badge — keep it until outside counsel signs off.
 
 **Locked decisions (May 2026):**
-- Legal entity: **Grace Flare LLC**, Delaware. Postal address still `[REGISTERED AGENT ADDRESS — TBD]` placeholder in `PrivacyPage.tsx` § 1 and `TermsPage.tsx` § 14 — fill before launch.
+- Legal entity: **Grace Flare LLC**, Delaware. Registered office c/o Northwest Registered Agent, 8 The Green, Suite A, Dover, DE 19901 — wired into `PrivacyPage.tsx` § 1 and `TermsPage.tsx` § 14.
 - COPPA Verifiable Parental Consent method: **email-plus** (confirm-link + 24h second-confirmation email). Currently described in `PrivacyPage.tsx` § 6 but **NOT YET IMPLEMENTED** in code.
 - AI provider: **Anthropic**, 30-day abuse-monitoring window, no training. DPA must be on file before launch.
 - Liability cap: greater of $100 or fees paid in last 12 months (`TermsPage.tsx` § 9).
@@ -67,7 +67,7 @@ A clause-by-clause legal pre-review (May 2026) has been completed by the in-hous
 - ✅ All 5 May-2026 migrations applied to live via Supabase MCP (versions 20260507151109 through 20260507151347 in `supabase_migrations.schema_migrations`). Local files in `supabase/migrations/20260507000000_*.sql` through `20260507040000_*.sql` are idempotent — `supabase db push` from local is a no-op against the now-applied schema.
 - ✅ Edge functions `send-vpc-email` and `inactive-account-purge` deployed (both v1, ACTIVE).
 - ✅ `app_supabase_url` and `app_service_role_key` stored in Supabase Vault. Cron jobs `inactive-account-purge-daily` and `reactivate-nudge-3x-daily` rescheduled (migration `20260507050000_cron_jobs_use_vault.sql`) to read from `vault.decrypted_secrets` instead of `current_setting()`. Hosted Supabase projects don't grant ALTER DATABASE to the SQL editor role, which is why the original `current_setting()` approach silently failed; Vault is the supported alternative.
-- ⚠️ `check-notifications-every-3h` cron still uses a hardcoded LEGACY anon JWT in its command body. If the JWT secret has been rotated (recommended after the May-2026 service_role leak), that cron is now broken too. Fix is the same pattern: switch to Vault — but the simpler path is to rewrite that cron to call its edge function with the same Vault-based service_role pattern as the other two.
+- ✅ `check-notifications-every-3h` cron migrated to the Vault-based service_role pattern (migration `20260508000000_check_notifications_cron_vault.sql`, applied to live). Hardcoded LEGACY anon JWT removed; schedule (`0 */3 * * *`) preserved.
 
 **Remaining manual steps before VPC actually gates production traffic:**
 1. **Set edge-function secrets** in Supabase dashboard → Edge Functions → Secrets:
