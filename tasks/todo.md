@@ -155,7 +155,110 @@ Run through the critical flows on-device. Each is a separate gate.
 
 ## App Privacy answer matrix (drafted by claude, edited by you)
 
-> Filled in §8 once claude drafts the table.
+Paste these answers into App Store Connect → App Privacy. Each row is one
+data type; columns map to the App Store Connect questionnaire.
+
+**Tracking declaration**: NO data is used for tracking. No third-party
+ad SDKs, no cross-app linking, no fingerprinting. ATT prompt is therefore
+not required.
+
+| Data type | Collected? | Linked to identity? | Used for tracking? | Purposes | Source |
+| --- | --- | --- | --- | --- | --- |
+| **Contact Info → Email Address** | Yes | Yes | No | App Functionality, Account Management | Supabase `auth.users.email` (account holder) |
+| **Contact Info → Name** | Yes | Yes | No | App Functionality | Optional `full_name` from signup; child name in `children.name` |
+| **Health & Fitness → Health** | Yes | Yes | No | App Functionality, Product Personalization | `sleep_logs`, `feeding_logs`, `diaper_logs`, `child_milestones`, `illness_logs`, `medication_logs`, growth percentile |
+| **Sensitive Info** | No | — | — | — | We collect child DOB + name; Apple's Sensitive Info is narrowly defined (race, religion, biometrics, etc.) and child data is **not** in that set. Disclose under "Other Data" instead. |
+| **User Content → Photos or Videos** | Yes | Yes | No | App Functionality | Milestone photos via `@capacitor/camera`, stored in Supabase Storage `milestone-photos/{uid}/*` |
+| **User Content → Audio Data** | Yes | Yes | No | App Functionality | Voice logs via `@capacitor-community/speech-recognition` → `parse-voice-log` edge function. Audio is transcribed server-side and the audio itself is not retained. |
+| **User Content → Customer Support** | Yes | Yes | No | App Functionality | `FeedbackDialog` screenshots in Supabase Storage `feedback-screenshots/{uid}/*` |
+| **User Content → Other User Content** | Yes | Yes | No | App Functionality, Product Personalization | AI chat history in `chat_conversations` / `chat_messages`. Sent to Anthropic per Privacy § 4 (DPA in place). |
+| **Identifiers → User ID** | Yes | Yes | No | App Functionality | Supabase auth `uid` (UUID) |
+| **Identifiers → Device ID** | No | — | — | — | We don't collect IDFA / IDFV. |
+| **Location → Coarse Location** | Yes | No | No | App Functionality | `geoBlock.ts` calls `api.country.is` once at signup to enforce U.S.-only availability. Country code is not stored — just used in-memory to decide whether to allow signup. **Apple may classify this as not collected since we don't persist it.** If they push back during review, we can recategorize as "not collected." |
+| **Financial Info** | No | — | — | — | The Financial Planning checklist surfaces guidance only. We do not collect SSN, account numbers, or income data. |
+| **Diagnostics → Crash Data** | No | — | — | — | Vercel captures server-side function logs; client-side crashes are not phoned home for v1. |
+| **Diagnostics → Performance Data** | No | — | — | — | Same as above. |
+| **Usage Data → Product Interaction** | No | — | — | — | We do not run product analytics in v1. If Posthog / Mixpanel is added later, update this row. |
+| **Other Data → Other Data Types** | Yes | Yes | No | App Functionality, Product Personalization | Child date of birth, premature flag + due date, primary parenting interest, partner consent metadata. None fits another category cleanly. |
+
+**Privacy Policy URL**: `https://graceflare.com/privacy`
+
+---
+
+## App Store listing copy (drafts by claude, edited by you)
+
+### App name
+**Grace Flare** (30-char max — fits)
+
+### Subtitle (≤ 30 chars)
+Pick one (in priority order, you choose):
+1. `Grow with confidence, day by day` (32 — too long, drop a word)
+2. `Track your baby's first years` (29) ✓
+3. `Sleep, feeding, and milestones` (30) ✓ — most descriptive
+4. `Parenting, organized` (20) — punchiest
+
+### Promotional text (≤ 170 chars, editable any time without resubmission)
+> Grace Flare turns the chaos of new parenthood into a calm, shared system. Track sleep, feeds, and milestones — and ask experts when you need a real answer.
+
+(160 chars)
+
+### Description (≤ 4,000 chars; ~3,000 below leaves room for edits)
+
+```
+Grace Flare is the calm, organized parenting app that grows with your baby — from the first feed to first words.
+
+Built for new and second-time parents who want a real system, not a noisy timeline. Log sleep, feeds, diapers, and milestones in seconds. Get pediatrician-, sleep-, and SLP-informed answers when you need them. Share everything with a co-parent or caregiver — no more "wait, did you feed her at 2?"
+
+WHAT YOU CAN DO
+
+• Log feeds, sleep, and diapers in two taps — or by voice, hands-free
+• Track milestones with photos and a private family timeline
+• Ask the AI advisors anything — pediatrician, sleep, nutrition, SLP, financial, and developmental — and get answers grounded in AAP, CDC, ASHA, and Ellyn Satter guidance
+• Get a personalized Today's Briefing each morning with a wake window, feed plan, and what to watch for
+• Capture first words and sounds in the Word & Sound Journal
+• Share with a co-parent or caregiver, with role-based access
+• Plan ahead with a financial checklist (529, Child Tax Credit, dependent care FSA, childcare cost planning)
+• Export your data anytime — JSON, no lock-in
+• Delete your account in one tap, with a full data purge
+
+PRIVACY YOU CAN ACTUALLY READ
+
+Grace Flare is built for parents in the U.S. We follow COPPA's email-plus verifiable parental consent standard before any child profile is created. We don't sell your data, we don't run third-party ad trackers, and we don't train AI models on your family's data. Read the full policy at graceflare.com/privacy.
+
+NOT MEDICAL ADVICE
+
+Grace Flare provides educational information from peer-reviewed sources. It is not a substitute for medical, developmental, or financial advice from a licensed professional. If you have a health concern about your child, contact your pediatrician.
+
+WHAT WE'RE NOT (YET)
+
+This is our first beta. We are U.S.-only, iPhone-only, and parent-controlled (no kid-facing surface). EU, UK, Android, and pediatrician integrations are on the roadmap.
+
+Made with care by Grace Flare LLC, Delaware. Questions? hello@graceflare.com.
+```
+
+(~1,930 chars — leaves headroom)
+
+### Keywords (≤ 100 chars total, comma-separated, no spaces after commas)
+
+```
+baby tracker,newborn,sleep,feeding,milestones,parenting,nursing,pumping,diaper,coparent,toddler
+```
+
+(95 chars — verify count after any edit. Apple counts the commas. Avoid: "Apple," "iPhone," "iOS," competitor brand names, generic words you don't want to rank on.)
+
+### What's New (release notes for v1.0)
+
+```
+First beta of Grace Flare. Track sleep, feeds, milestones, and growth — and ask the AI advisors when you need a real answer. Share with a co-parent. Export anytime. We'd love your feedback: hello@graceflare.com.
+```
+
+### URLs
+- Support URL: `https://graceflare.com/faq`
+- Marketing URL: `https://graceflare.com`
+- Privacy Policy URL: `https://graceflare.com/privacy`
+
+### Copyright
+`© 2026 Grace Flare LLC`
 
 ---
 
