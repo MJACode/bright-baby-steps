@@ -52,10 +52,10 @@ The five secret values are listed verbatim in `codemagic.yaml` comments.
 
 ### 4. Production domain (you, then claude)
 - [x] Point `graceflare.com` apex + `www` at the Vercel project (DNS A / CNAME records)
-- [ ] Confirm Vercel issues the TLS cert and the deployed app loads at `https://graceflare.com`
-- [ ] Verify Resend sending domain DNS records on `graceflare.com` (SPF / DKIM) — needed for VPC email #2 to actually send
+- [x] Confirm Vercel issues the TLS cert and the deployed app loads at `https://graceflare.com`
+- [x] Verify Resend sending domain DNS records on `graceflare.com` (SPF / DKIM)
 - [ ] Set `VITE_APP_URL = https://graceflare.com` in Codemagic
-- [ ] Add `graceflare://localhost` and `https://graceflare.com/auth/callback` to Supabase Auth → Redirect URLs
+- [x] Add `graceflare://localhost` and `https://graceflare.com/auth/callback` to Supabase Auth → Redirect URLs
 
 ### 5. Trigger the first Codemagic build (you)
 - [ ] Push any commit to `main` (or click "Start new build" in Codemagic)
