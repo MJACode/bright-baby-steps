@@ -47,8 +47,10 @@ The five secret values are listed verbatim in `codemagic.yaml` comments.
 - [ ] (Optional) Verify Capacitor's bundled `PrivacyInfo.xcprivacy` covers UserDefaults / file-timestamp / disk-space reasons
 
 ### 3. iOS app icon set (both)
-- [ ] **You**: provide a single 1024 × 1024 PNG master (no transparency, no rounded corners — Apple rounds them)
-- [ ] **Claude**: generate the full `AppIcon.appiconset` (all required sizes from iPhone notification 20pt up to marketing 1024pt) and add a Codemagic step that drops it into `ios/App/App/Assets.xcassets/` after `npx cap add ios`
+Shipped via PR #39.
+- [x] **Claude**: placeholder icon committed at `assets/icon-only.png` (1024 × 1024 opaque sage-green "GF" monogram). Regeneratable with `python3 scripts/gen-placeholder-icon.py`.
+- [x] **Claude**: `@capacitor/assets` added to `devDependencies`; new Codemagic step "Generate iOS app icon set" runs `npx @capacitor/assets generate --ios` after `cap add ios`, producing the full `AppIcon.appiconset` (every size from 20pt notification through 1024pt marketing).
+- [ ] **You (before Beta App Review)**: replace `assets/icon-only.png` with the real 1024 × 1024 master (opaque, no rounded corners, no transparency). Drop it in at the same path; the next Codemagic build picks it up automatically — no other changes needed.
 
 ### 4. Production domain (you, then claude)
 - [x] Point `graceflare.com` apex + `www` at the Vercel project (DNS A / CNAME records)
