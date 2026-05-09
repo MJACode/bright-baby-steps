@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { differenceInMonths, differenceInWeeks, differenceInDays, isValid, parseISO } from "date-fns";
@@ -26,6 +26,48 @@ interface WizardState {
   interest: PrimaryInterest | null;
   sync: SyncChoice | null;
   inviteCode: string | null;
+}
+
+const EMPTY_STATE: WizardState = {
+  name: "",
+  dob: "",
+  isPremature: null,
+  dueDate: "",
+  interest: null,
+  sync: null,
+  inviteCode: null,
+};
+
+// Draft persistence so a user who clicks the second VPC email link in a new
+// tab — landing back on /dashboard → OnboardingWizard — resumes where they
+// left off instead of restarting at step 1. Keyed by user id so accounts
+// don't collide on a shared browser.
+const draftKey = (uid: string) => `onboarding_draft_${uid}`;
+
+interface Draft { step: number; state: WizardState }
+
+function loadDraft(uid: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(uid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Draft> | null;
+    if (!parsed || typeof parsed.step !== "number" || !parsed.state) return null;
+    return { step: parsed.step, state: { ...EMPTY_STATE, ...parsed.state } };
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(uid: string, draft: Draft) {
+  try {
+    localStorage.setItem(draftKey(uid), JSON.stringify(draft));
+  } catch {
+    // Quota or disabled storage — drafting is best-effort, not load-bearing.
+  }
+}
+
+function clearDraft(uid: string) {
+  try { localStorage.removeItem(draftKey(uid)); } catch { /* ignore */ }
 }
 
 const INTEREST_OPTIONS: { id: PrimaryInterest; label: string; preview: string }[] = [
@@ -76,22 +118,20 @@ export function OnboardingWizard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<number>(() => (user ? loadDraft(user.id)?.step ?? 1 : 1));
   const [saving, setSaving] = useState(false);
   const [pairingActive, setPairingActive] = useState(false);
   const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [needsDirectNotice, setNeedsDirectNotice] = useState(false);
-  const [state, setState] = useState<WizardState>({
-    name: "",
-    dob: "",
-    isPremature: null,
-    dueDate: "",
-    interest: null,
-    sync: null,
-    inviteCode: null,
-  });
+  const [state, setState] = useState<WizardState>(() => (user ? loadDraft(user.id)?.state ?? EMPTY_STATE : EMPTY_STATE));
 
   const TOTAL_STEPS = 5;
+
+  useEffect(() => {
+    if (!user) return;
+    if (step >= 6) return;
+    saveDraft(user.id, { step, state });
+  }, [user, step, state]);
 
   async function saveAndAdvance() {
     if (!user) return;
@@ -137,6 +177,7 @@ export function OnboardingWizard() {
         })
         .eq("id", user.id);
 
+      clearDraft(user.id);
       setStep(6);
     } catch {
       toast({ title: "Something went wrong. Please try again.", variant: "destructive" });

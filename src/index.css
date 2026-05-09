@@ -130,11 +130,6 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Safe area for bottom tab bar */
-  .pb-tab-bar {
-    padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom));
-  }
-
   /* Applied to the tab bar nav itself so it clears the home indicator */
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
@@ -144,5 +139,13 @@
 @layer utilities {
   .touch-target {
     @apply min-h-[48px] min-w-[48px];
+  }
+
+  /* Must live in @layer utilities so it out-ranks Tailwind's py-* on the
+     dashboard <main>. In @layer base it lost to py-5 and the fixed
+     BottomTabBar covered the bottom of every page (e.g. the Delete Account
+     button on /dashboard/profile). */
+  .pb-tab-bar {
+    padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom));
   }
 }

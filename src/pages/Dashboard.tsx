@@ -4,7 +4,7 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Flame, UtensilsCrossed, Moon, Droplets, Brain } from "lucide-react";
+import { Flame, UtensilsCrossed, Moon, Droplets, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
@@ -18,7 +18,7 @@ const QUICK_NAV = [
   { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding/15 text-feeding" },
   { label: "Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep/15 text-sleep" },
   { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers/15 text-diapers" },
-  { label: "Milestone", icon: Brain, path: "/dashboard/milestones", color: "bg-milestones/15 text-milestones" },
+  { label: "Milestone", icon: Star, path: "/dashboard/milestones", color: "bg-milestones/15 text-milestones" },
 ] as const;
 
 
