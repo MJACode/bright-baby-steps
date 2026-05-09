@@ -43,25 +43,27 @@ Before creating a new component, hook, utility, or migration, check whether some
 
 ---
 
-## Legal Review Required
+## Legal Review
 
-A clause-by-clause legal pre-review (May 2026) has been completed by the in-house `legal` agent and the resulting redlines have been applied to `PrivacyPage.tsx`, `TermsPage.tsx`, and `FAQPage.tsx`. Both legal pages still carry a "Draft — pending legal review" badge — keep it until outside counsel signs off.
+**Posture:** in-house-only review accepted by the founder for the May 2026 v1 U.S. launch. No outside counsel. The "Draft — pending legal review" badge was retired on 2026-05-08 in favor of an "Effective: 2026-05-08 · Last reviewed: 2026-05-08" timestamp on PrivacyPage, TermsPage, and SubprocessorsPage. The full review trail (every pass, every redline, every risk level resolved) lives in `docs/legal-review-log.md` — the FTC / state-AG paper trail. **Update that log every time you touch Privacy / Terms / FAQ / consent / retention / deletion / subprocessor / geo-block code.**
+
+Outside counsel will be commissioned before any of: institutional fund-raise, EU/UK launch, pediatrician/EHR integration, or a material breach. See the log for the full risk-posture caveat.
 
 **Locked decisions (May 2026):**
 - Legal entity: **Grace Flare LLC**, Delaware. Registered office c/o Northwest Registered Agent, 8 The Green, Suite A, Dover, DE 19901 — wired into `PrivacyPage.tsx` § 1 and `TermsPage.tsx` § 14.
-- COPPA Verifiable Parental Consent method: **email-plus** (confirm-link + 24h second-confirmation email). Currently described in `PrivacyPage.tsx` § 6 but **NOT YET IMPLEMENTED** in code.
-- AI provider: **Anthropic**, 30-day abuse-monitoring window, no training. DPA must be on file before launch.
+- COPPA Verifiable Parental Consent method: **email-plus**, no dwell. Three steps: signup-confirmation email (#1) → typed-name digital-signature direct-notice modal at Add Child → separately-actionable second confirmation email (#2). Implemented end-to-end across `vpcGate.ts`, `CoppaDirectNotice.tsx`, `send-vpc-email/index.ts` (v3 ACTIVE on live), and migrations `20260507000000_vpc_email_plus.sql` + `20260508010000_vpc_zero_dwell_and_attestation.sql`.
+- AI provider: **Anthropic, PBC**. Five edge functions invoke it: chat, briefing, weekly-insights, parse-voice-log, detect-milestone. PrivacyPage § 4 + `/subprocessors` reflect this. **DPA still pending** — § 4 currently uses "we have requested a DPA we expect to confirm…" language; will be rewritten with "we have a written DPA" framing the day the executed PDF is in hand.
 - Liability cap: greater of $100 or fees paid in last 12 months (`TermsPage.tsx` § 9).
 - Governing law: Delaware (`TermsPage.tsx` § 12). Venue: New Castle County, DE.
 - Dispute resolution: AAA consumer arbitration with class-action waiver and 30-day opt-out (`TermsPage.tsx` § 11). Informal-resolution + opt-out emails go to `legal@graceflare.com`.
-- EU/UK: **geo-block** at signup for v1; no Art. 27 representative appointed.
+- EU/UK: **geo-block** at signup for v1; no Art. 27 representative appointed. The geo-block calls `api.country.is` — disclosed in PrivacyPage § 11 and listed at `/subprocessors`.
 - Inactive-account auto-purge: 24 months (`PrivacyPage.tsx` § 8).
-- Backup retention: 30 days (`PrivacyPage.tsx` § 8). Verify Supabase project tier matches.
+- Backup retention: "no longer than 30 days" (`PrivacyPage.tsx` § 8). Soft language pending verification of actual Supabase project tier.
 
-**Pending counsel sign-off before public launch:**
-- Outside counsel review of `PrivacyPage.tsx` and `TermsPage.tsx` end-to-end.
-- Confirm AAA arbitration + class-action-waiver enforceability in every state where users sign up.
-- Confirm the 30-day backup window matches the actual Supabase project rotation.
+**P0 follow-ups within 7 days (post badge-flip):**
+- ~~**Anthropic DPA execution**~~ ✅ **DONE 2026-05-08.** DPA accepted (template effective Feb 24, 2025). Audit findings logged in `docs/legal-review-log.md` (DPA entry): (a) no-training is implicit via § B.2 + Schedule 1 § B.5 purpose limitation — the explicit "no training" commitment lives in Anthropic's Commercial Terms / Usage Policy and is cited alongside the DPA in Privacy § 4; (b) the DPA does **not** state a 30-day abuse-monitoring cap — Privacy § 4 was softened to "limited period … per Anthropic's Usage Policy" rather than committing to a number we cannot back from contract; (c) SCCs 2021/914 Module Two + Module Three plus UK and Swiss addenda incorporated by reference (Schedule 3); (d) breach notification is **48h**, beating the 72h target. Executed PDF stored outside the repo (1Password / Google Drive).
+- **`delete_user_account()` Storage purge end-to-end test in dev.** Confirm `feedback-screenshots/{uid}/*` and `milestone-photos/{uid}/*` actually purge after the RPC. If Storage deletion silently fails on the project's tier, fix the path or soften PrivacyPage § 8 deletion language.
+- **Verify Supabase backup retention** matches the "no longer than 30 days" policy line.
 
 **Production deploy status (May 7, 2026):**
 - ✅ All 5 May-2026 migrations applied to live via Supabase MCP (versions 20260507151109 through 20260507151347 in `supabase_migrations.schema_migrations`). Local files in `supabase/migrations/20260507000000_*.sql` through `20260507040000_*.sql` are idempotent — `supabase db push` from local is a no-op against the now-applied schema.
@@ -77,7 +79,7 @@ A clause-by-clause legal pre-review (May 2026) has been completed by the in-hous
 2. **Verify the sending domain on Resend** — DNS records on `graceflare.com` (or whatever sending domain you pick).
 3. **In Supabase Auth → Email → enable "Confirm email"** so signup returns no session until the user clicks the first confirmation link. Without this flip, the first VPC confirmation never fires and `vpc_first_confirmation_at` stays null — meaning email #2 will never go out.
 
-After these three steps, the gate works as: signup → confirm email #1 (Supabase) → 24h dwell → tap Add Child → `send-vpc-email` fires email #2 → click `/vpc-confirm?token=...` → `vpc_completed_at` stamped → child INSERT unlocked. Existing accounts are grandfathered (`vpc_method = 'grandfathered_v1_checkbox'`) by the migration.
+After these three steps, the gate works as: signup → confirm email #1 (Supabase) → tap Add Child → typed-name attestation in CoppaDirectNotice modal → `send-vpc-email` fires email #2 immediately → click `/vpc-confirm?token=...` → `vpc_completed_at` stamped → child INSERT unlocked. The 24h dwell that originally lived between #1 and #2 was removed on 2026-05-08 (migration `20260508010000_vpc_zero_dwell_and_attestation.sql`); the typed-name digital signature replaces it as the "plus" step under 16 CFR § 312.5(b)(2)(ii). Existing accounts are grandfathered (`vpc_method = 'grandfathered_v1_checkbox'`) by the original migration.
 - A `BEFORE INSERT` trigger on `public.children` enforces the gate at the DB level for the primary parent (`parent_id = auth.uid()`); partner inserts go through the existing `has_partner_access` path.
 - **Direct-notice modal at Add Child** — required by 16 CFR § 312.4(c). Implemented in `src/components/CoppaDirectNotice.tsx`, wired into `AddChildDialog.tsx` (shown once per profile before the form) and `OnboardingWizard.tsx` (shown on step 5 before child INSERT). Acknowledgement stamps `profiles.coppa_direct_notice_acknowledged_at`.
 - **Partner-invitee consent moment** — implemented in `supabase/migrations/20260507020000_partner_invitee_consent.sql` + `src/pages/AcceptInvite.tsx`. The accept flow now requires the invitee to check a Privacy/Terms consent box and the `accept_partner_invitation` RPC stamps `partner_access.consent_acknowledged_at`. Existing `partner_access` rows are backfilled with `created_at`.

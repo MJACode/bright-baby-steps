@@ -201,6 +201,15 @@ export default function Auth() {
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
+                Already have an account with this email?{" "}
+                <button
+                  onClick={() => setView("login")}
+                  className="text-primary font-medium hover:underline"
+                >
+                  Log in instead
+                </button>
+              </p>
+              <p className="text-xs text-muted-foreground">
                 Wrong email?{" "}
                 <button
                   onClick={() => setView("signup")}

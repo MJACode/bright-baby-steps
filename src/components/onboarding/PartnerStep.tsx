@@ -25,9 +25,9 @@ export function PartnerStep({ babyName, onBack, onContinue }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
 
-  const canContinue =
-    choice?.kind === "skip" ||
-    (choice?.kind === "invite" && inviteCode);
+  const canContinue = choice !== null;
+  const pickedButDeferred =
+    choice?.kind === "invite" && !inviteCode && !sheetOpen;
 
   return (
     <div className="flex flex-col flex-1">
@@ -53,6 +53,12 @@ export function PartnerStep({ babyName, onBack, onContinue }: Props) {
         }}
         babyName={babyName}
       />
+
+      {pickedButDeferred && (
+        <p className="text-[11px] text-muted-foreground px-1 mt-3">
+          No rush — we'll save the invite link in Profile → Partner Access so you can send it whenever you're ready.
+        </p>
+      )}
 
       <div className="mt-auto pt-8 flex gap-3">
         <Button variant="outline" onClick={onBack} className="flex-1">

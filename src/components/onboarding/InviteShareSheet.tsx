@@ -1,11 +1,17 @@
 // src/components/onboarding/InviteShareSheet.tsx
 // Shown right after the user picks a role.
 // Three paths: Text it (share sheet) · Show QR · Copy link.
+//
+// The invite row is created LAZILY — only when the user actually clicks one of
+// the three actions. Opening + closing the drawer without acting writes nothing
+// to partner_invitations. If the user changes their mind and picks a different
+// role after generating an invite for the prior role, the prior unshared
+// invite is cancelled so it doesn't linger as an orphan.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
-import { MessageSquare, QrCode, Link2, Check, Loader2 } from "lucide-react";
+import { MessageSquare, QrCode, Link2, Check } from "lucide-react";
 import {
   createPartnerInvite,
   shareInvite,
@@ -13,6 +19,7 @@ import {
   ROLE_COPY,
   type PartnerRole,
 } from "@/lib/partnerInvite";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +30,8 @@ interface Props {
   role: PartnerRole;
   babyName: string;
   inviterName?: string;
-  /** Called when the invite has been shared/copied — wizard can advance. */
+  /** Called once an invite row exists — wizard captures the code so the user
+   *  can find it later from Profile → Partner Access. */
   onSent?: (inviteCode: string) => void;
 }
 
@@ -37,46 +45,80 @@ export function InviteShareSheet({
   const [code, setCode] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
 
-  // Generate the invite as soon as the sheet opens
-  useEffect(() => {
-    if (!open || url) return;
-    let cancelled = false;
-    (async () => {
-      setStatus("creating");
-      try {
-        const r = await createPartnerInvite({ ownerId, role });
-        if (cancelled) return;
-        setUrl(r.url);
-        setCode(r.inviteCode);
-        setStatus("ready");
-      } catch {
-        if (cancelled) return;
-        setStatus("error");
-        toast({ title: "Couldn't create invite link", variant: "destructive" });
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [open, ownerId, role, url]);
+  // Track whether an in-flight create call is happening so concurrent button
+  // taps don't double-insert.
+  const creatingRef = useRef(false);
 
-  const copy = ROLE_COPY[role];
+  // When the role changes, reset internal state. If the prior role had an
+  // unshared invite row, cancel it in the background so the orphan doesn't
+  // linger in PartnerManagement. Shared invites are left alone — the user may
+  // already have texted the link to the recipient.
+  useEffect(() => {
+    const priorCode = code;
+    const priorWasShared = status === "shared";
+    setStatus("idle");
+    setUrl(null);
+    setCode(null);
+    setShowQr(false);
+    if (priorCode && !priorWasShared) {
+      void supabase
+        .from("partner_invitations")
+        .update({ status: "cancelled" })
+        .eq("invite_code", priorCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role]);
+
+  async function ensureInvite(): Promise<{ url: string; code: string } | null> {
+    if (url && code) return { url, code };
+    if (creatingRef.current) return null;
+    creatingRef.current = true;
+    setStatus("creating");
+    try {
+      const r = await createPartnerInvite({ ownerId, role });
+      setUrl(r.url);
+      setCode(r.inviteCode);
+      setStatus("ready");
+      return { url: r.url, code: r.inviteCode };
+    } catch {
+      setStatus("error");
+      toast({ title: "Couldn't create invite link", variant: "destructive" });
+      return null;
+    } finally {
+      creatingRef.current = false;
+    }
+  }
 
   async function handleShare() {
-    if (!url) return;
-    const ok = await shareInvite({ url, babyName, inviterName, role });
+    const inv = await ensureInvite();
+    if (!inv) return;
+    const ok = await shareInvite({ url: inv.url, babyName, inviterName, role });
     if (ok) {
       setStatus("shared");
       toast({ title: "Invite sent! 🎉" });
-      if (code) onSent?.(code);
+      onSent?.(inv.code);
     }
   }
 
   async function handleCopy() {
-    if (!url) return;
-    await copyInviteUrl(url);
+    const inv = await ensureInvite();
+    if (!inv) return;
+    await copyInviteUrl(inv.url);
     toast({ title: "Link copied" });
     setStatus("shared");
-    if (code) onSent?.(code);
+    onSent?.(inv.code);
   }
+
+  async function handleShowQr() {
+    const inv = await ensureInvite();
+    if (!inv) return;
+    setShowQr(true);
+    setStatus("shared");
+    onSent?.(inv.code);
+  }
+
+  const copy = ROLE_COPY[role];
+  const busy = status === "creating";
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -89,53 +131,46 @@ export function InviteShareSheet({
         </DrawerHeader>
 
         <div className="px-4 pb-6 space-y-3">
-          {status === "creating" && (
-            <div className="flex items-center justify-center py-12 text-muted-foreground gap-2 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Generating invite…
-            </div>
-          )}
-
-          {status === "error" && (
+          {status === "error" ? (
             <div className="text-center py-8 text-sm text-destructive">
               Something went wrong. Please try again.
             </div>
-          )}
-
-          {(status === "ready" || status === "shared") && url && (
+          ) : showQr && url ? (
+            <QrPanel url={url} onBack={() => setShowQr(false)} />
+          ) : (
             <>
-              {!showQr ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <ShareTile
-                      icon={<MessageSquare className="w-5 h-5" />}
-                      title="Text it"
-                      sub="Opens Messages"
-                      primary
-                      onClick={handleShare}
-                    />
-                    <ShareTile
-                      icon={<QrCode className="w-5 h-5" />}
-                      title="Show QR"
-                      sub="If they're with you"
-                      onClick={() => setShowQr(true)}
-                    />
-                  </div>
+              <div className="grid grid-cols-2 gap-2">
+                <ShareTile
+                  icon={<MessageSquare className="w-5 h-5" />}
+                  title="Text it"
+                  sub="Opens Messages"
+                  primary
+                  disabled={busy}
+                  onClick={handleShare}
+                />
+                <ShareTile
+                  icon={<QrCode className="w-5 h-5" />}
+                  title="Show QR"
+                  sub="If they're with you"
+                  disabled={busy}
+                  onClick={handleShowQr}
+                />
+              </div>
 
-                  <button
-                    onClick={handleCopy}
-                    className="w-full flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left"
-                  >
-                    <Link2 className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
-                      {url}
-                    </span>
-                    <span className="text-xs font-medium text-primary">Copy</span>
-                  </button>
-                </>
-              ) : (
-                <QrPanel url={url} onBack={() => setShowQr(false)} />
-              )}
+              <button
+                type="button"
+                onClick={handleCopy}
+                disabled={busy}
+                className="w-full flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left disabled:opacity-50"
+              >
+                <Link2 className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="flex-1 text-xs font-mono text-muted-foreground truncate">
+                  {url ?? "Copy invite link"}
+                </span>
+                <span className="text-xs font-medium text-primary">
+                  {busy ? "…" : "Copy"}
+                </span>
+              </button>
 
               {status === "shared" && (
                 <div className="flex items-center gap-2 text-sm text-primary px-1">
@@ -160,19 +195,22 @@ export function InviteShareSheet({
 }
 
 function ShareTile({
-  icon, title, sub, primary, onClick,
+  icon, title, sub, primary, disabled, onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   sub: string;
   primary?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "min-h-[120px] rounded-2xl p-4 text-left flex flex-col gap-2 transition-colors",
+        "min-h-[120px] rounded-2xl p-4 text-left flex flex-col gap-2 transition-colors disabled:opacity-50",
         primary
           ? "bg-foreground text-background hover:bg-foreground/90"
           : "bg-card text-foreground border border-border hover:bg-muted"

@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 interface Subprocessor {
   name: string;
@@ -22,10 +21,10 @@ const SUBPROCESSORS: Subprocessor[] = [
   },
   {
     name: "Anthropic, PBC",
-    purpose: "AI provider for chat responses, daily briefings, and weekly insights.",
-    dataCategories: "Child first name, age, and the relevant logged activity needed to answer a prompt. Not used to train models. Retained by Anthropic for abuse-monitoring no longer than 30 days, then deleted.",
+    purpose: "AI provider for chat responses, daily briefings, weekly insights, voice-note transcription parsing, and (for parents who use the optional photo-milestone feature) photo-based milestone detection.",
+    dataCategories: "Depends on feature. Chat / briefings / insights: child first name, age, and relevant logged activity needed to answer a prompt. Voice-note parsing: the transcript text of the note. Photo milestone detection: a temporary, expiring URL pointing at the uploaded photo. Not used to train models. Retained by Anthropic for a limited period of safety/abuse review per its Usage Policy, then deleted.",
     location: "United States",
-    transferMechanism: "Direct U.S.-based processing under a written Data Processing Addendum.",
+    transferMechanism: "Direct U.S.-based processing under a Data Processing Addendum accepted May 8, 2026. SCCs Module Two and Module Three (Decision 2021/914) plus UK and Swiss addenda are incorporated for any future cross-border transfer — see Privacy Policy § 4.",
     website: "https://www.anthropic.com",
   },
   {
@@ -35,6 +34,14 @@ const SUBPROCESSORS: Subprocessor[] = [
     location: "United States",
     transferMechanism: "Direct U.S.-based processing.",
     website: "https://resend.com",
+  },
+  {
+    name: "api.country.is (Aiden Bishop)",
+    purpose: "Anonymous, IP-based country lookup at the signup page to apply Grace Flare's EEA / UK geographic restriction. Called once per session.",
+    dataCategories: "Visitor IP address. No cookie or persistent identifier is set. Only the ISO-3166 country code is returned to Grace Flare; the IP is not stored.",
+    location: "United States (Cloudflare-fronted)",
+    transferMechanism: "Single-purpose lookup; no personal data stored or used for further processing.",
+    website: "https://api.country.is",
   },
 ];
 
@@ -47,10 +54,9 @@ export default function SubprocessorsPage() {
 
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Subprocessors</h1>
-        <div className="flex items-center gap-2">
-          <p className="text-xs text-muted-foreground">Last updated: May 2026</p>
-          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Draft — pending legal review</Badge>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Effective: May 8, 2026 · Last reviewed: May 8, 2026
+        </p>
       </div>
 
       <div className="space-y-6 text-sm leading-relaxed text-foreground/80">
