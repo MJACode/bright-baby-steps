@@ -85,7 +85,15 @@ export default function ProfilePage() {
     if (!user) return;
     setDeletingAccount(true);
     try {
-      await supabase.rpc("delete_user_account" as any);
+      // Goes through the delete-account edge function so Storage objects in
+      // feedback-screenshots/{uid}/* and milestone-photos/{uid}/* are
+      // purged via the Storage admin API before the DB rows are removed —
+      // direct DELETE FROM storage.objects is blocked by the project's
+      // protect_delete() trigger.
+      const { error } = await supabase.functions.invoke("delete-account", {
+        method: "POST",
+      });
+      if (error) throw error;
       await signOut();
     } catch {
       toast({ title: "Deletion failed", description: "Contact support@babysteps.app if this continues.", variant: "destructive" });

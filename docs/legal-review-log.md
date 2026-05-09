@@ -494,3 +494,112 @@ SubprocessorsPage.
 **Code refs:** branch `claude/in-house-legal-signoff` — see PR for diff.
 
 ---
+
+## 2026-05-09 — Two production bugs in the deletion code path, fixed
+
+**Reviewer:** in-house (founder + Claude). **Surfaced during smoke-test of the
+inactive-account auto-purge cron and the user-initiated delete-account RPC
+against the live project (ieuznbvvwdvhtirzwkly).**
+
+### What broke
+
+The May-7 deletion migrations (`20260507010000_audit_delete_user_account.sql`,
+`20260507040000_inactive_account_purge.sql`) shipped with two latent bugs that
+neither the in-house legal review nor the type-checker caught:
+
+1. **`supplement_logs` does not exist.** Both `_purge_user_data()` and
+   `delete_user_account()` had `DELETE FROM public.supplement_logs WHERE
+   parent_id = _uid`. The live schema has `public.supplements` (which the
+   helper also deletes from) but no companion logs table. The first time the
+   helper actually runs, Postgres aborts the whole transaction with
+   `relation "public.supplement_logs" does not exist`, so the entire deletion
+   fails — leaving the user partially intact (or, in transactional contexts,
+   completely intact because the failure rolls back). **This means the
+   inactive-account auto-purge cron and every user-initiated delete have been
+   silently failing in production since May 7.**
+2. **Direct `DELETE FROM storage.objects` is blocked.** The hosted Supabase
+   project has a `storage.protect_delete()` trigger that raises
+   `42501: Direct deletion from storage tables is not allowed. Use the
+   Storage API instead.` even from SECURITY DEFINER PL/pgSQL. Both functions
+   had a storage-cleanup block at the end. **This means Privacy § 8's "Files
+   in object storage are deleted within 30 days" promise was being silently
+   broken — even after the supplement_logs bug is fixed, the helper would
+   still fail at the storage step.**
+
+In addition, code review during the fix surfaced two child_id-referencing
+tables (`parent_financial_checklist`, `pediatrician_exports`) whose FK to
+`children(id)` is `ON DELETE NO ACTION` rather than `CASCADE`. These would
+silently FK-violate `DELETE FROM children` for any user who had rows in
+either table — adding a third runtime bug to the same code path.
+
+### How we caught it
+
+While doing a manual smoke-test deletion of a test account
+(`matthew.alksninis@gmail.com` / uid `c6fe6765-…`) via Supabase MCP, the
+`purge_inactive_account()` call raised the supplement_logs error.
+Manually expanding the function body and re-running, the storage block
+raised the protect_delete error. Manual cleanup completed via a single DO
+block (less storage); zero objects were affected because that test user
+had no Storage uploads.
+
+### Architecture fix
+
+Migration `20260509000000_fix_purge_helper_remove_supplement_logs_and_storage.sql`:
+
+- `_purge_user_data()` rewritten DB-only:
+  - Removes the bogus `supplement_logs` line.
+  - Adds explicit deletes for `parent_financial_checklist` (by child_id) and
+    `pediatrician_exports` (by child_id) before `DELETE FROM children`.
+  - Adds explicit deletes for `subscriptions` and `rights_requests`
+    (user_id-referencing tables that the original helper didn't list).
+  - Removes the storage cleanup block — that responsibility moves to the
+    edge functions.
+- `delete_user_account()` simplified to a thin wrapper: assert
+  `auth.uid() IS NOT NULL`, then `PERFORM public._purge_user_data(auth.uid())`.
+
+Storage cleanup moved to edge functions so it goes through the supported
+Storage admin API (HTTP path, not table DELETE):
+
+- **New** `supabase/functions/delete-account/index.ts` (v1, ACTIVE,
+  `verify_jwt=true`): user-initiated path. Verifies caller via JWT, lists +
+  removes `feedback-screenshots/{uid}/*` and `milestone-photos/{uid}/*` via
+  `supabase.storage.from(bucket).remove([...])`, then calls the
+  `delete_user_account` RPC under the same user-scoped client so the RPC's
+  `auth.uid()` reads the right uid. Returns per-bucket deletion counts.
+- **Updated** `supabase/functions/inactive-account-purge/index.ts` (v3,
+  ACTIVE, `verify_jwt=false` because pg_cron invokes it): same `purgeUserStorage`
+  helper, called for each `purge_inactive_account` candidate before the RPC
+  fires.
+- **Client** `src/pages/dashboard/ProfilePage.tsx::handleDeleteAccount`
+  switched from `supabase.rpc("delete_user_account")` to
+  `supabase.functions.invoke("delete-account")`.
+- **CI** `.github/workflows/deploy-functions.yml` extended to deploy both
+  `inactive-account-purge` and `delete-account` so future updates to either
+  go out automatically on push to main. (Both were also deployed manually via
+  Supabase MCP in this pass so live is fixed *now*, not next push.)
+
+### Risk summary
+
+- **Net residual risk: low.** Live is correct as of this commit. Privacy § 8
+  no longer has a silent-failure gap.
+- **What we still owe ourselves:** an automated end-to-end test that
+  actually creates a test user with seeded rows in every parent_id /
+  child_id / user_id table plus a Storage upload, then exercises both
+  deletion paths and asserts zero remaining rows / objects. Tracked as a
+  P1 — without it, the next time someone adds a new records table they may
+  forget to add the parent_id delete here, and we'll only find out the next
+  time the cron actually runs.
+
+### Follow-ups added by this pass
+
+- **P1.** End-to-end deletion test (described above).
+- **P2.** Periodic schema reconciliation: a CI job that compares the tables
+  referenced inside `_purge_user_data()` against the actual list of tables
+  with parent_id / user_id / owner_id columns. Fail the build if the helper
+  is missing one. Cheap insurance against future drift.
+- **P3.** Surface the deletion completion email (Privacy § 8 promise to
+  "email confirmation when complete") — currently neither path sends it.
+
+**Code refs:** branch `claude/fix-purge-helper-storage`.
+
+---
