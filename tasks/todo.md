@@ -51,8 +51,8 @@ The five secret values are listed verbatim in `codemagic.yaml` comments.
 - [ ] **Claude**: generate the full `AppIcon.appiconset` (all required sizes from iPhone notification 20pt up to marketing 1024pt) and add a Codemagic step that drops it into `ios/App/App/Assets.xcassets/` after `npx cap add ios`
 
 ### 4. Production domain (you, then claude)
-- [ ] Point `graceflare.com` apex + `www` at the Vercel project (DNS A / CNAME records)
-- [ ] Confirm Vercel issues the TLS cert and the deployed app loads
+- [x] Point `graceflare.com` apex + `www` at the Vercel project (DNS A / CNAME records)
+- [ ] Confirm Vercel issues the TLS cert and the deployed app loads at `https://graceflare.com`
 - [ ] Verify Resend sending domain DNS records on `graceflare.com` (SPF / DKIM) — needed for VPC email #2 to actually send
 - [ ] Set `VITE_APP_URL = https://graceflare.com` in Codemagic
 - [ ] Add `graceflare://localhost` and `https://graceflare.com/auth/callback` to Supabase Auth → Redirect URLs
