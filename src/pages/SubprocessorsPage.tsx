@@ -22,9 +22,9 @@ const SUBPROCESSORS: Subprocessor[] = [
   {
     name: "Anthropic, PBC",
     purpose: "AI provider for chat responses, daily briefings, weekly insights, voice-note transcription parsing, and (for parents who use the optional photo-milestone feature) photo-based milestone detection.",
-    dataCategories: "Depends on feature. Chat / briefings / insights: child first name, age, and relevant logged activity needed to answer a prompt. Voice-note parsing: the transcript text of the note. Photo milestone detection: a temporary, expiring URL pointing at the uploaded photo. Not used to train models. Retained by Anthropic for abuse-monitoring no longer than 30 days, then deleted.",
+    dataCategories: "Depends on feature. Chat / briefings / insights: child first name, age, and relevant logged activity needed to answer a prompt. Voice-note parsing: the transcript text of the note. Photo milestone detection: a temporary, expiring URL pointing at the uploaded photo. Not used to train models. Retained by Anthropic for a limited period of safety/abuse review per its Usage Policy, then deleted.",
     location: "United States",
-    transferMechanism: "Direct U.S.-based processing. Data Processing Addendum requested; execution pending — see Privacy Policy § 4.",
+    transferMechanism: "Direct U.S.-based processing under a Data Processing Addendum accepted May 8, 2026. SCCs Module Two and Module Three (Decision 2021/914) plus UK and Swiss addenda are incorporated for any future cross-border transfer — see Privacy Policy § 4.",
     website: "https://www.anthropic.com",
   },
   {

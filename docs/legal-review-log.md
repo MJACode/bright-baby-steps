@@ -373,3 +373,124 @@ of:
 **Code refs:** This commit (TBD on PR #34).
 
 ---
+
+## 2026-05-08 — Anthropic DPA accepted; PrivacyPage § 4 + SubprocessorsPage updated (P0 #1 resolved)
+
+**Reviewer:** in-house (founder + Claude legal subagent).
+**Trigger:** founder accepted Anthropic's published Data Processing Addendum
+("DPA") template (template effective date Feb 24, 2025; acceptance date May 8,
+2026). Executed PDF stored outside the repo (1Password / Google Drive). This
+closes the **P0 #1 — Anthropic DPA execution** follow-up that opened with the
+May 8 badge-flip commit.
+
+**Method.** Read the full 20-page DPA text. Audited section-by-section against
+the four points the previous PrivacyPage § 4 draft promised the executed DPA
+would confirm: (a) no-training, (b) ≤ 30-day abuse-monitoring, (c) SCCs
+2021/914, (d) breach ≤ 72h. Cross-checked against the rest of the DPA
+(deletion windows, audit rights, subprocessor cascade, Schedule 2 security
+controls). Then redlined PrivacyPage § 4 and the Anthropic row on
+SubprocessorsPage.
+
+### Audit results vs. Privacy § 4 promises
+
+| Promise in prior § 4 (May 8 draft) | DPA §§ that bear on it | Verdict |
+|---|---|---|
+| (a) Not used to train, fine-tune, or improve general-purpose models | § B.2 (process only on documented instructions) + Schedule 1 § B.5 (permitted purposes: provide Services, security/integrity, debugging — training **not** listed, so excluded by the purpose-limitation principle) | **Implicit, not explicit.** The DPA does not contain a "Anthropic will not train on Customer Data" sentence. The explicit no-training commitment lives in Anthropic's Commercial Terms of Service + published Usage Policy. § 4 was rewritten to cite *both* the DPA's purpose-limitation section *and* the Commercial Terms / Usage Policy as the source of the no-training commitment. Net legal effect for our customers is unchanged; the citation is now honest about which document carries which clause. |
+| (b) Inputs/outputs retained ≤ 30 days for abuse-monitoring, then deleted | § H.1 (deletion within 30 days of termination) + § H.1.b carve-out: retention permitted "to combat harmful use of the Services" — **with no time cap in the DPA itself** | **Gap.** The DPA does not state a 30-day abuse-monitoring cap. The 30-day window is published on Anthropic's Trust Center / Usage Policy but is not incorporated into this DPA, which means Anthropic could in principle revise the Usage Policy and lengthen abuse-monitoring retention without touching our contract. **Action: § 4 was softened from a specific "30 days" number to "a limited period … per Anthropic's then-current Usage Policy, after which they are deleted."** This gives up the marketing pop of a specific number in exchange for not making a contractual claim that the contract does not back. SubprocessorsPage data-categories row was matched. If Anthropic publishes the 30-day cap in a side letter or future DPA revision, § 4 can be retightened. |
+| (c) SCCs Decision 2021/914 + UK IDTA where applicable | § A.8 names "Implementing Decision (EU) 2021/914 of 4 June 2021" verbatim. § I + Schedule 3 incorporate **Module Two (controller→processor) and Module Three (processor→processor)**. Schedule 3 § B incorporates the UK Approved Addendum (S119A(1) Data Protection Act 2018, version B.1.0). Schedule 3 § C adds a Swiss FDPIC addendum. Governing law for the SCCs themselves: Republic of Ireland (Clause 17, Option 1) | **✅ Confirmed and over-delivered.** Both Module Two and Module Three are incorporated (we only strictly need Module Two as a controller transferring to a processor). UK and Swiss addenda are also pre-wired even though we currently geo-block EEA / UK. § 4 was updated to name Module Two + Module Three + UK + Swiss explicitly so that if the geo-block is ever lifted, the policy text already matches the contract. |
+| (d) Breach notification ≤ 72h | § G.1: "without undue delay, but in any event within **48 hours**, after becoming aware of any Security Breach" | **✅ Better than required.** DPA commits to 48h, beating the 72h GDPR Art. 33 target we were asking for. § 4 was updated to claim 48h with a brief note that this beats GDPR. Privacy § 6 (our own breach-notification posture, separate from Anthropic's notice to us) was not changed — we still pledge 72h to supervisory authorities and 60 days to users under FTC HBNR. |
+
+### Other DPA terms that don't change § 4 but are worth logging
+
+- **Deletion / return on termination** (§ H.1): within 30 days of termination,
+  Anthropic returns or deletes Customer Data. Aligns with PrivacyPage § 8's
+  deletion windows. Carve-outs in § H.1.b (legal hold, dispute resolution,
+  abuse combat) are standard and accepted.
+- **Subprocessor change notice** (§ C.3): Anthropic gives reasonable notice
+  before adding a new subprocessor; Customer has **15 days to object**, after
+  which the subprocessor is deemed accepted. SubprocessorsPage doesn't
+  surface the 15-day window; this is a P2 — we're a downstream consumer of
+  Anthropic's subprocessor list, not a publisher of it, so the 30-day notice
+  we promise our own users on Privacy § 5 is independent.
+- **Audit rights** (§ F): annual SOC 2 on demand from trust.anthropic.com;
+  customer-funded audits with mutually agreed scope and a 12-month
+  cool-down. Adequate for our v1 posture; we are not auditing Anthropic
+  ourselves.
+- **Schedule 2 security controls.** AES-256 at rest, TLS 1.2+ in transit,
+  MFA + SSO + RBAC, annual third-party pen test, EDR on endpoints, SIEM /
+  SOAR. Consistent with the security claims in PrivacyPage § 6; nothing in
+  Schedule 2 contradicts what we already tell users.
+- **Confidentiality of personnel** (§ B.7), **DPIA assistance** (§ B.6),
+  **DSR forwarding** (§ D.1) — all standard GDPR-Art.-28-shaped processor
+  obligations. Accepted as-is.
+- **Effective date semantics.** The DPA template is dated Feb 24, 2025; our
+  acceptance date is May 8, 2026. Privacy § 4 cites the acceptance date so
+  there's no ambiguity in a discovery scenario about *when* we became
+  contractually covered.
+
+### Files changed in this pass
+
+- `src/pages/PrivacyPage.tsx` § 4 — full redline. "we have requested a DPA we
+  expect to confirm…" → "we have a written Data Processing Addendum in place
+  with Anthropic, accepted on May 8, 2026, that confirms…" 30-day
+  abuse-monitoring → "limited period … per Anthropic's then-current Usage
+  Policy." 72h breach → 48h with a parenthetical that this beats GDPR. SCCs
+  language updated to name Module Two + Module Three + UK + Swiss.
+- `src/pages/SubprocessorsPage.tsx` Anthropic row — `transferMechanism`
+  rewritten from "Data Processing Addendum requested; execution pending" →
+  "Direct U.S.-based processing under a Data Processing Addendum accepted
+  May 8, 2026. SCCs Module Two and Module Three (Decision 2021/914) plus UK
+  and Swiss addenda are incorporated for any future cross-border
+  transfer…". `dataCategories` retention sentence softened to match § 4's
+  "limited period" phrasing.
+- `CLAUDE.md` — Legal Review section: P0 #1 marked **✅ DONE 2026-05-08**;
+  the "DPA still pending" qualifier in the locked-decisions block was
+  rewritten to summarize the audit findings; the P0 follow-up bullet
+  retained as a strikethrough so the audit trail is preserved.
+- `docs/legal-review-log.md` — this entry.
+
+### What did **not** change
+
+- PrivacyPage § 6 ("Security and breach notification") — our promises to our
+  own users about breach notification are unchanged. The DPA's 48h commitment
+  is between Anthropic and Grace Flare; users don't need to know it.
+- PrivacyPage § 8 (retention windows) — unchanged.
+- TermsPage — unchanged. The DPA is a Privacy-side document.
+- The "Effective: May 8, 2026 · Last reviewed: May 8, 2026" timestamps on
+  PrivacyPage / TermsPage / SubprocessorsPage — same date as the prior
+  badge-flip commit, so no bump needed today.
+
+### Risk summary
+
+- **Net residual risk: low.** We over-promised (b) by a small margin in the
+  May 8 draft (specific 30-day number we couldn't cite). § 4 has been
+  softened to match what the documents actually say. Everything else
+  matches or exceeds what the prior § 4 draft promised.
+- **What a future plaintiff or FTC investigator could still pin on us:**
+  the no-training claim relies on Anthropic's Commercial Terms / Usage
+  Policy rather than the DPA itself. If Anthropic ever changed the Usage
+  Policy and started training on Customer Data, our § 4 promise would
+  silently break. Mitigation: subscribe a calendar alert to Anthropic's
+  Usage Policy / Trust Center pages and re-audit § 4 if those documents
+  change. Tracked as a P2 follow-up.
+- **What an outside-counsel review would likely flag:** asking Anthropic
+  for a side-letter that incorporates the 30-day abuse-monitoring cap into
+  the contract itself (not just the public Usage Policy). Worth doing the
+  next time we have leverage (Series A, enterprise deal, or material spend
+  threshold). Tracked as a P2.
+
+### Follow-ups added by this pass
+
+- **P2.** Calendar alert: re-check Anthropic Usage Policy + Commercial
+  Terms quarterly; re-audit § 4 if the no-training or abuse-monitoring
+  language changes.
+- **P2.** Side-letter request: ask Anthropic to incorporate the 30-day
+  abuse-monitoring window into a contractual document. Defer until next
+  natural negotiation moment.
+- **P3.** Surface Anthropic's 15-day subprocessor-objection window on
+  `/subprocessors` for transparency. Not legally required for our
+  downstream users.
+
+**Code refs:** branch `claude/in-house-legal-signoff` — see PR for diff.
+
+---
