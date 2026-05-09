@@ -188,9 +188,9 @@ export function OnboardingWizard() {
             </li>
           ))}
         </ul>
-        {state.sync?.kind === "invite" && state.inviteCode && (
+        {state.sync?.kind === "invite" && (
           <p className="text-xs text-muted-foreground mb-6 max-w-xs">
-            Your {state.sync.role === "coparent" ? "co-parent" : state.sync.role} can join using the invite you sent.
+            Your {state.sync.role === "coparent" ? "co-parent" : state.sync.role}'s invite link is saved in Profile → Partner Access — share it whenever you're ready.
           </p>
         )}
         <Button className="w-full max-w-xs" onClick={handleFinish}>

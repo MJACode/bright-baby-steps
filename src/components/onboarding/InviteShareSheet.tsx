@@ -147,7 +147,10 @@ export function InviteShareSheet({
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => onOpenChange(false)}
+                onClick={() => {
+                  if (status !== "shared" && code) onSent?.(code);
+                  onOpenChange(false);
+                }}
               >
                 {status === "shared" ? "Continue" : "I'll send this later"}
               </Button>
