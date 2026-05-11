@@ -97,3 +97,18 @@ export function getAgeInMonths(dob: string, isPremature?: boolean, dueDate?: str
   const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
   return differenceInMonths(now, adjustedDate);
 }
+
+/** New-account grace window: until the parent finishes (or skips) the retroactive
+ *  milestone catch-up, OR 14 days pass since the child row was created, suppress
+ *  red-flag surfaces. Used by MilestoneFlags, MilestonesPage banner, and MedicalTab. */
+export function isInRetroactiveGracePeriod(child: {
+  created_at: string;
+  retroactive_setup_completed_at: string | null;
+}): boolean {
+  if (child.retroactive_setup_completed_at != null) return false;
+  try {
+    return differenceInDays(new Date(), new Date(child.created_at)) < 14;
+  } catch {
+    return false;
+  }
+}

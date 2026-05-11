@@ -12,6 +12,10 @@ interface MilestoneCategoryGroupProps {
   isPending: boolean;
   ageMonths: number;
   userId?: string;
+  /** When true, hides the per-card "mention this at your next check-up" amber
+   *  callout. Used during the retroactive grace window so a parent who just
+   *  joined isn't blasted with concern notes for unlogged milestones. */
+  suppressConcernNotes?: boolean;
 }
 
 export function MilestoneCategoryGroup({
@@ -23,6 +27,7 @@ export function MilestoneCategoryGroup({
   isPending,
   ageMonths,
   userId,
+  suppressConcernNotes,
 }: MilestoneCategoryGroupProps) {
   const nonEmpty = categories.filter((cat) => cat.milestones.length > 0);
 
@@ -60,6 +65,7 @@ export function MilestoneCategoryGroup({
                 {cat.milestones.map((m: any) => {
                   const status = milestoneStatuses[m.id] ?? "not_yet";
                   const showConcernNote =
+                    !suppressConcernNotes &&
                     status !== "achieved" &&
                     m.age_months_concern_flag != null &&
                     ageMonths > m.age_months_concern_flag;

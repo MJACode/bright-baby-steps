@@ -1,11 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MilestoneCard } from "@/components/milestones/MilestoneCard";
+import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { toast } from "@/hooks/use-toast";
 
 type MilestoneStatus = "achieved" | "emerging" | "not_yet";
@@ -18,7 +16,7 @@ interface Props {
   initialMarks?: Record<string, MilestoneStatus>;
   /** Bubble up marks so the wizard can persist them in its draft */
   onMarksChange?: (marks: Record<string, MilestoneStatus>) => void;
-  onDone: (action: "saved" | "skipped") => void;
+  onDone: () => void;
 }
 
 export function RetroactiveMilestoneCatchUp({
@@ -33,8 +31,9 @@ export function RetroactiveMilestoneCatchUp({
   const queryClient = useQueryClient();
   const [marks, setMarks] = useState<Record<string, MilestoneStatus>>(initialMarks ?? {});
 
-  // Same shape as MilestonesPage but filtered to milestones the child is old
-  // enough to plausibly have already reached.
+  // Filter the same catalog MilestonesPage uses to milestones the child is old
+  // enough to plausibly have already reached. Distinct cache key keeps this
+  // age-filtered view independent of MilestonesPage's full list.
   const { data: categories, isLoading } = useQuery({
     queryKey: ["milestone-catalog-catchup", ageMonths],
     queryFn: async () => {
@@ -56,17 +55,11 @@ export function RetroactiveMilestoneCatchUp({
     enabled: ageMonths >= 1,
   });
 
-  const markedCount = useMemo(() => Object.keys(marks).length, [marks]);
+  const achievedCount = Object.values(marks).filter((v) => v === "achieved").length;
 
   const setStatus = (milestoneId: string, status: string) => {
     setMarks((prev) => {
-      const next = { ...prev };
-      // Tapping the same status again clears it (parent didn't mean to mark).
-      if (next[milestoneId] === status) {
-        delete next[milestoneId];
-      } else {
-        next[milestoneId] = status as MilestoneStatus;
-      }
+      const next = { ...prev, [milestoneId]: status as MilestoneStatus };
       onMarksChange?.(next);
       return next;
     });
@@ -76,9 +69,17 @@ export function RetroactiveMilestoneCatchUp({
     mutationFn: async (action: "saved" | "skipped") => {
       if (!user) throw new Error("Not signed in");
 
-      const today = new Date().toISOString().split("T")[0];
+      // Stamp first: if the upsert fails the parent can still re-enter via the
+      // MilestonesPage banner and any partially-saved marks are recoverable.
+      const { error: stampError } = await supabase
+        .from("children")
+        .update({ retroactive_setup_completed_at: new Date().toISOString() })
+        .eq("id", childId);
+      if (stampError) throw stampError;
+
       const entries = Object.entries(marks);
       if (action === "saved" && entries.length > 0) {
+        const today = new Date().toISOString().split("T")[0];
         const rows = entries.map(([milestoneId, status]) => ({
           child_id: childId,
           parent_id: user.id,
@@ -91,18 +92,13 @@ export function RetroactiveMilestoneCatchUp({
           .upsert(rows, { onConflict: "child_id,milestone_id" });
         if (speechError) throw speechError;
       }
-
-      const { error: stampError } = await supabase
-        .from("children")
-        .update({ retroactive_setup_completed_at: new Date().toISOString() })
-        .eq("id", childId);
-      if (stampError) throw stampError;
     },
-    onSuccess: (_, action) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["children"] });
       queryClient.invalidateQueries({ queryKey: ["child-milestones", childId] });
       queryClient.invalidateQueries({ queryKey: ["milestone-flags", childId] });
-      onDone(action);
+      queryClient.invalidateQueries({ queryKey: ["active-flag-count", childId] });
+      onDone();
     },
     onError: (err: Error) => {
       toast({
@@ -134,45 +130,16 @@ export function RetroactiveMilestoneCatchUp({
           No milestones to catch up on yet — your settings are saved.
         </p>
       ) : (
-        <Accordion
-          type="multiple"
-          defaultValue={categories.map((c) => c.id)}
-          className="space-y-2 mb-4"
-        >
-          {categories.map((cat) => {
-            const catMarked = cat.milestones.filter((m: { id: string }) => marks[m.id]).length;
-            return (
-              <AccordionItem
-                key={cat.id}
-                value={cat.id}
-                className="border rounded-xl px-4 bg-milestones-bg border-0"
-              >
-                <AccordionTrigger className="hover:no-underline touch-target">
-                  <div className="flex items-center gap-3 w-full">
-                    <span className="font-display font-bold text-left">{cat.name}</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {catMarked}/{cat.milestones.length}
-                    </Badge>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-3 pb-2">
-                    {cat.milestones.map((m: { id: string }) => (
-                      <MilestoneCard
-                        key={m.id}
-                        milestone={m}
-                        status={marks[m.id] ?? "not_yet_unset"}
-                        onStatusChange={setStatus}
-                        isPending={submit.isPending}
-                        showConcernNote={false}
-                      />
-                    ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
+        <div className="mb-4">
+          <MilestoneCategoryGroup
+            categories={categories}
+            milestoneStatuses={marks}
+            onStatusChange={setStatus}
+            isPending={submit.isPending}
+            ageMonths={ageMonths}
+            suppressConcernNotes
+          />
+        </div>
       )}
 
       <div className="mt-auto pt-4 flex gap-3 sticky bottom-0 bg-background pb-2">
@@ -191,8 +158,8 @@ export function RetroactiveMilestoneCatchUp({
         >
           {submit.isPending
             ? "Saving..."
-            : markedCount > 0
-              ? `Save ${markedCount} milestone${markedCount === 1 ? "" : "s"}`
+            : achievedCount > 0
+              ? `Save ${achievedCount} milestone${achievedCount === 1 ? "" : "s"}`
               : "Continue"}
         </Button>
       </div>

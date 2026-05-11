@@ -132,6 +132,10 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
           due_date: !expectedFlag && isPremature && dueDate ? dueDate : undefined,
           is_expected: expectedFlag,
         });
+        if (!newChild?.id) {
+          toast({ title: "Error", description: "Couldn't read back the new child row.", variant: "destructive" });
+          return;
+        }
         toast({ title: "Child added! 🌱", description: `${name} has been added to your profile.` });
 
         // For backdated DOBs, open the catch-up modal so red flags don't fire
@@ -146,11 +150,20 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
           if (newAgeMonths >= 1) {
             setCatchUpChild({ id: newChild.id, name: name.trim(), ageMonths: newAgeMonths });
           } else {
-            // Newborn — stamp at insert-side so the dashboard banner never fires.
-            await supabase
+            // Newborn — stamp so the dashboard banner never fires. If this
+            // stamp fails the parent sees a soft warning; the banner only
+            // appears for 14 days even if the stamp never lands.
+            const { error: stampError } = await supabase
               .from("children")
               .update({ retroactive_setup_completed_at: new Date().toISOString() })
               .eq("id", newChild.id);
+            if (stampError) {
+              toast({
+                title: "Couldn't finalize setup",
+                description: "We saved the child but couldn't dismiss the milestone catch-up banner. You can dismiss it from the Milestones tab.",
+                variant: "destructive",
+              });
+            }
           }
         }
       }

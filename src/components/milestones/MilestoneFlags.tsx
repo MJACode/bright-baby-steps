@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { differenceInDays, parseISO } from "date-fns";
+import { isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -115,12 +115,13 @@ export function MilestoneFlags({
     // 14 days, suppress flags entirely. This stops a parent who signs up with a
     // 6-month-old from being greeted by a wall of red flags for milestones they
     // never had a chance to log.
-    if (retroactiveCompletedAt == null) {
-      try {
-        if (differenceInDays(new Date(), parseISO(childCreatedAt)) < 14) return [];
-      } catch {
-        /* fall through if the date can't be parsed */
-      }
+    if (
+      isInRetroactiveGracePeriod({
+        created_at: childCreatedAt,
+        retroactive_setup_completed_at: retroactiveCompletedAt,
+      })
+    ) {
+      return [];
     }
     if (!categories) return [];
     const flagged: MilestoneRow[] = [];

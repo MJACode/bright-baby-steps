@@ -10,3 +10,11 @@ ALTER TABLE public.children
 COMMENT ON COLUMN public.children.retroactive_setup_completed_at IS
   'Set when the parent finishes or skips the onboarding milestone catch-up. '
   'NULL within 14 days of children.created_at suppresses MilestoneFlags red-flag alerts.';
+
+-- Grandfather existing rows so pre-feature accounts don't suddenly see the
+-- "Finish setting up X" banner or have their existing flags suppressed for 14
+-- days. Only brand-new children (created after this migration ships) opt into
+-- the gate. Idempotent: only stamps rows where the column is still NULL.
+UPDATE public.children
+   SET retroactive_setup_completed_at = COALESCE(created_at, now())
+ WHERE retroactive_setup_completed_at IS NULL;

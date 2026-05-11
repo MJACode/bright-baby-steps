@@ -2,7 +2,7 @@ import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
+import { useChildren, getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import { PhotoMilestoneDetector } from "@/components/PhotoMilestoneDetector";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { usePremium } from "@/hooks/usePremium";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
-import { differenceInDays, format, parseISO } from "date-fns";
+import { format } from "date-fns";
 
 function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
   milestone: any;
@@ -344,6 +344,7 @@ export default function MilestonesPage() {
     isPending: updateMilestone.isPending,
     ageMonths,
     userId: user?.id,
+    suppressConcernNotes: activeChild ? isInRetroactiveGracePeriod(activeChild) : false,
   };
 
   return (
@@ -386,15 +387,8 @@ export default function MilestonesPage() {
               )}
 
               {activeChild &&
-                activeChild.retroactive_setup_completed_at == null &&
                 ageMonths >= 1 &&
-                (() => {
-                  try {
-                    return differenceInDays(new Date(), parseISO(activeChild.created_at)) < 14;
-                  } catch {
-                    return false;
-                  }
-                })() && (
+                isInRetroactiveGracePeriod(activeChild) && (
                   <Card className="border-2 border-dashed border-milestones/40 bg-milestones-bg/40">
                     <CardContent className="p-4 flex items-start gap-3">
                       <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
