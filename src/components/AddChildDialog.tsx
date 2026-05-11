@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useChildren } from "@/hooks/useChildren";
+import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
 import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
+import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 
 interface ChildData {
   id: string;
@@ -49,6 +50,9 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
   const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [checkingVpc, setCheckingVpc] = useState(false);
   const [directNoticeAck, setDirectNoticeAck] = useState<boolean | null>(null);
+  // After a backdated (>=1mo) child is added, open the catch-up modal so the
+  // parent can mark already-reached milestones instead of seeing red flags.
+  const [catchUpChild, setCatchUpChild] = useState<{ id: string; name: string; ageMonths: number } | null>(null);
 
   const { addChild, updateChild } = useChildren();
   const { user } = useAuth();
@@ -120,7 +124,7 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
         });
         toast({ title: "Saved! ✏️", description: `${name}'s profile has been updated.` });
       } else {
-        await addChild.mutateAsync({
+        const newChild = await addChild.mutateAsync({
           name: name.trim(),
           date_of_birth: dob,
           gender: gender || undefined,
@@ -129,6 +133,26 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
           is_expected: expectedFlag,
         });
         toast({ title: "Child added! 🌱", description: `${name} has been added to your profile.` });
+
+        // For backdated DOBs, open the catch-up modal so red flags don't fire
+        // for milestones the parent never had a chance to log. Expected babies
+        // (future DOB) and newborns (<1mo) skip the catch-up.
+        if (!expectedFlag) {
+          const newAgeMonths = getAgeInMonths(
+            dob,
+            isPremature,
+            isPremature && dueDate ? dueDate : null
+          );
+          if (newAgeMonths >= 1) {
+            setCatchUpChild({ id: newChild.id, name: name.trim(), ageMonths: newAgeMonths });
+          } else {
+            // Newborn — stamp at insert-side so the dashboard banner never fires.
+            await supabase
+              .from("children")
+              .update({ retroactive_setup_completed_at: new Date().toISOString() })
+              .eq("id", newChild.id);
+          }
+        }
       }
       setOpen(false);
       if (!isEditMode) {
@@ -207,25 +231,52 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
     </DialogContent>
   );
 
+  const catchUpDialog = catchUpChild && (
+    <Dialog
+      open={!!catchUpChild}
+      onOpenChange={(o) => {
+        if (!o) setCatchUpChild(null);
+      }}
+    >
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Catch up on {catchUpChild.name}'s milestones</DialogTitle>
+        </DialogHeader>
+        <RetroactiveMilestoneCatchUp
+          childId={catchUpChild.id}
+          childName={catchUpChild.name}
+          ageMonths={catchUpChild.ageMonths}
+          onDone={() => setCatchUpChild(null)}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+
   if (trigger) {
     return (
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>{trigger}</DialogTrigger>
-        {content}
-      </Dialog>
+      <>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>{trigger}</DialogTrigger>
+          {content}
+        </Dialog>
+        {catchUpDialog}
+      </>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {!isEditMode && (
-        <DialogTrigger asChild>
-          <Button className="w-full touch-target gap-2">
-            <Plus className="w-5 h-5" /> Add Child
-          </Button>
-        </DialogTrigger>
-      )}
-      {content}
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {!isEditMode && (
+          <DialogTrigger asChild>
+            <Button className="w-full touch-target gap-2">
+              <Plus className="w-5 h-5" /> Add Child
+            </Button>
+          </DialogTrigger>
+        )}
+        {content}
+      </Dialog>
+      {catchUpDialog}
+    </>
   );
 }

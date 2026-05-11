@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X } from "lucide-react";
+import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X, Sparkles } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
@@ -20,7 +20,8 @@ import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { PhotoMilestoneDetector } from "@/components/PhotoMilestoneDetector";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { usePremium } from "@/hooks/usePremium";
-import { format } from "date-fns";
+import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
+import { differenceInDays, format, parseISO } from "date-fns";
 
 function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
   milestone: any;
@@ -79,6 +80,7 @@ export default function MilestonesPage() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [photoDetectorOpen, setPhotoDetectorOpen] = useState(false);
   const [photoUpsellOpen, setPhotoUpsellOpen] = useState(false);
+  const [catchUpOpen, setCatchUpOpen] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -378,8 +380,44 @@ export default function MilestonesPage() {
                   childId={activeChild.id}
                   parentId={user.id}
                   ageMonths={ageMonths}
+                  childCreatedAt={activeChild.created_at}
+                  retroactiveCompletedAt={activeChild.retroactive_setup_completed_at ?? null}
                 />
               )}
+
+              {activeChild &&
+                activeChild.retroactive_setup_completed_at == null &&
+                ageMonths >= 1 &&
+                (() => {
+                  try {
+                    return differenceInDays(new Date(), parseISO(activeChild.created_at)) < 14;
+                  } catch {
+                    return false;
+                  }
+                })() && (
+                  <Card className="border-2 border-dashed border-milestones/40 bg-milestones-bg/40">
+                    <CardContent className="p-4 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
+                        <Sparkles className="w-5 h-5 text-milestones" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">
+                          Finish setting up {activeChild.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Tell us which milestones {activeChild.name} has already reached so we don't flag them as missed.
+                        </p>
+                        <Button
+                          size="sm"
+                          className="mt-3 touch-target"
+                          onClick={() => setCatchUpOpen(true)}
+                        >
+                          Catch me up
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
               <button
                 onClick={() => isPremium ? setPhotoDetectorOpen(true) : setPhotoUpsellOpen(true)}
@@ -598,6 +636,22 @@ export default function MilestonesPage() {
           </div>
         </DrawerContent>
       </Drawer>
+
+      {activeChild && (
+        <Dialog open={catchUpOpen} onOpenChange={setCatchUpOpen}>
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Catch up on {activeChild.name}'s milestones</DialogTitle>
+            </DialogHeader>
+            <RetroactiveMilestoneCatchUp
+              childId={activeChild.id}
+              childName={activeChild.name}
+              ageMonths={ageMonths}
+              onDone={() => setCatchUpOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
       <UpgradeSheet
         open={photoUpsellOpen}
         onOpenChange={setPhotoUpsellOpen}

@@ -557,6 +557,7 @@ export type Database = {
           next_appointment: string | null
           parent_id: string
           photo_url: string | null
+          retroactive_setup_completed_at: string | null
           updated_at: string
         }
         Insert: {
@@ -573,6 +574,7 @@ export type Database = {
           next_appointment?: string | null
           parent_id: string
           photo_url?: string | null
+          retroactive_setup_completed_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -589,6 +591,7 @@ export type Database = {
           next_appointment?: string | null
           parent_id?: string
           photo_url?: string | null
+          retroactive_setup_completed_at?: string | null
           updated_at?: string
         }
         Relationships: [
