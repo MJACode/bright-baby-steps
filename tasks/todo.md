@@ -47,10 +47,14 @@ The five secret values are listed verbatim in `codemagic.yaml` comments.
 - [ ] (Optional) Verify Capacitor's bundled `PrivacyInfo.xcprivacy` covers UserDefaults / file-timestamp / disk-space reasons
 
 ### 3. iOS app icon set (both)
-Shipped via PR #39.
-- [x] **Claude**: placeholder icon committed at `assets/icon-only.png` (1024 × 1024 opaque sage-green "GF" monogram). Regeneratable with `python3 scripts/gen-placeholder-icon.py`.
-- [x] **Claude**: `@capacitor/assets` added to `devDependencies`; new Codemagic step "Generate iOS app icon set" runs `npx @capacitor/assets generate --ios` after `cap add ios`, producing the full `AppIcon.appiconset` (every size from 20pt notification through 1024pt marketing).
-- [ ] **You (before Beta App Review)**: replace `assets/icon-only.png` with the real 1024 × 1024 master (opaque, no rounded corners, no transparency). Drop it in at the same path; the next Codemagic build picks it up automatically — no other changes needed.
+Real designed icon coming via direct push (replacing the placeholder approach).
+
+Layout: source-of-truth lives in `assets/`, gets copied into the generated `ios/` tree at build time. This preserves the "ios/ is fully transient" invariant while keeping the icon set in version control.
+- [x] **Claude**: Codemagic step "Copy app icons into iOS project" replaces the default Capacitor blank `AppIcon.appiconset` with `assets/ios/AppIcon.appiconset/`. `@capacitor/assets` build dep removed — pre-rendered sizes are committed directly.
+- [ ] **You**: push the icon set to `claude/launch-prep`:
+  - `assets/icon.png` — 1024 × 1024 opaque master (Capacitor convention)
+  - `assets/ios/AppIcon.appiconset/` — 15 PNG sizes (20px → 1024px) + `Contents.json`
+  - `assets/android/mipmap-*/` — 5 density buckets (mdpi → xxxhdpi), each with `ic_launcher.png` + `ic_launcher_round.png` (committed for when an Android workflow is added; not wired into Codemagic yet)
 
 ### 4. Production domain (you, then claude)
 - [x] Point `graceflare.com` apex + `www` at the Vercel project (DNS A / CNAME records)

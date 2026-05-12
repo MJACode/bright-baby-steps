@@ -44,12 +44,18 @@ workflows:
           rm -rf ios/
           npx cap add ios
 
-      - name: Generate iOS app icon set
-        # Reads assets/icon-only.png (1024x1024 opaque PNG) and writes the
-        # full AppIcon.appiconset into ios/App/App/Assets.xcassets/. Replaces
-        # the default Capacitor blank icon. Swap assets/icon-only.png for
-        # the real master before App Store Review — see tasks/todo.md §3.
-        script: npx @capacitor/assets generate --ios
+      - name: Copy app icons into iOS project
+        # The 1024 master + 15 pre-rendered iOS sizes + Contents.json live at
+        # assets/ios/AppIcon.appiconset/. We blow away the default Capacitor
+        # AppIcon.appiconset (which has a blank icon) and drop ours in. This
+        # also catches stale files Capacitor's template might have shipped that
+        # we don't want in the final binary.
+        # Android assets live at assets/android/mipmap-*/ for when we add an
+        # Android workflow — not wired up here yet.
+        script: |
+          DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          rm -rf "$DEST"
+          cp -R assets/ios/AppIcon.appiconset "$DEST"
 
       - name: Sync Capacitor
         # Copies dist/ into the native project and installs pod dependencies
