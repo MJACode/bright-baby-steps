@@ -44,7 +44,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>
             <div className="flex items-center gap-2">
               <Baby className="w-4 h-4" />
-              {!collapsed && <span className="font-display font-semibold">Baby Tracker</span>}
+              {!collapsed && <span className="font-display font-semibold">Grace Flare</span>}
             </div>
           </SidebarGroupLabel>
           <SidebarGroupContent>

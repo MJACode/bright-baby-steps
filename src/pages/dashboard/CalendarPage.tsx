@@ -36,9 +36,9 @@ export default function CalendarPage() {
 
       {!isLoading && events.length === 0 && (
         <div className="text-center py-6 px-4 bg-muted/30 rounded-lg">
-          <p className="text-sm text-muted-foreground">No logs for this day yet.</p>
+          <p className="text-sm text-muted-foreground">Nothing logged for this day.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Anything you log will appear on the timeline below.
+            Tap the log button to add your first entry.
           </p>
         </div>
       )}

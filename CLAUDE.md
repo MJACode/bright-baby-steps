@@ -43,6 +43,44 @@ Before creating a new component, hook, utility, or migration, check whether some
 
 ---
 
+## Brand Guidelines
+
+Full source: `C:\Users\Matth\OneDrive\Documents\Claude\Projects\Speech App\Grace_Flare_Brand_Guidelines.docx` (v1.0, May 2026)
+
+### Identity
+- Brand name is **Grace Flare** (never "Baby Tracker" or any other variant). Premium tier is **Flare+**.
+- Brand personality: Confident, Warm, Clear, Modern. Never clinical, preachy, or condescending.
+
+### Colors
+All colors are defined as CSS HSL variables in `src/index.css` and exposed as Tailwind utilities. **Never hardcode hex values in product code.**
+- Primary: `--primary` / Forest Teal `hsl(152 45% 48%)` — CTAs, active states, icon backgrounds
+- Accent: `--accent` / Warm Orange `hsl(30 70% 55%)` — highlights, the flare mark, notifications
+- Background: `--background` / Warm Cream `hsl(30 40% 98%)`
+- Foreground: `--foreground` / Deep Slate `hsl(240 10% 20%)`
+- Module colors: `bg-sleep`, `bg-feeding`, `bg-diapers`, `bg-milestones`, `bg-finance` (+ `-bg` tint variants for card fills)
+- Semantic: `--success`, `--warning`, `--destructive` — use only for their designated purposes
+
+### Typography
+- **Nunito** (`font-sans`) — all body text, UI labels, form inputs
+- **Quicksand** (`font-display`) — display moments only: onboarding headings, dialog titles, screen H1/H2, wordmark. Not for body copy or data.
+- Heading weight: `font-bold` (700). Body: `font-normal` (400). Labels/captions: `font-semibold` (600).
+- Minimum visible text: `text-xs` (12px). Interactive elements minimum: `text-sm` (14px).
+- Never center-align body paragraphs longer than two lines. Left-align all data-dense content.
+
+### Shape & Spacing
+- Border radius via `--radius: 1rem` — use `rounded-sm/md/lg/xl/2xl` Tailwind tokens, never raw pixel values.
+- Touch targets: every interactive element needs `min-h-[48px] min-w-[48px]` (use `.touch-target` utility class).
+- Base spacing unit is 4px (Tailwind default). Common: `p-4` (16px internal), `p-6` (24px cards), `gap-8` (32px between sections).
+
+### Voice & Tone
+- Lead with the most important info. Parents are tired — be direct.
+- Avoid negative framing: "Tap to log a feed" not "You haven't logged yet."
+- Use second person (`you`, `your baby`). Use `we` sparingly.
+- Milestone copy is celebratory, not diagnostic: "Your baby may start..." not "Watch for delays if..."
+- Error messages explain what happened and what to do next — never just a failure state.
+
+---
+
 ## Legal Review
 
 **Posture:** in-house-only review accepted by the founder for the May 2026 v1 U.S. launch. No outside counsel. The "Draft — pending legal review" badge was retired on 2026-05-08 in favor of an "Effective: 2026-05-08 · Last reviewed: 2026-05-08" timestamp on PrivacyPage, TermsPage, and SubprocessorsPage. The full review trail (every pass, every redline, every risk level resolved) lives in `docs/legal-review-log.md` — the FTC / state-AG paper trail. **Update that log every time you touch Privacy / Terms / FAQ / consent / retention / deletion / subprocessor / geo-block code.**
