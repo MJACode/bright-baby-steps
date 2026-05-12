@@ -44,6 +44,19 @@ workflows:
           rm -rf ios/
           npx cap add ios
 
+      - name: Copy app icons into iOS project
+        # The 1024 master + 15 pre-rendered iOS sizes + Contents.json live at
+        # assets/ios/AppIcon.appiconset/. We blow away the default Capacitor
+        # AppIcon.appiconset (which has a blank icon) and drop ours in. This
+        # also catches stale files Capacitor's template might have shipped that
+        # we don't want in the final binary.
+        # Android assets live at assets/android/mipmap-*/ for when we add an
+        # Android workflow — not wired up here yet.
+        script: |
+          DEST="ios/App/App/Assets.xcassets/AppIcon.appiconset"
+          rm -rf "$DEST"
+          cp -R assets/ios/AppIcon.appiconset "$DEST"
+
       - name: Sync Capacitor
         # Copies dist/ into the native project and installs pod dependencies
         script: npx cap sync ios
@@ -85,6 +98,35 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string $BUNDLE_ID" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string graceflare" "$PLIST"
+
+      - name: Declare WKAppBoundDomains
+        # capacitor.config.ts sets limitsNavigationsToAppBoundDomains: true.
+        # When that's true, iOS restricts JavaScript document.cookie access,
+        # ServiceWorker, and WebStorage to the domains listed here. WebKit
+        # caps this list at 10 fully-qualified domains (no wildcards).
+        # Without this declaration, AI chat streaming and Supabase auth flows
+        # break in the WKWebView.
+        script: |
+          PLIST="ios/App/App/Info.plist"
+
+          /usr/libexec/PlistBuddy -c "Delete :WKAppBoundDomains" "$PLIST" 2>/dev/null || true
+
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:0 string graceflare.com" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:1 string www.graceflare.com" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:2 string ieuznbvvwdvhtirzwkly.supabase.co" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:3 string api.country.is" "$PLIST"
+
+      - name: Bump CFBundleVersion
+        # App Store Connect rejects an upload whose CFBundleVersion matches
+        # any previous build. Use a Unix timestamp for guaranteed monotonic
+        # uniqueness without a separate counter file. CFBundleShortVersionString
+        # (the user-facing 1.0 / 1.1 / etc.) is left to Xcode project settings;
+        # update it manually in ios/App/App.xcodeproj when shipping a new
+        # marketing version.
+        script: |
+          cd ios/App
+          xcrun agvtool new-version -all "$(date +%s)"
 
       - name: Set up code signing
         script: xcode-project use-profiles
