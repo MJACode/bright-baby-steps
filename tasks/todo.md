@@ -46,15 +46,12 @@ The five secret values are listed verbatim in `codemagic.yaml` comments.
 - [ ] Auto-bump `CFBundleVersion` per build (e.g. `agvtool new-version -all $(date +%s)`) so App Store Connect doesn't reject duplicate uploads
 - [ ] (Optional) Verify Capacitor's bundled `PrivacyInfo.xcprivacy` covers UserDefaults / file-timestamp / disk-space reasons
 
-### 3. iOS app icon set (both)
-Real designed icon coming via direct push (replacing the placeholder approach).
-
-Layout: source-of-truth lives in `assets/`, gets copied into the generated `ios/` tree at build time. This preserves the "ios/ is fully transient" invariant while keeping the icon set in version control.
-- [x] **Claude**: Codemagic step "Copy app icons into iOS project" replaces the default Capacitor blank `AppIcon.appiconset` with `assets/ios/AppIcon.appiconset/`. `@capacitor/assets` build dep removed — pre-rendered sizes are committed directly.
-- [ ] **You**: push the icon set to `claude/launch-prep`:
-  - `assets/icon.png` — 1024 × 1024 opaque master (Capacitor convention)
-  - `assets/ios/AppIcon.appiconset/` — 15 PNG sizes (20px → 1024px) + `Contents.json`
-  - `assets/android/mipmap-*/` — 5 density buckets (mdpi → xxxhdpi), each with `ic_launcher.png` + `ic_launcher_round.png` (committed for when an Android workflow is added; not wired into Codemagic yet)
+### 3. iOS app icon set (both) — done
+Real designed icon (sage-green / cream "C" smile with orange eye) lives in `assets/`, gets copied into the generated `ios/` tree at build time. Preserves the "ios/ is fully transient" invariant while keeping the icon set in version control.
+- [x] **Claude**: 1024 × 1024 master committed at `assets/icon.png`.
+- [x] **Claude**: 15 iOS sizes (`AppIcon-20.png` → `AppIcon-512@2x.png`) + `Contents.json` committed at `assets/ios/AppIcon.appiconset/`. Generated from the master via `python3 scripts/build-icon-set.py` — re-run if the master changes.
+- [x] **Claude**: 10 Android mipmap PNGs committed at `assets/android/mipmap-{m,h,x,xx,xxx}hdpi/` (`ic_launcher.png` + `ic_launcher_round.png` each). Held for the future Android workflow; not wired into Codemagic yet.
+- [x] **Claude**: Codemagic step "Copy app icons into iOS project" replaces the default Capacitor blank `AppIcon.appiconset` with our committed one after `cap add ios`.
 
 ### 4. Production domain (you, then claude)
 - [x] Point `graceflare.com` apex + `www` at the Vercel project (DNS A / CNAME records)
