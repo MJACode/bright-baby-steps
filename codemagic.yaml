@@ -184,16 +184,26 @@ workflows:
         # All four commands are idempotent — subsequent builds reuse the
         # same cert + profile.
         #
-        # `set -ex` makes every command echo and fail fast — earlier builds
-        # left `~/Library/MobileDevice/Provisioning Profiles/` empty after
-        # this step but the script still exited 0, masking which command
-        # actually no-op'd. The `--profile-type` flag is the modern alias for
-        # `--type` and disambiguates against the older `app-store-connect`
-        # CLI parsers. `--platform IOS` is now explicit because some versions
-        # of the CLI default to `MAC_OS` when only `--type IOS_APP_STORE` is
-        # passed, which silently returns zero profiles for an iOS bundle ID.
-        # The final `ls` block prints exactly what landed on disk so the
-        # next "Build and export IPA" step has visible evidence to debug
+        # `set -ex` makes every command echo and fail fast — without it,
+        # earlier builds had `fetch-signing-files` exit nonzero with
+        # `Cannot save Signing Certificates without certificate private key`
+        # while the parent script still exited 0, leaving
+        # `~/Library/MobileDevice/Provisioning Profiles/` empty and the
+        # build step's later `find` reporting a confusing downstream error.
+        #
+        # `--certificate-key=@env:CERTIFICATE_PRIVATE_KEY` is the actual
+        # fix. When `--create` is set, the CLI needs the RSA private key
+        # configured in the Codemagic UI as `CERTIFICATE_PRIVATE_KEY` so
+        # it can generate a CSR, submit it to Apple Developer Portal, and
+        # pair the returned signed cert back with the private key to form
+        # the .p12 it installs into the build keychain. The `@env:` prefix
+        # is codemagic-cli-tools' convention for "read from this env var".
+        #
+        # `--platform IOS` is explicit because some versions of the CLI
+        # default to MAC_OS when only `--type IOS_APP_STORE` is passed.
+        #
+        # The final `ls` block prints what landed on disk so the next
+        # "Build and export IPA" step has visible evidence to debug
         # against.
         script: |
           set -ex
@@ -201,6 +211,7 @@ workflows:
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --platform IOS \
             --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
           xcode-project use-profiles
