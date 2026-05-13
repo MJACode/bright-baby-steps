@@ -38,7 +38,7 @@ workflows:
         # The Issuer ID + Key ID + .p8 file are configured there, not as
         # env vars. The `auth: integration` line under publishing
         # references that integration. Same key drives `ios_signing` above.
-      node: 20
+      node: 22
       xcode: latest
       cocoapods: default
 
