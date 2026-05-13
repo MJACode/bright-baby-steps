@@ -70,9 +70,24 @@ workflows:
           rm -rf "$DEST"
           cp -R assets/ios/AppIcon.appiconset "$DEST"
 
-      - name: Sync Capacitor
-        # Copies dist/ into the native project and installs pod dependencies
-        script: npx cap sync ios
+      - name: Sync Capacitor + install CocoaPods
+        # `cap sync ios` copies dist/ into the native project and is supposed
+        # to run `pod install` as part of its update phase, but Capacitor 8
+        # sometimes skips pod install (the sync step finishing in <1s on
+        # build #6 was a tell that no pods were installed — `pod install` on
+        # a fresh project normally takes 30+s). Without pod install, no
+        # `ios/App/App.xcworkspace` is generated, and `xcode-project
+        # build-ipa --workspace ios/App/App.xcworkspace` fails with
+        # "Path does not exist".
+        #
+        # Run pod install explicitly so the workspace always exists. The
+        # `ls` at the end is a cheap diagnostic that puts the directory
+        # contents in the log — if the workspace still doesn't appear,
+        # the listing tells us what DID get created.
+        script: |
+          npx cap sync ios
+          ( cd ios/App && pod install )
+          ls -la ios/App/
 
       - name: Inject Info.plist permission strings
         # Apple rejects any app that uses a protected API without a usage description.
