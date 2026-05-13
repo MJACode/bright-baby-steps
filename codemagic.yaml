@@ -183,13 +183,34 @@ workflows:
         #   4. xcode-project use-profiles — points Xcode at the profile
         # All four commands are idempotent — subsequent builds reuse the
         # same cert + profile.
+        #
+        # `set -ex` makes every command echo and fail fast — earlier builds
+        # left `~/Library/MobileDevice/Provisioning Profiles/` empty after
+        # this step but the script still exited 0, masking which command
+        # actually no-op'd. The `--profile-type` flag is the modern alias for
+        # `--type` and disambiguates against the older `app-store-connect`
+        # CLI parsers. `--platform IOS` is now explicit because some versions
+        # of the CLI default to `MAC_OS` when only `--type IOS_APP_STORE` is
+        # passed, which silently returns zero profiles for an iOS bundle ID.
+        # The final `ls` block prints exactly what landed on disk so the
+        # next "Build and export IPA" step has visible evidence to debug
+        # against.
         script: |
+          set -ex
           keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --platform IOS \
             --type IOS_APP_STORE \
             --create
           keychain add-certificates
           xcode-project use-profiles
+
+          echo "--- Provisioning Profiles directory ---"
+          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" || true
+          echo "--- Certificates directory ---"
+          ls -la "$HOME/Library/MobileDevice/Certificates/" 2>/dev/null || true
+          echo "--- Keychain identities ---"
+          security find-identity -v -p codesigning || true
 
       - name: Build and export IPA
         # Capacitor 8 supports both CocoaPods (workspace) and Swift Package
@@ -216,10 +237,16 @@ workflows:
         script: |
           # Find the installed provisioning profile and decode its plist.
           PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_FILE=$(find "$PROFILE_DIR" -maxdepth 1 -name "*.mobileprovision" | head -1)
+          PROFILE_FILE=$(find "$PROFILE_DIR" -maxdepth 1 \
+            \( -name "*.mobileprovision" -o -name "*.provisionprofile" \) \
+            | head -1)
           if [ -z "$PROFILE_FILE" ]; then
-            echo "ERROR: no .mobileprovision found in $PROFILE_DIR"
+            echo "ERROR: no provisioning profile found in $PROFILE_DIR"
             ls -la "$PROFILE_DIR" 2>/dev/null || echo "  (directory missing)"
+            echo "--- Searching whole \$HOME for any profile file ---"
+            find "$HOME" -name "*.mobileprovision" -o -name "*.provisionprofile" 2>/dev/null || true
+            echo "--- Keychain identities (codesigning) ---"
+            security find-identity -v -p codesigning || true
             exit 1
           fi
           echo "Profile file: $PROFILE_FILE"
