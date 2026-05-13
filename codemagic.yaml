@@ -162,9 +162,12 @@ workflows:
         # which we don't do here. Codemagic's validator rejects the flag
         # when paired with TestFlight-only publishing.
         submit_to_testflight: true
-      email:
-        recipients:
-          - $CM_SUBMITTER  # Codemagic sends build status to the triggering user
-        notify:
-          success: true
-          failure: true
+      # The `email` publishing block was removed: Codemagic's validator
+      # evaluates `$CM_SUBMITTER` to None at validation time and rejects
+      # null as a recipient. Build outcomes are still visible in the
+      # Codemagic dashboard and via the GitHub commit-status check on
+      # the merge commit. Re-add with a literal address when needed:
+      #   email:
+      #     recipients:
+      #       - team@graceflare.com
+      #     notify: { success: true, failure: true }
