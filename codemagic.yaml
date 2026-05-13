@@ -19,9 +19,11 @@ workflows:
           include: true
 
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.graceflare.app
+      # NOTE: deliberately NO `ios_signing:` block here. That block triggers
+      # Codemagic's automatic pre-build signing flow, which on first build for
+      # a new Bundle ID fails with "No matching profiles found" and never runs
+      # the "Set up code signing" script step (where --create lives). Manual
+      # script-driven signing (below) bypasses the auto-flow entirely.
       vars:
         BUNDLE_ID: com.graceflare.app
         XCODE_WORKSPACE: ios/App/App.xcworkspace
@@ -140,17 +142,28 @@ workflows:
           xcrun agvtool new-version -all "$(date +%s)"
 
       - name: Set up code signing
-        # Codemagic's automatic signing (configured via `environment.ios_signing`)
-        # sometimes fails with "No matching profiles found" on first build for a
-        # new Bundle ID — the auto-create step doesn't always trigger reliably.
-        # Calling `fetch-signing-files --create` explicitly forces Codemagic to
-        # create the iOS Distribution cert and App Store provisioning profile
-        # via the App Store Connect API if they don't already exist. Subsequent
-        # builds reuse the same cert + profile. Idempotent.
+        # Manual signing flow — replaces Codemagic's `environment.ios_signing`
+        # auto-flow, which failed on first build for the new Bundle ID before
+        # any script could run. This version does the full keychain dance:
+        #   1. keychain initialize — fresh keychain for this build
+        #   2. fetch-signing-files --create — pulls the iOS Distribution cert
+        #      and App Store provisioning profile from App Store Connect,
+        #      creating them via API if they don't exist. Requires the App
+        #      Store Connect integration ("Graceflare") to be wired up and
+        #      the API key to have App Manager role or higher, and the Bundle
+        #      ID to already exist in the Apple Developer Portal Identifiers
+        #      list (Apple won't auto-create the App ID itself).
+        #   3. keychain add-certificates — installs the cert into the
+        #      keychain so codesign can find it
+        #   4. xcode-project use-profiles — points Xcode at the profile
+        # All four commands are idempotent — subsequent builds reuse the
+        # same cert + profile.
         script: |
+          keychain initialize
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
+          keychain add-certificates
           xcode-project use-profiles
 
       - name: Build and export IPA
