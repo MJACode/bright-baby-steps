@@ -5,11 +5,11 @@ workflows:
     max_build_duration: 120
 
     integrations:
-      # References the App Store Connect integration named "Graceflare"
+      # References the App Store Connect integration named "GraceFlare"
       # configured in Codemagic → Teams → Integrations → App Store Connect.
       # Drives both ios_signing (cert / profile fetch) and the publishing
       # step's `auth: integration` (TestFlight upload).
-      app_store_connect: Graceflare
+      app_store_connect: GraceFlare
 
     triggering:
       events:
@@ -149,7 +149,7 @@ workflows:
         #   2. fetch-signing-files --create — pulls the iOS Distribution cert
         #      and App Store provisioning profile from App Store Connect,
         #      creating them via API if they don't exist. Requires the App
-        #      Store Connect integration ("Graceflare") to be wired up and
+        #      Store Connect integration ("GraceFlare") to be wired up and
         #      the API key to have App Manager role or higher, and the Bundle
         #      ID to already exist in the Apple Developer Portal Identifiers
         #      list (Apple won't auto-create the App ID itself).
