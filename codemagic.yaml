@@ -207,20 +207,22 @@ workflows:
         # because the Capacitor-scaffolded App.xcodeproj is set to Automatic
         # signing with no team / profile assigned by default.
         script: |
-          ARCHIVE_FLAGS="-allowProvisioningUpdates"
-
+          # NOTE on the `=` syntax: --archive-flags's value `-allowProvisioningUpdates`
+          # starts with `-`, which Python's argparse refuses to consume as a positional
+          # value (it thinks it's another flag). Using `--archive-flags=...` joins them
+          # into a single token so argparse parses it correctly.
           if [ -d "$XCODE_WORKSPACE" ]; then
             echo "Building from workspace: $XCODE_WORKSPACE"
             xcode-project build-ipa \
               --workspace "$XCODE_WORKSPACE" \
               --scheme "$XCODE_SCHEME" \
-              --archive-flags "$ARCHIVE_FLAGS"
+              --archive-flags=-allowProvisioningUpdates
           elif [ -d "ios/App/App.xcodeproj" ]; then
             echo "No workspace found; building from xcodeproj (SPM layout)"
             xcode-project build-ipa \
               --project "ios/App/App.xcodeproj" \
               --scheme "$XCODE_SCHEME" \
-              --archive-flags "$ARCHIVE_FLAGS"
+              --archive-flags=-allowProvisioningUpdates
           else
             echo "ERROR: neither $XCODE_WORKSPACE nor ios/App/App.xcodeproj exists"
             ls -la ios/ ios/App/ 2>/dev/null
