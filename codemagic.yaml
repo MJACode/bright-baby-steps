@@ -86,7 +86,17 @@ workflows:
         # the listing tells us what DID get created.
         script: |
           npx cap sync ios
-          ( cd ios/App && pod install )
+          # `pod install` is wrapped in `if [ -f Podfile ]` because Capacitor
+          # 8 supports BOTH CocoaPods (legacy) and Swift Package Manager
+          # (default for new projects). SPM projects don't have a Podfile;
+          # trying to `pod install` errors out and breaks the build.
+          if [ -f ios/App/Podfile ]; then
+            ( cd ios/App && pod install )
+          else
+            echo "No Podfile found — Capacitor is using Swift Package Manager. Skipping pod install."
+          fi
+          # Diagnostic: log directory contents so the next failure (if any)
+          # tells us what DID get created.
           ls -la ios/App/
 
       - name: Inject Info.plist permission strings
@@ -182,10 +192,27 @@ workflows:
           xcode-project use-profiles
 
       - name: Build and export IPA
+        # Capacitor 8 supports both CocoaPods (workspace) and Swift Package
+        # Manager (xcodeproj-only). Detect which layout is present and pass
+        # the right --workspace / --project flag to xcode-project build-ipa.
+        # `$XCODE_WORKSPACE` (declared in env vars) is used as a hint for the
+        # CocoaPods path but only honored if the workspace actually exists.
         script: |
-          xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
+          if [ -d "$XCODE_WORKSPACE" ]; then
+            echo "Building from workspace: $XCODE_WORKSPACE"
+            xcode-project build-ipa \
+              --workspace "$XCODE_WORKSPACE" \
+              --scheme "$XCODE_SCHEME"
+          elif [ -d "ios/App/App.xcodeproj" ]; then
+            echo "No workspace found; building from xcodeproj (SPM layout)"
+            xcode-project build-ipa \
+              --project "ios/App/App.xcodeproj" \
+              --scheme "$XCODE_SCHEME"
+          else
+            echo "ERROR: neither $XCODE_WORKSPACE nor ios/App/App.xcodeproj exists"
+            ls -la ios/ ios/App/ 2>/dev/null
+            exit 1
+          fi
 
     artifacts:
       - build/ios/ipa/*.ipa
