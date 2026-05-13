@@ -197,17 +197,30 @@ workflows:
         # the right --workspace / --project flag to xcode-project build-ipa.
         # `$XCODE_WORKSPACE` (declared in env vars) is used as a hint for the
         # CocoaPods path but only honored if the workspace actually exists.
+        #
+        # `-allowProvisioningUpdates` lets Xcode automatically update the
+        # project's signing settings to use the provisioning profile that
+        # the previous "Set up code signing" step fetched into the keychain.
+        # Without it, builds fail with:
+        #   "App" requires a provisioning profile. Select a provisioning
+        #   profile in the Signing & Capabilities editor.
+        # because the Capacitor-scaffolded App.xcodeproj is set to Automatic
+        # signing with no team / profile assigned by default.
         script: |
+          ARCHIVE_FLAGS="-allowProvisioningUpdates"
+
           if [ -d "$XCODE_WORKSPACE" ]; then
             echo "Building from workspace: $XCODE_WORKSPACE"
             xcode-project build-ipa \
               --workspace "$XCODE_WORKSPACE" \
-              --scheme "$XCODE_SCHEME"
+              --scheme "$XCODE_SCHEME" \
+              --archive-flags "$ARCHIVE_FLAGS"
           elif [ -d "ios/App/App.xcodeproj" ]; then
             echo "No workspace found; building from xcodeproj (SPM layout)"
             xcode-project build-ipa \
               --project "ios/App/App.xcodeproj" \
-              --scheme "$XCODE_SCHEME"
+              --scheme "$XCODE_SCHEME" \
+              --archive-flags "$ARCHIVE_FLAGS"
           else
             echo "ERROR: neither $XCODE_WORKSPACE nor ios/App/App.xcodeproj exists"
             ls -la ios/ ios/App/ 2>/dev/null
