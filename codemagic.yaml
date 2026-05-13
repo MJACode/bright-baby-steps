@@ -19,12 +19,16 @@ workflows:
         BUNDLE_ID: com.graceflare.app
         XCODE_WORKSPACE: ios/App/App.xcworkspace
         XCODE_SCHEME: App
-        # --- Set these in Codemagic UI → Environment variables ---
-        # APP_STORE_CONNECT_ISSUER_ID     (App Store Connect API key issuer ID)
-        # APP_STORE_CONNECT_KEY_IDENTIFIER (App Store Connect API key ID)
-        # APP_STORE_CONNECT_PRIVATE_KEY   (Contents of the .p8 key file)
-        # CERTIFICATE_PRIVATE_KEY         (RSA private key for your distribution cert)
-        # VITE_APP_URL                    (Your production HTTPS URL, once you have one)
+        # --- Codemagic UI → Environment variables (Secure unless noted) ---
+        # VITE_APP_URL              https://graceflare.com  (Plain text)
+        # CERTIFICATE_PRIVATE_KEY   RSA priv key Codemagic uses to encrypt
+        #                           fetched signing certs. Generate with:
+        #                             ssh-keygen -t rsa -b 2048 -m PEM \
+        #                               -f codemagic_signing -q -N ""
+        # --- Codemagic UI → Team integrations → App Store Connect ---
+        # The Issuer ID + Key ID + .p8 file are configured there, not as
+        # env vars. The `auth: integration` line under publishing
+        # references that integration. Same key drives `ios_signing` above.
       node: 20
       xcode: latest
       cocoapods: default
@@ -146,8 +150,11 @@ workflows:
         auth: integration
         # Uploads to TestFlight automatically on every successful build.
         # Promote to App Store manually from App Store Connect once ready.
+        # `cancel_previous_submissions` is intentionally omitted: it only
+        # applies to App Store review submissions (`submit_to_app_store`),
+        # which we don't do here. Codemagic's validator rejects the flag
+        # when paired with TestFlight-only publishing.
         submit_to_testflight: true
-        cancel_previous_submissions: true
       email:
         recipients:
           - $CM_SUBMITTER  # Codemagic sends build status to the triggering user
