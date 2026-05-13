@@ -195,34 +195,64 @@ workflows:
         # Capacitor 8 supports both CocoaPods (workspace) and Swift Package
         # Manager (xcodeproj-only). Detect which layout is present and pass
         # the right --workspace / --project flag to xcode-project build-ipa.
-        # `$XCODE_WORKSPACE` (declared in env vars) is used as a hint for the
-        # CocoaPods path but only honored if the workspace actually exists.
         #
-        # `-allowProvisioningUpdates` lets Xcode automatically update the
-        # project's signing settings to use the provisioning profile that
-        # the previous "Set up code signing" step fetched into the keychain.
-        # Without it, builds fail with:
+        # Signing override (the meat of this step):
+        # The earlier "Set up code signing" step fetches the App Store
+        # provisioning profile + iOS Distribution cert via
+        # `app-store-connect fetch-signing-files --create` and installs them
+        # into the build keychain. Then `xcode-project use-profiles` is
+        # supposed to update the .pbxproj's CODE_SIGN_STYLE,
+        # DEVELOPMENT_TEAM, and PROVISIONING_PROFILE_SPECIFIER to use the
+        # fetched profile. With Capacitor 8 + SPM projects, use-profiles
+        # only partially applies (switches to Manual but leaves team blank),
+        # producing the build error:
         #   "App" requires a provisioning profile. Select a provisioning
         #   profile in the Signing & Capabilities editor.
-        # because the Capacitor-scaffolded App.xcodeproj is set to Automatic
-        # signing with no team / profile assigned by default.
+        #
+        # Fix: extract the team ID and profile name directly from the
+        # installed .mobileprovision file and pass them to xcodebuild via
+        # --archive-xcargs. This bypasses use-profiles entirely and makes
+        # the signing config explicit at build time.
         script: |
-          # NOTE on the `=` syntax: --archive-flags's value `-allowProvisioningUpdates`
-          # starts with `-`, which Python's argparse refuses to consume as a positional
-          # value (it thinks it's another flag). Using `--archive-flags=...` joins them
-          # into a single token so argparse parses it correctly.
+          # Find the installed provisioning profile and decode its plist.
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_FILE=$(find "$PROFILE_DIR" -maxdepth 1 -name "*.mobileprovision" | head -1)
+          if [ -z "$PROFILE_FILE" ]; then
+            echo "ERROR: no .mobileprovision found in $PROFILE_DIR"
+            ls -la "$PROFILE_DIR" 2>/dev/null || echo "  (directory missing)"
+            exit 1
+          fi
+          echo "Profile file: $PROFILE_FILE"
+
+          TEAM_ID=$(security cms -D -i "$PROFILE_FILE" | \
+            python3 -c "import sys, plistlib; d = plistlib.loads(sys.stdin.buffer.read()); print(d['TeamIdentifier'][0])")
+          PROFILE_NAME=$(security cms -D -i "$PROFILE_FILE" | \
+            python3 -c "import sys, plistlib; d = plistlib.loads(sys.stdin.buffer.read()); print(d['Name'])")
+          echo "Team ID:       $TEAM_ID"
+          echo "Profile name:  $PROFILE_NAME"
+
+          XCARGS="DEVELOPMENT_TEAM=$TEAM_ID PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME CODE_SIGN_STYLE=Manual"
+          echo "Archive xcargs: $XCARGS"
+
+          # NOTE on the `=` syntax for --archive-flags: the value
+          # `-allowProvisioningUpdates` starts with `-`, which Python's
+          # argparse refuses to consume as a positional value (thinks it's
+          # another flag). Using `--archive-flags=...` joins them into a
+          # single token so argparse parses it correctly.
           if [ -d "$XCODE_WORKSPACE" ]; then
             echo "Building from workspace: $XCODE_WORKSPACE"
             xcode-project build-ipa \
               --workspace "$XCODE_WORKSPACE" \
               --scheme "$XCODE_SCHEME" \
-              --archive-flags=-allowProvisioningUpdates
+              --archive-flags=-allowProvisioningUpdates \
+              --archive-xcargs "$XCARGS"
           elif [ -d "ios/App/App.xcodeproj" ]; then
             echo "No workspace found; building from xcodeproj (SPM layout)"
             xcode-project build-ipa \
               --project "ios/App/App.xcodeproj" \
               --scheme "$XCODE_SCHEME" \
-              --archive-flags=-allowProvisioningUpdates
+              --archive-flags=-allowProvisioningUpdates \
+              --archive-xcargs "$XCARGS"
           else
             echo "ERROR: neither $XCODE_WORKSPACE nor ios/App/App.xcodeproj exists"
             ls -la ios/ ios/App/ 2>/dev/null
