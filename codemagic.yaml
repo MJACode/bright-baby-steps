@@ -140,7 +140,18 @@ workflows:
           xcrun agvtool new-version -all "$(date +%s)"
 
       - name: Set up code signing
-        script: xcode-project use-profiles
+        # Codemagic's automatic signing (configured via `environment.ios_signing`)
+        # sometimes fails with "No matching profiles found" on first build for a
+        # new Bundle ID — the auto-create step doesn't always trigger reliably.
+        # Calling `fetch-signing-files --create` explicitly forces Codemagic to
+        # create the iOS Distribution cert and App Store provisioning profile
+        # via the App Store Connect API if they don't already exist. Subsequent
+        # builds reuse the same cert + profile. Idempotent.
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          xcode-project use-profiles
 
       - name: Build and export IPA
         script: |
