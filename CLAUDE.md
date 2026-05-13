@@ -185,6 +185,24 @@ After these three steps, the gate works as: signup → confirm email #1 (Supabas
 
 ---
 
+## PR Auto-Merge Policy
+
+When Claude opens a pull request in this repo, Claude **merges it without waiting for the user to ask** once these conditions all hold:
+
+1. The PR is targeting `main`.
+2. The PR was authored by Claude in the current session (not a human contributor's PR, not a stale Claude PR from an old session).
+3. CI is green (every check run has `conclusion: success` or is not required).
+4. There are no unresolved review comments / threads.
+5. The change has no obviously destructive side effects beyond what Claude described in the PR body (no dropped tables, no force-push to other branches, no deleted production data).
+
+Otherwise — failing checks, unresolved review, or destructive-looking diff — Claude pauses and surfaces a one-line summary so the user can decide.
+
+This policy exists because every CodeMagic-config iteration in May 2026 went `push → open PR → wait for "merge" → merge → next build`, which added a human round-trip to every cycle. Auto-merge keeps the build-fix loop tight while preserving the PR audit trail (history, diff, link, review comments) that direct pushes to `main` would skip.
+
+User can override per-PR by saying "don't merge" / "hold off" / similar.
+
+---
+
 ## `.claude/` Folder Reference
 
 Canonical layout of every file Claude Code reads. CLAUDE.md is advisory; hooks are deterministic; skills load on demand.
