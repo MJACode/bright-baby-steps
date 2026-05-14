@@ -287,10 +287,19 @@ workflows:
             python3 -c "import sys, plistlib; d = plistlib.loads(sys.stdin.buffer.read()); print(d['TeamIdentifier'][0])")
           PROFILE_NAME=$(security cms -D -i "$PROFILE_FILE" | \
             python3 -c "import sys, plistlib; d = plistlib.loads(sys.stdin.buffer.read()); print(d['Name'])")
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_FILE" | \
+            python3 -c "import sys, plistlib; d = plistlib.loads(sys.stdin.buffer.read()); print(d['UUID'])")
           echo "Team ID:       $TEAM_ID"
           echo "Profile name:  $PROFILE_NAME"
+          echo "Profile UUID:  $PROFILE_UUID"
 
-          XCARGS="DEVELOPMENT_TEAM=$TEAM_ID PROVISIONING_PROFILE_SPECIFIER=$PROFILE_NAME CODE_SIGN_STYLE=Manual"
+          # Use the UUID (not the name) as PROVISIONING_PROFILE_SPECIFIER.
+          # `xcode-project build-ipa --archive-xcargs` forwards the value
+          # to xcodebuild by splitting on whitespace, so a name like
+          # `Grace Flare ios_app_store 1778718709` gets mangled into four
+          # tokens. UUIDs are guaranteed space-free, and xcodebuild's
+          # specifier accepts either name or UUID.
+          XCARGS="DEVELOPMENT_TEAM=$TEAM_ID PROVISIONING_PROFILE_SPECIFIER=$PROFILE_UUID CODE_SIGN_STYLE=Manual"
           echo "Archive xcargs: $XCARGS"
 
           # NOTE on the `=` syntax for --archive-flags: the value
