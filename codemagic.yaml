@@ -256,13 +256,25 @@ workflows:
         # the signing config explicit at build time.
         script: |
           # Find the installed provisioning profile and decode its plist.
-          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          PROFILE_FILE=$(find "$PROFILE_DIR" -maxdepth 1 \
+          # Xcode 16 / codemagic-cli-tools install profiles into the new
+          # `~/Library/Developer/Xcode/UserData/Provisioning Profiles/`
+          # directory; older Xcode versions used
+          # `~/Library/MobileDevice/Provisioning Profiles/`. Search both
+          # so this step works regardless of which path the toolchain
+          # populates.
+          NEW_PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          LEGACY_PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILE_FILE=$(find \
+            "$NEW_PROFILE_DIR" "$LEGACY_PROFILE_DIR" \
+            -maxdepth 1 \
             \( -name "*.mobileprovision" -o -name "*.provisionprofile" \) \
-            | head -1)
+            2>/dev/null | head -1)
           if [ -z "$PROFILE_FILE" ]; then
-            echo "ERROR: no provisioning profile found in $PROFILE_DIR"
-            ls -la "$PROFILE_DIR" 2>/dev/null || echo "  (directory missing)"
+            echo "ERROR: no provisioning profile found in either"
+            echo "  $NEW_PROFILE_DIR"
+            echo "  $LEGACY_PROFILE_DIR"
+            ls -la "$NEW_PROFILE_DIR" 2>/dev/null || echo "  ($NEW_PROFILE_DIR missing)"
+            ls -la "$LEGACY_PROFILE_DIR" 2>/dev/null || echo "  ($LEGACY_PROFILE_DIR missing)"
             echo "--- Searching whole \$HOME for any profile file ---"
             find "$HOME" -name "*.mobileprovision" -o -name "*.provisionprofile" 2>/dev/null || true
             echo "--- Keychain identities (codesigning) ---"
