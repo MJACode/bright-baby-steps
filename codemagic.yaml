@@ -24,6 +24,15 @@ workflows:
       # a new Bundle ID fails with "No matching profiles found" and never runs
       # the "Set up code signing" script step (where --create lives). Manual
       # script-driven signing (below) bypasses the auto-flow entirely.
+      groups:
+        # Imports the "GraceFlare" environment-variable group from the
+        # Codemagic UI (App → Environment variables → Group: GraceFlare).
+        # Without this line, variables added to that group (notably
+        # CERTIFICATE_PRIVATE_KEY) aren't exposed to the workflow's shell,
+        # and `app-store-connect fetch-signing-files --certificate-key`
+        # fails with `Environment variable "CERTIFICATE_PRIVATE_KEY" is
+        # not defined`.
+        - GraceFlare
       vars:
         BUNDLE_ID: com.graceflare.app
         XCODE_WORKSPACE: ios/App/App.xcworkspace
