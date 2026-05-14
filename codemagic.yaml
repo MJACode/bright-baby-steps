@@ -142,6 +142,16 @@ workflows:
           add_or_set "NSPhotoLibraryAddUsageDescription" \
             "Grace Flare can save milestone photos back to your photo library so they show up in your camera roll."
 
+          # ITSAppUsesNonExemptEncryption=false declares the app uses only
+          # exempt encryption (HTTPS / TLS via Apple's URLSession + WKWebView,
+          # iOS Keychain). With this key present, App Store Connect skips the
+          # "Export Compliance Information" prompt on every TestFlight upload.
+          # Flip to <true/> only if a future version bundles its own crypto
+          # library (OpenSSL, libsodium, etc.) — then upload the matching
+          # compliance documentation under Apple's BIS / EAR rules.
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
+
       - name: Register deep link URL scheme (graceflare://)
         # Supabase auth redirects (password reset, email confirmation) open via this scheme.
         # Add graceflare://localhost to your Supabase Auth → Redirect URLs list.
