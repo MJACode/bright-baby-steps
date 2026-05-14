@@ -110,7 +110,12 @@ workflows:
 
       - name: Inject Info.plist permission strings
         # Apple rejects any app that uses a protected API without a usage description.
-        # These four keys cover camera, Face ID, speech recognition, and microphone.
+        # These six keys cover camera, Face ID, speech recognition, microphone,
+        # and read/write access to the system photo library. The two photo-library
+        # keys are required even though the app never directly reads from the
+        # library — Capacitor's Camera plugin statically references PHPhotoLibrary
+        # and Apple's automated review (ITMS-90683) rejects any binary that links
+        # those symbols without the matching usage description.
         script: |
           PLIST="ios/App/App/Info.plist"
 
@@ -130,6 +135,12 @@ workflows:
 
           add_or_set "NSMicrophoneUsageDescription" \
             "Grace Flare uses the microphone to capture your voice for hands-free logging."
+
+          add_or_set "NSPhotoLibraryUsageDescription" \
+            "Grace Flare lets you pick existing photos from your library to attach to milestones."
+
+          add_or_set "NSPhotoLibraryAddUsageDescription" \
+            "Grace Flare can save milestone photos back to your photo library so they show up in your camera roll."
 
       - name: Register deep link URL scheme (graceflare://)
         # Supabase auth redirects (password reset, email confirmation) open via this scheme.
