@@ -345,13 +345,26 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        # Uploads to TestFlight automatically on every successful build.
+        # Uploads the IPA to App Store Connect on every successful build.
+        # Internal TestFlight testers (added in App Store Connect → Users
+        # and Access → TestFlight Internal Testers) can install the build
+        # as soon as Apple finishes processing it (~5-10 min after upload).
+        #
+        # `submit_to_testflight: false` is deliberate for v1. Setting it
+        # to `true` would submit the build for **external** TestFlight
+        # review, which requires Beta App Information (Feedback Email)
+        # and Beta App Review Information (First/Last Name, Phone, Email)
+        # to be filled in at
+        #   https://appstoreconnect.apple.com/apps/6763634933/testflight/test-info
+        # When you're ready to invite people outside the dev team, fill
+        # those fields in and flip this flag back to true.
+        #
         # Promote to App Store manually from App Store Connect once ready.
         # `cancel_previous_submissions` is intentionally omitted: it only
         # applies to App Store review submissions (`submit_to_app_store`),
         # which we don't do here. Codemagic's validator rejects the flag
         # when paired with TestFlight-only publishing.
-        submit_to_testflight: true
+        submit_to_testflight: false
       # The `email` publishing block was removed: Codemagic's validator
       # evaluates `$CM_SUBMITTER` to None at validation time and rejects
       # null as a recipient. Build outcomes are still visible in the
