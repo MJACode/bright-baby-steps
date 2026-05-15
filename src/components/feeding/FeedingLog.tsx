@@ -275,7 +275,16 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
           </h2>
           <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s feeding log</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open);
+            if (!open) {
+              resetForm();
+              setActiveRow(null);
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button size="icon" className="rounded-full bg-feeding hover:bg-feeding/90 text-white touch-target w-12 h-12">
               <Plus className="w-6 h-6" />
@@ -427,9 +436,25 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
               </div>
 
-              <Button type="button" onClick={() => saveMutation.mutate()} className="w-full touch-target bg-feeding hover:bg-feeding/90" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
-              </Button>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 touch-target"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={saveMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => saveMutation.mutate()}
+                  className="flex-1 touch-target bg-feeding hover:bg-feeding/90"
+                  disabled={saveMutation.isPending}
+                >
+                  {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

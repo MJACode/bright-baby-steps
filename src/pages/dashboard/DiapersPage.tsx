@@ -334,24 +334,35 @@ export default function DiapersPage() {
               />
             </div>
 
-            <Button
-              type="button"
-              onClick={() => {
-                if (!logTime) {
-                  toast({ title: "Please set a time", variant: "destructive" });
-                  return;
-                }
-                if (diaperType !== "wet" && (!selectedColor || !selectedConsistency)) {
-                  toast({ title: "Please fill in all required fields", description: "Color and consistency are required for dirty or both diapers.", variant: "destructive" });
-                  return;
-                }
-                saveMutation.mutate();
-              }}
-              disabled={saveMutation.isPending}
-              className="w-full h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
-            >
-              {saveMutation.isPending ? "Saving..." : editingId ? "Update" : "Save"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-12 text-base rounded-xl touch-target"
+                onClick={() => setModalOpen(false)}
+                disabled={saveMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (!logTime) {
+                    toast({ title: "Please set a time", variant: "destructive" });
+                    return;
+                  }
+                  if (diaperType !== "wet" && (!selectedColor || !selectedConsistency)) {
+                    toast({ title: "Please fill in all required fields", description: "Color and consistency are required for dirty or both diapers.", variant: "destructive" });
+                    return;
+                  }
+                  saveMutation.mutate();
+                }}
+                disabled={saveMutation.isPending}
+                className="flex-1 h-12 text-base font-bold rounded-xl touch-target bg-diapers hover:bg-diapers/90 text-white"
+              >
+                {saveMutation.isPending ? "Saving..." : editingId ? "Update" : "Save"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

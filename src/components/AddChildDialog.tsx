@@ -83,9 +83,16 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
     }
   }, [child, open]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !dob) return;
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!name.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
+      return;
+    }
+    if (!dob) {
+      toast({ title: "Date of birth is required", variant: "destructive" });
+      return;
+    }
 
     // COPPA email-plus VPC gate: only required when CREATING a new child.
     // Edit mode bypasses (the child already exists; the original VPC covers it).
@@ -199,9 +206,32 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
             <p className="text-xs text-muted-foreground">Used to calculate adjusted age for milestones.</p>
           </div>
         )}
-        <Button type="submit" className="w-full touch-target" disabled={addChild.isPending || updateChild.isPending || checkingVpc}>
-          {checkingVpc ? "Verifying parental consent…" : (addChild.isPending || updateChild.isPending) ? "Saving..." : isEditMode ? "Save Changes" : "Add Child"}
-        </Button>
+        <div className="flex gap-2 pt-1">
+          {isEditMode && (
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 touch-target"
+              onClick={() => setOpen(false)}
+              disabled={addChild.isPending || updateChild.isPending || checkingVpc}
+            >
+              Cancel
+            </Button>
+          )}
+          <Button
+            type="submit"
+            className="flex-1 touch-target"
+            disabled={addChild.isPending || updateChild.isPending || checkingVpc}
+            onClick={(e) => {
+              // Belt-and-suspenders on iOS WKWebView: trigger handleSubmit directly
+              // in case the surrounding form's onSubmit doesn't fire reliably.
+              e.preventDefault();
+              void handleSubmit();
+            }}
+          >
+            {checkingVpc ? "Verifying parental consent…" : (addChild.isPending || updateChild.isPending) ? "Saving..." : isEditMode ? "Save Changes" : "Add Child"}
+          </Button>
+        </div>
       </form>
       </>
       )}
