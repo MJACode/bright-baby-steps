@@ -590,9 +590,25 @@ export default function SleepPage() {
               onChange={setEditEndedAt}
               maxDate={new Date()}
             />
-            <Button type="button" onClick={() => updateLog.mutate()} className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white" disabled={updateLog.isPending}>
-              {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 touch-target"
+                onClick={() => setEditDialogOpen(false)}
+                disabled={updateLog.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => updateLog.mutate()}
+                className="flex-1 touch-target bg-sleep hover:bg-sleep/90 text-white"
+                disabled={updateLog.isPending}
+              >
+                {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
