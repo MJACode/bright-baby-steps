@@ -107,35 +107,36 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
     const isDateInFuture = new Date(dob) > new Date();
     const expectedFlag = isExpected || isDateInFuture;
 
+    // Send null (not undefined) so cleared fields actually clear server-side.
+    // supabase-js drops undefined keys from the payload before sending.
+    const payload = {
+      name: name.trim(),
+      date_of_birth: dob,
+      gender: gender || null,
+      is_premature: expectedFlag ? false : isPremature,
+      due_date: !expectedFlag && isPremature && dueDate ? dueDate : null,
+      is_expected: expectedFlag,
+    };
+
     try {
       if (isEditMode && child) {
-        await updateChild.mutateAsync({
-          id: child.id,
-          name: name.trim(),
-          date_of_birth: dob,
-          gender: gender || undefined,
-          is_premature: expectedFlag ? false : isPremature,
-          due_date: !expectedFlag && isPremature && dueDate ? dueDate : undefined,
-          is_expected: expectedFlag,
-        });
+        await updateChild.mutateAsync({ id: child.id, ...payload });
         toast({ title: "Saved! ✏️", description: `${name}'s profile has been updated.` });
       } else {
-        await addChild.mutateAsync({
-          name: name.trim(),
-          date_of_birth: dob,
-          gender: gender || undefined,
-          is_premature: expectedFlag ? false : isPremature,
-          due_date: !expectedFlag && isPremature && dueDate ? dueDate : undefined,
-          is_expected: expectedFlag,
-        });
+        await addChild.mutateAsync(payload);
         toast({ title: "Child added! 🌱", description: `${name} has been added to your profile.` });
       }
       setOpen(false);
       if (!isEditMode) {
         setName(""); setDob(""); setGender(""); setIsPremature(false); setDueDate(""); setIsExpected(false);
       }
-    } catch {
-      toast({ title: "Error", description: "Could not save. Please try again.", variant: "destructive" });
+    } catch (err) {
+      console.error("Could not save child", err);
+      toast({
+        title: "Couldn't save",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

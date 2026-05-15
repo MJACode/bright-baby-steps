@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { cn } from "@/lib/utils";
+import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
@@ -75,6 +76,8 @@ export default function DashboardLayout() {
           )}
         </div>
       </header>
+
+      {!isOnboarding && <ActiveSessionBanner />}
 
       {/* Main content */}
       <main className={cn("flex-1 px-4 py-5 max-w-lg mx-auto w-full", !isOnboarding && "pb-tab-bar")}>

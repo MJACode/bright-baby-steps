@@ -98,7 +98,12 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
                   </button>
                   <button
                     type="button"
-                    onClick={() => setEditingChild(child)}
+                    onClick={() => {
+                      // Close the Drawer first so it doesn't fight the edit Dialog
+                      // over focus trap / scroll lock, which made Save unresponsive.
+                      setOpen(false);
+                      setEditingChild(child);
+                    }}
                     className="h-10 w-10 rounded-xl flex items-center justify-center hover:bg-secondary transition-colors shrink-0"
                     aria-label={`Edit ${child.name}`}
                   >

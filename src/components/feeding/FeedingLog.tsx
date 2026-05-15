@@ -29,6 +29,8 @@ import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
 import BottleTimer from "@/components/feeding/BottleTimer";
+import type { ActiveFeedRow } from "@/hooks/useActiveFeed";
+import { useActiveFeed } from "@/hooks/useActiveFeed";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -115,6 +117,26 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     setDurationMin(minutes > 0 ? String(minutes) : "");
   }, []);
 
+  // While a nursing/bottle timer is running on this child, we receive the
+  // active feeding_logs row from the timer. Save then UPDATEs that row instead
+  // of INSERTing a new one.
+  const [activeRow, setActiveRow] = useState<ActiveFeedRow | null>(null);
+  const handleActiveRowChange = useCallback((row: ActiveFeedRow | null) => {
+    setActiveRow(row);
+  }, []);
+
+  // If a session is in-progress for this child when the user reopens FeedingLog,
+  // pop the dialog and pre-fill the feed type so the user sees the running timer.
+  const { active: hydratedActive } = useActiveFeed(activeChild?.id);
+  useEffect(() => {
+    if (!hydratedActive || dialogOpen || editingId) return;
+    if (hydratedActive.feeding_type !== "breast" && hydratedActive.feeding_type !== "bottle") return;
+    setFeedType(hydratedActive.feeding_type);
+    setSide(hydratedActive.side ?? "");
+    setLoggedAt(new Date(hydratedActive.logged_at));
+    setDialogOpen(true);
+  }, [hydratedActive, dialogOpen, editingId]);
+
   // Resume the in-progress solid feed when the user comes back from the
   // Allergen Tracker via the "← Back to your feed log" banner.
   useEffect(() => {
@@ -187,22 +209,44 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (editingId) {
+        // Editing an existing completed log.
         const { error } = await supabase.from("feeding_logs").update(getPayload()).eq("id", editingId);
         if (error) throw error;
-      } else {
-        const { error } = await supabase.from("feeding_logs").insert({
-          ...getPayload(),
-          child_id: activeChild!.id,
-          parent_id: user!.id,
-        });
-        if (error) throw error;
+        return;
       }
+      if (activeRow) {
+        // Finalize the active (timer-started) row. We must clear the in-progress
+        // markers so the row leaves the "active" set (duration_minutes IS NULL).
+        const payload = getPayload();
+        const { error } = await supabase
+          .from("feeding_logs")
+          .update({
+            ...payload,
+            // Use max(1, x) to guarantee the row leaves the active set even
+            // if the timer hadn't ticked a full minute yet.
+            duration_minutes: payload.duration_minutes ?? 1,
+            active_side: null,
+            side_started_at: null,
+          })
+          .eq("id", activeRow.id);
+        if (error) throw error;
+        return;
+      }
+      // Pure manual entry — no active session was running.
+      const { error } = await supabase.from("feeding_logs").insert({
+        ...getPayload(),
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", activeChild?.id] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
       setDialogOpen(false);
       resetForm();
+      setActiveRow(null);
       toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼" });
     },
   });
@@ -253,10 +297,13 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
 
               {feedType === "breast" && (
                 <NursingTimer
+                  childId={activeChild.id}
                   side={side}
                   onSideChange={setSide}
                   onDurationChange={handleTimerDuration}
+                  onActiveRowChange={handleActiveRowChange}
                   initialMinutes={durationMin ? Number(durationMin) : undefined}
+                  editMode={!!editingId}
                 />
               )}
 
@@ -300,8 +347,11 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               {feedType === "bottle" && (
                 <div className="space-y-3">
                   <BottleTimer
+                    childId={activeChild.id}
                     onDurationChange={handleTimerDuration}
+                    onActiveRowChange={handleActiveRowChange}
                     initialMinutes={durationMin ? Number(durationMin) : undefined}
+                    editMode={!!editingId}
                   />
                   <div className="space-y-1">
                     <Label>Amount (oz)</Label>

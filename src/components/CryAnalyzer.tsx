@@ -7,7 +7,7 @@
 // write `parent_id` instead of `logged_by`.
 
 import { useEffect, useState } from "react";
-import { Mic, Square, RotateCcw, Info, Loader2, AlertCircle } from "lucide-react";
+import { Mic, Square, RotateCcw, Info, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useCryAnalyzer } from "@/hooks/useCryAnalyzer";
@@ -16,6 +16,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
 import { toast } from "@/hooks/use-toast";
 import type { Json } from "@/integrations/supabase/types";
+import { useCryAnalyses } from "@/hooks/useCryAnalyses";
+import { formatDistanceToNowStrict } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
 
 const MAX_MS = 8000;
 
@@ -23,6 +26,7 @@ export function CryAnalyzer() {
   const { state, result, error, level, elapsedMs, start, stop, reset } =
     useCryAnalyzer({ maxDurationMs: MAX_MS });
   const { activeChild } = useChildren();
+  const queryClient = useQueryClient();
   const [logged, setLogged] = useState(false);
 
   useEffect(() => {
@@ -47,6 +51,7 @@ export function CryAnalyzer() {
       return;
     }
     setLogged(true);
+    queryClient.invalidateQueries({ queryKey: ["cry-analyses", activeChild.id] });
     toast({ title: "Logged" });
   };
 
@@ -55,7 +60,7 @@ export function CryAnalyzer() {
       <div>
         <h1 className="font-display text-2xl">Listen</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Hold the mic and let baby do the talking. We'll suggest what might be going on.
+          Hold the mic and let baby do the talking. We'll suggest what might be going on. Logged cries appear in the list below.
         </p>
       </div>
 
@@ -103,6 +108,72 @@ export function CryAnalyzer() {
             Try again
           </Button>
         </div>
+      )}
+
+      <CryHistoryList childId={activeChild?.id} />
+    </div>
+  );
+}
+
+function CryHistoryList({ childId }: { childId: string | undefined }) {
+  const { list, remove } = useCryAnalyses(childId, 10);
+
+  if (!childId) return null;
+
+  return (
+    <div className="space-y-2">
+      <h2 className="font-display text-base">Recent cries</h2>
+      {list.isLoading ? (
+        <p className="text-xs text-muted-foreground">Loading…</p>
+      ) : !list.data || list.data.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Cries you log will show up here.</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {list.data.map((row) => {
+            const bucketKey = (row.user_correction ?? row.bucket) as CryBucket;
+            const meta = BUCKET_LABELS[bucketKey] ?? BUCKET_LABELS.unknown;
+            const pct = Math.round(row.confidence * 100);
+            return (
+              <li
+                key={row.id}
+                className="rounded-xl border border-border bg-card px-3 py-2 flex items-center gap-3"
+              >
+                <div
+                  className="w-9 h-9 rounded-lg flex items-center justify-center text-lg shrink-0"
+                  style={{ backgroundColor: `hsl(var(--${meta.color}) / 0.15)` }}
+                >
+                  {meta.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">
+                    {meta.title.replace(/^Sounds like |^Could be /, "")}
+                    {row.user_correction && (
+                      <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                        corrected
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDistanceToNowStrict(new Date(row.occurred_at), { addSuffix: true })}
+                    {" · "}
+                    {pct}% confident
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground touch-target shrink-0"
+                  onClick={() => remove.mutate(row.id)}
+                  disabled={remove.isPending}
+                  aria-label="Delete cry"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

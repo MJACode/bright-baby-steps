@@ -1,73 +1,75 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Play, Pause, Square, Sun, Moon, ChevronDown, Clock } from "lucide-react";
+import { Play, Pause, Square, Sun, Moon, ChevronDown, Clock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+import { useActiveSleep, useElapsedSeconds, type SleepType } from "@/hooks/useActiveSleep";
 
 interface SleepTimerProps {
-  onSleepComplete: (durationMinutes: number, sleepType: "nap" | "night") => void;
-  isSaving?: boolean;
+  childId: string | undefined;
+  onManualSubmit: (durationMinutes: number, sleepType: SleepType) => Promise<void> | void;
+  isSavingManual?: boolean;
 }
 
-export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProps) {
-  const [sleepType, setSleepType] = useState<"nap" | "night">("nap");
-  const [isRunning, setIsRunning] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [startedAt, setStartedAt] = useState<Date | null>(null);
+export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: SleepTimerProps) {
+  const { active, start, pause, resume, stop, cancel, isStale } = useActiveSleep(childId);
+  const elapsedSeconds = useElapsedSeconds(active);
+
+  const [pendingSleepType, setPendingSleepType] = useState<SleepType>("nap");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualHours, setManualHours] = useState("");
   const [manualMinutes, setManualMinutes] = useState("");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const stopInterval = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+  const sleepType: SleepType = (active?.sleep_type as SleepType | undefined) ?? pendingSleepType;
+  const isRunning = !!active && !active.paused_at;
+  const timerActive = !!active;
+
+  const handleStart = async () => {
+    try {
+      await start.mutateAsync({ sleep_type: pendingSleepType });
+    } catch (err) {
+      // Partial unique index rejects a concurrent start from another device.
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("one_active_sleep_per_child")) {
+        toast({ title: "Already tracking", description: "A sleep is already running on another device." });
+      } else {
+        toast({ title: "Couldn't start", description: msg || "Please try again.", variant: "destructive" });
+      }
     }
-  }, []);
-
-  useEffect(() => {
-    return () => stopInterval();
-  }, [stopInterval]);
-
-  const handleStart = () => {
-    setStartedAt(new Date());
-    setElapsedSeconds(0);
-    setIsRunning(true);
-    intervalRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
   };
 
-  const handlePause = () => {
-    setIsRunning(false);
-    stopInterval();
+  const handleStop = async () => {
+    try {
+      const minutes = await stop.mutateAsync();
+      if (typeof minutes === "number") {
+        toast({ title: sleepType === "nap" ? "Nap logged! ☀️" : "Sleep logged! 🌙" });
+      }
+    } catch (err) {
+      toast({
+        title: "Couldn't save",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleResume = () => {
-    setIsRunning(true);
-    intervalRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
+  const handleCancel = async () => {
+    try {
+      await cancel.mutateAsync();
+    } catch (err) {
+      toast({ title: "Couldn't cancel", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    }
   };
 
-  const handleStop = () => {
-    stopInterval();
-    setIsRunning(false);
-    const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
-    onSleepComplete(durationMinutes, sleepType);
-    setElapsedSeconds(0);
-    setStartedAt(null);
-  };
-
-  const handleManualApply = () => {
+  const handleManualApply = async () => {
     const hrs = Number(manualHours) || 0;
     const mins = Number(manualMinutes) || 0;
     const totalMins = hrs * 60 + mins;
     if (totalMins > 0) {
-      onSleepComplete(totalMins, sleepType);
+      await onManualSubmit(totalMins, pendingSleepType);
       setManualOpen(false);
       setManualHours("");
       setManualMinutes("");
@@ -81,8 +83,6 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
     ? `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
     : `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
-  const timerActive = isRunning || elapsedSeconds > 0;
-
   return (
     <div className="space-y-4">
       {/* Sleep type toggle */}
@@ -92,9 +92,9 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
           variant={sleepType === "nap" ? "default" : "outline"}
           className={cn(
             "flex-1 touch-target gap-2 font-bold",
-            sleepType === "nap" && "bg-sleep hover:bg-sleep/90"
+            sleepType === "nap" && "bg-sleep hover:bg-sleep/90",
           )}
-          onClick={() => setSleepType("nap")}
+          onClick={() => setPendingSleepType("nap")}
           disabled={timerActive}
         >
           <Sun className="w-5 h-5" /> Nap
@@ -104,9 +104,9 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
           variant={sleepType === "night" ? "default" : "outline"}
           className={cn(
             "flex-1 touch-target gap-2 font-bold",
-            sleepType === "night" && "bg-sleep hover:bg-sleep/90"
+            sleepType === "night" && "bg-sleep hover:bg-sleep/90",
           )}
-          onClick={() => setSleepType("night")}
+          onClick={() => setPendingSleepType("night")}
           disabled={timerActive}
         >
           <Moon className="w-5 h-5" /> Night
@@ -118,19 +118,23 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
         <div
           className={cn(
             "font-mono text-5xl font-bold tracking-wider tabular-nums transition-colors",
-            isRunning ? "text-sleep" : "text-foreground"
+            isRunning ? "text-sleep" : "text-foreground",
           )}
         >
           {display}
         </div>
-        {isRunning && startedAt && (
+        {isRunning && active && (
           <span className="text-xs text-muted-foreground animate-pulse">
-            {sleepType === "nap" ? "Napping" : "Sleeping"} since {startedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}...
+            {sleepType === "nap" ? "Napping" : "Sleeping"} since{" "}
+            {new Date(active.started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}...
           </span>
         )}
-        {!isRunning && elapsedSeconds > 0 && (
-          <span className="text-xs text-muted-foreground">
-            Timer paused
+        {timerActive && !isRunning && (
+          <span className="text-xs text-muted-foreground">Timer paused</span>
+        )}
+        {isStale && (
+          <span className="text-xs text-destructive font-medium">
+            Still sleeping? Confirm or discard.
           </span>
         )}
       </div>
@@ -143,6 +147,7 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
             size="lg"
             className="flex-1 max-w-[200px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90 text-lg py-6"
             onClick={handleStart}
+            disabled={!childId || start.isPending}
           >
             <Play className="w-6 h-6" />
             {sleepType === "nap" ? "Start Nap" : "Start Sleep"}
@@ -155,7 +160,8 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
                 variant="outline"
                 size="lg"
                 className="flex-1 max-w-[140px] touch-target gap-2 font-bold"
-                onClick={handlePause}
+                onClick={() => pause.mutate()}
+                disabled={pause.isPending}
               >
                 <Pause className="w-5 h-5" /> Pause
               </Button>
@@ -165,7 +171,8 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
                 variant="outline"
                 size="lg"
                 className="flex-1 max-w-[140px] touch-target gap-2 font-bold"
-                onClick={handleResume}
+                onClick={() => resume.mutate()}
+                disabled={resume.isPending}
               >
                 <Play className="w-5 h-5" /> Resume
               </Button>
@@ -175,16 +182,32 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
               size="lg"
               className="flex-1 max-w-[140px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90"
               onClick={handleStop}
-              disabled={isSaving}
+              disabled={stop.isPending}
             >
               <Square className="w-5 h-5" />
-              {isSaving ? "Saving..." : "Stop & Save"}
+              {stop.isPending ? "Saving..." : "Stop & Save"}
             </Button>
           </>
         )}
       </div>
 
-      {/* Manual duration entry - only when timer not active */}
+      {/* Cancel — only when active, to delete the session without logging */}
+      {timerActive && (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground gap-1.5 touch-target"
+            onClick={handleCancel}
+            disabled={cancel.isPending}
+          >
+            <X className="w-4 h-4" /> Discard
+          </Button>
+        </div>
+      )}
+
+      {/* Manual duration entry — only when no active session */}
       {!timerActive && (
         <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
           <CollapsibleTrigger asChild>
@@ -229,11 +252,11 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
                 className="h-8 bg-sleep hover:bg-sleep/90 text-xs"
                 onClick={handleManualApply}
                 disabled={
-                  isSaving ||
+                  isSavingManual ||
                   ((Number(manualHours) || 0) * 60 + (Number(manualMinutes) || 0)) <= 0
                 }
               >
-                {isSaving ? "..." : "Save"}
+                {isSavingManual ? "..." : "Save"}
               </Button>
             </div>
           </CollapsibleContent>
@@ -243,7 +266,7 @@ export default function SleepTimer({ onSleepComplete, isSaving }: SleepTimerProp
       {/* Hint */}
       {!timerActive && !manualOpen && (
         <p className="text-xs text-center text-muted-foreground">
-          Tap Start to time, or enter duration manually
+          Tap Start to time, or enter duration manually. Timer keeps running if you close the app.
         </p>
       )}
     </div>

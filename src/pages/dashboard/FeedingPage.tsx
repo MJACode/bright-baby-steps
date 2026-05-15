@@ -11,6 +11,7 @@ import FeedingLog, { type SolidFeedDraft } from "@/components/feeding/FeedingLog
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 import SupplementTracker from "@/components/feeding/SupplementTracker";
 import PumpingSchedule from "@/components/feeding/PumpingSchedule";
+import { PageInstructions } from "@/components/PageInstructions";
 
 export default function FeedingPage() {
   const [tab, setTab] = useState("feeding");
@@ -61,6 +62,12 @@ export default function FeedingPage() {
 
   return (
     <div className="space-y-4">
+      <PageInstructions tint="feeding">
+        <p><strong>Feeding</strong> logs nursing, bottle, and solids. Nursing and bottle have live timers that keep running if you close the app.</p>
+        <p><strong>Supps</strong> tracks vitamin D and other supplements.</p>
+        <p><strong>Pump</strong> sets reminders and logs pumping sessions.</p>
+        <p><strong>Allergens</strong> walks through the 9 common allergen introductions safely.</p>
+      </PageInstructions>
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4 h-14 p-1 bg-muted/60">
           <TabsTrigger
