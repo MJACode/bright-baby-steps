@@ -315,6 +315,13 @@ export default function SleepPage() {
       queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
     },
+    onError: (err) => {
+      toast({
+        title: "Couldn't save sleep",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateLog = useMutation({

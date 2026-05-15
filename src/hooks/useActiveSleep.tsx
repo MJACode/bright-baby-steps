@@ -48,10 +48,15 @@ export function useActiveSleep(childId: string | undefined) {
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     queryFn: async (): Promise<ActiveSleepRow | null> => {
+      // Scope to source='timer' to mirror the feeding fix. Voice-logged sleeps
+      // (source='voice') and manually-entered sleeps (source='manual') can
+      // legitimately have NULL ended_at if the AI parse failed to capture an
+      // end time — those must not surface as active sessions.
       const { data, error } = await supabase
         .from("sleep_logs")
         .select("*")
         .eq("child_id", childId!)
+        .eq("source", "timer")
         .is("ended_at", null)
         .order("started_at", { ascending: false })
         .limit(1)
@@ -158,6 +163,10 @@ export function useActiveSleep(childId: string | undefined) {
 // Re-renders once per second while running.
 export function useElapsedSeconds(row: ActiveSleepRow | null | undefined): number {
   const [, force] = useState(0);
+  // Intentional: the effect depends on `row?.id` + `row?.paused_at`, not the
+  // whole `row` object. react-query returns a fresh reference per refetch,
+  // and we don't want the interval torn down + recreated on every poll.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!row || row.paused_at) return;
     const i = setInterval(() => force((n) => n + 1), 1000);

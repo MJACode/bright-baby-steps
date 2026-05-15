@@ -126,6 +126,10 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
 
   // Resume the in-progress solid feed when the user comes back from the
   // Allergen Tracker via the "← Back to your feed log" banner.
+  // Note: `dialogOpen` is intentionally NOT in the dep array. Reading it via
+  // closure is sufficient for the guard; including it would let the effect
+  // re-fire each time the dialog closes and re-open it (the regression
+  // captured in tasks/lessons-frontend.md).
   useEffect(() => {
     if (pendingResume && !dialogOpen) {
       setFeedType("solid");
@@ -137,7 +141,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       setDialogOpen(true);
       onConsumeResume?.();
     }
-  }, [pendingResume, dialogOpen, onConsumeResume]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingResume, onConsumeResume]);
 
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
@@ -168,9 +173,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     setAmountOzLeft(log.amount_oz_left ? String(log.amount_oz_left) : "");
     setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
     setFoodDesc(log.food_description || "");
-    setFoodCategory((log as any).food_category || "");
-    setReactionNoted((log as any).reaction_noted || false);
-    setReactionDescription((log as any).reaction_description || "");
+    setFoodCategory(log.food_category || "");
+    setReactionNoted(log.reaction_noted || false);
+    setReactionDescription(log.reaction_description || "");
     setNotes(log.notes || "");
     setLoggedAt(new Date(log.logged_at));
     setDialogOpen(true);
@@ -235,6 +240,13 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       resetForm();
       setActiveRow(null);
       toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't save feed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -448,11 +460,11 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {format(new Date(log.logged_at), "MMM d, h:mm a")}
-                    {(log as any).food_category && ` · ${foodCategories.find(c => c.value === (log as any).food_category)?.label || (log as any).food_category}`}
+                    {log.food_category && ` · ${foodCategories.find(c => c.value === log.food_category)?.label || log.food_category}`}
                   </p>
-                  {(log as any).reaction_noted && (
+                  {log.reaction_noted && (
                     <p className="text-xs text-[hsl(var(--warning))] flex items-center gap-1 mt-0.5">
-                      <AlertTriangle className="w-3 h-3" /> Reaction noted{(log as any).reaction_description ? `: ${(log as any).reaction_description}` : ""}
+                      <AlertTriangle className="w-3 h-3" /> Reaction noted{log.reaction_description ? `: ${log.reaction_description}` : ""}
                     </p>
                   )}
                 </div>

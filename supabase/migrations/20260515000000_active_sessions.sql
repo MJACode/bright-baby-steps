@@ -11,10 +11,13 @@
 -- no_overlapping_sleep exclusion constraint on commit. The pause/resume
 -- columns on sleep_logs preserve pause state across reload without client state.
 
--- One active sleep per child across all devices.
+-- One active sleep per child across all devices. Scoped to source='timer' so
+-- voice-logged sleeps (which can land with ended_at NULL when the AI parse
+-- didn't capture an end time) don't surface as phantom active sessions or
+-- collide with a freshly-started timer.
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_sleep_per_child
   ON public.sleep_logs (child_id)
-  WHERE ended_at IS NULL;
+  WHERE ended_at IS NULL AND source = 'timer';
 
 -- One active feed per child across all devices. "Active" = a timer-started row
 -- (source='timer') with duration_minutes still NULL. Scoping the predicate to

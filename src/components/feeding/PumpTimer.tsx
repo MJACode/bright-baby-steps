@@ -10,7 +10,6 @@ import {
   useActiveFeed,
   useSecondTicker,
   elapsedSecondsForSide,
-  type ActiveFeedRow,
   type FeedingSide,
 } from "@/hooks/useActiveFeed";
 
@@ -37,8 +36,8 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   const activeIsPump = !!active && active.feeding_type === "pump";
   useSecondTicker(!!activeIsPump && !!active?.active_side);
 
-  const leftSeconds = activeIsPump ? elapsedSecondsForSide(active as ActiveFeedRow, "left") : 0;
-  const rightSeconds = activeIsPump ? elapsedSecondsForSide(active as ActiveFeedRow, "right") : 0;
+  const leftSeconds = activeIsPump && active ? elapsedSecondsForSide(active, "left") : 0;
+  const rightSeconds = activeIsPump && active ? elapsedSecondsForSide(active, "right") : 0;
   const activeSide = (active?.active_side as FeedingSide | null) ?? null;
   const totalSeconds = leftSeconds + rightSeconds;
 
