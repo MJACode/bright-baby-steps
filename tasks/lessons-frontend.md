@@ -12,4 +12,4 @@ Read this file at the start of every task. Apply what's here.
 
 ## Open lessons
 
-(none yet — will accumulate as the agent ships work)
+- 2026-05-15 — Never put a state setter's source-of-truth (`dialogOpen`) in a `useEffect` dep array that also calls the setter unconditionally — infinite loop.

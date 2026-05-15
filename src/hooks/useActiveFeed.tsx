@@ -32,9 +32,17 @@ export type ActiveFeedRow = {
   source: string;
 };
 
-// An active feed has duration_minutes still NULL. Per the partial unique index
-// `one_active_feed_per_child`, there is at most one active feed per child
-// across all devices.
+// Sessions older than this are considered stale — the user almost certainly
+// forgot to stop them. We still surface them so the user can discard, but the
+// query window itself ignores anything older to keep banners / dialogs sane.
+const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
+
+// An active feed has source='timer' AND duration_minutes still NULL AND was
+// started within the last 12 hours. The `source='timer'` filter is critical:
+// solid feeds and bottle feeds without a recorded duration also store NULL
+// in duration_minutes, and pre-existing manual rows must not surface as
+// "active". The matching partial unique index `one_active_feed_per_child`
+// has the same predicate.
 export function useActiveFeed(childId: string | undefined) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -46,11 +54,14 @@ export function useActiveFeed(childId: string | undefined) {
     refetchOnWindowFocus: true,
     refetchOnMount: true,
     queryFn: async (): Promise<ActiveFeedRow | null> => {
+      const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
       const { data, error } = await supabase
         .from("feeding_logs")
         .select("*")
         .eq("child_id", childId!)
+        .eq("source", "timer")
         .is("duration_minutes", null)
+        .gte("logged_at", cutoff)
         .order("logged_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -58,6 +69,8 @@ export function useActiveFeed(childId: string | undefined) {
       return (data as ActiveFeedRow | null) ?? null;
     },
   });
+
+  const isStale = !!active && Date.now() - new Date(active.logged_at).getTime() > STALE_AFTER_MS;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", childId] });
@@ -167,7 +180,7 @@ export function useActiveFeed(childId: string | undefined) {
     onSuccess: invalidate,
   });
 
-  return { active, isLoading, start, setSide, stop, cancel };
+  return { active, isLoading, isStale, start, setSide, stop, cancel };
 }
 
 // Live "tick" hook — forces a re-render once per second while `enabled` so

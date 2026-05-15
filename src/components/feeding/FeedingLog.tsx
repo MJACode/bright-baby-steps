@@ -30,7 +30,6 @@ import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
 import BottleTimer from "@/components/feeding/BottleTimer";
 import type { ActiveFeedRow } from "@/hooks/useActiveFeed";
-import { useActiveFeed } from "@/hooks/useActiveFeed";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -124,18 +123,6 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const handleActiveRowChange = useCallback((row: ActiveFeedRow | null) => {
     setActiveRow(row);
   }, []);
-
-  // If a session is in-progress for this child when the user reopens FeedingLog,
-  // pop the dialog and pre-fill the feed type so the user sees the running timer.
-  const { active: hydratedActive } = useActiveFeed(activeChild?.id);
-  useEffect(() => {
-    if (!hydratedActive || dialogOpen || editingId) return;
-    if (hydratedActive.feeding_type !== "breast" && hydratedActive.feeding_type !== "bottle") return;
-    setFeedType(hydratedActive.feeding_type);
-    setSide(hydratedActive.side ?? "");
-    setLoggedAt(new Date(hydratedActive.logged_at));
-    setDialogOpen(true);
-  }, [hydratedActive, dialogOpen, editingId]);
 
   // Resume the in-progress solid feed when the user comes back from the
   // Allergen Tracker via the "← Back to your feed log" banner.

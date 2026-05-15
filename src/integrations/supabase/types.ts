@@ -558,6 +558,7 @@ export type Database = {
           parent_id: string
           photo_url: string | null
           updated_at: string
+          is_expected: boolean
         }
         Insert: {
           archived_at?: string | null
@@ -574,6 +575,7 @@ export type Database = {
           parent_id: string
           photo_url?: string | null
           updated_at?: string
+          is_expected?: boolean
         }
         Update: {
           archived_at?: string | null
@@ -590,6 +592,7 @@ export type Database = {
           parent_id?: string
           photo_url?: string | null
           updated_at?: string
+          is_expected?: boolean
         }
         Relationships: [
           {

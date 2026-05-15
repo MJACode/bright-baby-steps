@@ -16,12 +16,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_active_sleep_per_child
   ON public.sleep_logs (child_id)
   WHERE ended_at IS NULL;
 
--- One active feed per child across all devices. "Active" = duration_minutes IS NULL
--- (feeding_logs has no ended_at column; logged_at carries the start time while
--- a session is in-progress, and duration_minutes is filled in on Stop).
+-- One active feed per child across all devices. "Active" = a timer-started row
+-- (source='timer') with duration_minutes still NULL. Scoping the predicate to
+-- source='timer' is critical: solid feeds and bottle feeds without a recorded
+-- duration also use NULL legitimately, so a plain "duration_minutes IS NULL"
+-- index would (a) fail to create against existing manual rows and (b) surface
+-- those rows as "active" in useActiveFeed.
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_feed_per_child
   ON public.feeding_logs (child_id)
-  WHERE duration_minutes IS NULL;
+  WHERE duration_minutes IS NULL AND source = 'timer';
 
 -- Pause / resume state preserved server-side so reload survives without
 -- bespoke client state. paused_at NULL means "currently running".
