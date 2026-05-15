@@ -237,3 +237,27 @@ your-project/                       Project root for Claude Code
     ├── settings.json               Permissions, model, hook registry
     └── settings.local.json         Personal, gitignored
 ```
+
+---
+
+## Specialist Agents — Frontend / Backend / QA
+
+Three subagents in `.claude/agents/` carry the bulk of the implementation work. Each maintains its own lessons library so corrections persist across sessions.
+
+| Agent | Domain | Lessons file |
+|---|---|---|
+| `frontend` | UI: `src/components/**`, `src/pages/**`, client-state hooks, Tailwind, brand tokens | `tasks/lessons-frontend.md` |
+| `backend` | Supabase: `supabase/migrations/**`, `supabase/functions/**`, RLS, edge functions, cron, Vault | `tasks/lessons-backend.md` |
+| `qa` | Read-only QA reviewer. Runs after every non-trivial frontend or backend change | `tasks/lessons-qa.md` |
+
+**Routing rule.** Before writing code, decide which specialist owns the surface area and invoke that agent. The parent Claude orchestrates — it does not write the code itself on tasks that have a clear specialist. Mixed-surface tasks (e.g. a feature with both a migration and a UI) split into two delegations (backend first to land the schema, then frontend to wire the UI), with QA between the two if the backend change is risky.
+
+**QA-after-every-update rule.** After every non-trivial code update — frontend or backend — the parent Claude invokes the `qa` agent before declaring the task complete or running `git commit`. QA returns Pass / Fix-required / Investigate. On Fix-required, the originating specialist gets a second pass with QA's findings. Trivial changes (typo fix, comment edit, version bump, single-line config tweak) skip QA.
+
+**Lessons-library protocol.** When the user or the parent Claude corrects a specialist:
+
+1. The specialist appends a one-line entry to its lessons file: `- YYYY-MM-DD — <pattern that bit us> — <how to avoid it next time>`.
+2. Every specialist reads its lessons file at the start of every task.
+
+This is how the agents get better over time without bloating CLAUDE.md.
+
