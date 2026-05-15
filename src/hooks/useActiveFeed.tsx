@@ -70,8 +70,6 @@ export function useActiveFeed(childId: string | undefined) {
     },
   });
 
-  const isStale = !!active && Date.now() - new Date(active.logged_at).getTime() > STALE_AFTER_MS;
-
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", childId] });
     queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
@@ -180,7 +178,7 @@ export function useActiveFeed(childId: string | undefined) {
     onSuccess: invalidate,
   });
 
-  return { active, isLoading, isStale, start, setSide, stop, cancel };
+  return { active, isLoading, start, setSide, stop, cancel };
 }
 
 // Live "tick" hook — forces a re-render once per second while `enabled` so
