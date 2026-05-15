@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { format, differenceInHours, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
+import { PageInstructions } from "@/components/PageInstructions";
 
 const colors = ["yellow", "green", "brown", "dark-brown", "black", "red"];
 const consistencies = ["watery", "loose", "soft", "formed", "hard/pellets"];
@@ -183,6 +184,12 @@ export default function DiapersPage() {
           <Plus className="w-6 h-6" />
         </Button>
       </div>
+
+      <PageInstructions tint="diaper">
+        <p><strong>Wet, Dirty, Both</strong> — tap one of the three big buttons for a one-tap log.</p>
+        <p>Need to record color, consistency, or a rash? Tap the <strong>+</strong> button on the top right.</p>
+        <p>Tap the pencil on any row to edit or delete it.</p>
+      </PageInstructions>
 
       {/* Three quick-add buttons: wet, dirty, both — for one-tap logging */}
       <div className="grid grid-cols-3 gap-2">

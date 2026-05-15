@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { format, addHours, parseISO, differenceInMinutes, isToday, parse } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import PumpTimer from "@/components/feeding/PumpTimer";
 
 interface PumpingSchedule {
   id: string;
@@ -226,6 +227,8 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
 
   return (
     <div className="space-y-4">
+      <PumpTimer childId={activeChild?.id} />
+
       {/* Next session card */}
       {hasSchedule && schedule.is_active && (
         <Card className={cn(

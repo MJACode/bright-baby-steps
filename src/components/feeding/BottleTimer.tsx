@@ -1,14 +1,24 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Play, Pause, RotateCcw, ChevronDown, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+import {
+  useActiveFeed,
+  useSecondTicker,
+  elapsedSecondsBottle,
+  type ActiveFeedRow,
+} from "@/hooks/useActiveFeed";
 
 interface BottleTimerProps {
+  childId: string | undefined;
   onDurationChange: (minutes: number) => void;
+  onActiveRowChange?: (row: ActiveFeedRow | null) => void;
   initialMinutes?: number;
+  editMode?: boolean;
 }
 
 function formatTime(totalSeconds: number) {
@@ -17,47 +27,92 @@ function formatTime(totalSeconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-export default function BottleTimer({ onDurationChange, initialMinutes }: BottleTimerProps) {
-  const [seconds, setSeconds] = useState(initialMinutes ? initialMinutes * 60 : 0);
-  const [running, setRunning] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualMinutes, setManualMinutes] = useState("");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+// For bottle, we reuse the active_side mechanism as a single "is currently
+// running" flag: active_side='left' = running, active_side=null = paused.
+// duration_minutes_left holds the accumulated minutes; side_started_at marks
+// the start of the current running segment.
+export default function BottleTimer({
+  childId,
+  onDurationChange,
+  onActiveRowChange,
+  initialMinutes,
+  editMode,
+}: BottleTimerProps) {
+  const { active, start, setSide, cancel } = useActiveFeed(childId);
+  const activeIsBottle = !!active && active.feeding_type === "bottle";
+  useSecondTicker(!!activeIsBottle && !!active?.active_side);
 
-  const stopTicker = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
+  // Edit-mode fallback: keep the old in-memory ticker.
+  const [editSeconds, setEditSeconds] = useState(initialMinutes ? initialMinutes * 60 : 0);
+  const [editRunning, setEditRunning] = useState(false);
+  useEffect(() => {
+    if (!editMode || !editRunning) return;
+    const i = setInterval(() => setEditSeconds((s) => s + 1), 1000);
+    return () => clearInterval(i);
+  }, [editMode, editRunning]);
 
   useEffect(() => {
-    return () => stopTicker();
-  }, [stopTicker]);
+    if (editMode) return;
+    onActiveRowChange?.(activeIsBottle ? active : null);
+  }, [activeIsBottle, active, onActiveRowChange, editMode]);
 
-  useEffect(() => {
-    stopTicker();
-    if (running) {
-      intervalRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
-    }
-    return stopTicker;
-  }, [running, stopTicker]);
+  const seconds = editMode ? editSeconds : activeIsBottle ? elapsedSecondsBottle(active) : 0;
+  const running = editMode ? editRunning : !!active?.active_side;
 
   useEffect(() => {
     onDurationChange(Math.round(seconds / 60));
   }, [seconds, onDurationChange]);
 
-  const handleReset = () => {
-    setRunning(false);
-    setSeconds(0);
-    onDurationChange(0);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualMinutes, setManualMinutes] = useState("");
+
+  const toggle = async () => {
+    if (editMode) {
+      setEditRunning((r) => !r);
+      return;
+    }
+    if (!childId) return;
+    try {
+      if (!activeIsBottle) {
+        // First-time start.
+        await start.mutateAsync({ feeding_type: "bottle", side: "left" });
+        return;
+      }
+      // Pause / resume: clear or set active_side.
+      const target = running ? null : "left";
+      await setSide.mutateAsync({ nextSide: target });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("one_active_feed_per_child")) {
+        toast({ title: "Already feeding", description: "A feed is already running on another device." });
+      } else {
+        toast({ title: "Couldn't update timer", description: msg || "Please try again.", variant: "destructive" });
+      }
+    }
+  };
+
+  const handleReset = async () => {
+    if (editMode) {
+      setEditRunning(false);
+      setEditSeconds(0);
+      onDurationChange(0);
+      return;
+    }
+    if (!activeIsBottle) return;
+    try {
+      await cancel.mutateAsync();
+    } catch (err) {
+      toast({ title: "Couldn't reset", description: err instanceof Error ? err.message : "", variant: "destructive" });
+    }
   };
 
   const handleManualApply = () => {
     const mins = Number(manualMinutes);
     if (mins > 0) {
-      setRunning(false);
-      setSeconds(mins * 60);
+      if (editMode) {
+        setEditRunning(false);
+        setEditSeconds(mins * 60);
+      }
       onDurationChange(mins);
       setManualOpen(false);
       setManualMinutes("");
@@ -70,7 +125,7 @@ export default function BottleTimer({ onDurationChange, initialMinutes }: Bottle
         <div
           className={cn(
             "font-mono text-4xl font-bold tracking-wider tabular-nums transition-colors",
-            running ? "text-feeding" : "text-foreground"
+            running ? "text-feeding" : "text-foreground",
           )}
         >
           {formatTime(seconds)}
@@ -89,9 +144,10 @@ export default function BottleTimer({ onDurationChange, initialMinutes }: Bottle
           size="lg"
           className={cn(
             "flex-1 max-w-[160px] touch-target gap-2 font-bold",
-            !running && "bg-feeding hover:bg-feeding/90"
+            !running && "bg-feeding hover:bg-feeding/90",
           )}
-          onClick={() => setRunning((r) => !r)}
+          onClick={toggle}
+          disabled={!editMode && !childId}
         >
           {running ? <><Pause className="w-5 h-5" /> Pause</> :
            seconds > 0 ? <><Play className="w-5 h-5" /> Resume</> :

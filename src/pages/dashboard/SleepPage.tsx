@@ -21,6 +21,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
 import SleepTimer from "@/components/sleep/SleepTimer";
+import { PageInstructions } from "@/components/PageInstructions";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -536,10 +537,16 @@ export default function SleepPage() {
         </div>
       </div>
 
+      <PageInstructions tint="sleep">
+        <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
+        <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
+        <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
+      </PageInstructions>
+
       {/* Live Sleep Timer — Primary CTA */}
       <Card className="border-0 bg-sleep-bg/60">
         <CardContent className="p-4">
-          <SleepTimer onSleepComplete={handleTimerComplete} isSaving={savingTimer} />
+          <SleepTimer childId={activeChild?.id} onManualSubmit={handleTimerComplete} isSavingManual={savingTimer} />
         </CardContent>
       </Card>
 

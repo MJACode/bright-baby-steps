@@ -1044,6 +1044,7 @@ export type Database = {
       }
       feeding_logs: {
         Row: {
+          active_side: string | null
           amount_oz: number | null
           amount_oz_left: number | null
           amount_oz_right: number | null
@@ -1062,9 +1063,11 @@ export type Database = {
           reaction_description: string | null
           reaction_noted: boolean | null
           side: string | null
+          side_started_at: string | null
           source: string
         }
         Insert: {
+          active_side?: string | null
           amount_oz?: number | null
           amount_oz_left?: number | null
           amount_oz_right?: number | null
@@ -1083,9 +1086,11 @@ export type Database = {
           reaction_description?: string | null
           reaction_noted?: boolean | null
           side?: string | null
+          side_started_at?: string | null
           source?: string
         }
         Update: {
+          active_side?: string | null
           amount_oz?: number | null
           amount_oz_left?: number | null
           amount_oz_right?: number | null
@@ -1104,6 +1109,7 @@ export type Database = {
           reaction_description?: string | null
           reaction_noted?: boolean | null
           side?: string | null
+          side_started_at?: string | null
           source?: string
         }
         Relationships: [
@@ -1844,6 +1850,8 @@ export type Database = {
           id: string
           notes: string | null
           parent_id: string
+          paused_accumulated_seconds: number
+          paused_at: string | null
           quality: string | null
           sleep_type: string
           source: string
@@ -1858,6 +1866,8 @@ export type Database = {
           id?: string
           notes?: string | null
           parent_id: string
+          paused_accumulated_seconds?: number
+          paused_at?: string | null
           quality?: string | null
           sleep_type: string
           source?: string
@@ -1872,6 +1882,8 @@ export type Database = {
           id?: string
           notes?: string | null
           parent_id?: string
+          paused_accumulated_seconds?: number
+          paused_at?: string | null
           quality?: string | null
           sleep_type?: string
           source?: string
