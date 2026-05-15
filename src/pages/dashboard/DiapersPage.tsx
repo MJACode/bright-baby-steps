@@ -106,6 +106,13 @@ export default function DiapersPage() {
       setModalOpen(false);
       toast({ title: editingId ? "Diaper updated! ✏️" : "Diaper logged! 🧷" });
     },
+    onError: (err) => {
+      toast({
+        title: "Couldn't save diaper",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const quickLogMutation = useMutation({
@@ -133,6 +140,13 @@ export default function DiapersPage() {
         both: "Wet + dirty logged! 💧💩",
       };
       toast({ title: labels[type] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't log diaper",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 

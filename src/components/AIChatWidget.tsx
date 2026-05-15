@@ -21,14 +21,18 @@ type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Re
 
 export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "developmental" | "nutrition" | "sleep";
 
+// Skill colors map to brand module tokens where there's a natural match
+// (nutrition→feeding, sleep→sleep, financial→finance, developmental→milestones,
+// slp→milestones tint). Pediatrician uses the semantic destructive token to
+// signal "health concerns." General uses primary.
 const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description: string; color: string }[] = [
   { id: "general", label: "General", icon: Bot, description: "Ask anything about parenting", color: "bg-primary/15 text-primary" },
-  { id: "pediatrician", label: "Pediatrician", icon: Stethoscope, description: "Health, vaccines, illness", color: "bg-red-500/15 text-red-600" },
-  { id: "slp", label: "Speech (SLP)", icon: Speech, description: "Language milestones & activities", color: "bg-violet-500/15 text-violet-600" },
-  { id: "developmental", label: "Development", icon: Brain, description: "Motor, sensory & cognitive", color: "bg-amber-500/15 text-amber-600" },
-  { id: "nutrition", label: "Nutrition", icon: Apple, description: "Feeding, solids & allergens", color: "bg-green-500/15 text-green-600" },
-  { id: "sleep", label: "Sleep", icon: BedDouble, description: "Schedules, training & regressions", color: "bg-indigo-500/15 text-indigo-600" },
-  { id: "financial", label: "Financial", icon: Wallet, description: "529s, tax credits & budgeting", color: "bg-emerald-500/15 text-emerald-600" },
+  { id: "pediatrician", label: "Pediatrician", icon: Stethoscope, description: "Health, vaccines, illness", color: "bg-destructive/15 text-destructive" },
+  { id: "slp", label: "Speech (SLP)", icon: Speech, description: "Language milestones & activities", color: "bg-milestones/15 text-milestones" },
+  { id: "developmental", label: "Development", icon: Brain, description: "Motor, sensory & cognitive", color: "bg-accent/15 text-accent" },
+  { id: "nutrition", label: "Nutrition", icon: Apple, description: "Feeding, solids & allergens", color: "bg-feeding/15 text-feeding" },
+  { id: "sleep", label: "Sleep", icon: BedDouble, description: "Schedules, training & regressions", color: "bg-sleep/15 text-sleep" },
+  { id: "financial", label: "Financial", icon: Wallet, description: "529s, tax credits & budgeting", color: "bg-finance/15 text-finance" },
 ];
 
 const SKILL_SUGGESTIONS: Record<SkillId, string[]> = {

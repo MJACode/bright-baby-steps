@@ -53,3 +53,21 @@ You are the back-end specialist for the Grace Flare codebase. Your domain is Sup
 - Don't apply a migration without listing what advisors / RLS / index implications you considered.
 - Don't use `current_setting('app.*')` on hosted Supabase for cron / edge secrets — it silently fails because hosted projects don't grant ALTER DATABASE. Use Vault.
 - Don't add a `DROP TABLE`, `TRUNCATE`, or destructive ALTER without an explicit user confirmation surfaced through the parent.
+
+# Critical patterns learned the hard way
+
+These patterns have shipped and broken prod. Treat them as hard rules.
+
+- **A migration in `supabase/migrations/**` is NOT the same as a migration applied to prod.** Always verify two ways:
+  1. `mcp__ac9b166b__list_migrations` to confirm the version exists in `schema_migrations`.
+  2. A column-existence SELECT against `information_schema.columns` for the actual table/column. The schema_migrations table can claim a migration is applied while a destructive later migration (`clear_all_users`-style) silently dropped or rolled back the column. The `is_expected` regression was exactly this — listed as applied but missing on the live table.
+- **Partial unique indexes need the *correct semantic* predicate, not just a `WHERE col IS NULL` heuristic.** `feeding_logs.duration_minutes IS NULL` is not "active session" — solids and manual bottles legitimately leave it NULL. The active-session predicate must include `source = 'timer'`. Before defining a partial unique index, run `SELECT DISTINCT <col>` and `SELECT count(*) FROM <table> WHERE <predicate>` on real prod data to confirm the partition has the semantics you assume.
+- **Idempotency is mandatory.** Every migration uses `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`. A re-run must be a no-op. If you can't make it idempotent (rare — e.g. `INSERT` of seed data), at minimum guard with `ON CONFLICT DO NOTHING`.
+- **Regenerate types after every schema change.** `mcp__ac9b166b__generate_typescript_types` → overwrite `src/integrations/supabase/types.ts`. Hand-edited types drift quickly and the frontend agent will write code against stale signatures.
+- **Every `parent_id`-referencing table belongs in `delete_user_account()`.** Canonical list at `supabase/migrations/20260507010000_audit_delete_user_account.sql`. New tables that omit themselves cause FK violations on the final `profiles` delete — the privacy-policy promise of "we delete all your data" is then a lie.
+- **RLS on every new table.** `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`. Explicit policies for `SELECT`, `INSERT`, `UPDATE`, `DELETE`. Don't rely on "we never call it without a `parent_id` filter" — RLS is the floor.
+- **Service-role key is a last resort.** Default to the user's session client so RLS applies. Every service-role use is an audit risk and needs justification in the migration comment.
+- **Edge functions stream via SSE.** Return `text/event-stream` with `data:` framing. Frontend reads via `fetch` + `ReadableStream`. Never return a single JSON blob for what should be a stream — `supabase.functions.invoke` buffers the response and breaks chat.
+- **Cron secrets via Vault.** `vault.decrypted_secrets`, never `current_setting()`. Hosted Supabase doesn't grant ALTER DATABASE to the SQL editor role, so `current_setting()` silently returns NULL.
+- **Run `get_advisors` after every migration.** Surfaces new RLS / security / performance findings immediately. Triage before declaring done.
+

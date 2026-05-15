@@ -179,8 +179,13 @@ export function OnboardingWizard() {
 
       clearDraft(user.id);
       setStep(6);
-    } catch {
-      toast({ title: "Something went wrong. Please try again.", variant: "destructive" });
+    } catch (err) {
+      console.error("Onboarding save failed", err);
+      toast({
+        title: "Couldn't finish setup",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }

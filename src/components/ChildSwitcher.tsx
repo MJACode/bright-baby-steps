@@ -25,6 +25,7 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
   const { children, activeChild, setSelectedChildId } = useChildren();
   const [internalOpen, setInternalOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<(typeof children)[0] | null>(null);
+  const [addingChild, setAddingChild] = useState(false);
 
   const open = externalOpen !== undefined ? externalOpen || internalOpen : internalOpen;
   const setOpen = (v: boolean) => {
@@ -114,22 +115,30 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
             })}
           </div>
           <div className="px-4 pb-6 pt-1">
-            <AddChildDialog
-              trigger={
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-3 rounded-xl p-3 hover:bg-secondary transition-colors text-left"
-                >
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium text-primary">Add another child</span>
-                </button>
-              }
-            />
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setAddingChild(true);
+              }}
+              className="w-full flex items-center gap-3 rounded-xl p-3 hover:bg-secondary transition-colors text-left touch-target"
+            >
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Plus className="w-5 h-5 text-primary" />
+              </div>
+              <span className="text-sm font-medium text-primary">Add another child</span>
+            </button>
           </div>
         </DrawerContent>
       </Drawer>
+
+      {/* Add child dialog — rendered outside the Drawer so focus traps don't fight. */}
+      {addingChild && (
+        <AddChildDialog
+          open={addingChild}
+          onOpenChange={setAddingChild}
+        />
+      )}
 
       {/* Edit child dialog — rendered outside the Drawer so it can open on top */}
       {editingChild && (

@@ -48,3 +48,18 @@ You are the front-end specialist for the Grace Flare codebase. You own everythin
 - Don't edit `src/integrations/supabase/types.ts` by hand unless explicitly coordinating with backend on a freshly-added column.
 - Don't add a new color, font, or radius value to the brand palette without flagging it as a brand-guidelines change.
 - Don't open a PR or merge — the parent Claude owns git operations.
+
+# Critical patterns learned the hard way
+
+These patterns have shipped to main and broken users. Read these as hard rules, not guidelines.
+
+- **useEffect re-open loop.** Never put a state-setter's source-of-truth (`open`, `dialogOpen`, `isExpanded`) in a `useEffect` dep array if the same effect calls the setter inside the body. The effect re-fires on every set and traps the user. If you need "auto-pop on first detection," gate it with a `useRef(false)` "has-fired" sentinel instead.
+- **No auto-pop dialogs from global effects.** A passive banner (ActiveSessionBanner pattern) is the correct surface for "you have an in-progress thing." Yanking the user into a modal from a top-level effect is a usability footgun and a focus-trap nightmare.
+- **`supabase-js` strips `undefined` keys from UPDATE payloads.** `gender: gender || undefined` makes "clear gender" a silent no-op. Use `null` when the intent is "clear this field server-side." Grep your diffs for `|| undefined` before declaring done.
+- **Never `catch {}`** in a save / mutation path. Even `catch (_)` with no body. Every Supabase call needs a `catch (err)` that surfaces `err.message` via toast. Silent failures are how "I clicked save and nothing happened" bugs reach prod.
+- **shadcn Drawer + Dialog can't both be open at the same focus level.** Radix focus traps fight. When opening a Dialog from inside a Drawer (e.g. ChildSwitcher → AddChildDialog), close the Drawer first (`setOpen(false)`) in the same click handler.
+- **Hydrating form state from a prop snapshot is a stale-data trap.** When a Dialog re-opens and prefills from a `child` prop that was captured at click-time, the prefill is whatever the parent had cached, not the latest server state. Re-prefill in a `useEffect` keyed on `[child, open]`, and reset locally on `onOpenChange(false)`.
+- **TanStack Query invalidation is async.** A `mutateAsync` that resolves does not mean the consuming `useQuery` has refetched yet. Pair the mutation with the consumer's `queryKey` invalidation in `onSuccess` and don't rely on render order to surface fresh data — let the query refetch drive it.
+- **Brand tokens, not hex.** Search the diff for `#[0-9a-fA-F]{3,8}` before committing. Use `bg-primary`, `bg-accent`, `bg-feeding`, `bg-sleep`, `bg-diapers`, `bg-milestones`, `bg-finance` and their `-bg` tint variants. Module colors are not interchangeable.
+- **`min-h-[48px]`/`.touch-target` on every interactive element.** Mobile users + sleep-deprived parents need oversized hit targets. Buttons, switches, segmented toggles, swipe targets — all of them.
+

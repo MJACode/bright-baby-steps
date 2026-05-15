@@ -16,7 +16,13 @@ export function WindDownOverlay({ onClose }: { onClose: () => void }) {
       <p className="mt-8 text-lg font-display max-w-xs text-center">
         {secs > 0 ? "Breathe slow. Dim the lights." : "Lay them down."}
       </p>
-      <button className="mt-12 text-sm underline opacity-70" onClick={onClose}>Close</button>
+      <button
+        className="mt-12 text-sm underline opacity-70 touch-target px-4"
+        onClick={onClose}
+        aria-label="Close wind-down overlay"
+      >
+        Close
+      </button>
       <style>{`@keyframes pulseSlow { 0%,100% {transform:scale(1);opacity:.6} 50% {transform:scale(1.15);opacity:.3} }
         .animate-pulse-slow { animation: pulseSlow 4s ease-in-out infinite; }`}</style>
     </div>

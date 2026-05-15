@@ -162,7 +162,7 @@ export default function Auth() {
   };
 
   const descriptions: Record<View, string> = {
-    login: "Sign in to access your baby tracking dashboard",
+    login: "Sign in to your Grace Flare dashboard",
     signup: isGeoBlocked
       ? "Grace Flare is not currently available in the EEA or UK."
       : "Start tracking your baby's growth and speech development",

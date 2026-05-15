@@ -62,10 +62,14 @@ export default function NursingTimer({
   }, [editMode, editActive]);
 
   // Notify parent when the active row changes so it can save by UPDATE.
+  // Dep on `active?.id` (not the whole `active` object) — react-query returns
+  // a new object reference on every refetch, which would fire this effect on
+  // every focus/poll and cause an unnecessary parent re-render cascade.
   useEffect(() => {
     if (editMode) return;
     onActiveRowChange?.(activeIsBreast ? active : null);
-  }, [activeIsBreast, active, onActiveRowChange, editMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIsBreast, active?.id, onActiveRowChange, editMode]);
 
   const leftSeconds = editMode
     ? editLeft

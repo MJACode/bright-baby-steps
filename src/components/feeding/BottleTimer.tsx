@@ -51,10 +51,12 @@ export default function BottleTimer({
     return () => clearInterval(i);
   }, [editMode, editRunning]);
 
+  // Dep on `active?.id` — react-query returns a new reference per refetch.
   useEffect(() => {
     if (editMode) return;
     onActiveRowChange?.(activeIsBottle ? active : null);
-  }, [activeIsBottle, active, onActiveRowChange, editMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIsBottle, active?.id, onActiveRowChange, editMode]);
 
   const seconds = editMode ? editSeconds : activeIsBottle ? elapsedSecondsBottle(active) : 0;
   const running = editMode ? editRunning : !!active?.active_side;

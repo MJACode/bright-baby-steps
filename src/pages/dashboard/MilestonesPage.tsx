@@ -145,6 +145,13 @@ export default function MilestonesPage() {
         toast({ title: "🎉 Milestone achieved!" });
       }
     },
+    onError: (err) => {
+      toast({
+        title: "Couldn't update milestone",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateMilestonePhoto = useMutation({
@@ -159,6 +166,13 @@ export default function MilestonesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["child-milestones"] });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't save photo",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -211,6 +225,13 @@ export default function MilestonesPage() {
       setTimeout(() => setShowConfetti(false), 2000);
       toast({ title: "🎉 Custom milestone saved!" });
     },
+    onError: (err) => {
+      toast({
+        title: "Couldn't save milestone",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateCustomPhoto = useMutation({
@@ -223,6 +244,13 @@ export default function MilestonesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
     },
+    onError: (err) => {
+      toast({
+        title: "Couldn't update photo",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteCustomMilestone = useMutation({
@@ -233,6 +261,13 @@ export default function MilestonesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
       toast({ title: "Milestone removed" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't remove milestone",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
