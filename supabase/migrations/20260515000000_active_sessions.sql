@@ -41,3 +41,15 @@ ALTER TABLE public.feeding_logs
   ADD COLUMN IF NOT EXISTS active_side text NULL
     CHECK (active_side IS NULL OR active_side IN ('left', 'right')),
   ADD COLUMN IF NOT EXISTS side_started_at timestamptz NULL;
+
+-- Extend the source allowlist to include 'timer'. The original allowlist
+-- (migration 20260429020000_log_source) predates the timer-start flow added
+-- by useActiveFeed / useActiveSleep, which insert source='timer' on session
+-- start. Without this, every Start-timer INSERT throws a CHECK violation.
+ALTER TABLE public.feeding_logs DROP CONSTRAINT IF EXISTS feeding_logs_source_check;
+ALTER TABLE public.feeding_logs ADD CONSTRAINT feeding_logs_source_check
+  CHECK (source IN ('manual', 'voice', 'photo', 'watch', 'import', 'timer'));
+
+ALTER TABLE public.sleep_logs DROP CONSTRAINT IF EXISTS sleep_logs_source_check;
+ALTER TABLE public.sleep_logs ADD CONSTRAINT sleep_logs_source_check
+  CHECK (source IN ('manual', 'voice', 'photo', 'watch', 'import', 'timer'));
