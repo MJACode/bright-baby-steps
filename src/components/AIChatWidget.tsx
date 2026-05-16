@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -602,7 +603,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
         </div>
       )}
 
-      <div ref={scrollRef} className="overflow-y-auto p-3 space-y-3 h-[40dvh] max-h-64">
+      <div ref={scrollRef} className="overflow-y-auto p-3 space-y-3 h-[50dvh] max-h-[420px]">
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center py-2">
@@ -623,14 +624,21 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
         )}
         {messages.map((msg, i) => (
           <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
-            <div className={cn("max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed", msg.role === "user" ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-secondary text-foreground rounded-bl-sm")}>
+            <div
+              className={cn(
+                "max-w-[85%] text-sm leading-relaxed",
+                msg.role === "user"
+                  ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-sm"
+                  : "bg-muted/80 border border-border/40 text-foreground rounded-2xl rounded-bl-md px-3.5 py-2.5",
+              )}
+            >
               <p className="whitespace-pre-wrap">{msg.content}</p>
             </div>
           </div>
         ))}
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex justify-start">
-            <div className="bg-secondary rounded-2xl rounded-bl-sm px-3 py-2">
+            <div className="bg-muted/80 border border-border/40 rounded-2xl rounded-bl-md px-3.5 py-2.5">
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             </div>
           </div>
@@ -654,22 +662,60 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
         </div>
       )}
 
-      <div className="p-3 border-t border-border space-y-2">
-        <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
-          <Input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} placeholder={isListening ? "Listening..." : "Ask a question or log an entry..."} className={cn("flex-1 h-9 text-sm rounded-full", isListening && "border-primary ring-1 ring-primary")} disabled={isLoading} />
+      <div className="p-3 border-t border-border">
+        <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2 items-center bg-muted/40 rounded-full p-1.5">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={isListening ? "Listening..." : "Ask a question or log an entry..."}
+            className={cn(
+              "flex-1 h-10 text-sm border-0 bg-transparent focus-visible:ring-0 px-3",
+              isListening && "text-primary",
+            )}
+            disabled={isLoading}
+          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-10 w-10 rounded-full shrink-0 text-muted-foreground hover:text-foreground"
+                aria-label="About AI replies"
+              >
+                <Info className="w-4 h-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="top" align="end" className="w-64 text-xs leading-relaxed">
+              AI-generated using your child's tracked data. Replies are for general information only — not medical advice.{" "}
+              <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
+            </PopoverContent>
+          </Popover>
           {supportsVoice && (
-            <Button type="button" size="icon" variant={isListening ? "default" : "outline"} className={cn("h-9 w-9 rounded-full shrink-0", isListening && "bg-destructive hover:bg-destructive/90 animate-pulse")} onClick={toggleVoice} disabled={isLoading}>
+            <Button
+              type="button"
+              size="icon"
+              variant={isListening ? "default" : "ghost"}
+              className={cn(
+                "h-10 w-10 rounded-full shrink-0",
+                isListening && "bg-destructive hover:bg-destructive/90 animate-pulse text-destructive-foreground",
+              )}
+              onClick={toggleVoice}
+              disabled={isLoading}
+            >
               {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </Button>
           )}
-          <Button type="submit" size="icon" className="h-9 w-9 rounded-full bg-primary shrink-0" disabled={!input.trim() || isLoading}>
+          <Button
+            type="submit"
+            size="icon"
+            className="h-10 w-10 rounded-full bg-primary shrink-0"
+            disabled={!input.trim() || isLoading}
+          >
             <Send className="w-4 h-4" />
           </Button>
         </form>
-        <p className="text-[10px] text-muted-foreground text-center">
-          AI-generated using your child's tracked data.{" "}
-          <Link to="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>
-        </p>
       </div>
     </Card>
   );

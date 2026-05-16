@@ -117,11 +117,18 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
       <div className="flex flex-col items-center gap-2 py-4">
         <div
           className={cn(
-            "font-mono text-5xl font-bold tracking-wider tabular-nums transition-colors",
-            isRunning ? "text-sleep" : "text-foreground",
+            "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-sleep-bg/60 ring-1 ring-inset ring-sleep/15",
+            isRunning && "before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 before:animate-ping",
           )}
         >
-          {display}
+          <div
+            className={cn(
+              "relative font-display text-6xl font-bold tabular-nums transition-colors",
+              isRunning ? "text-sleep" : "text-foreground",
+            )}
+          >
+            {display}
+          </div>
         </div>
         {isRunning && active && (
           <span className="text-xs text-muted-foreground animate-pulse">

@@ -124,11 +124,18 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
         <div className="flex flex-col items-center gap-1 py-2">
           <div
             className={cn(
-              "font-mono text-3xl font-bold tracking-wider tabular-nums transition-colors",
-              activeSide ? "text-feeding" : "text-foreground",
+              "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
+              activeSide && "before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
             )}
           >
-            {formatTime(totalSeconds)}
+            <div
+              className={cn(
+                "relative font-display text-6xl font-bold tabular-nums transition-colors",
+                activeSide ? "text-feeding" : "text-foreground",
+              )}
+            >
+              {formatTime(totalSeconds)}
+            </div>
           </div>
           <span className="text-xs text-muted-foreground">
             {activeSide === "left" && "Pumping left..."}

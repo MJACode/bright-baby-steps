@@ -148,4 +148,9 @@
   .pb-tab-bar {
     padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom));
   }
+
+  /* Opt-in for Card-as-Link surfaces. Not on the Card primitive itself. */
+  .card-hover {
+    @apply transition-transform active:scale-[0.99];
+  }
 }
