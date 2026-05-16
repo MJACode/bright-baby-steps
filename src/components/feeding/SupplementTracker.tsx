@@ -56,6 +56,13 @@ export default function SupplementTracker() {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: "Supplement added! 💊" });
     },
+    onError: (err) => {
+      toast({
+        title: "Couldn't add supplement",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   const toggleSupplement = useMutation({
@@ -73,6 +80,13 @@ export default function SupplementTracker() {
     onSuccess: (_, { isActive }) => {
       queryClient.invalidateQueries({ queryKey });
       toast({ title: isActive ? "Supplement restarted ✅" : "Supplement stopped" });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't update supplement",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 

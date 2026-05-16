@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -99,17 +99,21 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
       return data as PumpingSchedule | null;
     },
     enabled: !!activeChild && !!user,
-    onSuccess: (data: PumpingSchedule | null) => {
-      if (data) {
-        setFreqHours(data.frequency_hours);
-        setStartTime(data.day_start_time.slice(0, 5));
-        setEndTime(data.day_end_time.slice(0, 5));
-        setIsActive(data.is_active);
-        setNotificationsEnabled(data.pump_notifications_enabled);
-        setScheduleNotes(data.notes ?? "");
-      }
-    },
   });
+
+  // react-query v5 removed useQuery's onSuccess callback. Sync the form state
+  // from the loaded schedule via an effect keyed on the row's id so we don't
+  // clobber edits the user is making (the effect only re-fires when a
+  // different schedule row arrives, not on every refetch).
+  useEffect(() => {
+    if (!schedule) return;
+    setFreqHours(schedule.frequency_hours);
+    setStartTime(schedule.day_start_time.slice(0, 5));
+    setEndTime(schedule.day_end_time.slice(0, 5));
+    setIsActive(schedule.is_active);
+    setNotificationsEnabled(schedule.pump_notifications_enabled);
+    setScheduleNotes(schedule.notes ?? "");
+  }, [schedule?.id]);
 
   // Fetch today's pump logs
   const { data: pumpLogs = [] } = useQuery({

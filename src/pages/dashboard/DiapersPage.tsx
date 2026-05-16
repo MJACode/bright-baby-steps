@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,9 +57,16 @@ export default function DiapersPage() {
     setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
-  // Auto-open modal when navigated from FAB
+  // Auto-open modal when navigated from FAB. Fire at most once per mount —
+  // otherwise a react-query refetch that returns a new activeChild reference
+  // re-fires this effect, calls resetForm() mid-edit, and silently drops the
+  // user's in-progress diaper edit (turning a save into a duplicate insert
+  // because editingId got cleared).
+  const autoOpenedFromFab = useRef(false);
   useEffect(() => {
+    if (autoOpenedFromFab.current) return;
     if ((location.state as any)?.openModal && activeChild) {
+      autoOpenedFromFab.current = true;
       resetForm();
       setModalOpen(true);
       window.history.replaceState({}, document.title);

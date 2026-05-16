@@ -71,7 +71,9 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
     };
   }, [open, isEditMode, user]);
 
-  // Pre-fill form when editing
+  // Pre-fill form when editing. Key on child.id (not the whole object) so a
+  // react-query refetch returning a new array reference doesn't wipe the
+  // user's in-flight edits.
   useEffect(() => {
     if (child && open) {
       setName(child.name);
@@ -81,7 +83,8 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       setDueDate(child.due_date ?? "");
       setIsExpected(child.is_expected ?? false);
     }
-  }, [child, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child?.id, open]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
