@@ -8,7 +8,7 @@
     "newArchEnabled": true,
     "scheme": "graceflare",
     "ios": {
-      "bundleIdentifier": "com.graceflare.mobile",
+      "bundleIdentifier": "com.graceflare.app",
       "supportsTablet": false
     },
     "plugins": [
