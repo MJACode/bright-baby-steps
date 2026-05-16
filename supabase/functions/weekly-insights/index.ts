@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
+
+// EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
+// Deno's lib types.
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: { waitUntil: (p: Promise<any>) => void } | undefined;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -189,6 +195,17 @@ Rules:
 - If data is limited in a category, acknowledge it warmly and encourage logging
 - Return ONLY valid JSON, no markdown, no code fences`;
 
+    // Per-child memory loaded separately and appended as a non-cached
+    // system-content block. The leading prompt's cache_control prefix stays
+    // intact across calls.
+    const memoryBlock = await loadMemoryContext(supabase, childId);
+    const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
+      { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+    ];
+    if (memoryBlock) {
+      systemContent.push({ type: "text", text: memoryBlock });
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -198,7 +215,7 @@ Rules:
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+        system: systemContent,
         messages: [{ role: "user", content: context }],
         temperature: 0.7,
         max_tokens: 600,
@@ -244,6 +261,24 @@ Rules:
       newWords: newWords.length,
       milestonesAchieved,
     };
+
+    // Fire-and-forget memory extraction. Synthetic transcript pairs the
+    // context block (the user-turn equivalent) with the parsed digest text.
+    const jwt = authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : authHeader;
+    const transcript = [
+      { role: "user", content: context },
+      { role: "assistant", content: typeof content2 === "string" && content2.length > 0
+        ? content2
+        : JSON.stringify(digest) },
+    ];
+    const extractPromise = fireExtractMemory(jwt, childId, transcript, "weekly-insights");
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(extractPromise);
+    } else {
+      void extractPromise;
+    }
 
     return new Response(JSON.stringify(digest), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

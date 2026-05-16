@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
+
+// EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
+// Deno's lib types.
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: { waitUntil: (p: Promise<any>) => void } | undefined;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -195,6 +201,18 @@ Rules:
 - If an illness is active, mention it in the watch field
 - If "Hours since last log" is greater than 6, gently nudge in the watch field (e.g., "It's been about 8 hours since your last entry — a quick log keeps the patterns accurate."). Do NOT mention it when 6 or under.`;
 
+    // Per-child memory loaded separately so it can be appended to the
+    // system-content array as a non-cached block. The leading system prompt
+    // keeps its cache_control prefix unchanged across calls — memory is the
+    // mutable bit.
+    const memoryBlock = await loadMemoryContext(supabase, childId);
+    const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
+      { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
+    ];
+    if (memoryBlock) {
+      systemContent.push({ type: "text", text: memoryBlock });
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -204,7 +222,7 @@ Rules:
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+        system: systemContent,
         messages: [{ role: "user", content: contextBlock }],
         temperature: 0.7,
         max_tokens: 300,
@@ -235,6 +253,25 @@ Rules:
         watch: "Everything looks on track — keep up the great work! 💛",
         focus: "Try to maintain consistent routines today.",
       };
+    }
+
+    // Fire-and-forget memory extraction. Build a synthetic transcript that
+    // pairs the contextBlock (treated as the user turn — it is what the
+    // model saw) with the assistant's parsed briefing as JSON text.
+    const jwt = authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : authHeader;
+    const transcript = [
+      { role: "user", content: contextBlock },
+      { role: "assistant", content: typeof content === "string" && content.length > 0
+        ? content
+        : JSON.stringify(briefing) },
+    ];
+    const extractPromise = fireExtractMemory(jwt, childId, transcript, "briefing");
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(extractPromise);
+    } else {
+      void extractPromise;
     }
 
     return new Response(JSON.stringify(briefing), {

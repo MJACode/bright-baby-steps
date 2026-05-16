@@ -351,6 +351,41 @@ export type Database = {
           },
         ]
       }
+      caregiver_notes: {
+        Row: {
+          author_id: string
+          body: string
+          child_id: string
+          created_at: string
+          id: string
+          read_at: string | null
+        }
+        Insert: {
+          author_id: string
+          body: string
+          child_id: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          child_id?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caregiver_notes_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_conversations: {
         Row: {
           child_id: string | null
@@ -475,6 +510,56 @@ export type Database = {
           },
         ]
       }
+      child_memories: {
+        Row: {
+          category: string
+          child_id: string
+          confidence: number | null
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+          last_referenced_at: string | null
+          pinned: boolean
+          source_function: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          child_id: string
+          confidence?: number | null
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_referenced_at?: string | null
+          pinned?: boolean
+          source_function?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          child_id?: string
+          confidence?: number | null
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_referenced_at?: string | null
+          pinned?: boolean
+          source_function?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_memories_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       child_speech: {
         Row: {
           achieved_at: string | null
@@ -552,13 +637,13 @@ export type Database = {
           due_date: string | null
           gender: string | null
           id: string
+          is_expected: boolean
           is_premature: boolean | null
           name: string
           next_appointment: string | null
           parent_id: string
           photo_url: string | null
           updated_at: string
-          is_expected: boolean
         }
         Insert: {
           archived_at?: string | null
@@ -569,13 +654,13 @@ export type Database = {
           due_date?: string | null
           gender?: string | null
           id?: string
+          is_expected?: boolean
           is_premature?: boolean | null
           name: string
           next_appointment?: string | null
           parent_id: string
           photo_url?: string | null
           updated_at?: string
-          is_expected?: boolean
         }
         Update: {
           archived_at?: string | null
@@ -586,13 +671,13 @@ export type Database = {
           due_date?: string | null
           gender?: string | null
           id?: string
+          is_expected?: boolean
           is_premature?: boolean | null
           name?: string
           next_appointment?: string | null
           parent_id?: string
           photo_url?: string | null
           updated_at?: string
-          is_expected?: boolean
         }
         Relationships: [
           {
@@ -1586,6 +1671,7 @@ export type Database = {
       }
       partner_access: {
         Row: {
+          consent_acknowledged_at: string | null
           created_at: string
           id: string
           label: string | null
@@ -1596,6 +1682,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          consent_acknowledged_at?: string | null
           created_at?: string
           id?: string
           label?: string | null
@@ -1606,6 +1693,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          consent_acknowledged_at?: string | null
           created_at?: string
           id?: string
           label?: string | null
@@ -1805,42 +1893,120 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          coppa_attestation_ip: unknown
+          coppa_attestation_signed_at: string | null
+          coppa_attestation_signed_name: string | null
+          coppa_direct_notice_acknowledged_at: string | null
           created_at: string
           data_consent_given_at: string | null
           data_consent_version: string | null
           email: string
           full_name: string | null
-          has_partner: boolean | null
           id: string
+          inactive_purge_warned_at: string | null
           onboarding_completed_at: string | null
-          primary_interest: string | null
           updated_at: string
+          vpc_completed_at: string | null
+          vpc_first_confirmation_at: string | null
+          vpc_method: string | null
+          vpc_second_confirmation_at: string | null
+          vpc_second_token: string | null
+          vpc_second_token_expires_at: string | null
         }
         Insert: {
           avatar_url?: string | null
+          coppa_attestation_ip?: unknown
+          coppa_attestation_signed_at?: string | null
+          coppa_attestation_signed_name?: string | null
+          coppa_direct_notice_acknowledged_at?: string | null
           created_at?: string
           data_consent_given_at?: string | null
           data_consent_version?: string | null
           email: string
           full_name?: string | null
-          has_partner?: boolean | null
           id: string
+          inactive_purge_warned_at?: string | null
           onboarding_completed_at?: string | null
-          primary_interest?: string | null
           updated_at?: string
+          vpc_completed_at?: string | null
+          vpc_first_confirmation_at?: string | null
+          vpc_method?: string | null
+          vpc_second_confirmation_at?: string | null
+          vpc_second_token?: string | null
+          vpc_second_token_expires_at?: string | null
         }
         Update: {
           avatar_url?: string | null
+          coppa_attestation_ip?: unknown
+          coppa_attestation_signed_at?: string | null
+          coppa_attestation_signed_name?: string | null
+          coppa_direct_notice_acknowledged_at?: string | null
           created_at?: string
           data_consent_given_at?: string | null
           data_consent_version?: string | null
           email?: string
           full_name?: string | null
-          has_partner?: boolean | null
           id?: string
+          inactive_purge_warned_at?: string | null
           onboarding_completed_at?: string | null
-          primary_interest?: string | null
           updated_at?: string
+          vpc_completed_at?: string | null
+          vpc_first_confirmation_at?: string | null
+          vpc_method?: string | null
+          vpc_second_confirmation_at?: string | null
+          vpc_second_token?: string | null
+          vpc_second_token_expires_at?: string | null
+        }
+        Relationships: []
+      }
+      rights_requests: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledgement_due_at: string
+          admin_notes: string | null
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          email: string
+          id: string
+          jurisdiction: string | null
+          request_type: string
+          response_due_at: string
+          status: string
+          user_id: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledgement_due_at?: string
+          admin_notes?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          email: string
+          id?: string
+          jurisdiction?: string | null
+          request_type: string
+          response_due_at?: string
+          status?: string
+          user_id?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledgement_due_at?: string
+          admin_notes?: string | null
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string
+          id?: string
+          jurisdiction?: string | null
+          request_type?: string
+          response_due_at?: string
+          status?: string
+          user_id?: string | null
+          verified_at?: string | null
         }
         Relationships: []
       }
@@ -2246,9 +2412,21 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      family_moments: {
+        Row: {
+          author_id: string | null
+          child_id: string | null
+          id: string | null
+          kind: string | null
+          occurred_at: string | null
+          payload: Json | null
+          source: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      _purge_user_data: { Args: { _uid: string }; Returns: undefined }
       accept_partner_invitation: {
         Args: { _invite_code: string }
         Returns: undefined
@@ -2256,6 +2434,10 @@ export type Database = {
       can_access_child: {
         Args: { _child_id: string; _user_id: string }
         Returns: boolean
+      }
+      complete_vpc_second_confirmation: {
+        Args: { p_token: string }
+        Returns: Json
       }
       delete_user_account: { Args: never; Returns: undefined }
       has_partner_access: {
@@ -2267,6 +2449,18 @@ export type Database = {
         Returns: Json
       }
       partner_can_write: { Args: { _owner_id: string }; Returns: boolean }
+      purge_inactive_account: {
+        Args: { _target_uid: string }
+        Returns: undefined
+      }
+      users_with_no_logs_since: {
+        Args: { since: string }
+        Returns: {
+          child_id: string
+          child_name: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       partner_role: "coparent" | "caregiver" | "viewer"
