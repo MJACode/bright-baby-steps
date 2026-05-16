@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS, type PersonaKey } from "../_shared/personas.ts";
+import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
+
+// EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
+// Deno's lib types. Declare a minimal ambient binding so we can use it.
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: { waitUntil: (p: Promise<any>) => void } | undefined;
 
 // Free tier: 10 expert messages / UTC day. Flare+ (subscriptions.tier='plus',
 // status in ('active','trialing')) is unlimited. Keep in sync with the
@@ -110,19 +116,37 @@ serve(async (req) => {
       }
     }
 
-    const { messages, skill, context } = await req.json();
+    const { messages, skill, context, childId } = await req.json();
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
     const systemPrompt = PERSONA_PROMPTS[skill as PersonaKey] ?? PERSONA_PROMPTS.general;
 
-    // Static skill prompt is cached; dynamic child context is not (changes per child)
+    // Per-child memory block. Loaded separately and appended as its own
+    // non-cached message so the static skill prompt's cache_control prefix
+    // remains a hit across turns (memory mutates each turn, but the prompt
+    // before it does not).
+    let memoryBlock = "";
+    if (childId && typeof childId === "string") {
+      memoryBlock = await loadMemoryContext(supabase, childId);
+    }
+
+    // Static skill prompt is cached; dynamic child context + memory are not.
     const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
       { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
     ];
     if (context && context.childName) {
       systemContent.push({ type: "text", text: buildContextMessage(context) });
     }
+    if (memoryBlock) {
+      systemContent.push({ type: "text", text: memoryBlock });
+    }
+
+    // Pull the raw JWT once — needed for the fire-and-forget extract call
+    // below. authHeader is `Bearer <jwt>`; strip the scheme.
+    const jwt = authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : authHeader;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -168,6 +192,10 @@ serve(async (req) => {
     const encoder = new TextEncoder();
 
     (async () => {
+      // Accumulate the assistant's text so we can pass the full transcript to
+      // the memory extractor after the stream closes.
+      let assistantText = "";
+      let streamOk = false;
       try {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
@@ -188,10 +216,13 @@ serve(async (req) => {
             let parsed: any;
             try { parsed = JSON.parse(jsonStr); } catch { continue; }
             if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
-              const chunk = JSON.stringify({ choices: [{ delta: { content: parsed.delta.text } }] });
+              const text = parsed.delta.text as string;
+              assistantText += text;
+              const chunk = JSON.stringify({ choices: [{ delta: { content: text } }] });
               await writer.write(encoder.encode(`data: ${chunk}\n\n`));
             } else if (parsed.type === "message_stop") {
               await writer.write(encoder.encode("data: [DONE]\n\n"));
+              streamOk = true;
             }
           }
         }
@@ -199,6 +230,24 @@ serve(async (req) => {
         console.error("Stream re-encoding error:", err);
       } finally {
         await writer.close();
+      }
+
+      // Fire-and-forget memory extraction once the stream is fully drained.
+      // Skip when no childId was supplied (no child scope), when the stream
+      // didn't complete cleanly, or when nothing was actually generated.
+      if (childId && typeof childId === "string" && streamOk && assistantText.trim().length > 0) {
+        const transcript = [
+          ...(Array.isArray(messages) ? messages : []),
+          { role: "assistant", content: assistantText },
+        ];
+        const promise = fireExtractMemory(jwt, childId, transcript, "chat");
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+          EdgeRuntime.waitUntil(promise);
+        } else {
+          // Local / non-edge runtime fallback. fireExtractMemory swallows
+          // its own errors, so this is safe to leave unawaited.
+          void promise;
+        }
       }
     })();
 
