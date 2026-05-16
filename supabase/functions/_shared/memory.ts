@@ -15,6 +15,12 @@
 // deno-lint-ignore no-explicit-any
 type SupabaseClient = any;
 
+// Ambient declaration so we can use Supabase Edge's `waitUntil` to keep the
+// last_referenced_at UPDATE alive after the parent fn returns. Falls back to
+// `await` when running under plain Deno (local dev / tests).
+// deno-lint-ignore no-explicit-any
+declare const EdgeRuntime: { waitUntil: (p: Promise<any>) => void } | undefined;
+
 type MemoryRow = {
   id: string;
   category: string;
@@ -84,10 +90,13 @@ export async function loadMemoryContext(
 
   if (referencedIds.length === 0) return "";
 
-  // Stamp last_referenced_at on the rows we actually surfaced. Fire-and-
-  // forget by intent — a failure here must not break the AI turn. Caller's
-  // RLS context already governs whether the update lands.
-  supabase
+  // Stamp last_referenced_at on the rows we actually surfaced. We want this
+  // off the critical path (the caller is about to do a slow Anthropic round-
+  // trip) but it MUST land — `last_referenced_at` is what the eviction policy
+  // will lean on once row counts grow. On the Supabase Edge runtime, hand the
+  // promise to `EdgeRuntime.waitUntil` so the worker isn't recycled before
+  // the update completes; fall back to `await` under plain Deno.
+  const updatePromise = supabase
     .from("child_memories")
     .update({ last_referenced_at: new Date().toISOString() })
     .in("id", referencedIds)
@@ -97,6 +106,12 @@ export async function loadMemoryContext(
         console.error("loadMemoryContext last_referenced_at update error:", res.error);
       }
     });
+
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+    EdgeRuntime.waitUntil(updatePromise);
+  } else {
+    await updatePromise;
+  }
 
   return header + lines.join("");
 }

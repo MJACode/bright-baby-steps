@@ -195,7 +195,8 @@ serve(async (req) => {
       // Accumulate the assistant's text so we can pass the full transcript to
       // the memory extractor after the stream closes.
       let assistantText = "";
-      let streamOk = false;
+      let sawMessageStop = false;
+      let readLoopCompleted = false;
       try {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
@@ -222,15 +223,21 @@ serve(async (req) => {
               await writer.write(encoder.encode(`data: ${chunk}\n\n`));
             } else if (parsed.type === "message_stop") {
               await writer.write(encoder.encode("data: [DONE]\n\n"));
-              streamOk = true;
+              sawMessageStop = true;
             }
           }
         }
+        readLoopCompleted = true;
       } catch (err) {
         console.error("Stream re-encoding error:", err);
       } finally {
         await writer.close();
       }
+      // Only treat the stream as a clean success if we both saw the final
+      // message_stop event AND the read loop exited normally. A throw after
+      // message_stop would otherwise lead us to extract memory from a
+      // half-broken response.
+      const streamOk = readLoopCompleted && sawMessageStop;
 
       // Fire-and-forget memory extraction once the stream is fully drained.
       // Skip when no childId was supplied (no child scope), when the stream

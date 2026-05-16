@@ -11,12 +11,11 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 //
 // Auth model:
 //   - Validates Bearer JWT, derives `user.id` for the audit column.
-//   - Loads the existing memory list via a USER-SESSION client so RLS via
-//     `can_access_child` gates access. A 403/empty result short-circuits
-//     extraction — the caller must have access to write back.
-//   - Performs the final INSERT via the SERVICE-ROLE client so we can stamp
-//     `created_by = user.id` reliably; the RLS check already happened on
-//     the SELECT above.
+//   - All Supabase calls (SELECT existing memories, probe children for
+//     access, INSERT new memories) go through the USER-SESSION client so
+//     RLS via `can_access_child(auth.uid(), child_id)` AND the INSERT
+//     policy's `created_by = auth.uid()` check both apply. No service-role
+//     dependency on this hot path.
 //
 // Returns 204 No Content on success even when zero rows are inserted —
 // extraction is best-effort.
@@ -61,9 +60,8 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    // User-session client for the RLS-gated SELECT.
+    // User-session client for every Supabase call below — RLS gates access.
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -225,17 +223,11 @@ serve(async (req) => {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    // Insert via service-role client so the audit column is the real caller
-    // even if RLS would have rejected (it won't — we already confirmed
-    // can_access_child above), and so the INSERT can't be silently filtered.
-    if (!serviceRoleKey) {
-      console.error("extract-memory: SUPABASE_SERVICE_ROLE_KEY missing — skipping insert");
-      return new Response(null, { status: 204, headers: corsHeaders });
-    }
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
+    // Insert via the user-session client so RLS (can_access_child + created_by
+    // = auth.uid()) does its job as defence-in-depth. The DB-level dedupe
+    // trigger added in 20260516010000_*.sql will silently skip same-content
+    // re-inserts within a 30-day window even if our in-memory dedupe missed
+    // them (e.g. because the existing row sat past row 50).
     const rows = validated.map((v) => ({
       child_id: childId,
       category: v.category,
@@ -245,7 +237,7 @@ serve(async (req) => {
       created_by: user.id,
     }));
 
-    const { error: insertErr } = await serviceClient
+    const { error: insertErr } = await userClient
       .from("child_memories")
       .insert(rows);
 
