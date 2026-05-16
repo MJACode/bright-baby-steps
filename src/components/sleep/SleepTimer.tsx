@@ -118,7 +118,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
         <div
           className={cn(
             "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-sleep-bg/60 ring-1 ring-inset ring-sleep/15",
-            isRunning && "before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 before:animate-ping",
+            isRunning && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 before:animate-ping",
           )}
         >
           <div

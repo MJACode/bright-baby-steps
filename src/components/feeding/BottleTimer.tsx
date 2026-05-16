@@ -127,7 +127,7 @@ export default function BottleTimer({
         <div
           className={cn(
             "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
-            running && "before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
+            running && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
           )}
         >
           <div
