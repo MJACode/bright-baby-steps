@@ -3,6 +3,146 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS, type PersonaKey } from "../_shared/personas.ts";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
 
+// Valid persona keys — keep in sync with PersonaKey in _shared/personas.ts.
+const VALID_PERSONAS: readonly PersonaKey[] = [
+  "general",
+  "pediatrician",
+  "slp",
+  "financial",
+  "developmental",
+  "nutrition",
+  "sleep",
+] as const;
+
+function isValidPersona(v: unknown): v is PersonaKey {
+  return typeof v === "string" && (VALID_PERSONAS as readonly string[]).includes(v);
+}
+
+// Persona synonyms used by the natural-language regex override. Order matters
+// only insofar as the regex is built once per persona — longer / more specific
+// phrases first within each group so e.g. "speech-language pathologist" beats
+// a bare "slp" match if both were present.
+const PERSONA_SYNONYMS: Record<PersonaKey, string[]> = {
+  pediatrician: ["pediatrician", "pediatric doctor", "doctor", "dr"],
+  sleep: ["sleep coach", "sleep consultant"],
+  nutrition: ["nutritionist", "dietitian"],
+  slp: ["speech-language pathologist", "speech therapist", "slp"],
+  financial: ["financial advisor", "financial planner", "cfp"],
+  developmental: [
+    "developmental specialist",
+    "child development",
+    "occupational therapist",
+    "ot",
+  ],
+  general: [],
+};
+
+// Build one combined regex per persona once at module load. Patterns match the
+// start of the message (after optional whitespace/punctuation) and accept two
+// shapes:
+//   1. ask/tell/talk to [the] <persona>...
+//   2. as a/an/the <persona>[,:] ...
+// We escape each synonym and require a word boundary after it so "dr" doesn't
+// match "drink".
+const ROUTE_PATTERNS: Array<{ skill: PersonaKey; re: RegExp }> = (() => {
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const out: Array<{ skill: PersonaKey; re: RegExp }> = [];
+  for (const skill of VALID_PERSONAS) {
+    const syns = PERSONA_SYNONYMS[skill];
+    if (!syns || syns.length === 0) continue;
+    const alt = syns.map(escape).join("|");
+    // Two trigger shapes joined into a single regex.
+    const re = new RegExp(
+      `^[\\s,.!?]*(?:(?:ask|tell|talk to)\\s+(?:the\\s+)?(?:${alt})\\b|as\\s+(?:a|an|the)\\s+(?:${alt})\\s*[,:])`,
+      "i",
+    );
+    out.push({ skill, re });
+  }
+  return out;
+})();
+
+const CLASSIFIER_SYSTEM_PROMPT =
+  "Classify the user's question into exactly one expert category. Reply with ONLY one of these tokens, lowercase, no punctuation: pediatrician, slp, financial, developmental, nutrition, sleep, general. Use 'general' for non-specialist parenting questions, greetings, or off-topic chat.";
+
+async function routeMessage(
+  lastUserText: string,
+  apiKey: string,
+): Promise<{ skill: PersonaKey; source: "explicit" | "classifier" | "fallback" }> {
+  // Stage A — regex override. No LLM call.
+  for (const { skill, re } of ROUTE_PATTERNS) {
+    if (re.test(lastUserText)) {
+      return { skill, source: "explicit" };
+    }
+  }
+
+  // Stage B — Haiku classifier. Falls back to 'general' on any error.
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "prompt-caching-2024-07-31",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 8,
+        temperature: 0,
+        system: [
+          {
+            type: "text",
+            text: CLASSIFIER_SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: lastUserText }],
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("Classifier API error:", res.status, await res.text().catch(() => ""));
+      return { skill: "general", source: "fallback" };
+    }
+
+    const data = await res.json();
+    // Anthropic returns { content: [{ type: 'text', text: '...' }, ...] } for
+    // non-streaming responses.
+    const raw: unknown = data?.content?.[0]?.text;
+    if (typeof raw !== "string") {
+      return { skill: "general", source: "fallback" };
+    }
+    const token = raw.trim().toLowerCase().replace(/[^a-z]/g, "");
+    if (isValidPersona(token)) {
+      return { skill: token, source: "classifier" };
+    }
+    return { skill: "general", source: "fallback" };
+  } catch (err) {
+    console.error("Classifier fetch failed:", err);
+    return { skill: "general", source: "fallback" };
+  }
+}
+
+function extractLastUserText(messages: unknown): string {
+  if (!Array.isArray(messages)) return "";
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m && typeof m === "object" && (m as { role?: unknown }).role === "user") {
+      const c = (m as { content?: unknown }).content;
+      if (typeof c === "string") return c;
+      // Anthropic content-block arrays: pull text out.
+      if (Array.isArray(c)) {
+        const text = c
+          .filter((b: unknown) => b && typeof b === "object" && (b as { type?: unknown }).type === "text")
+          .map((b: unknown) => (b as { text?: string }).text ?? "")
+          .join(" ");
+        if (text) return text;
+      }
+    }
+  }
+  return "";
+}
+
 // EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
 // Deno's lib types. Declare a minimal ambient binding so we can use it.
 // deno-lint-ignore no-explicit-any
@@ -120,7 +260,22 @@ serve(async (req) => {
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
 
-    const systemPrompt = PERSONA_PROMPTS[skill as PersonaKey] ?? PERSONA_PROMPTS.general;
+    // Resolve the persona. Explicit valid keys from legacy clients bypass the
+    // router. Anything else ('auto', undefined, unknown string) goes through
+    // the two-stage routeMessage.
+    let resolvedSkill: PersonaKey;
+    let routeSource: "explicit" | "classifier" | "fallback";
+    if (isValidPersona(skill)) {
+      resolvedSkill = skill;
+      routeSource = "explicit";
+    } else {
+      const lastUserText = extractLastUserText(messages);
+      const routed = await routeMessage(lastUserText, ANTHROPIC_API_KEY);
+      resolvedSkill = routed.skill;
+      routeSource = routed.source;
+    }
+
+    const systemPrompt = PERSONA_PROMPTS[resolvedSkill];
 
     // Per-child memory block. Loaded separately and appended as its own
     // non-cached message so the static skill prompt's cache_control prefix
@@ -198,6 +353,15 @@ serve(async (req) => {
       let sawMessageStop = false;
       let readLoopCompleted = false;
       try {
+        // SSE preamble: a single named 'routed' event the frontend parses on
+        // the first chunk to render the routed-expert badge. Must precede any
+        // OpenAI-shaped 'data:' frames below. Terminated by a blank line per
+        // the SSE spec.
+        const routedPayload = JSON.stringify({ skill: resolvedSkill, source: routeSource });
+        await writer.write(
+          encoder.encode(`event: routed\ndata: ${routedPayload}\n\n`),
+        );
+
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
