@@ -180,7 +180,12 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
       if (currentConvoId) await chatHistory.saveMessages(currentConvoId, [confirmMsg]);
       toast({ title: "Entry logged! ✅" });
     } catch (e) {
-      toast({ title: "Failed to log entry", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      const err = e as { message?: string; code?: string } | null;
+      let description = err?.message || (e instanceof Error ? e.message : "Something went wrong. Try again.");
+      if (err?.code === "23P01") {
+        description = "That window overlaps another sleep entry. Edit or delete the existing one first.";
+      }
+      toast({ title: "Failed to log entry", description, variant: "destructive" });
     } finally { setActionSaving(false); }
   };
 
