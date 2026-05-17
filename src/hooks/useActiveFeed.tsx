@@ -11,7 +11,7 @@ function notificationKindFor(feeding_type: string): SessionKind {
 }
 
 export type FeedingType = "breast" | "bottle" | "pump";
-export type FeedingSide = "left" | "right";
+export type FeedingSide = "left" | "right" | "both";
 
 export type ActiveFeedRow = {
   id: string;
@@ -122,9 +122,12 @@ export function useActiveFeed(childId: string | undefined) {
           Math.floor((Date.now() - new Date(active.side_started_at).getTime()) / 1000),
         );
         const flushMin = Math.round(elapsedSec / 60);
-        if (currentSide === "left") {
+        // "both" double-pumps in parallel — the same segment counts toward
+        // both per-side accumulators.
+        if (currentSide === "left" || currentSide === "both") {
           updates.duration_minutes_left = (active.duration_minutes_left ?? 0) + flushMin;
-        } else {
+        }
+        if (currentSide === "right" || currentSide === "both") {
           updates.duration_minutes_right = (active.duration_minutes_right ?? 0) + flushMin;
         }
       }
@@ -193,16 +196,25 @@ export function useSecondTicker(enabled: boolean): void {
 }
 
 // Per-side seconds derived from the row: stored minutes + the in-progress
-// segment since side_started_at (if this side is currently active).
-export function elapsedSecondsForSide(row: ActiveFeedRow | null, side: FeedingSide): number {
+// segment since side_started_at (if this side OR "both" is currently active —
+// "both" ticks both sides in parallel).
+export function elapsedSecondsForSide(row: ActiveFeedRow | null, side: "left" | "right"): number {
   if (!row) return 0;
   const storedMin = side === "left" ? row.duration_minutes_left : row.duration_minutes_right;
   let total = (storedMin ?? 0) * 60;
-  if (row.active_side === side && row.side_started_at) {
+  if ((row.active_side === side || row.active_side === "both") && row.side_started_at) {
     const segSec = Math.max(0, Math.floor((Date.now() - new Date(row.side_started_at).getTime()) / 1000));
     total += segSec;
   }
   return total;
+}
+
+// Display-only "both" stopwatch: in-progress segment when active_side==="both",
+// else 0. Not persisted as a column — the segment is folded into both per-side
+// accumulators when "both" is switched off.
+export function elapsedSecondsBoth(row: ActiveFeedRow | null): number {
+  if (!row || row.active_side !== "both" || !row.side_started_at) return 0;
+  return Math.max(0, Math.floor((Date.now() - new Date(row.side_started_at).getTime()) / 1000));
 }
 
 // For bottle / pump (single-track timer): total wall-clock since logged_at,
