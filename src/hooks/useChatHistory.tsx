@@ -3,7 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-export type Message = { role: "user" | "assistant"; content: string };
+export type Message = {
+  role: "user" | "assistant";
+  content: string;
+  // Set on assistant messages from the SSE `routed` preamble. Not persisted —
+  // only present during the live session that produced the reply.
+  routedSkill?:
+    | "general"
+    | "pediatrician"
+    | "slp"
+    | "financial"
+    | "developmental"
+    | "nutrition"
+    | "sleep";
+};
 
 export interface Conversation {
   id: string;
