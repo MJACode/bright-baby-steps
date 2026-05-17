@@ -257,7 +257,14 @@ export default function DiapersPage() {
               <Button
                 type="button"
                 variant={diaperType === "dirty" ? "default" : "outline"}
-                onClick={() => setDiaperType("dirty")}
+                onClick={() => {
+                  setDiaperType("dirty");
+                  // Pre-fill sensible defaults when switching from wet so the
+                  // user isn't blocked by the color/consistency validation when
+                  // they're just trying to change the type on an existing log.
+                  if (!selectedColor) setSelectedColor("brown");
+                  if (!selectedConsistency) setSelectedConsistency("soft");
+                }}
                 className="flex-1 touch-target h-11"
               >
                 💩 Dirty
@@ -265,7 +272,11 @@ export default function DiapersPage() {
               <Button
                 type="button"
                 variant={diaperType === "both" ? "default" : "outline"}
-                onClick={() => setDiaperType("both")}
+                onClick={() => {
+                  setDiaperType("both");
+                  if (!selectedColor) setSelectedColor("brown");
+                  if (!selectedConsistency) setSelectedConsistency("soft");
+                }}
                 className="flex-1 touch-target h-11"
               >
                 💧💩 Both

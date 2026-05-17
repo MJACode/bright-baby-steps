@@ -189,9 +189,13 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
         <div className="space-y-2">
           <Label>Gender (optional)</Label>
           <div className="flex gap-2">
-            {["boy", "girl", "other"].map((g) => (
-              <Button key={g} type="button" variant={gender === g ? "default" : "outline"} size="sm" onClick={() => setGender(gender === g ? "" : g)} className="flex-1 capitalize touch-target">
-                {g}
+            {[
+              { value: "male", label: "Boy" },
+              { value: "female", label: "Girl" },
+              { value: "other", label: "Other" },
+            ].map((g) => (
+              <Button key={g.value} type="button" variant={gender === g.value ? "default" : "outline"} size="sm" onClick={() => setGender(gender === g.value ? "" : g.value)} className="flex-1 touch-target">
+                {g.label}
               </Button>
             ))}
           </div>
