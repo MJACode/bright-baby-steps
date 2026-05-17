@@ -129,11 +129,17 @@ export function useActiveSleep(childId: string | undefined) {
       if (!active) return;
       const elapsed = computeElapsedSeconds(active);
       const durationMinutes = Math.max(1, Math.round(elapsed / 60));
+      // duration_minutes is a generated column = (ended_at - started_at)/60.
+      // Anchor ended_at to started_at + pause-adjusted elapsed so the generated
+      // duration reflects active sleep time, not raw wall-clock (which would
+      // overcount any time the session spent paused).
+      const endedAt = new Date(
+        new Date(active.started_at).getTime() + elapsed * 1000,
+      ).toISOString();
       const { error } = await supabase
         .from("sleep_logs")
         .update({
-          ended_at: new Date().toISOString(),
-          duration_minutes: durationMinutes,
+          ended_at: endedAt,
           paused_at: null,
         })
         .eq("id", active.id);

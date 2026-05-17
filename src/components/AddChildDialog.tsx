@@ -71,7 +71,9 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
     };
   }, [open, isEditMode, user]);
 
-  // Pre-fill form when editing
+  // Pre-fill form when editing. Key on child.id (not the whole object) so a
+  // react-query refetch returning a new array reference doesn't wipe the
+  // user's in-flight edits.
   useEffect(() => {
     if (child && open) {
       setName(child.name);
@@ -81,7 +83,8 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       setDueDate(child.due_date ?? "");
       setIsExpected(child.is_expected ?? false);
     }
-  }, [child, open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [child?.id, open]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -186,9 +189,13 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
         <div className="space-y-2">
           <Label>Gender (optional)</Label>
           <div className="flex gap-2">
-            {["boy", "girl", "other"].map((g) => (
-              <Button key={g} type="button" variant={gender === g ? "default" : "outline"} size="sm" onClick={() => setGender(gender === g ? "" : g)} className="flex-1 capitalize touch-target">
-                {g}
+            {[
+              { value: "male", label: "Boy" },
+              { value: "female", label: "Girl" },
+              { value: "other", label: "Other" },
+            ].map((g) => (
+              <Button key={g.value} type="button" variant={gender === g.value ? "default" : "outline"} size="sm" onClick={() => setGender(gender === g.value ? "" : g.value)} className="flex-1 touch-target">
+                {g.label}
               </Button>
             ))}
           </div>

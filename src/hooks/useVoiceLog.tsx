@@ -144,8 +144,16 @@ export function useVoiceLog({ childContext, onSaved }: UseVoiceLogOptions = {}) 
             if (insErr) throw insErr;
           } else if (entry.type === "sleep") {
             const startedAt = asString(f.started_at) ?? occurred;
-            const endedAt = asString(f.ended_at);
+            const explicitEnd = asString(f.ended_at);
             const duration = asNumber(f.duration_minutes);
+            // duration_minutes on sleep_logs is generated from (ended_at - started_at).
+            // If the parse only gave us a duration, derive ended_at from start + duration
+            // so the row carries an end time (and the generated column gets populated).
+            const endedAt =
+              explicitEnd ??
+              (duration
+                ? new Date(new Date(startedAt).getTime() + duration * 60_000).toISOString()
+                : null);
             const sleepType = asString(f.sleep_type) ?? "nap";
             const quality = asString(f.quality);
             const { error: insErr } = await supabase.from("sleep_logs").insert({
@@ -153,7 +161,6 @@ export function useVoiceLog({ childContext, onSaved }: UseVoiceLogOptions = {}) 
               parent_id: userId,
               started_at: startedAt,
               ended_at: endedAt,
-              duration_minutes: duration,
               sleep_type: sleepType,
               quality,
               notes: entry.summary,

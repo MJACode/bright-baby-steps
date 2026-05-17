@@ -144,10 +144,18 @@ function toast({ ...props }: Toast) {
     });
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id });
 
+  // Destructive toasts carry the actual error text we need to debug failed
+  // saves. The Radix default duration (5s) makes them unreadable on mobile —
+  // override with a long duration so the user (or screen-recording) can
+  // capture the message. Tap-to-dismiss still works via swipe / X / outside-tap.
+  const isDestructive = props.variant === "destructive";
+  const finalDuration = isDestructive ? 60_000 : props.duration;
+
   dispatch({
     type: "ADD_TOAST",
     toast: {
       ...props,
+      duration: finalDuration,
       id,
       open: true,
       onOpenChange: (open) => {

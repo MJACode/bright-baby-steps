@@ -13,12 +13,13 @@ import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
+import { cn } from "@/lib/utils";
 
 const QUICK_NAV = [
-  { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", color: "bg-feeding/15 text-feeding" },
-  { label: "Sleep", icon: Moon, path: "/dashboard/sleep", color: "bg-sleep/15 text-sleep" },
-  { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", color: "bg-diapers/15 text-diapers" },
-  { label: "Milestone", icon: Star, path: "/dashboard/milestones", color: "bg-milestones/15 text-milestones" },
+  { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", tile: "bg-feeding-bg", chip: "bg-feeding/15 text-feeding", label_color: "text-feeding" },
+  { label: "Sleep", icon: Moon, path: "/dashboard/sleep", tile: "bg-sleep-bg", chip: "bg-sleep/15 text-sleep", label_color: "text-sleep" },
+  { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", tile: "bg-diapers-bg", chip: "bg-diapers/15 text-diapers", label_color: "text-diapers" },
+  { label: "Milestone", icon: Star, path: "/dashboard/milestones", tile: "bg-milestones-bg", chip: "bg-milestones/15 text-milestones", label_color: "text-milestones" },
 ] as const;
 
 
@@ -87,17 +88,20 @@ export default function Dashboard() {
       {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
       {/* Quick nav grid — primary log entry points */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-3 p-3.5">
         {QUICK_NAV.map((item) => (
           <Link
             key={item.label}
             to={item.path}
-            className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl bg-card border border-border active:scale-[0.97] transition-transform touch-target"
+            className={cn(
+              "flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl border-0 active:scale-[0.97] transition-transform touch-target",
+              item.tile,
+            )}
           >
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center ${item.color}`}>
+            <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", item.chip)}>
               <item.icon className="w-6 h-6" strokeWidth={2} />
             </div>
-            <span className="text-xs font-semibold">{item.label}</span>
+            <span className={cn("text-xs font-semibold", item.label_color)}>{item.label}</span>
           </Link>
         ))}
       </div>

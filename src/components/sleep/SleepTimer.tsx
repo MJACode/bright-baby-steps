@@ -7,6 +7,7 @@ import { Play, Pause, Square, Sun, Moon, ChevronDown, Clock, X } from "lucide-re
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useActiveSleep, useElapsedSeconds, type SleepType } from "@/hooks/useActiveSleep";
+import { getErrorMessage } from "@/lib/handleRlsError";
 
 interface SleepTimerProps {
   childId: string | undefined;
@@ -32,7 +33,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
       await start.mutateAsync({ sleep_type: pendingSleepType });
     } catch (err) {
       // Partial unique index rejects a concurrent start from another device.
-      const msg = err instanceof Error ? err.message : "";
+      const msg = getErrorMessage(err);
       if (msg.includes("one_active_sleep_per_child")) {
         toast({ title: "Already tracking", description: "A sleep is already running on another device." });
       } else {
@@ -50,7 +51,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
     } catch (err) {
       toast({
         title: "Couldn't save",
-        description: err instanceof Error ? err.message : "Please try again.",
+        description: getErrorMessage(err, "Please try again."),
         variant: "destructive",
       });
     }
@@ -60,7 +61,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
     try {
       await cancel.mutateAsync();
     } catch (err) {
-      toast({ title: "Couldn't cancel", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      toast({ title: "Couldn't cancel", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 
@@ -117,11 +118,18 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
       <div className="flex flex-col items-center gap-2 py-4">
         <div
           className={cn(
-            "font-mono text-5xl font-bold tracking-wider tabular-nums transition-colors",
-            isRunning ? "text-sleep" : "text-foreground",
+            "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-sleep-bg/60 ring-1 ring-inset ring-sleep/15",
+            isRunning && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 before:animate-ping",
           )}
         >
-          {display}
+          <div
+            className={cn(
+              "relative font-display text-6xl font-bold tabular-nums transition-colors",
+              isRunning ? "text-sleep" : "text-foreground",
+            )}
+          >
+            {display}
+          </div>
         </div>
         {isRunning && active && (
           <span className="text-xs text-muted-foreground animate-pulse">

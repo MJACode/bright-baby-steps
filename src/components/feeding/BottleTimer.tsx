@@ -126,11 +126,18 @@ export default function BottleTimer({
       <div className="flex flex-col items-center gap-1 py-3">
         <div
           className={cn(
-            "font-mono text-4xl font-bold tracking-wider tabular-nums transition-colors",
-            running ? "text-feeding" : "text-foreground",
+            "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
+            running && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
           )}
         >
-          {formatTime(seconds)}
+          <div
+            className={cn(
+              "relative font-display text-6xl font-bold tabular-nums transition-colors",
+              running ? "text-feeding" : "text-foreground",
+            )}
+          >
+            {formatTime(seconds)}
+          </div>
         </div>
         <span className="text-xs text-muted-foreground">
           {running && "Feeding..."}

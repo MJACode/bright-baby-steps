@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
 export type SolidFeedDraft = {
   foodDesc: string;
@@ -29,7 +29,7 @@ import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
 import BottleTimer from "@/components/feeding/BottleTimer";
-import type { ActiveFeedRow } from "@/hooks/useActiveFeed";
+import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -144,6 +144,24 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingResume, onConsumeResume]);
 
+  // When the user arrives on the Feeding page with an active timer running
+  // (e.g. tapped the "Nursing in progress" banner), the live timer UI lives
+  // inside the log dialog. Auto-open the dialog once per active session so
+  // they actually see the timer they were trying to reach. The has-fired ref
+  // prevents the lesson-flagged useEffect re-open loop: once the user closes
+  // the dialog for a given active row, we don't yank it back open.
+  const { active: pageActiveFeed } = useActiveFeed(activeChild?.id);
+  const autoOpenedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pageActiveFeed) return;
+    if (autoOpenedFor.current === pageActiveFeed.id) return;
+    autoOpenedFor.current = pageActiveFeed.id;
+    setEditingId(null);
+    setFeedType(pageActiveFeed.feeding_type);
+    setSide(pageActiveFeed.side ?? "");
+    setDialogOpen(true);
+  }, [pageActiveFeed?.id, pageActiveFeed?.feeding_type, pageActiveFeed?.side]);
+
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
     queryFn: async () => {
@@ -244,7 +262,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     onError: (err) => {
       toast({
         title: "Couldn't save feed",
-        description: err instanceof Error ? err.message : "Please try again.",
+        description: getErrorMessage(err, "Please try again."),
         variant: "destructive",
       });
     },
