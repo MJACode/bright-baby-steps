@@ -6,8 +6,6 @@ import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, C
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
-
-const HEALTH_SKILLS = new Set(["pediatrician", "slp", "developmental", "nutrition", "sleep"]);
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +15,8 @@ import { ToastAction } from "@/components/ui/toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useChatUsage } from "@/hooks/useChatUsage";
+
+const HEALTH_SKILLS = new Set(["pediatrician", "slp", "developmental", "nutrition", "sleep"]);
 
 type LogAction = { type: "sleep" | "feeding" | "diaper"; label: string; data: Record<string, string> };
 
@@ -36,19 +36,19 @@ const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description
   { id: "financial", label: "Financial", icon: Wallet, description: "529s, tax credits & budgeting", color: "bg-finance/15 text-finance" },
 ];
 
-const SKILL_SUGGESTIONS: Record<SkillId, string[]> = {
-  general: ["Log a 2 hour nap", "How's my baby doing?", "Log a bottle feeding", "Tips for teething pain"],
-  pediatrician: ["When is the next vaccine due?", "My baby has a fever of 101°F", "What happens at the 6-month visit?", "When should I call the doctor?"],
-  slp: ["Is my baby's babbling normal?", "Activities to encourage first words", "When should I worry about speech?", "How to read to my baby"],
-  financial: ["How do I start a 529 plan?", "What tax credits can I claim?", "How much should I budget for childcare?", "Do I need life insurance?"],
-  developmental: ["Tummy time tips for a hater", "When should baby start crawling?", "Best toys for 6 months", "Is my baby's pincer grasp on track?"],
-  nutrition: ["When can I start solids?", "How to introduce peanuts safely", "Iron-rich foods for baby", "My toddler won't eat vegetables"],
-  sleep: ["Wake windows for 4 months", "How to handle the 4-month regression", "When to drop to 2 naps?", "Safe sleep guidelines"],
-};
+// One starter from each non-general expert. The server-side router picks the
+// right specialist from the prompt text — users no longer pick a skill.
+const STARTER_PROMPTS: string[] = [
+  "My baby has a fever of 101°F",
+  "Wake windows for 4 months",
+  "When can I start solids?",
+  "Is my baby's babbling normal?",
+  "When should baby start crawling?",
+  "How do I start a 529 plan?",
+];
 
 interface AIChatWidgetProps {
   activeChildId?: string;
-  defaultSkill?: SkillId;
   quickLogMode?: boolean;
 }
 
@@ -59,9 +59,19 @@ const QUICK_LOG_SUGGESTIONS = [
   "Log a 2 hour night sleep",
 ];
 
-type View = "closed" | "skills" | "chat";
+type View = "closed" | "chat";
 
-export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AIChatWidgetProps) {
+// SSE frames are delimited by a blank line — either `\n\n` or `\r\n\r\n`.
+// Returns the index of the end of the frame (start of the delimiter), or -1.
+function findFrameBoundary(buf: string): number {
+  const a = buf.indexOf("\n\n");
+  const b = buf.indexOf("\r\n\r\n");
+  if (a === -1) return b;
+  if (b === -1) return a;
+  return Math.min(a, b);
+}
+
+export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -76,7 +86,6 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
-  const [activeSkill, setActiveSkill] = useState<SkillId>(defaultSkill ?? "general");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -213,6 +222,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
     setInput("");
     setIsLoading(true);
     let assistantContent = "";
+    let routedSkill: SkillId | undefined;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -222,7 +232,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ messages: updatedMessages, skill: activeSkill, context: childContext || undefined }),
+          body: JSON.stringify({ messages: updatedMessages, skill: "auto", context: childContext || undefined }),
         }
       );
 
@@ -253,34 +263,88 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
       const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let textBuffer = "";
+      let done = false;
 
-      const upsertAssistant = (content: string) => {
+      const upsertAssistant = (content: string, skill?: SkillId) => {
         const displayContent = content.trim();
         setMessages((prev) => {
           const last = prev[prev.length - 1];
-          if (last?.role === "assistant") return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: displayContent } : m));
-          return [...prev, { role: "assistant", content: displayContent }];
+          if (last?.role === "assistant") {
+            return prev.map((m, i) =>
+              i === prev.length - 1
+                ? { ...m, content: displayContent, ...(skill ? { routedSkill: skill } : {}) }
+                : m,
+            );
+          }
+          return [
+            ...prev,
+            { role: "assistant", content: displayContent, ...(skill ? { routedSkill: skill } : {}) },
+          ];
         });
       };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // Apply the routed-skill preamble before any content arrives so the badge
+      // renders the moment the user sees a reply forming.
+      const applyRouted = (skill: SkillId) => {
+        routedSkill = skill;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant") {
+            return prev.map((m, i) =>
+              i === prev.length - 1 ? { ...m, routedSkill: skill } : m,
+            );
+          }
+          return [...prev, { role: "assistant", content: "", routedSkill: skill }];
+        });
+      };
+
+      // SSE frames are separated by a blank line. Each frame may carry an
+      // `event:` line plus one or more `data:` lines. We buffer until we have
+      // a complete frame, then dispatch.
+      while (!done) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
         textBuffer += decoder.decode(value, { stream: true });
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
+
+        let sepIdx: number;
+        while ((sepIdx = findFrameBoundary(textBuffer)) !== -1) {
+          const rawFrame = textBuffer.slice(0, sepIdx);
+          textBuffer = textBuffer.slice(sepIdx).replace(/^(\r?\n)+/, "");
+
+          let eventName = "message";
+          const dataLines: string[] = [];
+          for (const rawLine of rawFrame.split("\n")) {
+            const line = rawLine.endsWith("\r") ? rawLine.slice(0, -1) : rawLine;
+            if (!line || line.startsWith(":")) continue;
+            if (line.startsWith("event:")) eventName = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+          }
+          if (dataLines.length === 0) continue;
+          const dataStr = dataLines.join("\n");
+
+          if (eventName === "routed") {
+            try {
+              const parsed = JSON.parse(dataStr) as { skill?: SkillId };
+              if (parsed.skill) applyRouted(parsed.skill);
+            } catch {
+              // Malformed preamble — ignore and let the content stream through.
+            }
+            continue;
+          }
+
+          if (dataStr === "[DONE]") { done = true; break; }
           try {
-            const parsed = JSON.parse(jsonStr);
+            const parsed = JSON.parse(dataStr);
             const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) { assistantContent += content; upsertAssistant(assistantContent); }
-          } catch { textBuffer = line + "\n" + textBuffer; break; }
+            if (content) {
+              assistantContent += content;
+              upsertAssistant(assistantContent, routedSkill);
+            }
+          } catch {
+            // Incomplete JSON — push it back and wait for more bytes.
+            textBuffer = `data: ${dataStr}\n\n${textBuffer}`;
+            break;
+          }
         }
       }
 
@@ -294,26 +358,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
     } finally { setIsLoading(false); }
   };
 
-  const handleNewChat = () => {
-    chatHistory.startNewChat();
-    setCurrentConvoId(null);
-    setMessages([]);
-    setPendingAction(null);
-    setView("skills");
-  };
-
-  const handleVoiceFromOutside = () => {
-    setActiveSkill("general");
-    setMessages([]);
-    setCurrentConvoId(null);
-    chatHistory.startNewChat();
-    setView("chat");
-    // Start voice recognition after a brief delay to let the view render
-    setTimeout(() => toggleVoice(), 300);
-  };
-
   const openVoiceMode = () => {
-    setActiveSkill("general");
     setMessages([]);
     setCurrentConvoId(null);
     chatHistory.startNewChat();
@@ -341,26 +386,13 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
     }
   };
 
-  const handleSelectSkill = (skillId: SkillId) => {
-    setActiveSkill(skillId);
-    setView("chat");
-  };
-
-  const handleOpenConversation = (id: string) => {
-    chatHistory.openConversation(id);
-    setView("chat");
-  };
-
   const actionIcon = (type: string) => {
     if (type === "sleep") return <Moon className="w-4 h-4 text-sleep" />;
     if (type === "feeding") return <UtensilsCrossed className="w-4 h-4 text-feeding" />;
     return <Droplets className="w-4 h-4 text-diapers" />;
   };
 
-  const activeSkillInfo = SKILLS.find(s => s.id === activeSkill);
-
   const openQuickLogChat = () => {
-    setActiveSkill("general");
     setView("chat");
   };
 
@@ -490,13 +522,13 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
       <>
         {voiceOverlay}
         <div className="flex items-center gap-2">
-          <button onClick={() => setView("skills")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+          <button onClick={() => setView("chat")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
             <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
               <Bot className="w-5 h-5 text-primary" />
             </div>
             <div className="text-left">
               <p className="text-sm font-semibold">Ask Grace Flare AI</p>
-              <p className="text-xs text-muted-foreground">6 expert skills • Ask anything</p>
+              <p className="text-xs text-muted-foreground">Ask anything — we'll route to the right expert</p>
             </div>
           </button>
           {supportsVoice && (
@@ -512,43 +544,6 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
     );
   }
 
-  // SKILLS PICKER
-  if (view === "skills") {
-    return (
-      <Card className="border-0 bg-card shadow-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            <span className="text-sm font-semibold">Choose an Expert</span>
-          </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-        <div className="p-3 grid grid-cols-2 gap-2">
-          {SKILLS.map((skill) => (
-            <button
-              key={skill.id}
-              onClick={() => handleSelectSkill(skill.id)}
-              className={cn(
-                "flex flex-col items-start gap-1.5 p-3 rounded-xl text-left transition-all active:scale-95 border border-transparent hover:border-border",
-                skill.color
-              )}
-            >
-              <skill.icon className="w-5 h-5" />
-              <div>
-                <p className="text-xs font-semibold leading-tight">{skill.label}</p>
-                <p className="text-[10px] opacity-70 leading-tight mt-0.5">{skill.description}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </Card>
-    );
-  }
-
   // CHAT VIEW
   return (
     <Card className="border-0 bg-card shadow-lg overflow-hidden">
@@ -557,12 +552,7 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          {activeSkillInfo && (
-            <button onClick={() => setView("skills")} className={cn("flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium", activeSkillInfo.color)}>
-              <activeSkillInfo.icon className="w-3.5 h-3.5" />
-              {activeSkillInfo.label}
-            </button>
-          )}
+          <span className="text-sm font-semibold">Grace Flare AI</span>
         </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
           <X className="w-4 h-4" />
@@ -590,18 +580,6 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
           <span className="font-semibold underline">Upgrade to Flare+</span>
         </button>
       )}
-      {HEALTH_SKILLS.has(activeSkill) && (
-        <div className="flex items-start gap-2 px-3 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span>For general information only — not medical advice or diagnosis. For emergencies, <strong>call 911</strong>. Always consult your healthcare provider.</span>
-        </div>
-      )}
-      {activeSkill === "financial" && (
-        <div className="flex items-start gap-2 px-3 py-2 bg-muted/60 border-b border-border text-xs text-muted-foreground">
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-          <span>General information only. Consult a licensed financial advisor for personalised advice.</span>
-        </div>
-      )}
 
       <div ref={scrollRef} className="overflow-y-auto p-3 space-y-3 h-[50dvh] max-h-[420px]">
         {messages.length === 0 && !pendingAction && (
@@ -609,12 +587,10 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
             <p className="text-xs text-muted-foreground text-center py-2">
               {quickLogMode
                 ? "Say or type what happened — I'll log it. 👶"
-                : activeSkillInfo
-                  ? `Ask your ${activeSkillInfo.label.toLowerCase()} questions! 👶`
-                  : "Ask questions or log entries naturally! 👶"}
+                : "Ask anything — we'll route to the right expert. 👶"}
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {(quickLogMode ? QUICK_LOG_SUGGESTIONS : (SKILL_SUGGESTIONS[activeSkill] || SKILL_SUGGESTIONS.general)).map((s) => (
+              {(quickLogMode ? QUICK_LOG_SUGGESTIONS : STARTER_PROMPTS).map((s) => (
                 <button key={s} onClick={() => sendMessage(s)} className="text-xs px-2.5 py-1.5 rounded-full bg-secondary hover:bg-secondary/80 text-foreground transition-colors">
                   {s}
                 </button>
@@ -622,20 +598,53 @@ export function AIChatWidget({ activeChildId, defaultSkill, quickLogMode }: AICh
             </div>
           </div>
         )}
-        {messages.map((msg, i) => (
-          <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
-            <div
-              className={cn(
-                "max-w-[85%] text-sm leading-relaxed",
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-sm"
-                  : "bg-muted/80 border border-border/40 text-foreground rounded-2xl rounded-bl-md px-3.5 py-2.5",
+        {messages.map((msg, i) => {
+          const badge =
+            msg.role === "assistant" && msg.routedSkill && msg.routedSkill !== "general"
+              ? SKILLS.find((s) => s.id === msg.routedSkill)
+              : undefined;
+          const showHealthNotice =
+            msg.role === "assistant" && msg.routedSkill && HEALTH_SKILLS.has(msg.routedSkill);
+          const showFinanceNotice =
+            msg.role === "assistant" && msg.routedSkill === "financial";
+          return (
+            <div key={i} className={cn("flex flex-col gap-1", msg.role === "user" ? "items-end" : "items-start")}>
+              {badge && (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold",
+                    badge.color,
+                  )}
+                >
+                  <badge.icon className="w-3 h-3" />
+                  {badge.label}
+                </span>
               )}
-            >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <div
+                className={cn(
+                  "max-w-[85%] text-sm leading-relaxed",
+                  msg.role === "user"
+                    ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-sm"
+                    : "bg-muted/80 border border-border/40 text-foreground rounded-2xl rounded-bl-md px-3.5 py-2.5",
+                )}
+              >
+                <p className="whitespace-pre-wrap">{msg.content}</p>
+              </div>
+              {showHealthNotice && (
+                <div className="max-w-[85%] flex items-start gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                  <span>For general information only — not medical advice or diagnosis. For emergencies, <strong>call 911</strong>. Always consult your healthcare provider.</span>
+                </div>
+              )}
+              {showFinanceNotice && (
+                <div className="max-w-[85%] flex items-start gap-1.5 px-2.5 py-1.5 rounded-md bg-muted/60 text-xs text-muted-foreground">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                  <span>General information only. Consult a licensed financial advisor for personalised advice.</span>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
         {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex justify-start">
             <div className="bg-muted/80 border border-border/40 rounded-2xl rounded-bl-md px-3.5 py-2.5">
