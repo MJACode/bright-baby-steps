@@ -7,6 +7,7 @@ import { Play, Pause, Square, Sun, Moon, ChevronDown, Clock, X } from "lucide-re
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useActiveSleep, useElapsedSeconds, type SleepType } from "@/hooks/useActiveSleep";
+import { getErrorMessage } from "@/lib/handleRlsError";
 
 interface SleepTimerProps {
   childId: string | undefined;
@@ -32,7 +33,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
       await start.mutateAsync({ sleep_type: pendingSleepType });
     } catch (err) {
       // Partial unique index rejects a concurrent start from another device.
-      const msg = err instanceof Error ? err.message : "";
+      const msg = getErrorMessage(err);
       if (msg.includes("one_active_sleep_per_child")) {
         toast({ title: "Already tracking", description: "A sleep is already running on another device." });
       } else {
@@ -50,7 +51,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
     } catch (err) {
       toast({
         title: "Couldn't save",
-        description: err instanceof Error ? err.message : "Please try again.",
+        description: getErrorMessage(err, "Please try again."),
         variant: "destructive",
       });
     }
@@ -60,7 +61,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
     try {
       await cancel.mutateAsync();
     } catch (err) {
-      toast({ title: "Couldn't cancel", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      toast({ title: "Couldn't cancel", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 

@@ -262,7 +262,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     onError: (err) => {
       toast({
         title: "Couldn't save feed",
-        description: err instanceof Error ? err.message : "Please try again.",
+        description: getErrorMessage(err, "Please try again."),
         variant: "destructive",
       });
     },

@@ -12,6 +12,7 @@ import {
   elapsedSecondsForSide,
   type FeedingSide,
 } from "@/hooks/useActiveFeed";
+import { getErrorMessage } from "@/lib/handleRlsError";
 
 function formatTime(totalSeconds: number) {
   const mins = Math.floor(totalSeconds / 60);
@@ -55,7 +56,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
       const target = activeSide === next ? null : next;
       await setSide.mutateAsync({ nextSide: target });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
+      const msg = getErrorMessage(err);
       if (msg.includes("one_active_feed_per_child")) {
         toast({ title: "Already feeding", description: "A feed is already running on another device." });
       } else {
@@ -69,7 +70,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
     try {
       await setSide.mutateAsync({ nextSide: null });
     } catch (err) {
-      toast({ title: "Couldn't pause", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      toast({ title: "Couldn't pause", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 
@@ -81,7 +82,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
       setAmountLeft("");
       setAmountRight("");
     } catch (err) {
-      toast({ title: "Couldn't reset", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      toast({ title: "Couldn't reset", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 
@@ -109,7 +110,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
       setAmountLeft("");
       setAmountRight("");
     } catch (err) {
-      toast({ title: "Couldn't save", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      toast({ title: "Couldn't save", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 

@@ -318,7 +318,7 @@ export default function SleepPage() {
     onError: (err) => {
       toast({
         title: "Couldn't save sleep",
-        description: err instanceof Error ? err.message : "Please try again.",
+        description: getErrorMessage(err, "Please try again."),
         variant: "destructive",
       });
     },
