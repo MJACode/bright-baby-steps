@@ -5,7 +5,7 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
-import { Footprints, UserCircle, Home, CalendarDays } from "lucide-react";
+import { UserCircle, Home, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
@@ -24,7 +24,11 @@ export default function DashboardLayout() {
   if (loading || childrenLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-3">
-        <Footprints className="w-10 h-10 text-primary animate-pulse" />
+        <img
+          src="/app-icon.png"
+          alt="Grace Flare"
+          className="w-12 h-12 rounded-xl animate-pulse"
+        />
         <p className="text-muted-foreground font-medium">Loading...</p>
       </div>
     );
@@ -50,7 +54,7 @@ export default function DashboardLayout() {
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <Link to="/dashboard" aria-label="Home" className="shrink-0">
-              <Footprints className="w-5 h-5 text-primary" />
+              <img src="/app-icon.png" alt="Grace Flare" className="w-7 h-7 rounded-md" />
             </Link>
             {!isOnboarding && <ChildSwitcher />}
           </div>
