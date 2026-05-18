@@ -684,7 +684,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
             onChange={(e) => setInput(e.target.value)}
             placeholder={isListening ? "Listening..." : "Ask a question or log an entry..."}
             className={cn(
-              "flex-1 h-10 text-sm border-0 bg-transparent focus-visible:ring-0 px-3",
+              "flex-1 h-10 text-base md:text-sm border-0 bg-transparent focus-visible:ring-0 px-3",
               isListening && "text-primary",
             )}
             disabled={isLoading}
