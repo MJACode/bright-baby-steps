@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, ChevronLeft, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info } from "lucide-react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info, RotateCcw } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
@@ -491,84 +491,97 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
     </div>
   ) : null;
 
-  // CLOSED — AI button + voice mic side by side
-  if (view === "closed") {
-    if (quickLogMode) {
-      return (
-        <>
-          {voiceOverlay}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <button onClick={openQuickLogChat} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
-                <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm font-semibold">Quick Log with AI</p>
-                  <p className="text-xs text-muted-foreground">Say or type "fed her 4oz" or "90 min nap"</p>
-                </div>
-              </button>
-              {supportsVoice && (
-                <button
-                  onClick={openVoiceMode}
-                  aria-label="Quick log by voice"
-                  className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
-                >
-                  <Mic className="w-5 h-5 text-primary" />
-                </button>
-              )}
-            </div>
+  // CLOSED-view entry button (rendered alongside the Dialog so the chat
+  // dialog can play its close animation without unmounting).
+  const closedEntry = quickLogMode ? (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <button onClick={openQuickLogChat} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-primary" />
           </div>
-        </>
-      );
-    }
-
-    return (
-      <>
-        {voiceOverlay}
-        <div className="flex items-center gap-2">
-          <button onClick={() => setView("chat")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
-            <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-              <Bot className="w-5 h-5 text-primary" />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold">Ask Grace Flare AI</p>
-              <p className="text-xs text-muted-foreground">Ask anything — we'll route to the right expert</p>
-            </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold">Quick Log with AI</p>
+            <p className="text-xs text-muted-foreground">Say or type "fed her 4oz" or "90 min nap"</p>
+          </div>
+        </button>
+        {supportsVoice && (
+          <button
+            onClick={openVoiceMode}
+            aria-label="Quick log by voice"
+            className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+          >
+            <Mic className="w-5 h-5 text-primary" />
           </button>
-          {supportsVoice && (
-            <button
-              onClick={openVoiceMode}
-              className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
-            >
-              <Mic className="w-5 h-5 text-primary" />
-            </button>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  // CHAT VIEW
-  return (
-    <Card className="border-0 bg-card shadow-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-primary/10 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setView("closed"); chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); }}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <span className="text-sm font-semibold">Grace Flare AI</span>
-        </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setView("closed")}>
-          <X className="w-4 h-4" />
-        </Button>
+        )}
       </div>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2">
+      <button onClick={() => setView("chat")} className="flex items-center gap-2 flex-1 p-3 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.98]">
+        <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+          <Bot className="w-5 h-5 text-primary" />
+        </div>
+        <div className="text-left">
+          <p className="text-sm font-semibold">Ask Grace Flare AI</p>
+          <p className="text-xs text-muted-foreground">Ask anything — we'll route to the right expert</p>
+        </div>
+      </button>
+      {supportsVoice && (
+        <button
+          onClick={openVoiceMode}
+          aria-label="Ask by voice"
+          className="w-12 h-12 rounded-full bg-primary/10 hover:bg-primary/15 flex items-center justify-center transition-all active:scale-95 shrink-0"
+        >
+          <Mic className="w-5 h-5 text-primary" />
+        </button>
+      )}
+    </div>
+  );
+
+  // CHAT VIEW — popup modal. Full-bleed on mobile, centered card on desktop,
+  // so the conversation has room and the on-screen keyboard never crushes it.
+  return (
+    <>
+      {voiceOverlay}
+      {closedEntry}
+      <Dialog
+        open={view === "chat"}
+        onOpenChange={(open) => {
+          if (!open) setView("closed");
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl w-screen sm:w-full h-[100dvh] sm:h-[85dvh] sm:max-h-[720px] p-0 gap-0 flex flex-col overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            inputRef.current?.focus();
+          }}
+        >
+          <DialogTitle className="sr-only">Grace Flare AI chat</DialogTitle>
+          <div
+            className="flex items-center gap-2 px-4 py-3 bg-primary/10 border-b border-border shrink-0"
+            style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+          >
+            <span className="font-display text-base font-bold">Grace Flare AI</span>
+            {messages.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-11 min-h-[44px] gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); setPendingAction(null); }}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                New chat
+              </Button>
+            )}
+          </div>
 
       {!usage.isUnlimited && !usage.isLoading && (
         <button
           onClick={() => navigate("/upgrade")}
           className={cn(
-            "w-full flex items-center justify-between gap-2 px-3 py-2 border-b border-border text-xs transition-colors",
+            "w-full flex items-center justify-between gap-2 px-3 py-2 border-b border-border text-xs transition-colors shrink-0",
             usage.remaining === 0
               ? "bg-destructive/10 text-destructive hover:bg-destructive/15"
               : usage.remaining <= 2
@@ -586,7 +599,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         </button>
       )}
 
-      <div ref={scrollRef} className="overflow-y-auto p-3 space-y-3 h-[50dvh] max-h-[420px]">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && !pendingAction && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-center py-2">
@@ -660,7 +673,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
       </div>
 
       {pendingAction && (
-        <div className="px-3 pb-2">
+        <div className="px-3 pb-2 shrink-0">
           <div className="rounded-xl bg-secondary/80 p-3 space-y-2">
             <div className="flex items-center gap-2">
               {actionIcon(pendingAction.type)}
@@ -676,7 +689,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         </div>
       )}
 
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border shrink-0" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
         <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2 items-center bg-muted/40 rounded-full p-1.5">
           <Input
             ref={inputRef}
@@ -684,7 +697,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
             onChange={(e) => setInput(e.target.value)}
             placeholder={isListening ? "Listening..." : "Ask a question or log an entry..."}
             className={cn(
-              "flex-1 h-10 text-sm border-0 bg-transparent focus-visible:ring-0 px-3",
+              "flex-1 h-11 text-base md:text-sm border-0 bg-transparent focus-visible:ring-0 px-3",
               isListening && "text-primary",
             )}
             disabled={isLoading}
@@ -731,6 +744,8 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
           </Button>
         </form>
       </div>
-    </Card>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
