@@ -552,23 +552,20 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         }}
       >
         <DialogContent
-          className="max-w-2xl w-screen sm:w-full h-[100dvh] sm:h-[85dvh] sm:max-h-[720px] p-0 gap-0 flex flex-col overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border"
+          className="max-w-md sm:max-w-lg max-h-[80dvh] p-0 gap-0 flex flex-col overflow-hidden"
           onOpenAutoFocus={(e) => {
             e.preventDefault();
             inputRef.current?.focus();
           }}
         >
           <DialogTitle className="sr-only">Grace Flare AI chat</DialogTitle>
-          <div
-            className="flex items-center gap-2 px-4 py-3 bg-primary/10 border-b border-border shrink-0"
-            style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
-          >
+          <div className="flex items-center gap-2 px-4 py-3 bg-primary/10 border-b border-border shrink-0">
             <span className="font-display text-base font-bold">Grace Flare AI</span>
             {messages.length > 0 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-11 min-h-[44px] gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => { chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); setPendingAction(null); }}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -689,7 +686,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         </div>
       )}
 
-      <div className="p-3 border-t border-border shrink-0" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+      <div className="p-3 border-t border-border shrink-0">
         <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2 items-center bg-muted/40 rounded-full p-1.5">
           <Input
             ref={inputRef}
