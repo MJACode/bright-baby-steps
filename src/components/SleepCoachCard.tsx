@@ -16,7 +16,8 @@ interface ChildLite {
 }
 
 export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null }) {
-  const { data: pred } = useSleepCoach(activeChild);
+  const { data } = useSleepCoach(activeChild);
+  const pred = data?.prediction ?? null;
   const [winddown, setWinddown] = useState(false);
 
   if (!pred) return null;

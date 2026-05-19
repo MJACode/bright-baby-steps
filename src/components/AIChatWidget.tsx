@@ -15,6 +15,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useChatHistory, type Message } from "@/hooks/useChatHistory";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useChatUsage } from "@/hooks/useChatUsage";
+import { onChatOpen } from "@/lib/chatOpener";
 
 const HEALTH_SKILLS = new Set(["pediatrician", "slp", "developmental", "nutrition", "sleep"]);
 
@@ -50,6 +51,10 @@ const STARTER_PROMPTS: string[] = [
 interface AIChatWidgetProps {
   activeChildId?: string;
   quickLogMode?: boolean;
+}
+
+interface SendOptions {
+  forceSkill?: SkillId;
 }
 
 const QUICK_LOG_SUGGESTIONS = [
@@ -127,6 +132,24 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
     if (view === "chat" && inputRef.current) inputRef.current.focus();
   }, [view]);
 
+  // External handoff: subscribe to the module-level chatOpener bus so surfaces
+  // like SleepTriageCard can open the widget with a pre-seeded prompt and an
+  // explicit skill override. We hold the latest `sendMessage` in a ref so the
+  // single subscription always dispatches against the current closure.
+  const sendMessageRef = useRef<((text: string, opts?: SendOptions) => void) | null>(null);
+  useEffect(() => {
+    return onChatOpen(({ seedPrompt, forceSkill }) => {
+      setView("chat");
+      setInput(seedPrompt);
+      // Let the dialog mount and the input render before kicking off the
+      // request — mirrors the sendVoiceTranscript handoff pattern.
+      setTimeout(() => {
+        sendMessageRef.current?.(seedPrompt, { forceSkill });
+        setInput("");
+      }, 50);
+    });
+  }, []);
+
   const parseLogAction = (text: string): LogAction | null => {
     const lower = text.toLowerCase();
     // Bind units to digits so "90 min nap" isn't parsed as 90 hours. Either
@@ -194,7 +217,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
     } finally { setActionSaving(false); }
   };
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, opts: SendOptions = {}) => {
     if (!text.trim() || isLoading) return;
     const action = parseLogAction(text);
     const userMsg: Message = { role: "user", content: text.trim() };
@@ -232,7 +255,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
     setInput("");
     setIsLoading(true);
     let assistantContent = "";
-    let routedSkill: SkillId | undefined;
+    let routedSkill: SkillId | undefined = opts.forceSkill;
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -242,7 +265,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ messages: updatedMessages, skill: "auto", context: childContext || undefined }),
+          body: JSON.stringify({ messages: updatedMessages, skill: opts.forceSkill ?? "auto", context: childContext || undefined }),
         }
       );
 
@@ -367,6 +390,10 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
       setMessages((prev) => [...prev, { role: "assistant", content: `Sorry, I couldn't respond right now. ${errorMsg}` }]);
     } finally { setIsLoading(false); }
   };
+
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  });
 
   const openVoiceMode = () => {
     setMessages([]);

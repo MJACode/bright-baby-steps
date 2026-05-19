@@ -22,6 +22,8 @@ import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
 import SleepTimer from "@/components/sleep/SleepTimer";
 import { PageInstructions } from "@/components/PageInstructions";
+import { SleepTriageCard } from "@/components/SleepTriageCard";
+import { detectTriageReasons } from "@/lib/sleepTriage";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -168,16 +170,13 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
       });
     }
 
-    // 3. Early waking pattern
-    const nightWithEnd = recentLogs.filter(l => l.sleep_type === "night" && l.ended_at);
-    if (nightWithEnd.length >= 2) {
-      const earlyCount = nightWithEnd.filter(l => new Date(l.ended_at!).getHours() < 6).length;
-      if (earlyCount > nightWithEnd.length / 2) {
-        result.push({
-          icon: <Sunrise className="w-5 h-5 text-sleep shrink-0" />,
-          text: "Early waking pattern detected — try a slightly later bedtime or a blackout curtain.",
-        });
-      }
+    // 3. Early waking pattern — uses the shared rule so both Insights and
+    // SleepTriageCard agree on what counts as "early waking."
+    if (detectTriageReasons(logs, ageMonths).includes("early_waking")) {
+      result.push({
+        icon: <Sunrise className="w-5 h-5 text-sleep shrink-0" />,
+        text: "Early waking pattern detected — try a slightly later bedtime or a blackout curtain.",
+      });
     }
 
     return { insights: result.slice(0, 3), napBreakdown: napBreakdownData };
@@ -549,6 +548,8 @@ export default function SleepPage() {
         <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
         <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
       </PageInstructions>
+
+      <SleepTriageCard activeChild={activeChild} ageMonths={ageMonths} />
 
       {/* Live Sleep Timer — Primary CTA */}
       <Card className="border-0 bg-sleep-bg/60">
