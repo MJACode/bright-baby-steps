@@ -15,10 +15,19 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine,
 } from "recharts";
-import { Scale, Plus, Stethoscope, TrendingUp, TrendingDown, Minus, Pencil, Trash2 } from "lucide-react";
+import { Scale, Plus, Stethoscope, TrendingUp, TrendingDown, Minus, Pencil, Trash2, Ruler, CircleDashed } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  cmToIn,
+  inToCm,
+  correctedAgeMonths,
+  weightPercentile,
+  lengthPercentile,
+  headPercentile,
+  formatPercentile,
+} from "@/lib/growthPercentiles";
 
 // ── weight unit helpers ───────────────────────────────────────────────────────
 
@@ -34,6 +43,11 @@ function displayWeight(totalOz: number | null | undefined): string {
   if (totalOz == null) return "—";
   const { lbs, oz } = ozToLbsOz(totalOz);
   return `${lbs} lbs ${oz} oz`;
+}
+
+function displayInches(cm: number | null | undefined): string {
+  if (cm == null) return "—";
+  return `${cmToIn(cm).toFixed(1)} in`;
 }
 
 function pctChange(current: number, reference: number): number {
@@ -138,10 +152,12 @@ export default function GrowthPage() {
   const [setupOpen, setSetupOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  // Log weight form state
+  // Log measurement form state
   const [logDate, setLogDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [logLbs, setLogLbs] = useState("");
   const [logOz, setLogOz] = useState("");
+  const [logLengthIn, setLogLengthIn] = useState("");
+  const [logHeadIn, setLogHeadIn] = useState("");
   const [logIsPeds, setLogIsPeds] = useState(false);
   const [logNotes, setLogNotes] = useState("");
 
@@ -165,7 +181,9 @@ export default function GrowthPage() {
       if (error) throw error;
       return data as {
         id: string;
-        weight_oz: number;
+        weight_oz: number | null;
+        length_cm: number | null;
+        head_circumference_cm: number | null;
         logged_at: string;
         is_pediatrician_visit: boolean;
         notes: string | null;
@@ -189,16 +207,25 @@ export default function GrowthPage() {
     enabled: !!childId,
   });
 
-  // Insert weight log
+  // Insert measurement log
   const logWeight = useMutation({
     mutationFn: async () => {
       const lbs = parseFloat(logLbs) || 0;
       const oz = parseFloat(logOz) || 0;
       const totalOz = lbsOzToOz(lbs, oz);
-      if (totalOz <= 0) throw new Error("Enter a valid weight.");
+      const lengthIn = parseFloat(logLengthIn);
+      const headIn = parseFloat(logHeadIn);
+      const lengthCm = Number.isFinite(lengthIn) && lengthIn > 0 ? inToCm(lengthIn) : null;
+      const headCm = Number.isFinite(headIn) && headIn > 0 ? inToCm(headIn) : null;
+      const weightOz = totalOz > 0 ? totalOz : null;
+      if (weightOz == null && lengthCm == null && headCm == null) {
+        throw new Error("Enter at least one measurement.");
+      }
       const { error } = await supabase.from("weight_logs").insert({
         child_id: childId!,
-        weight_oz: totalOz,
+        weight_oz: weightOz,
+        length_cm: lengthCm,
+        head_circumference_cm: headCm,
         logged_at: logDate,
         is_pediatrician_visit: logIsPeds,
         notes: logNotes.trim() || null,
@@ -207,9 +234,10 @@ export default function GrowthPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["weight-logs", childId] });
-      toast({ title: "Weight logged" });
+      toast({ title: "Measurement logged" });
       setLogOpen(false);
-      setLogLbs(""); setLogOz(""); setLogNotes(""); setLogIsPeds(false);
+      setLogLbs(""); setLogOz(""); setLogLengthIn(""); setLogHeadIn("");
+      setLogNotes(""); setLogIsPeds(false);
       setLogDate(format(new Date(), "yyyy-MM-dd"));
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -254,29 +282,60 @@ export default function GrowthPage() {
 
   // ── Derived stats ───────────────────────────────────────────────────────────
 
-  const currentLog = logs.length > 0 ? logs[logs.length - 1] : null;
-  const currentOz = currentLog?.weight_oz ?? null;
+  // Most recent log per metric (entries may include any subset of metrics).
+  const reversed = [...logs].reverse();
+  const latestWeightLog = reversed.find((l) => l.weight_oz != null) ?? null;
+  const latestLengthLog = reversed.find((l) => l.length_cm != null) ?? null;
+  const latestHeadLog = reversed.find((l) => l.head_circumference_cm != null) ?? null;
+
+  const currentOz = latestWeightLog?.weight_oz ?? null;
+  const currentLengthCm = latestLengthLog?.length_cm ?? null;
+  const currentHeadCm = latestHeadLog?.head_circumference_cm ?? null;
   const birthOzVal = child?.birth_weight_oz ?? null;
   const dischargeOzVal = child?.discharge_weight_oz ?? null;
 
   const vsbirthPct = currentOz != null && birthOzVal ? pctChange(currentOz, birthOzVal) : null;
   const goalReached = vsbirthPct != null && vsbirthPct >= 0;
 
-  // Last pediatrician visit weight (most recent is_pediatrician_visit = true)
-  const lastPedsLog = [...logs].reverse().find((l) => l.is_pediatrician_visit);
+  // Last pediatrician visit weight (most recent is_pediatrician_visit = true that has a weight)
+  const lastPedsLog = reversed.find((l) => l.is_pediatrician_visit && l.weight_oz != null);
   const sinceLastPeds =
-    currentOz != null && lastPedsLog && lastPedsLog.id !== currentLog?.id
-      ? currentOz - lastPedsLog.weight_oz
+    currentOz != null && lastPedsLog && lastPedsLog.id !== latestWeightLog?.id
+      ? currentOz - (lastPedsLog.weight_oz ?? 0)
       : null;
 
-  // Chart data
-  const chartData = logs.map((l) => ({
-    date: format(parseISO(l.logged_at), "M/d"),
-    oz: l.logged_at,
-    weight: l.weight_oz / 16,
-    label: displayWeight(l.weight_oz),
-    isPeds: l.is_pediatrician_visit,
-  }));
+  // ── Percentiles (WHO, 0–24 months) ──────────────────────────────────────────
+  // Computed against corrected age when child is premature.
+  function pctlAt(date: string | undefined, fn: (m: number) => number | null): number | null {
+    if (!activeChild || !date) return null;
+    const m = correctedAgeMonths(
+      activeChild.date_of_birth,
+      activeChild.due_date ?? null,
+      activeChild.is_premature ?? null,
+      date,
+    );
+    return fn(m);
+  }
+  const weightPctl = currentOz != null
+    ? pctlAt(latestWeightLog?.logged_at, (m) => weightPercentile(currentOz, activeChild?.gender, m))
+    : null;
+  const lengthPctl = currentLengthCm != null
+    ? pctlAt(latestLengthLog?.logged_at, (m) => lengthPercentile(currentLengthCm, activeChild?.gender, m))
+    : null;
+  const headPctl = currentHeadCm != null
+    ? pctlAt(latestHeadLog?.logged_at, (m) => headPercentile(currentHeadCm, activeChild?.gender, m))
+    : null;
+
+  // Chart data — weight only (length/HC trend charts are a follow-up).
+  const chartData = logs
+    .filter((l) => l.weight_oz != null)
+    .map((l) => ({
+      date: format(parseISO(l.logged_at), "M/d"),
+      oz: l.logged_at,
+      weight: (l.weight_oz ?? 0) / 16,
+      label: displayWeight(l.weight_oz),
+      isPeds: l.is_pediatrician_visit,
+    }));
 
   const birthWeightLine = birthOzVal ? birthOzVal / 16 : undefined;
 
@@ -296,7 +355,7 @@ export default function GrowthPage() {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
         <Scale className="w-12 h-12 text-muted-foreground" />
-        <p className="text-muted-foreground">Add a child to start tracking weight</p>
+        <p className="text-muted-foreground">Add a child to start tracking growth</p>
         <AddChildDialog />
       </div>
     );
@@ -319,7 +378,7 @@ export default function GrowthPage() {
           </Button>
           <Button size="sm" onClick={() => setLogOpen(true)}>
             <Plus className="w-4 h-4 mr-1.5" />
-            Log weight
+            Log measurement
           </Button>
         </div>
       </div>
@@ -342,49 +401,93 @@ export default function GrowthPage() {
         </Card>
       )}
 
-      {/* Stat cards */}
+      {/* Primary stat cards — current weight / length / head, each with percentile */}
       <div className="flex gap-3">
         <StatCard
-          title="Current"
+          title="Weight"
           value={displayWeight(currentOz)}
-          sub={currentLog ? format(parseISO(currentLog.logged_at), "MMM d") : undefined}
+          sub={
+            weightPctl != null
+              ? `${formatPercentile(weightPctl)} percentile`
+              : latestWeightLog
+              ? format(parseISO(latestWeightLog.logged_at), "MMM d")
+              : undefined
+          }
           icon={<Scale className="w-3.5 h-3.5" />}
         />
         <StatCard
-          title="vs birth"
-          value={
-            vsbirthPct != null
-              ? `${vsbirthPct >= 0 ? "+" : ""}${vsbirthPct.toFixed(1)}%`
-              : "—"
-          }
+          title="Length"
+          value={displayInches(currentLengthCm)}
           sub={
-            vsbirthPct != null
-              ? goalReached
-                ? "Back to birth weight"
-                : `${displayWeight(birthOzVal)} goal`
-              : birthOzVal
-              ? displayWeight(birthOzVal)
-              : "Set birth weight"
+            lengthPctl != null
+              ? `${formatPercentile(lengthPctl)} percentile`
+              : latestLengthLog
+              ? format(parseISO(latestLengthLog.logged_at), "MMM d")
+              : "Not logged"
           }
-          delta={vsbirthPct}
-          icon={<TrendingUp className="w-3.5 h-3.5" />}
+          icon={<Ruler className="w-3.5 h-3.5" />}
         />
         <StatCard
-          title="Since last visit"
-          value={
-            sinceLastPeds != null
-              ? `${sinceLastPeds >= 0 ? "+" : ""}${displayWeight(Math.abs(sinceLastPeds))}`
-              : "—"
-          }
+          title="Head"
+          value={displayInches(currentHeadCm)}
           sub={
-            lastPedsLog
-              ? format(parseISO(lastPedsLog.logged_at), "MMM d")
-              : "No visit logged"
+            headPctl != null
+              ? `${formatPercentile(headPctl)} percentile`
+              : latestHeadLog
+              ? format(parseISO(latestHeadLog.logged_at), "MMM d")
+              : "Not logged"
           }
-          delta={sinceLastPeds}
-          icon={<Stethoscope className="w-3.5 h-3.5" />}
+          icon={<CircleDashed className="w-3.5 h-3.5" />}
         />
       </div>
+
+      {/* Percentile context — only shown when measurements exist but no percentile can be computed for any of them. */}
+      {(currentOz != null || currentLengthCm != null || currentHeadCm != null) &&
+        weightPctl == null && lengthPctl == null && headPctl == null && (
+          <p className="text-xs text-muted-foreground -mt-2">
+            {!activeChild?.gender || activeChild.gender === "other"
+              ? "Set your child's sex on their profile to see WHO percentiles."
+              : "Percentiles are shown for ages 0–24 months."}
+          </p>
+        )}
+
+      {/* Secondary row — birth-weight recovery & peds-visit delta */}
+      {(birthOzVal || lastPedsLog) && (
+        <div className="flex gap-3">
+          {birthOzVal && (
+            <StatCard
+              title="vs birth"
+              value={
+                vsbirthPct != null
+                  ? `${vsbirthPct >= 0 ? "+" : ""}${vsbirthPct.toFixed(1)}%`
+                  : "—"
+              }
+              sub={
+                vsbirthPct != null
+                  ? goalReached
+                    ? "Back to birth weight"
+                    : `${displayWeight(birthOzVal)} goal`
+                  : displayWeight(birthOzVal)
+              }
+              delta={vsbirthPct}
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+            />
+          )}
+          {lastPedsLog && (
+            <StatCard
+              title="Since last visit"
+              value={
+                sinceLastPeds != null
+                  ? `${sinceLastPeds >= 0 ? "+" : ""}${displayWeight(Math.abs(sinceLastPeds))}`
+                  : "—"
+              }
+              sub={format(parseISO(lastPedsLog.logged_at), "MMM d")}
+              delta={sinceLastPeds}
+              icon={<Stethoscope className="w-3.5 h-3.5" />}
+            />
+          )}
+        </div>
+      )}
 
       {/* Goal banner */}
       {birthOzVal && currentOz && !goalReached && (
@@ -431,7 +534,7 @@ export default function GrowthPage() {
       )}
 
       {/* Chart */}
-      {logs.length > 1 && (
+      {chartData.length > 1 && (
         <Card className="border-0 bg-card/60">
           <CardHeader className="pb-1 pt-3 px-4">
             <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -531,21 +634,54 @@ export default function GrowthPage() {
         <CardContent className="px-4 pb-3 space-y-2">
           {logs.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              No weigh-ins logged yet
+              No measurements logged yet
             </p>
           ) : (
             [...logs].reverse().map((log) => {
-              const { lbs, oz } = ozToLbsOz(log.weight_oz);
+              const ageM = activeChild
+                ? correctedAgeMonths(
+                    activeChild.date_of_birth,
+                    activeChild.due_date ?? null,
+                    activeChild.is_premature ?? null,
+                    log.logged_at,
+                  )
+                : null;
+              const parts: { label: string; pctl: number | null }[] = [];
+              if (log.weight_oz != null) {
+                parts.push({
+                  label: displayWeight(log.weight_oz),
+                  pctl: ageM != null ? weightPercentile(log.weight_oz, activeChild?.gender, ageM) : null,
+                });
+              }
+              if (log.length_cm != null) {
+                parts.push({
+                  label: displayInches(log.length_cm),
+                  pctl: ageM != null ? lengthPercentile(log.length_cm, activeChild?.gender, ageM) : null,
+                });
+              }
+              if (log.head_circumference_cm != null) {
+                parts.push({
+                  label: `${displayInches(log.head_circumference_cm)} head`,
+                  pctl: ageM != null ? headPercentile(log.head_circumference_cm, activeChild?.gender, ageM) : null,
+                });
+              }
               return (
                 <div
                   key={log.id}
-                  className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0"
+                  className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0"
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">
-                        {lbs} lbs {oz} oz
-                      </span>
+                  <div className="flex-1 min-w-0 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {parts.map((p, i) => (
+                        <span key={i} className="font-semibold text-sm">
+                          {p.label}
+                          {p.pctl != null && (
+                            <span className="ml-1 font-normal text-xs text-muted-foreground">
+                              ({formatPercentile(p.pctl)})
+                            </span>
+                          )}
+                        </span>
+                      ))}
                       {log.is_pediatrician_visit && (
                         <Badge variant="secondary" className="text-[10px] py-0 h-4">
                           <Stethoscope className="w-2.5 h-2.5 mr-1" />
@@ -561,7 +697,7 @@ export default function GrowthPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="w-7 h-7 text-muted-foreground hover:text-destructive"
+                    className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0"
                     onClick={() => setDeleteId(log.id)}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -573,20 +709,50 @@ export default function GrowthPage() {
         </CardContent>
       </Card>
 
-      {/* Log weight sheet */}
+      {/* Log measurement sheet */}
       <Sheet open={logOpen} onOpenChange={setLogOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[90vh] overflow-y-auto">
           <SheetHeader className="mb-4">
-            <SheetTitle>Log weight</SheetTitle>
+            <SheetTitle>Log measurement</SheetTitle>
           </SheetHeader>
           <div className="space-y-4">
             <WeightInput
-              label="Weight"
+              label="Weight (optional)"
               lbs={logLbs}
               oz={logOz}
               onLbsChange={setLogLbs}
               onOzChange={setLogOz}
             />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm">Length (optional)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min="0"
+                  placeholder="0.0"
+                  value={logLengthIn}
+                  onChange={(e) => setLogLengthIn(e.target.value)}
+                  className="text-center"
+                />
+                <p className="text-center text-xs text-muted-foreground">inches</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm">Head circ. (optional)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  min="0"
+                  placeholder="0.0"
+                  value={logHeadIn}
+                  onChange={(e) => setLogHeadIn(e.target.value)}
+                  className="text-center"
+                />
+                <p className="text-center text-xs text-muted-foreground">inches</p>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-sm">Date</Label>
               <Input

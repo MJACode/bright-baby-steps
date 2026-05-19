@@ -2376,29 +2376,35 @@ export type Database = {
         Row: {
           child_id: string
           created_at: string
+          head_circumference_cm: number | null
           id: string
           is_pediatrician_visit: boolean
+          length_cm: number | null
           logged_at: string
           notes: string | null
-          weight_oz: number
+          weight_oz: number | null
         }
         Insert: {
           child_id: string
           created_at?: string
+          head_circumference_cm?: number | null
           id?: string
           is_pediatrician_visit?: boolean
+          length_cm?: number | null
           logged_at?: string
           notes?: string | null
-          weight_oz: number
+          weight_oz?: number | null
         }
         Update: {
           child_id?: string
           created_at?: string
+          head_circumference_cm?: number | null
           id?: string
           is_pediatrician_visit?: boolean
+          length_cm?: number | null
           logged_at?: string
           notes?: string | null
-          weight_oz?: number
+          weight_oz?: number | null
         }
         Relationships: [
           {
