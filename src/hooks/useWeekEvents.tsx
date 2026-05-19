@@ -5,8 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { DayEvent } from "./useDayEvents";
 
 export function useWeekEvents(childId: string | undefined, anchorDate: Date) {
-  const weekStart = startOfWeek(anchorDate);
-  const weekEnd = endOfWeek(anchorDate);
+  const weekStart = startOfWeek(anchorDate, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(anchorDate, { weekStartsOn: 1 });
   const weekKey = format(weekStart, "yyyy-MM-dd");
 
   const queries = useQueries({

@@ -4,8 +4,6 @@ import {
   format,
   startOfWeek,
   isToday,
-  isFuture,
-  isSameDay,
   differenceInMinutes,
   startOfDay,
   endOfDay,
@@ -35,21 +33,34 @@ interface DayStats {
 }
 
 export function WeekTimeline({ anchorDate, events, onSelectDay }: Props) {
-  const weekStart = startOfWeek(anchorDate);
+  const weekStart = startOfWeek(anchorDate, { weekStartsOn: 1 });
   const days = useMemo(
     () => Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i)),
     [weekStart]
   );
 
-  // Group events by the day their start falls on. Sleeps that cross midnight
-  // are clipped to the day they started; the WeekTimeline is a summary view.
+  // Group events by day. Point events (feed, diaper) belong to the day their
+  // timestamp falls on. Sleeps overlap onto every day they touch — the per-day
+  // clipping in statsByDay / ActivityBar prevents any minute from being
+  // counted twice.
   const eventsByDay = useMemo(() => {
     const map = new Map<string, DayEvent[]>();
     for (const d of days) map.set(format(d, "yyyy-MM-dd"), []);
     for (const e of events) {
-      const t = e.kind === "sleep" ? e.start : e.at;
-      const key = format(t, "yyyy-MM-dd");
-      if (map.has(key)) map.get(key)!.push(e);
+      if (e.kind === "sleep") {
+        const sleepStart = e.start;
+        const sleepEnd = e.end ?? new Date();
+        for (const d of days) {
+          const dayStart = startOfDay(d);
+          const dayEnd = endOfDay(d);
+          if (sleepStart <= dayEnd && sleepEnd >= dayStart) {
+            map.get(format(d, "yyyy-MM-dd"))!.push(e);
+          }
+        }
+      } else {
+        const key = format(e.at, "yyyy-MM-dd");
+        if (map.has(key)) map.get(key)!.push(e);
+      }
     }
     return map;
   }, [events, days]);
@@ -191,7 +202,7 @@ interface DayRowProps {
 
 function DayRow({ day, events, stats, onSelect }: DayRowProps) {
   const today = isToday(day);
-  const future = isFuture(day) && !isSameDay(day, new Date());
+  const future = day > startOfDay(new Date());
   const hasAny = stats.feeds > 0 || stats.diapers > 0 || stats.sleepMin > 0;
 
   return (
