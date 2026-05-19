@@ -10,22 +10,37 @@ interface ChildLite {
   due_date?: string | null;
 }
 
+export interface SleepLogRow {
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  sleep_type: string;
+}
+
+export interface SleepCoachData {
+  prediction: NapPrediction | null;
+  logs: SleepLogRow[];
+  ageMonths: number;
+}
+
 export function useSleepCoach(activeChild: ChildLite | null) {
-  return useQuery<NapPrediction | null>({
+  return useQuery<SleepCoachData | null>({
     queryKey: ["sleep-coach", activeChild?.id],
     queryFn: async () => {
       if (!activeChild) return null;
       const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const { data } = await supabase.from("sleep_logs")
-        .select("started_at, ended_at")
+        .select("started_at, ended_at, duration_minutes, sleep_type")
         .eq("child_id", activeChild.id)
         .gte("started_at", since)
         .order("started_at", { ascending: false })
         .limit(60);
       const ref = activeChild.is_premature && activeChild.due_date
         ? new Date(activeChild.due_date) : new Date(activeChild.date_of_birth);
-      const ageMo = Math.max(0, differenceInMonths(new Date(), ref));
-      return predictNextNap({ ageMonths: ageMo, sleeps: data ?? [] });
+      const ageMonths = Math.max(0, differenceInMonths(new Date(), ref));
+      const logs: SleepLogRow[] = data ?? [];
+      const prediction = predictNextNap({ ageMonths, sleeps: logs });
+      return { prediction, logs, ageMonths };
     },
     enabled: !!activeChild,
     refetchInterval: 5 * 60 * 1000,
