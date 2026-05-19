@@ -4,11 +4,13 @@ import { useAuth } from "./useAuth";
 interface Preferences {
   showBriefing: boolean;
   showNotifications: boolean;
+  calendarView: "day" | "week";
 }
 
 const defaults: Preferences = {
   showBriefing: true,
   showNotifications: true,
+  calendarView: "day",
 };
 
 function loadPrefs(key: string): Preferences {
