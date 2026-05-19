@@ -151,6 +151,7 @@ export default function GrowthPage() {
   const [logOpen, setLogOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Log measurement form state
   const [logDate, setLogDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -160,6 +161,13 @@ export default function GrowthPage() {
   const [logHeadIn, setLogHeadIn] = useState("");
   const [logIsPeds, setLogIsPeds] = useState(false);
   const [logNotes, setLogNotes] = useState("");
+
+  const resetLogForm = () => {
+    setEditingId(null);
+    setLogLbs(""); setLogOz(""); setLogLengthIn(""); setLogHeadIn("");
+    setLogNotes(""); setLogIsPeds(false);
+    setLogDate(format(new Date(), "yyyy-MM-dd"));
+  };
 
   // Setup baseline form state
   const [birthLbs, setBirthLbs] = useState("");
@@ -221,24 +229,32 @@ export default function GrowthPage() {
       if (weightOz == null && lengthCm == null && headCm == null) {
         throw new Error("Enter at least one measurement.");
       }
-      const { error } = await supabase.from("weight_logs").insert({
-        child_id: childId!,
+      const payload = {
         weight_oz: weightOz,
         length_cm: lengthCm,
         head_circumference_cm: headCm,
         logged_at: logDate,
         is_pediatrician_visit: logIsPeds,
         notes: logNotes.trim() || null,
-      });
-      if (error) throw error;
+      };
+      if (editingId) {
+        const { error } = await supabase
+          .from("weight_logs")
+          .update(payload)
+          .eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("weight_logs")
+          .insert({ child_id: childId!, ...payload });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["weight-logs", childId] });
-      toast({ title: "Measurement logged" });
+      toast({ title: editingId ? "Measurement updated" : "Measurement logged" });
       setLogOpen(false);
-      setLogLbs(""); setLogOz(""); setLogLengthIn(""); setLogHeadIn("");
-      setLogNotes(""); setLogIsPeds(false);
-      setLogDate(format(new Date(), "yyyy-MM-dd"));
+      resetLogForm();
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -338,6 +354,24 @@ export default function GrowthPage() {
     }));
 
   const birthWeightLine = birthOzVal ? birthOzVal / 16 : undefined;
+
+  const openEdit = (log: typeof logs[number]) => {
+    setEditingId(log.id);
+    if (log.weight_oz != null) {
+      const { lbs, oz } = ozToLbsOz(log.weight_oz);
+      setLogLbs(String(lbs));
+      setLogOz(String(oz));
+    } else {
+      setLogLbs("");
+      setLogOz("");
+    }
+    setLogLengthIn(log.length_cm != null ? cmToIn(log.length_cm).toFixed(1) : "");
+    setLogHeadIn(log.head_circumference_cm != null ? cmToIn(log.head_circumference_cm).toFixed(1) : "");
+    setLogDate(log.logged_at);
+    setLogIsPeds(log.is_pediatrician_visit);
+    setLogNotes(log.notes ?? "");
+    setLogOpen(true);
+  };
 
   const openSetup = () => {
     if (child?.birth_weight_oz) {
@@ -694,14 +728,26 @@ export default function GrowthPage() {
                       {log.notes && ` · ${log.notes}`}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-7 h-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => setDeleteId(log.id)}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-7 h-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => openEdit(log)}
+                      aria-label="Edit measurement"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="w-7 h-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteId(log.id)}
+                      aria-label="Delete measurement"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
               );
             })
@@ -709,11 +755,17 @@ export default function GrowthPage() {
         </CardContent>
       </Card>
 
-      {/* Log measurement sheet */}
-      <Sheet open={logOpen} onOpenChange={setLogOpen}>
+      {/* Log measurement sheet (also used for editing) */}
+      <Sheet
+        open={logOpen}
+        onOpenChange={(open) => {
+          setLogOpen(open);
+          if (!open) resetLogForm();
+        }}
+      >
         <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[90vh] overflow-y-auto">
           <SheetHeader className="mb-4">
-            <SheetTitle>Log measurement</SheetTitle>
+            <SheetTitle>{editingId ? "Edit measurement" : "Log measurement"}</SheetTitle>
           </SheetHeader>
           <div className="space-y-4">
             <WeightInput
@@ -782,7 +834,7 @@ export default function GrowthPage() {
               onClick={() => logWeight.mutate()}
               disabled={logWeight.isPending}
             >
-              Save
+              {editingId ? "Save changes" : "Save"}
             </Button>
           </div>
         </SheetContent>
