@@ -129,14 +129,19 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
 
   const parseLogAction = (text: string): LogAction | null => {
     const lower = text.toLowerCase();
-    const sleepMatch = lower.match(/log\s+(?:a\s+)?(\d+\.?\d*)\s*(?:hr|hour|h)?\s*(\d+)?\s*(?:min|minute|m)?\s*(nap|night|sleep)?/);
-    if (sleepMatch) {
-      const hours = parseFloat(sleepMatch[1]) || 0;
+    // Bind units to digits so "90 min nap" isn't parsed as 90 hours. Either
+    // the hr-group or the min-group must match for a duration to be valid.
+    const sleepMatch = lower.match(/log\s+(?:a\s+)?(?:(\d+\.?\d*)\s*(?:hr|hour|hours|h)\b)?\s*(?:(\d+)\s*(?:min|minute|minutes|m)\b)?\s*(nap|night|sleep)?/);
+    if (sleepMatch && (sleepMatch[1] || sleepMatch[2])) {
+      const hours = parseFloat(sleepMatch[1] || "0") || 0;
       const mins = parseInt(sleepMatch[2] || "0") || 0;
       const totalMins = Math.round(hours * 60 + mins);
       const sleepType = sleepMatch[3] === "night" ? "night" : "nap";
       if (totalMins > 0) {
-        return { type: "sleep", label: `${sleepType === "nap" ? "☀️ Nap" : "🌙 Night"} — ${hours > 0 ? `${Math.floor(totalMins / 60)}h ${totalMins % 60}m` : `${totalMins}m`}`, data: { duration_minutes: String(totalMins), sleep_type: sleepType } };
+        const h = Math.floor(totalMins / 60);
+        const m = totalMins % 60;
+        const durationLabel = h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+        return { type: "sleep", label: `${sleepType === "nap" ? "☀️ Nap" : "🌙 Night"} — ${durationLabel}`, data: { duration_minutes: String(totalMins), sleep_type: sleepType } };
       }
     }
     const feedMatch = lower.match(/log\s+(?:a\s+)?(?:(\d+\.?\d*)\s*(?:oz|ounce))?\s*(bottle|breast|formula|nursing|feed|solid)/);
