@@ -66,8 +66,6 @@ export function NotificationBell() {
     pumping_reminder: "🧴",
     reactivation: "👋",
     sleep_plan_winddown: "🌙",
-    sleep_plan_bedtime: "🌙",
-    sleep_plan_bedtime_late: "⏰",
   };
 
   return (

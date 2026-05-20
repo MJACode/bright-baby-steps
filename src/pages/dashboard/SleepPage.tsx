@@ -7,6 +7,7 @@ import { useChildren } from "@/hooks/useChildren";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -281,7 +282,7 @@ export default function SleepPage() {
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const { data: coach } = useSleepCoach(activeChild ?? null);
-  const { data: savedPlan } = useSleepPlan(activeChild?.id ?? null);
+  const { data: savedPlan, isLoading: isLoadingPlan } = useSleepPlan(activeChild?.id ?? null);
 
   // Edit state
   const [showAll, setShowAll] = useState(false);
@@ -561,14 +562,21 @@ export default function SleepPage() {
       <Card className="border bg-sleep/5 border-sleep/20">
         <CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-sleep/15 flex items-center justify-center shrink-0">
-            {savedPlan ? (
+            {isLoadingPlan ? (
+              <Sparkle className="w-5 h-5 text-sleep/40" />
+            ) : savedPlan ? (
               <CheckCircle2 className="w-5 h-5 text-sleep" />
             ) : (
               <Sparkle className="w-5 h-5 text-sleep" />
             )}
           </div>
           <div className="flex-1 min-w-0">
-            {savedPlan ? (
+            {isLoadingPlan ? (
+              <>
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-48 mt-1.5" />
+              </>
+            ) : savedPlan ? (
               <>
                 <p className="font-display font-bold text-sm leading-tight flex items-center gap-1.5">
                   Your sleep plan
@@ -588,9 +596,12 @@ export default function SleepPage() {
           <Button
             type="button"
             onClick={() => setPlanOpen(true)}
+            disabled={isLoadingPlan}
             className="bg-sleep hover:bg-sleep/90 text-white touch-target gap-1.5 shrink-0"
           >
-            {savedPlan ? (
+            {isLoadingPlan ? (
+              <Skeleton className="h-4 w-12 bg-white/30" />
+            ) : savedPlan ? (
               <>
                 <CheckCircle2 className="w-4 h-4" />
                 View
