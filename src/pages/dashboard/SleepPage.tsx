@@ -11,9 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown } from "lucide-react";
+import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays } from "date-fns";
+import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays, formatDistanceToNow } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
@@ -26,6 +26,7 @@ import { SleepTriageCard } from "@/components/SleepTriageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { useSleepPlan } from "@/hooks/useSleepPlan";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -279,6 +280,7 @@ export default function SleepPage() {
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const { data: coach } = useSleepCoach(activeChild ?? null);
+  const { data: savedPlan } = useSleepPlan(activeChild?.id ?? null);
 
   // Edit state
   const [showAll, setShowAll] = useState(false);
@@ -558,19 +560,46 @@ export default function SleepPage() {
       <Card className="border bg-sleep/5 border-sleep/20">
         <CardContent className="p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-sleep/15 flex items-center justify-center shrink-0">
-            <Sparkle className="w-5 h-5 text-sleep" />
+            {savedPlan ? (
+              <CheckCircle2 className="w-5 h-5 text-sleep" />
+            ) : (
+              <Sparkle className="w-5 h-5 text-sleep" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-display font-bold text-sm leading-tight">{activeChild.name}'s sleep plan</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Age-based total sleep, naps, wake windows, and a sample day.</p>
+            {savedPlan ? (
+              <>
+                <p className="font-display font-bold text-sm leading-tight flex items-center gap-1.5">
+                  Your sleep plan
+                  <CheckCircle2 className="w-3.5 h-3.5 text-sleep" />
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Saved {formatDistanceToNow(new Date(savedPlan.updated_at), { addSuffix: true })} · tap to view or adjust
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-display font-bold text-sm leading-tight">{activeChild.name}'s sleep plan</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Age-based total sleep, naps, wake windows, and a sample day.</p>
+              </>
+            )}
           </div>
           <Button
             type="button"
             onClick={() => setPlanOpen(true)}
             className="bg-sleep hover:bg-sleep/90 text-white touch-target gap-1.5 shrink-0"
           >
-            <Sparkle className="w-4 h-4" />
-            Build
+            {savedPlan ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                View
+              </>
+            ) : (
+              <>
+                <Sparkle className="w-4 h-4" />
+                Build
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
