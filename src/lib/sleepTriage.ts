@@ -713,6 +713,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "There isn't really a schedule yet — newborns sleep when they're tired and feed when they're hungry. That can feel chaotic and it's also exactly right.",
         "Tracking patterns over a few days often shows a rough rhythm hiding inside the chaos. That's your starting point.",
+        "Tap Build a sleep plan for the age-appropriate wake-window targets and safe-sleep ABCs.",
       ],
       tips: [
         { icon: Eye, text: "Watch wake windows: ~45-60 min at this age" },
@@ -726,6 +727,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "Most babies this age land on 3-4 naps with wake windows of 1.5-2 hours. The exact times move as wake windows stretch.",
         "Anchor the morning (same wake-up, same first feed) and the rest of the day starts to fall into place.",
+        "Tap Build a sleep plan for an evidence-based target schedule mapped to your baby's age.",
       ],
       tips: [
         { icon: Sun, text: "Same wake time within a 30-min window daily" },
@@ -739,6 +741,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "Most babies this age move from 3 to 2 naps. The transition takes 2-4 weeks of slightly off days as the schedule resets.",
         "Lock the wake time and bedtime, and let the nap timing move within that window while the body adjusts.",
+        "Tap Build a sleep plan to see the target nap count, wake windows, and bedtime range for this stage.",
       ],
       tips: [
         { icon: Sun, text: "Same wake time and bedtime every day" },
@@ -752,6 +755,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "Most babies this age are on 2 naps with wake windows of 3-3.5 hours, but the move to one nap is starting to peek through.",
         "Signs you're heading to one nap: the second nap gets short, refused, or pushes bedtime late. Wait for two weeks of consistent signs before making the change.",
+        "Tap Build a sleep plan for a personalized day built from your recent bedtime data.",
       ],
       tips: [
         { icon: Clock, text: "2 naps, ~3-3.5 hour wake windows" },
@@ -765,6 +769,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "Most toddlers move to one nap somewhere between 12-18 months. The transition is bumpy — short naps, early or late bedtimes, generally weird.",
         "Once you're fully on one nap, aim for an after-lunch start and a 1.5-2.5 hour stretch. That sets up the rest of the day.",
+        "Tap Build a sleep plan for the one-nap target day, bedtime range, and a sample schedule.",
       ],
       tips: [
         { icon: Clock, text: "One nap after lunch, 1.5-2.5 hours" },
@@ -778,6 +783,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "Most toddlers this age are firmly on one nap of 1.5-2.5 hours, with bedtime about 5-6 hours after the nap ends.",
         "A schedule that 'feels off' is often the nap going too late or too long. Aim for the nap to end by 3pm.",
+        "Tap Build a sleep plan for the toddler target day plus a personalized bedtime check from your recent data.",
       ],
       tips: [
         { icon: Clock, text: "Cap the nap at 2-2.5 hours" },
@@ -791,6 +797,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "By now the structure is set: one nap or quiet time after lunch, bedtime around 7-8pm. Variability is fine — rigidity isn't required.",
         "If the day feels off, look at the morning wake time and the nap end time. Those two anchors usually pull the rest of the day into shape.",
+        "Tap Build a sleep plan for the target total sleep, bedtime range, and a sample day at this age.",
       ],
       tips: [
         { icon: Sun, text: "Wake within a 30-min window most days" },
@@ -804,6 +811,7 @@ export const TRIAGE_CONTENT: Record<
       body: [
         "At this age the day is shaped more by activities (school, daycare, preschool) than by infant-style wake windows.",
         "If sleep is off, look at total hours per 24 hours, what time the day ends, and whether the wind-down is genuinely calm.",
+        "Tap Build a sleep plan for the target total sleep at this age plus a bedtime range to anchor the week.",
       ],
       tips: [
         { icon: Sun, text: "Anchor the wake time across weekdays and weekends" },

@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Moon, Sparkles, MessageCircle } from "lucide-react";
+import { ChevronDown, Moon, Sparkles, MessageCircle, Sparkle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSleepTriage } from "@/hooks/useSleepTriage";
+import { useSleepCoach } from "@/hooks/useSleepCoach";
 import {
   TRIAGE_REASON_HUMAN,
   TRIAGE_REASON_ORDER,
@@ -11,12 +13,14 @@ import {
   type TriageReason,
 } from "@/lib/sleepTriage";
 import { openChat } from "@/lib/chatOpener";
+import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 
 interface ChildLite {
   id: string;
   date_of_birth: string;
   is_premature?: boolean | null;
   due_date?: string | null;
+  name?: string;
 }
 
 interface SleepTriageCardProps {
@@ -30,12 +34,19 @@ export function SleepTriageCard({ activeChild, ageMonths: ageFromPage }: SleepTr
     selected,
     setSelected,
     ageBucket,
+    ageMonths,
     methodFlavor,
     content,
     writeMemory,
     collapsed,
     setCollapsed,
   } = useSleepTriage(activeChild);
+
+  // We already have logs cached via useSleepCoach in useSleepTriage — reuse the
+  // query so SleepPlanDialog renders with the same 14-day window the triage
+  // detection ran on.
+  const { data: coach } = useSleepCoach(activeChild);
+  const [planOpen, setPlanOpen] = useState(false);
 
   if (!activeChild) return null;
 
@@ -67,6 +78,7 @@ export function SleepTriageCard({ activeChild, ageMonths: ageFromPage }: SleepTr
   const isNewborn = ageFromPage < 1;
 
   return (
+    <>
     <Card className="border border-sleep/20 bg-sleep/5">
       <CardContent className="p-0">
         <Collapsible open={isOpen} onOpenChange={onOpenChange}>
@@ -117,6 +129,18 @@ export function SleepTriageCard({ activeChild, ageMonths: ageFromPage }: SleepTr
                   tips={content.tips}
                   onChange={() => setSelected(null)}
                   onTalk={handleTalk}
+                  primaryAction={
+                    selected === "schedule_confusion"
+                      ? {
+                          label: "Build a sleep plan",
+                          icon: Sparkle,
+                          onClick: () => {
+                            void writeMemory();
+                            setPlanOpen(true);
+                          },
+                        }
+                      : undefined
+                  }
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2">
@@ -146,7 +170,22 @@ export function SleepTriageCard({ activeChild, ageMonths: ageFromPage }: SleepTr
         </Collapsible>
       </CardContent>
     </Card>
+    <SleepPlanDialog
+      open={planOpen}
+      onOpenChange={setPlanOpen}
+      childId={activeChild.id}
+      childName={activeChild.name ?? "your baby"}
+      ageMonths={ageMonths}
+      logs={coach?.logs ?? []}
+    />
+    </>
   );
+}
+
+interface PrimaryAction {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  onClick: () => void;
 }
 
 interface DetailPanelProps {
@@ -155,9 +194,11 @@ interface DetailPanelProps {
   tips: { icon: React.ComponentType<{ className?: string }>; text: string }[];
   onChange: () => void;
   onTalk: () => void;
+  primaryAction?: PrimaryAction;
 }
 
-function DetailPanel({ title, body, tips, onChange, onTalk }: DetailPanelProps) {
+function DetailPanel({ title, body, tips, onChange, onTalk, primaryAction }: DetailPanelProps) {
+  const PrimaryIcon = primaryAction?.icon;
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -183,24 +224,56 @@ function DetailPanel({ title, body, tips, onChange, onTalk }: DetailPanelProps) 
         </ul>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <Button
-          type="button"
-          variant="ghost"
-          className="flex-1 touch-target text-muted-foreground"
-          onClick={onChange}
-        >
-          Change answer
-        </Button>
-        <Button
-          type="button"
-          className="flex-1 touch-target gap-2 bg-sleep hover:bg-sleep/90 text-white"
-          onClick={onTalk}
-        >
-          <MessageCircle className="w-4 h-4" />
-          Talk to Sleep Coach
-        </Button>
-      </div>
+      {primaryAction && PrimaryIcon ? (
+        <div className="flex flex-col gap-2 pt-1">
+          <Button
+            type="button"
+            className="w-full touch-target gap-2 bg-sleep hover:bg-sleep/90 text-white"
+            onClick={primaryAction.onClick}
+          >
+            <PrimaryIcon className="w-4 h-4" />
+            {primaryAction.label}
+          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="flex-1 touch-target text-muted-foreground"
+              onClick={onChange}
+            >
+              Change answer
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 touch-target gap-2"
+              onClick={onTalk}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Talk to Sleep Coach
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2 pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            className="flex-1 touch-target text-muted-foreground"
+            onClick={onChange}
+          >
+            Change answer
+          </Button>
+          <Button
+            type="button"
+            className="flex-1 touch-target gap-2 bg-sleep hover:bg-sleep/90 text-white"
+            onClick={onTalk}
+          >
+            <MessageCircle className="w-4 h-4" />
+            Talk to Sleep Coach
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

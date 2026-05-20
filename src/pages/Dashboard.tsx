@@ -8,7 +8,6 @@ import { Flame, UtensilsCrossed, Moon, Droplets, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
-import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
@@ -105,9 +104,6 @@ export default function Dashboard() {
           </Link>
         ))}
       </div>
-
-      {/* AI Quick Log */}
-      <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />
