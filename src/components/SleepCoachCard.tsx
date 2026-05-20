@@ -1,11 +1,9 @@
-import { useState } from "react";
-import { format } from "date-fns";
+import { useEffect, useState } from "react";
+import { format, formatDistanceStrict } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Moon, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { PremiumGate } from "@/components/PremiumGate";
-import { WindDownOverlay } from "@/components/WindDownOverlay";
 import { cn } from "@/lib/utils";
 
 interface ChildLite {
@@ -18,7 +16,12 @@ interface ChildLite {
 export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null }) {
   const { data } = useSleepCoach(activeChild);
   const pred = data?.prediction ?? null;
-  const [winddown, setWinddown] = useState(false);
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   if (!pred) return null;
   const confidenceTone = {
@@ -26,6 +29,19 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
     medium: "bg-amber-500",
     low: "bg-muted-foreground",
   }[pred.confidence];
+
+  let countdownText: string;
+  let countdownClass: string;
+  if (now < pred.windowStart) {
+    countdownText = `in ${formatDistanceStrict(pred.windowStart, now)}`;
+    countdownClass = "text-foreground";
+  } else if (now <= pred.windowEnd) {
+    countdownText = "Nap window open";
+    countdownClass = "text-primary";
+  } else {
+    countdownText = `Window passed · ${formatDistanceStrict(pred.windowEnd, now)} ago`;
+    countdownClass = "text-muted-foreground";
+  }
 
   return (
     <PremiumGate feature="predictions" variant="blur">
@@ -41,18 +57,10 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
           <p className="text-base font-semibold">
             Next nap: {format(pred.windowStart, "h:mm")} – {format(pred.windowEnd, "h:mm a")}
           </p>
+          <p className={cn("text-sm font-semibold mt-1", countdownClass)}>{countdownText}</p>
           <p className="text-xs text-muted-foreground mt-1">{pred.reason}</p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-3 gap-2 w-full"
-            onClick={() => setWinddown(true)}
-          >
-            <Moon className="w-4 h-4" /> Start wind-down (30s)
-          </Button>
         </CardContent>
       </Card>
-      {winddown && <WindDownOverlay onClose={() => setWinddown(false)} />}
     </PremiumGate>
   );
 }
