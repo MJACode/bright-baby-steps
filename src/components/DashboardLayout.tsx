@@ -11,6 +11,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { cn } from "@/lib/utils";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
+import { AIChatWidget } from "@/components/AIChatWidget";
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
@@ -87,6 +88,14 @@ export default function DashboardLayout() {
       <main className={cn("flex-1 px-4 py-5 max-w-lg mx-auto w-full", !isOnboarding && "pb-tab-bar")}>
         <Outlet />
       </main>
+
+      {/* AI chat widget — mounted at the layout level so its chatOpener
+          subscription is live on every dashboard sub-route, not just the
+          home dashboard. Surfaces like SleepTriageCard dispatch onto that bus
+          to hand off into the chat. */}
+      {!isOnboarding && (
+        <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
+      )}
 
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}

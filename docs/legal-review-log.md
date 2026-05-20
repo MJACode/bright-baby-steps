@@ -603,3 +603,112 @@ Storage admin API (HTTP path, not table DELETE):
 **Code refs:** branch `claude/fix-purge-helper-storage`.
 
 ---
+
+## 2026-05-20 — Sleep-plan builder evidence base
+
+**Scope:** `src/lib/sleepPlan.ts`, `src/components/SleepPlanDialog.tsx`,
+`src/components/SleepTriageCard.tsx`, `src/lib/sleepTriage.ts`. New "Build
+a sleep plan" surface reachable from the SleepTriageCard when the parent
+selects `schedule_confusion`. The dialog renders age-bracket-targeted
+clinical guidance (total sleep target, nap count + next transition, wake
+windows, bedtime range, bedtime routine, Safe Sleep ABCs under 12 months,
+sleep-training-readiness note under 4 months), personalized against the
+last 14 days of `sleep_logs` rows (median bedtime / wake / total).
+
+**Trigger:** Product extension of the Sleep Triage card. No change to
+Privacy, Terms, FAQ text, COPPA flows, retention, deletion, subprocessor
+list, or geo-block.
+
+**Why this entry exists:** the dialog cites peer-reviewed pediatric-sleep
+literature in-product. The FTC has historically taken interest in
+health-adjacent claims, so the source posture is documented here even
+though the surface itself isn't a "consent" surface.
+
+**Evidence base (cited verbatim alongside each clinical number):**
+
+- **Total-sleep targets (24h)** — *Recommended Amount of Sleep for
+  Pediatric Populations: AASM Consensus Statement*, Paruthi S et al.,
+  J Clin Sleep Med 2016;12(6):785-786
+  (https://pubmed.ncbi.nlm.nih.gov/27250809/). AASM declined to issue
+  a recommendation for infants under 4 months, so the 0-3 mo range
+  (14-17h) comes from *NSF sleep time duration recommendations*,
+  Hirshkowitz M et al., Sleep Health 2015;1(1):40-43, also peer-reviewed
+  expert consensus.
+- **Safe Sleep ABCs (rendered only when ageMonths < 12)** — *Sleep-Related
+  Infant Deaths: Updated 2022 Recommendations for Reducing Infant Deaths
+  in the Sleep Environment*, Moon RY et al., Pediatrics 2022;150(1):
+  e2022057990 (https://publications.aap.org/pediatrics/article/150/1/
+  e2022057990/). AAP Policy Statement, current as of May 2026 to our
+  knowledge. Includes: supine for every sleep first year, firm flat
+  surface meeting CPSC standards (incline ≤10°), no bed-sharing, no
+  soft objects/bumpers/pillows/blankets, no weighted swaddles or sleep
+  sacks, room-share 6-12 mo, stop swaddling at first sign of rolling,
+  pacifier at sleep onset is protective, no home cardiorespiratory
+  monitors for SIDS prevention.
+- **Wake windows** — *A Clinical Guide to Pediatric Sleep* (3rd ed.),
+  Mindell JA, Owens JA, Wolters Kluwer 2015. Standard pediatric-sleep
+  clinical reference. Explicitly flagged in-product with the footnote
+  "Approximate guidance from clinical practice (Mindell & Owens 2015) —
+  not RCT-validated" so parents aren't shown clinical-practice numbers
+  as randomized-trial evidence.
+- **Bedtime routine guidance** — *A nightly bedtime routine: impact on
+  sleep in young children*, Mindell JA et al., Sleep 2009;32(5):599-606
+  (https://pmc.ncbi.nlm.nih.gov/articles/PMC2675894/), n=405 RCT; and
+  *Bedtime Routines for Young Children: A Dose-Dependent Association
+  with Sleep Outcomes*, Mindell JA et al., Sleep 2015;38(5):717-722
+  (https://pubmed.ncbi.nlm.nih.gov/25325483/), n=10,085 cross-sectional
+  dose-response. Recommendation rendered in product: 3+ activities,
+  20+ minutes, 5+ nights/week.
+- **Behavioral sleep-intervention safety follow-up** — *Five-Year
+  Follow-up of Harms and Benefits of Behavioral Infant Sleep
+  Intervention*, Price AMH et al., Pediatrics 2012;130(4):643-651
+  (https://publications.aap.org/pediatrics/article/130/4/643/). Cited
+  in the dialog's sources list as the long-term safety reference for
+  behavioral sleep training; the sleep-training method picker itself
+  is out of scope for this PR. Sleep-training-readiness note ("not
+  appropriate before ~4-6 months") cites Mindell & Owens 2015 + AAP
+  guidance and only renders when ageMonths < 4.
+- **Bedtime-range defaults** — Mindell & Owens 2015 clinical defaults;
+  AAP recommends a consistent age-appropriate bedtime (no specific clock
+  range mandated). 0-3 mo is rendered with `bedtimeRange.label = "No
+  fixed bedtime — circadian rhythm consolidates around 10-12 weeks"`
+  rather than a clock-time, consistent with developmental science.
+
+**Disclaimer posture:** no new in-product disclaimer added. The clinical
+guidance is presented under the existing "Service Is Not Medical Advice"
+language in `TermsPage.tsx` § 4 (Terms of Service), which already states
+that Grace Flare provides educational information, not medical advice,
+and that parents should consult a pediatrician for medical concerns. The
+dialog also avoids prescriptive framings ("experts recommend…",
+"you should…") in favor of a parent-led framing ("Build a structured
+plan for your baby") consistent with the brand voice guidelines in
+CLAUDE.md.
+
+**Personalization & data:** the dialog reads the last 14 days of
+`sleep_logs` rows for the active child (already loaded by
+`useSleepCoach`), computes median bedtime, median wake time, and mean
+daily total — never sends data off-device for this calculation. The
+"Save to my plan" action writes a single `child_memories` row with
+`category = 'routine'`, `source_function = 'sleep-triage'` (allowlist
+already widened by migration `20260519010000_*`), `created_by =
+auth.uid()` (RLS-enforced), `content` truncated to fit the 3-500 char
+CHECK constraint. No PHI is logged to any edge function during plan
+generation.
+
+**Risk levels surfaced:**
+- P0: none.
+- P1: none. Adjustment-tip language ("Try shifting bedtime 15 min
+  earlier") is suggestive, not prescriptive, and gated on ≥3 night-sleep
+  rows in the last 14 days so it doesn't fire on thin data.
+- P2: when the sleep-method picker (`profiles.sleep_method`) ships, the
+  triage and plan surfaces will need a second pre-review pass to confirm
+  the method-flavored copy stays inside the same evidence base and
+  doesn't drift into prescriptive territory.
+
+**Outstanding:** none for this surface. If/when the dialog adds a
+medication, supplement, or specific clinical-intervention recommendation
+(e.g. melatonin), it must come back through this log for a fresh review.
+
+**Code refs:** working branch `claude/investigate-sleep-coach-PcWKN`.
+
+---
