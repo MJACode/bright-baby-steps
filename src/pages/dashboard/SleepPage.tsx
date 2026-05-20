@@ -24,6 +24,7 @@ import SleepTimer from "@/components/sleep/SleepTimer";
 import { PageInstructions } from "@/components/PageInstructions";
 import { SleepTriageCard } from "@/components/SleepTriageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
+import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
@@ -603,6 +604,11 @@ export default function SleepPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <SleepPlanReminderBanner
+        childId={activeChild.id}
+        childName={activeChild.name ?? "your baby"}
+      />
 
       {/* Live Sleep Timer — Primary CTA */}
       <Card className="border-0 bg-sleep-bg/60">

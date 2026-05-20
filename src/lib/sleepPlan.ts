@@ -268,14 +268,14 @@ function minutesSinceMidnightLocal(d: Date): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-function formatHHmm(minutes: number): string {
+export function formatHHmm(minutes: number): string {
   const wrapped = ((minutes % 1440) + 1440) % 1440;
   const h = Math.floor(wrapped / 60);
   const m = Math.round(wrapped % 60);
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-function parseHHmm(s: string): number {
+export function parseHHmm(s: string): number {
   const [h, m] = s.split(":").map(Number);
   return h * 60 + m;
 }
