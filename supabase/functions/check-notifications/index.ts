@@ -132,6 +132,54 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 5. Sleep-plan-driven reminders.
+    //
+    // Wind-down is the only block here — it's TZ-safe because it derives from
+    // `last_sleep.ended_at + wake_window_low_min` (absolute timestamp + offset).
+    // Bedtime cues (HH:MM → wall-clock) need the user's local TZ to fire at
+    // the right moment; without a `tz` column on `profiles` or `children`,
+    // those would fire 7-8h off for any non-UTC user. The in-app
+    // `SleepPlanReminderBanner` covers bedtime cues in local time until that
+    // schema lands.
+    if (!recentTypes.has("sleep_plan_winddown")) {
+      const { data: plan } = await supabase
+        .from("sleep_plans")
+        .select("wake_window_low_min")
+        .eq("child_id", child.id)
+        .maybeSingle();
+
+      if (plan && plan.wake_window_low_min) {
+        const { data: lastSleep } = await supabase
+          .from("sleep_logs")
+          .select("ended_at")
+          .eq("child_id", child.id)
+          .not("ended_at", "is", null)
+          .order("started_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (lastSleep && lastSleep.ended_at) {
+          const lastEnd = new Date(lastSleep.ended_at).getTime();
+          const nextNapOnsetMs = lastEnd + plan.wake_window_low_min * 60 * 1000;
+          const cueAtMs = nextNapOnsetMs - 15 * 60 * 1000;
+          const minutesAway = Math.round((nextNapOnsetMs - now.getTime()) / 60000);
+          const threeHoursMs = 3 * 60 * 60 * 1000;
+
+          if (cueAtMs >= now.getTime() && cueAtMs <= now.getTime() + threeHoursMs && minutesAway > 0) {
+            const message = minutesAway <= 15
+              ? `Wind-down for ${child.name}'s nap starting now ✨`
+              : `Wind-down for ${child.name}'s nap in ~${minutesAway} min ✨`;
+            notifications.push({
+              user_id: userId,
+              child_id: child.id,
+              message,
+              type: "sleep_plan_winddown",
+            });
+          }
+        }
+      }
+    }
+
     // Also notify partners
     const { data: partners } = await supabase
       .from("partner_access")

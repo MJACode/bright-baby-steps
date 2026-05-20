@@ -268,14 +268,14 @@ function minutesSinceMidnightLocal(d: Date): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-function formatHHmm(minutes: number): string {
+export function formatHHmm(minutes: number): string {
   const wrapped = ((minutes % 1440) + 1440) % 1440;
   const h = Math.floor(wrapped / 60);
   const m = Math.round(wrapped % 60);
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-function parseHHmm(s: string): number {
+export function parseHHmm(s: string): number {
   const [h, m] = s.split(":").map(Number);
   return h * 60 + m;
 }
@@ -288,18 +288,54 @@ function diffInMinutes(later: string, earlier: string): number {
   return parseHHmm(later) - parseHHmm(earlier);
 }
 
+export interface SavedSleepPlan {
+  wake_time: string | null;
+  bedtime_earliest: string | null;
+  bedtime_latest: string | null;
+  wake_window_low_min: number | null;
+  wake_window_high_min: number | null;
+  nap_count: number | null;
+  overrides: { wake_time?: boolean; bedtime?: boolean; nap_count?: boolean };
+}
+
 interface BuildSleepPlanArgs {
   ageMonths: number;
   logs: PlanLog[];
   methodFlavor?: MethodFlavor;
+  savedPlan?: SavedSleepPlan | null;
 }
 
-export function buildSleepPlan({ ageMonths, logs }: BuildSleepPlanArgs): SleepPlan {
+export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArgs): SleepPlan {
   const bucket = getAgeBucket(ageMonths);
   const totalSleep = TOTAL_SLEEP_BY_BRACKET[bucket];
-  const naps = NAPS_BY_BRACKET[bucket];
+  const defaultNaps = NAPS_BY_BRACKET[bucket];
   const wakeWindow = WAKE_WINDOW_BY_BRACKET[bucket];
-  const bedtimeRange = BEDTIME_RANGE_BY_BRACKET[bucket];
+  const defaultBedtimeRange = BEDTIME_RANGE_BY_BRACKET[bucket];
+
+  const wakeOverride = savedPlan?.overrides?.wake_time && savedPlan.wake_time ? savedPlan.wake_time : null;
+  const bedtimeOverride =
+    savedPlan?.overrides?.bedtime && (savedPlan.bedtime_earliest || savedPlan.bedtime_latest)
+      ? {
+          earliest: savedPlan.bedtime_earliest,
+          latest: savedPlan.bedtime_latest,
+        }
+      : null;
+  const napCountOverride =
+    savedPlan?.overrides?.nap_count && typeof savedPlan.nap_count === "number"
+      ? savedPlan.nap_count
+      : null;
+
+  const bedtimeRange: BedtimeRange = bedtimeOverride
+    ? {
+        earliest: bedtimeOverride.earliest,
+        latest: bedtimeOverride.latest,
+        source: defaultBedtimeRange.source,
+      }
+    : defaultBedtimeRange;
+
+  const naps: NapInfo = napCountOverride !== null
+    ? { ...defaultNaps, typical: napCountOverride }
+    : defaultNaps;
 
   // Observed values from the last 14 days of logs.
   const fourteenAgo = subDays(new Date(), 14);
@@ -361,8 +397,8 @@ export function buildSleepPlan({ ageMonths, logs }: BuildSleepPlanArgs): SleepPl
     newbornNote =
       "Newborn schedules are flexible by design. Follow short wake windows and feeding cues rather than the clock — a real rhythm settles in around 10-12 weeks.";
   } else {
-    const wakeAnchor = observedWakeTime ?? "07:00";
-    const bedtimeAnchor = observedBedtime ?? bedtimeRange.earliest ?? "19:30";
+    const wakeAnchor = wakeOverride ?? observedWakeTime ?? "07:00";
+    const bedtimeAnchor = bedtimeOverride?.earliest ?? observedBedtime ?? bedtimeRange.earliest ?? "19:30";
     const wwLow = wakeWindow.low;
     let cursor = wakeAnchor;
     sampleDay.push({ time: cursor, activity: "Wake + bright light" });
@@ -405,8 +441,8 @@ export function buildSleepPlan({ ageMonths, logs }: BuildSleepPlanArgs): SleepPl
     safeSleep,
     sleepTrainingNote,
     observed: {
-      bedtime: observedBedtime,
-      wakeTime: observedWakeTime,
+      bedtime: bedtimeOverride?.earliest ?? observedBedtime,
+      wakeTime: wakeOverride ?? observedWakeTime,
       totalHours: observedTotalHours !== null ? Math.round(observedTotalHours * 10) / 10 : null,
       nightLogCount: nightLogs.length,
       hasEnoughSignal: hasEnoughLogs,

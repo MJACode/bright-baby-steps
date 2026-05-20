@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_memories: {
+        Row: {
+          child_id: string | null
+          content: string
+          created_at: string
+          id: string
+          pinned: boolean
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          child_id?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          child_id?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          pinned?: boolean
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_memories_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       allergen_exposure_logs: {
         Row: {
           allergen_id: string
@@ -2072,6 +2113,71 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sleep_plans: {
+        Row: {
+          bedtime_earliest: string | null
+          bedtime_latest: string | null
+          bucket: string | null
+          bucket_label: string | null
+          child_id: string
+          created_at: string
+          id: string
+          nap_count: number | null
+          overrides: Json
+          parent_id: string
+          total_sleep_high: number | null
+          total_sleep_low: number | null
+          updated_at: string
+          wake_time: string | null
+          wake_window_high_min: number | null
+          wake_window_low_min: number | null
+        }
+        Insert: {
+          bedtime_earliest?: string | null
+          bedtime_latest?: string | null
+          bucket?: string | null
+          bucket_label?: string | null
+          child_id: string
+          created_at?: string
+          id?: string
+          nap_count?: number | null
+          overrides?: Json
+          parent_id: string
+          total_sleep_high?: number | null
+          total_sleep_low?: number | null
+          updated_at?: string
+          wake_time?: string | null
+          wake_window_high_min?: number | null
+          wake_window_low_min?: number | null
+        }
+        Update: {
+          bedtime_earliest?: string | null
+          bedtime_latest?: string | null
+          bucket?: string | null
+          bucket_label?: string | null
+          child_id?: string
+          created_at?: string
+          id?: string
+          nap_count?: number | null
+          overrides?: Json
+          parent_id?: string
+          total_sleep_high?: number | null
+          total_sleep_low?: number | null
+          updated_at?: string
+          wake_time?: string | null
+          wake_window_high_min?: number | null
+          wake_window_low_min?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sleep_plans_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
             referencedColumns: ["id"]
           },
         ]
