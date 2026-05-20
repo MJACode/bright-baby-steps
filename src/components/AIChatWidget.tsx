@@ -51,6 +51,7 @@ const STARTER_PROMPTS: string[] = [
 interface AIChatWidgetProps {
   activeChildId?: string;
   quickLogMode?: boolean;
+  headless?: boolean;
 }
 
 interface SendOptions {
@@ -76,7 +77,7 @@ function findFrameBoundary(buf: string): number {
   return Math.min(a, b);
 }
 
-export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps) {
+export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWidgetProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -141,8 +142,9 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
     return onChatOpen(({ seedPrompt, forceSkill }) => {
       setView("chat");
       setInput(seedPrompt);
-      // Let the dialog mount and the input render before kicking off the
-      // request — mirrors the sendVoiceTranscript handoff pattern.
+      // Empty seedPrompt = just open the dialog (used by the home-page entry
+      // card). A seedPrompt with content auto-sends after the dialog mounts.
+      if (!seedPrompt.trim()) return;
       setTimeout(() => {
         sendMessageRef.current?.(seedPrompt, { forceSkill });
         setInput("");
@@ -576,7 +578,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
   return (
     <>
       {voiceOverlay}
-      {closedEntry}
+      {!headless && closedEntry}
       <Dialog
         open={view === "chat"}
         onOpenChange={(open) => {
