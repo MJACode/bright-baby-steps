@@ -14,6 +14,7 @@ import {
 } from "@/lib/sleepTriage";
 import { openChat } from "@/lib/chatOpener";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
+import { PremiumGate } from "@/components/PremiumGate";
 
 interface ChildLite {
   id: string;
@@ -78,7 +79,7 @@ export function SleepTriageCard({ activeChild, ageMonths: ageFromPage }: SleepTr
   const isNewborn = ageFromPage < 1;
 
   return (
-    <>
+    <PremiumGate feature="ai-insights" variant="blur">
     <Card className="border border-sleep/20 bg-sleep/5">
       <CardContent className="p-0">
         <Collapsible open={isOpen} onOpenChange={onOpenChange}>
@@ -178,7 +179,7 @@ export function SleepTriageCard({ activeChild, ageMonths: ageFromPage }: SleepTr
       ageMonths={ageMonths}
       logs={coach?.logs ?? []}
     />
-    </>
+    </PremiumGate>
   );
 }
 
