@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays, formatDistanceToNow } from "date-fns";
@@ -22,7 +22,6 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
 import SleepTimer from "@/components/sleep/SleepTimer";
-import { PageInstructions } from "@/components/PageInstructions";
 import { SleepTriageCard } from "@/components/SleepTriageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
@@ -530,32 +529,34 @@ export default function SleepPage() {
             </h1>
             <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s sleep tracker</p>
           </div>
-          <TooltipProvider delayDuration={0}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-sleep">
-                  <Info className="w-5 h-5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-[220px] p-3">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="touch-target text-muted-foreground hover:text-sleep">
+                <Info className="w-5 h-5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="bottom" align="start" className="w-80 p-4 space-y-4">
+              <div>
                 <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
-                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep Guide ({ageGroup})
+                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep guide ({ageGroup})
                 </p>
                 <div className="space-y-1 text-xs">
                   <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{rec.total}</span></p>
                   <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{rec.naps}</span></p>
                 </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              </div>
+              <div>
+                <p className="font-bold text-xs mb-1.5">How to use this page</p>
+                <div className="space-y-1.5 text-xs text-muted-foreground">
+                  <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
+                  <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
+                  <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
-
-      <PageInstructions tint="sleep">
-        <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
-        <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
-        <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
-      </PageInstructions>
 
       <SleepTriageCard activeChild={activeChild} ageMonths={ageMonths} />
 
@@ -589,7 +590,7 @@ export default function SleepPage() {
             ) : (
               <>
                 <p className="font-display font-bold text-sm leading-tight">{activeChild.name}'s sleep plan</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Age-based total sleep, naps, wake windows, and a sample day.</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Our age-based recommendation — tap to view or customize.</p>
               </>
             )}
           </div>
@@ -609,7 +610,7 @@ export default function SleepPage() {
             ) : (
               <>
                 <Sparkle className="w-4 h-4" />
-                Build
+                View
               </>
             )}
           </Button>
