@@ -1,11 +1,11 @@
-import { Navigate, Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import { Navigate, Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
-import { UserCircle, Home, CalendarDays, ChevronLeft } from "lucide-react";
+import { UserCircle, Home, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
@@ -18,14 +18,7 @@ export default function DashboardLayout() {
   const { children, activeChild, isLoading: childrenLoading } = useChildren();
   const { prefs } = usePreferences();
   const location = useLocation();
-  const navigate = useNavigate();
   const role = useCurrentRole(activeChild?.id);
-
-  const isAtRoot = location.pathname === "/dashboard";
-  const handleBack = () => {
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/dashboard");
-  };
 
   const isOnboarding = !childrenLoading && (!children || children.length === 0);
 
@@ -60,18 +53,7 @@ export default function DashboardLayout() {
       {/* Top header — single row */}
       <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
-          <div className="flex items-center gap-1.5">
-            {!isOnboarding && !isAtRoot && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleBack}
-                aria-label="Back"
-                className="touch-target text-muted-foreground hover:text-foreground"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-            )}
+          <div className="flex items-center gap-2">
             <Link to="/dashboard" aria-label="Home" className="shrink-0">
               <img src="/app-icon.png" alt="Grace Flare" className="w-7 h-7 rounded-md" />
             </Link>
