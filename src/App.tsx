@@ -10,6 +10,7 @@ import AcceptInvite from "./pages/AcceptInvite";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import { DeepLinkHandler } from "./components/DeepLinkHandler";
+import ErrorBoundary from "./components/ErrorBoundary";
 import SleepPage from "./pages/dashboard/SleepPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
@@ -42,37 +43,39 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <DeepLinkHandler />
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/invite/:code" element={<AcceptInvite />} />
-            <Route path="/upgrade" element={<Upgrade />} />
-            <Route path="/dashboard" element={<DashboardLayout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="sleep" element={<SleepPage />} />
-              <Route path="diapers" element={<DiapersPage />} />
-              <Route path="feeding" element={<FeedingPage />} />
-              <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
-              <Route path="milestones" element={<MilestonesPage />} />
-              <Route path="growth" element={<GrowthPage />} />
-              <Route path="financial" element={<Navigate to="/dashboard/records?tab=financial" replace />} />
-              <Route path="profile" element={<ProfilePage />} />
-              <Route path="weekly" element={<WeeklyInsightsPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="records" element={<RecordsPage />} />
-              <Route path="calendar" element={<CalendarPage />} />
-              <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
-              <Route path="more" element={<MorePage />} />
-            </Route>
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            <Route path="/faq" element={<FAQPage />} />
-            <Route path="/subprocessors" element={<SubprocessorsPage />} />
-            <Route path="/rights-request" element={<RightsRequestPage />} />
-            <Route path="/vpc-confirm" element={<VpcConfirmPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/invite/:code" element={<AcceptInvite />} />
+              <Route path="/upgrade" element={<Upgrade />} />
+              <Route path="/dashboard" element={<DashboardLayout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="sleep" element={<SleepPage />} />
+                <Route path="diapers" element={<DiapersPage />} />
+                <Route path="feeding" element={<FeedingPage />} />
+                <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
+                <Route path="milestones" element={<MilestonesPage />} />
+                <Route path="growth" element={<GrowthPage />} />
+                <Route path="financial" element={<Navigate to="/dashboard/records?tab=financial" replace />} />
+                <Route path="profile" element={<ProfilePage />} />
+                <Route path="weekly" element={<WeeklyInsightsPage />} />
+                <Route path="analytics" element={<AnalyticsPage />} />
+                <Route path="records" element={<RecordsPage />} />
+                <Route path="calendar" element={<CalendarPage />} />
+                <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
+                <Route path="more" element={<MorePage />} />
+              </Route>
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+              <Route path="/subprocessors" element={<SubprocessorsPage />} />
+              <Route path="/rights-request" element={<RightsRequestPage />} />
+              <Route path="/vpc-confirm" element={<VpcConfirmPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
