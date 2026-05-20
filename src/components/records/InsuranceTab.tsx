@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Shield, Heart, GraduationCap, ChevronDown, Clock } from "lucide-react";
+import { Shield, Heart, ChevronDown, Clock } from "lucide-react";
 
 interface Props {
   childId: string;
@@ -107,43 +107,6 @@ function LifeInsuranceSection() {
   );
 }
 
-function CollegeSavingsSection() {
-  return (
-    <Collapsible>
-      <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
-        <GraduationCap className="w-5 h-5 text-primary" />
-        <h3 className="font-display font-bold text-lg flex-1 text-left">529 College Savings</h3>
-        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-3 space-y-3">
-        <Card className="border-blue-200 bg-blue-50/60">
-          <CardContent className="p-4 flex items-start gap-3">
-            <Clock className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-sm font-semibold text-blue-900">Open it early — compounding is the whole point</p>
-              <p className="text-xs text-blue-900/80">Even $25/month from birth grows. The first years matter most because they have the longest runway.</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-0 bg-muted/40">
-          <CardContent className="p-4 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What to know</p>
-            <ul className="space-y-1.5">
-              <InfoBullet>Most parents start with their <span className="font-semibold">home state's plan</span> for the state-tax deduction. Check your state — a few have no deduction, in which case any plan works.</InfoBullet>
-              <InfoBullet>The account owner is the parent; the beneficiary is the child. You stay in control of withdrawals.</InfoBullet>
-              <InfoBullet>Confirm the beneficiary on the account is your child — sounds obvious, easy to miss.</InfoBullet>
-              <InfoBullet>Funds are tax-free for qualified education expenses (tuition, fees, books, room & board, K-12 tuition up to a limit).</InfoBullet>
-              <InfoBullet>Friends and family can contribute directly. Many plans support gift portals for birthdays and holidays.</InfoBullet>
-              <InfoBullet>Federal contribution limits are very high (often $400k+ aggregate). Annual gift-tax exclusion is the practical ceiling for most families.</InfoBullet>
-            </ul>
-          </CardContent>
-        </Card>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
 export function InsuranceTab({ childId: _childId, parentId: _parentId }: Props) {
   return (
     <div className="space-y-6">
@@ -152,7 +115,6 @@ export function InsuranceTab({ childId: _childId, parentId: _parentId }: Props) 
       </p>
       <HealthInsuranceSection />
       <LifeInsuranceSection />
-      <CollegeSavingsSection />
     </div>
   );
 }
