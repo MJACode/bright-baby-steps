@@ -14,6 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Stethoscope, Syringe, Smile, Plus, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { safeFormatDate } from "@/lib/safeFormat";
 
 interface Props {
   childId: string;
@@ -140,11 +141,11 @@ function PediatricianSection({ childId, parentId, hasActiveFlags }: { childId: s
                 <CardContent className="p-3 flex items-start gap-2">
                   <div className="flex-1 min-w-0 space-y-0.5">
                     <p className="text-sm font-semibold">
-                      {format(new Date(v.visit_date), "MMM d, yyyy")} • {VISIT_TYPES.find((t) => t.value === v.visit_type)?.label ?? v.visit_type}
+                      {safeFormatDate(v.visit_date, "MMM d, yyyy")} • {VISIT_TYPES.find((t) => t.value === v.visit_type)?.label ?? v.visit_type}
                     </p>
                     {v.provider_name && <p className="text-xs text-muted-foreground">{v.provider_name}{v.practice_name ? ` • ${v.practice_name}` : ""}</p>}
                     {v.notes && <p className="text-xs text-foreground/80 mt-1">{v.notes}</p>}
-                    {v.next_appointment_date && <p className="text-xs text-primary mt-1">Next: {format(new Date(v.next_appointment_date), "MMM d, yyyy")}</p>}
+                    {v.next_appointment_date && <p className="text-xs text-primary mt-1">Next: {safeFormatDate(v.next_appointment_date, "MMM d, yyyy")}</p>}
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteVisit.mutate(v.id)}>
                     <Trash2 className="w-4 h-4" />
@@ -297,9 +298,9 @@ function VaccinationsSection({ childId, parentId, ageMonths }: { childId: string
                       {v.vaccine_name}
                       {v.declined && <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">declined</span>}
                     </p>
-                    {v.date_administered && <p className="text-xs text-muted-foreground">Given {format(new Date(v.date_administered), "MMM d, yyyy")}{v.provider_name ? ` • ${v.provider_name}` : ""}</p>}
+                    {v.date_administered && <p className="text-xs text-muted-foreground">Given {safeFormatDate(v.date_administered, "MMM d, yyyy")}{v.provider_name ? ` • ${v.provider_name}` : ""}</p>}
                     {v.lot_number && <p className="text-xs text-muted-foreground">Lot: {v.lot_number}</p>}
-                    {v.next_due_date && <p className="text-xs text-primary">Next dose: {format(new Date(v.next_due_date), "MMM d, yyyy")}</p>}
+                    {v.next_due_date && <p className="text-xs text-primary">Next dose: {safeFormatDate(v.next_due_date, "MMM d, yyyy")}</p>}
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteVaccine.mutate(v.id)}>
                     <Trash2 className="w-4 h-4" />
@@ -455,7 +456,7 @@ function DentalSection({ childId, parentId, ageMonths }: { childId: string; pare
               <Card key={v.id} className="border-0 bg-muted/40">
                 <CardContent className="p-3 flex items-start gap-2">
                   <div className="flex-1 min-w-0 space-y-0.5">
-                    <p className="text-sm font-semibold">{format(new Date(v.visit_date), "MMM d, yyyy")}</p>
+                    <p className="text-sm font-semibold">{safeFormatDate(v.visit_date, "MMM d, yyyy")}</p>
                     {v.provider_name && <p className="text-xs text-muted-foreground">{v.provider_name}</p>}
                     {v.notes && <p className="text-xs text-foreground/80 mt-1">{v.notes}</p>}
                   </div>
