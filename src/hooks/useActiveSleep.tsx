@@ -73,13 +73,15 @@ export function useActiveSleep(childId: string | undefined) {
   };
 
   const start = useMutation({
-    mutationFn: async (input: { sleep_type: SleepType }) => {
+    mutationFn: async (input: { sleep_type: SleepType; startedMinutesAgo?: number }) => {
+      const offsetMs = (input.startedMinutesAgo ?? 0) * 60_000;
+      const startedAt = new Date(Date.now() - offsetMs).toISOString();
       const { data, error } = await supabase
         .from("sleep_logs")
         .insert({
           child_id: childId!,
           parent_id: user!.id,
-          started_at: new Date().toISOString(),
+          started_at: startedAt,
           sleep_type: input.sleep_type,
           source: "timer",
         })
