@@ -20,9 +20,18 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
   const elapsedSeconds = useElapsedSeconds(active);
 
   const [pendingSleepType, setPendingSleepType] = useState<SleepType>("nap");
+  const [startOffsetMin, setStartOffsetMin] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualHours, setManualHours] = useState("");
   const [manualMinutes, setManualMinutes] = useState("");
+
+  const offsetChips: { label: string; value: number }[] = [
+    { label: "Now", value: 0 },
+    { label: "−5m", value: 5 },
+    { label: "−10m", value: 10 },
+    { label: "−15m", value: 15 },
+    { label: "−30m", value: 30 },
+  ];
 
   const sleepType: SleepType = (active?.sleep_type as SleepType | undefined) ?? pendingSleepType;
   const isRunning = !!active && !active.paused_at;
@@ -30,7 +39,8 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
 
   const handleStart = async () => {
     try {
-      await start.mutateAsync({ sleep_type: pendingSleepType });
+      await start.mutateAsync({ sleep_type: pendingSleepType, startedMinutesAgo: startOffsetMin });
+      setStartOffsetMin(0);
     } catch (err) {
       // Partial unique index rejects a concurrent start from another device.
       const msg = getErrorMessage(err);
@@ -60,6 +70,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
   const handleCancel = async () => {
     try {
       await cancel.mutateAsync();
+      setStartOffsetMin(0);
     } catch (err) {
       toast({ title: "Couldn't cancel", description: getErrorMessage(err), variant: "destructive" });
     }
@@ -147,18 +158,50 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
         )}
       </div>
 
+      {/* Start-offset chips — only when no active session */}
+      {!timerActive && (
+        <div
+          role="group"
+          aria-label="Adjust start time"
+          className="flex flex-wrap gap-1.5 justify-center"
+        >
+          {offsetChips.map((chip) => {
+            const selected = startOffsetMin === chip.value;
+            return (
+              <button
+                key={chip.value}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => setStartOffsetMin(chip.value)}
+                className={cn(
+                  "px-4 min-h-[48px] min-w-[48px] rounded-full text-sm font-semibold transition-colors",
+                  selected
+                    ? "bg-sleep text-white"
+                    : "bg-sleep-bg/60 text-sleep hover:bg-sleep-bg",
+                )}
+              >
+                {chip.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex gap-2 justify-center">
         {!timerActive ? (
           <Button
             type="button"
             size="lg"
-            className="flex-1 max-w-[200px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90 text-lg py-6"
+            className="flex-1 max-w-[260px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90 text-lg py-6"
             onClick={handleStart}
             disabled={!childId || start.isPending}
           >
             <Play className="w-6 h-6" />
             {sleepType === "nap" ? "Start Nap" : "Start Sleep"}
+            {startOffsetMin > 0 && (
+              <span className="font-semibold opacity-90">· {startOffsetMin}m ago</span>
+            )}
           </Button>
         ) : (
           <>
