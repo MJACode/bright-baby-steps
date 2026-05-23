@@ -124,6 +124,17 @@
     @apply border-border;
   }
 
+  /* html bg matters on iOS: when the visual viewport extends past the body
+     (URL-bar collapse, rubber-band overscroll, safe-area below the fixed tab
+     bar), the html background is what's visible. Without this, the system
+     default shows through — black on dark-mode iPhones — even though body
+     is cream. color-scheme: light also keeps Safari's form/scrollbar chrome
+     in light mode regardless of the OS setting. */
+  html {
+    @apply bg-background;
+    color-scheme: light;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Nunito', system-ui, -apple-system, sans-serif;
