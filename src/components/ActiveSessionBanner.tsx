@@ -7,6 +7,7 @@ import {
   useActiveFeed,
   useSecondTicker,
   elapsedSecondsForSide,
+  elapsedSecondsBoth,
   elapsedSecondsBottle,
 } from "@/hooks/useActiveFeed";
 
@@ -86,7 +87,9 @@ function FeedStrip({
   } else if (activeFeed.feeding_type === "pump") {
     const left = elapsedSecondsForSide(activeFeed, "left");
     const right = elapsedSecondsForSide(activeFeed, "right");
-    elapsedSec = left + right;
+    // "Both" pumps in parallel — the same segment is counted in left and right,
+    // so subtract it once to avoid double-counting.
+    elapsedSec = left + right - elapsedSecondsBoth(activeFeed);
     label = "Pumping";
   } else {
     elapsedSec = elapsedSecondsBottle(activeFeed);

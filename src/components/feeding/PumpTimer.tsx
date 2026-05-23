@@ -43,9 +43,11 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   const rightSeconds = activeIsPump && active ? elapsedSecondsForSide(active, "right") : 0;
   const bothSeconds = activeIsPump && active ? elapsedSecondsBoth(active) : 0;
   const activeSide = (active?.active_side as FeedingSide | null) ?? null;
-  // While "both" is active, the same wall-clock segment ticks both sides in
-  // parallel — so the displayed total is max(left, right), not sum.
-  const totalSeconds = Math.max(leftSeconds, rightSeconds);
+  // Sequential pumps (right then left) accumulate as left + right. While "both"
+  // is active, the same wall-clock segment ticks both sides in parallel, so it
+  // appears in both leftSeconds and rightSeconds — subtract bothSeconds once to
+  // cancel that double-count.
+  const totalSeconds = leftSeconds + rightSeconds - bothSeconds;
 
   const [showStopForm, setShowStopForm] = useState(false);
   const [amountLeft, setAmountLeft] = useState("");
