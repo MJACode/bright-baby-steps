@@ -21,7 +21,7 @@ interface ToolItem {
 const tools: ToolItem[] = [
   {
     label: "Records",
-    description: "Medical, insurance, financial, EI",
+    description: "Medical, financial, EI, New Baby",
     icon: FileText,
     path: "/dashboard/records",
     colorClass: "bg-primary/10",

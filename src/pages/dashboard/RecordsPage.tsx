@@ -3,14 +3,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
 import { AddChildDialog } from "@/components/AddChildDialog";
-import { FileText, Stethoscope, Shield, Activity, DollarSign, Sparkles } from "lucide-react";
+import { FileText, Stethoscope, Activity, DollarSign, Sparkles } from "lucide-react";
 import { MedicalTab } from "@/components/records/MedicalTab";
-import { InsuranceTab } from "@/components/records/InsuranceTab";
 import { EarlyInterventionTab } from "@/components/records/EarlyInterventionTab";
 import { NewBabyChecklistTab } from "@/components/records/NewBabyChecklistTab";
 import FinancialPage from "@/pages/dashboard/FinancialPage";
 
-const VALID_TABS = ["newbaby", "medical", "insurance", "financial", "ei"] as const;
+const VALID_TABS = ["newbaby", "medical", "financial", "ei"] as const;
 
 export default function RecordsPage() {
   const { user } = useAuth();
@@ -49,15 +48,12 @@ export default function RecordsPage() {
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-5">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="newbaby" className="gap-1 text-[10px] px-1">
             <Sparkles className="w-3.5 h-3.5" /> New Baby
           </TabsTrigger>
           <TabsTrigger value="medical" className="gap-1 text-[10px] px-1">
             <Stethoscope className="w-3.5 h-3.5" /> Medical
-          </TabsTrigger>
-          <TabsTrigger value="insurance" className="gap-1 text-[10px] px-1">
-            <Shield className="w-3.5 h-3.5" /> Insurance
           </TabsTrigger>
           <TabsTrigger value="financial" className="gap-1 text-[10px] px-1">
             <DollarSign className="w-3.5 h-3.5" /> Financial
@@ -80,10 +76,6 @@ export default function RecordsPage() {
 
         <TabsContent value="medical" className="mt-4">
           {user && <MedicalTab childId={activeChild.id} parentId={user.id} ageMonths={ageMonths} />}
-        </TabsContent>
-
-        <TabsContent value="insurance" className="mt-4">
-          {user && <InsuranceTab childId={activeChild.id} parentId={user.id} />}
         </TabsContent>
 
         <TabsContent value="financial" className="mt-4">

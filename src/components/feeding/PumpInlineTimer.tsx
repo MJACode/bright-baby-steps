@@ -10,21 +10,18 @@ import {
   useActiveFeed,
   useSecondTicker,
   elapsedSecondsForSide,
+  elapsedSecondsBoth,
   type ActiveFeedRow,
+  type FeedingSide,
 } from "@/hooks/useActiveFeed";
 
-interface NursingTimerProps {
+interface PumpInlineTimerProps {
   childId: string | undefined;
   side: string;
   onSideChange: (side: string) => void;
   onDurationChange: (minutes: number) => void;
   onActiveRowChange?: (row: ActiveFeedRow | null) => void;
-  // When editing an existing completed log, the parent passes the existing
-  // duration in minutes. The timer ignores the active-session flow in that case.
   initialMinutes?: number;
-  // True when the parent form is in edit mode (editing an existing completed
-  // log). In edit mode, the timer behaves like the old in-memory version and
-  // does not write to feeding_logs.
   editMode?: boolean;
 }
 
@@ -34,7 +31,10 @@ function formatTime(totalSeconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-export default function NursingTimer({
+// Timer-only sub-component for the FeedingLog dialog. Mirrors NursingTimer's
+// pattern but supports the third "both" side for double-pumping. The parent
+// dialog handles save (oz inputs, notes, finalize via feeding_logs UPDATE).
+export default function PumpInlineTimer({
   childId,
   side,
   onSideChange,
@@ -42,52 +42,63 @@ export default function NursingTimer({
   onActiveRowChange,
   initialMinutes,
   editMode,
-}: NursingTimerProps) {
+}: PumpInlineTimerProps) {
   const { active, start, setSide, cancel } = useActiveFeed(childId);
-  const activeIsBreast = !!active && active.feeding_type === "breast";
-  useSecondTicker(!!activeIsBreast && !!active?.active_side);
+  const activeIsPump = !!active && active.feeding_type === "pump";
+  useSecondTicker(!!activeIsPump && !!active?.active_side);
 
-  // Edit-mode fallback: keep the old in-memory ticker for editing a completed log.
-  const [editLeft, setEditLeft] = useState(initialMinutes && side !== "right" ? initialMinutes * 60 : 0);
-  const [editRight, setEditRight] = useState(initialMinutes && side === "right" ? initialMinutes * 60 : 0);
-  const [editActive, setEditActive] = useState<"left" | "right" | null>(null);
+  const [editLeft, setEditLeft] = useState(
+    initialMinutes && (side === "left" || side === "both") ? initialMinutes * 60 : 0,
+  );
+  const [editRight, setEditRight] = useState(
+    initialMinutes && (side === "right" || side === "both") ? initialMinutes * 60 : 0,
+  );
+  const [editBoth, setEditBoth] = useState(
+    initialMinutes && side === "both" ? initialMinutes * 60 : 0,
+  );
+  const [editActive, setEditActive] = useState<FeedingSide | null>(null);
   useEffect(() => {
-    if (!editMode) return;
-    if (!editActive) return;
+    if (!editMode || !editActive) return;
     const i = setInterval(() => {
       if (editActive === "left") setEditLeft((s) => s + 1);
-      else setEditRight((s) => s + 1);
+      else if (editActive === "right") setEditRight((s) => s + 1);
+      else {
+        setEditLeft((s) => s + 1);
+        setEditRight((s) => s + 1);
+        setEditBoth((s) => s + 1);
+      }
     }, 1000);
     return () => clearInterval(i);
   }, [editMode, editActive]);
 
-  // Notify parent when the active row changes so it can save by UPDATE.
-  // Dep on `active?.id` (not the whole `active` object) — react-query returns
-  // a new object reference on every refetch, which would fire this effect on
-  // every focus/poll and cause an unnecessary parent re-render cascade.
   useEffect(() => {
     if (editMode) return;
-    onActiveRowChange?.(activeIsBreast ? active : null);
+    onActiveRowChange?.(activeIsPump ? active : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIsBreast, active?.id, onActiveRowChange, editMode]);
+  }, [activeIsPump, active?.id, onActiveRowChange, editMode]);
 
   const leftSeconds = editMode
     ? editLeft
-    : activeIsBreast
+    : activeIsPump
       ? elapsedSecondsForSide(active, "left")
       : 0;
   const rightSeconds = editMode
     ? editRight
-    : activeIsBreast
+    : activeIsPump
       ? elapsedSecondsForSide(active, "right")
       : 0;
-  const activeSide: "left" | "right" | null = editMode
+  const bothSeconds = editMode
+    ? editBoth
+    : activeIsPump
+      ? elapsedSecondsBoth(active)
+      : 0;
+  const activeSide: FeedingSide | null = editMode
     ? editActive
-    : ((active?.active_side as "left" | "right" | null) ?? null);
-  const totalSeconds = leftSeconds + rightSeconds;
+    : ((active?.active_side as FeedingSide | null) ?? null);
+  // While "both" is running, the same wall-clock segment ticks both left and
+  // right in parallel, so subtract bothSeconds once to cancel the double-count.
+  const totalSeconds = leftSeconds + rightSeconds - bothSeconds;
 
-  // Push total minutes + derived side back to the parent form so the existing
-  // save path still gets the values it needs to render the dialog.
   useEffect(() => {
     onDurationChange(Math.round(totalSeconds / 60));
   }, [totalSeconds, onDurationChange]);
@@ -102,22 +113,19 @@ export default function NursingTimer({
 
   const [manualOpen, setManualOpen] = useState(false);
   const [manualMinutes, setManualMinutes] = useState("");
-  const [manualSide, setManualSide] = useState<"left" | "right" | "both">("left");
+  const [manualSide, setManualSide] = useState<FeedingSide>("both");
 
-  const toggleSide = async (next: "left" | "right") => {
+  const toggleSide = async (next: FeedingSide) => {
     if (editMode) {
       setEditActive((cur) => (cur === next ? null : next));
       return;
     }
     if (!childId) return;
     try {
-      // First-time start: insert active row with this side.
-      if (!activeIsBreast) {
-        await start.mutateAsync({ feeding_type: "breast", side: next });
+      if (!activeIsPump) {
+        await start.mutateAsync({ feeding_type: "pump", side: next });
         return;
       }
-      // Toggling the currently-active side off pauses (active_side=null).
-      // Toggling to the other side flushes + switches.
       const target = activeSide === next ? null : next;
       await setSide.mutateAsync({ nextSide: target });
     } catch (err) {
@@ -135,10 +143,11 @@ export default function NursingTimer({
       setEditActive(null);
       setEditLeft(0);
       setEditRight(0);
+      setEditBoth(0);
       onDurationChange(0);
       return;
     }
-    if (!activeIsBreast) return;
+    if (!activeIsPump) return;
     try {
       await cancel.mutateAsync();
     } catch (err) {
@@ -154,13 +163,15 @@ export default function NursingTimer({
         if (manualSide === "left") {
           setEditLeft(mins * 60);
           setEditRight(0);
+          setEditBoth(0);
         } else if (manualSide === "right") {
           setEditLeft(0);
           setEditRight(mins * 60);
+          setEditBoth(0);
         } else {
-          const half = (mins * 60) / 2;
-          setEditLeft(half);
-          setEditRight(half);
+          setEditLeft(mins * 60);
+          setEditRight(mins * 60);
+          setEditBoth(mins * 60);
         }
       }
       onDurationChange(mins);
@@ -172,7 +183,6 @@ export default function NursingTimer({
 
   return (
     <div className="space-y-3">
-      {/* Total elapsed */}
       <div className="flex flex-col items-center gap-1 py-3">
         <div
           className={cn(
@@ -190,36 +200,65 @@ export default function NursingTimer({
           </div>
         </div>
         <span className="text-xs text-muted-foreground">
-          {activeSide === "left" && "Nursing on left..."}
-          {activeSide === "right" && "Nursing on right..."}
+          {activeSide === "left" && "Pumping left..."}
+          {activeSide === "right" && "Pumping right..."}
+          {activeSide === "both" && "Pumping both sides..."}
           {!activeSide && totalSeconds > 0 && "Paused"}
           {!activeSide && totalSeconds === 0 && "Tap a side to start"}
         </span>
       </div>
 
-      {/* Per-side controls */}
-      <div className="grid grid-cols-2 gap-2">
-        <SideButton
-          label="Left"
-          icon={activeSide === "left" ? "pause" : "play"}
-          accent="left"
-          isActive={activeSide === "left"}
-          seconds={leftSeconds}
+      <div className="grid grid-cols-3 gap-2">
+        <Button
+          type="button"
+          variant={activeSide === "left" ? "default" : "outline"}
+          size="lg"
+          className={cn(
+            "touch-target h-auto py-3 flex flex-col items-center gap-1 font-bold",
+            activeSide === "left" && "bg-feeding hover:bg-feeding/90 ring-2 ring-feeding/40",
+          )}
           onClick={() => toggleSide("left")}
           disabled={!editMode && !childId}
-        />
-        <SideButton
-          label="Right"
-          icon={activeSide === "right" ? "pause" : "play"}
-          accent="right"
-          isActive={activeSide === "right"}
-          seconds={rightSeconds}
+        >
+          <span className="flex items-center gap-1.5 text-sm">
+            ◀ {activeSide === "left" ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />} Left
+          </span>
+          <span className="font-mono text-xs tabular-nums opacity-90">{formatTime(leftSeconds)}</span>
+        </Button>
+        <Button
+          type="button"
+          variant={activeSide === "both" ? "default" : "outline"}
+          size="lg"
+          className={cn(
+            "touch-target h-auto py-3 flex flex-col items-center gap-1 font-bold",
+            activeSide === "both" && "bg-feeding hover:bg-feeding/90 ring-2 ring-feeding/40",
+          )}
+          onClick={() => toggleSide("both")}
+          disabled={!editMode && !childId}
+        >
+          <span className="flex items-center gap-1.5 text-sm">
+            {activeSide === "both" ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />} Both
+          </span>
+          <span className="font-mono text-xs tabular-nums opacity-90">{formatTime(bothSeconds)}</span>
+        </Button>
+        <Button
+          type="button"
+          variant={activeSide === "right" ? "default" : "outline"}
+          size="lg"
+          className={cn(
+            "touch-target h-auto py-3 flex flex-col items-center gap-1 font-bold",
+            activeSide === "right" && "bg-feeding hover:bg-feeding/90 ring-2 ring-feeding/40",
+          )}
           onClick={() => toggleSide("right")}
           disabled={!editMode && !childId}
-        />
+        >
+          <span className="flex items-center gap-1.5 text-sm">
+            {activeSide === "right" ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />} Right ▶
+          </span>
+          <span className="font-mono text-xs tabular-nums opacity-90">{formatTime(rightSeconds)}</span>
+        </Button>
       </div>
 
-      {/* Reset */}
       {totalSeconds > 0 && (
         <div className="flex justify-center">
           <Button
@@ -234,7 +273,6 @@ export default function NursingTimer({
         </div>
       )}
 
-      {/* Manual entry */}
       {!activeSide && (
         <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
           <CollapsibleTrigger asChild>
@@ -273,9 +311,10 @@ export default function NursingTimer({
                 <Label className="text-xs">Total minutes</Label>
                 <Input
                   type="number"
+                  inputMode="numeric"
                   value={manualMinutes}
                   onChange={(e) => setManualMinutes(e.target.value)}
-                  placeholder="e.g. 15"
+                  placeholder="e.g. 20"
                   className="h-8 text-sm"
                 />
               </div>
@@ -293,40 +332,5 @@ export default function NursingTimer({
         </Collapsible>
       )}
     </div>
-  );
-}
-
-interface SideButtonProps {
-  label: string;
-  icon: "play" | "pause";
-  accent: "left" | "right";
-  isActive: boolean;
-  seconds: number;
-  onClick: () => void;
-  disabled?: boolean;
-}
-
-function SideButton({ label, icon, accent, isActive, seconds, onClick, disabled }: SideButtonProps) {
-  const Icon = icon === "pause" ? Pause : Play;
-  return (
-    <Button
-      type="button"
-      variant={isActive ? "default" : "outline"}
-      size="lg"
-      className={cn(
-        "touch-target h-auto py-3 flex flex-col items-center gap-1 font-bold",
-        isActive && "bg-feeding hover:bg-feeding/90 ring-2 ring-feeding/40",
-      )}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      <span className="flex items-center gap-1.5 text-base">
-        {accent === "left" ? "◀" : null}
-        <Icon className="w-4 h-4" />
-        {label}
-        {accent === "right" ? "▶" : null}
-      </span>
-      <span className="font-mono text-xs tabular-nums opacity-90">{formatTime(seconds)}</span>
-    </Button>
   );
 }
