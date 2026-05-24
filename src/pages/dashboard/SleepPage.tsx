@@ -25,9 +25,12 @@ import SleepTimer from "@/components/sleep/SleepTimer";
 import { SleepTriageCard } from "@/components/SleepTriageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
+import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
+import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
+import type { FerberSchedule } from "@/hooks/useSleepPlan";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -516,8 +519,17 @@ export default function SleepPage() {
   }
 
   const ageMonths = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+  const ageDays = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24));
   const ageGroup = getAgeGroup(ageMonths);
   const rec = sleepRecommendations[ageGroup];
+
+  const activeSleepLog = logs?.find((l) => !l.ended_at) ?? null;
+  const planMethod = savedPlan?.method ?? "gentle_foundations";
+  const showFerberTimer =
+    planMethod === "ferber" &&
+    !!activeSleepLog &&
+    activeSleepLog.sleep_type === "night";
+  const showChairCard = planMethod === "chair" && !!savedPlan;
 
   return (
     <div className="space-y-5">
@@ -617,6 +629,27 @@ export default function SleepPage() {
         </CardContent>
       </Card>
 
+      {showChairCard && savedPlan && (
+        <ChairStageCard childId={activeChild.id} plan={savedPlan} />
+      )}
+
+      {showFerberTimer && user && activeSleepLog && (
+        <FerberCheckInTimer
+          childId={activeChild.id}
+          parentId={user.id}
+          method="ferber"
+          ferberSchedule={
+            (savedPlan?.ferber_schedule as unknown as FerberSchedule | null) ??
+            null
+          }
+          activeSleepLog={{
+            id: activeSleepLog.id,
+            started_at: activeSleepLog.started_at,
+            sleep_type: activeSleepLog.sleep_type,
+          }}
+        />
+      )}
+
       <SleepPlanReminderBanner
         childId={activeChild.id}
         childName={activeChild.name ?? "your baby"}
@@ -640,6 +673,7 @@ export default function SleepPage() {
         childId={activeChild.id}
         childName={activeChild.name ?? "your baby"}
         ageMonths={coach?.ageMonths ?? ageMonths}
+        ageDays={ageDays}
         logs={coach?.logs ?? []}
       />
 

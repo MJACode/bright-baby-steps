@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import type { SleepMethod } from "@/lib/sleepMethods";
 
 export type SleepPlanRow = Database["public"]["Tables"]["sleep_plans"]["Row"];
 export type SleepPlanInsert = Database["public"]["Tables"]["sleep_plans"]["Insert"];
@@ -9,6 +10,10 @@ export interface SleepPlanOverrides {
   wake_time?: boolean;
   bedtime?: boolean;
   nap_count?: boolean;
+}
+
+export interface FerberSchedule {
+  intervals: number[][];
 }
 
 export function useSleepPlan(childId: string | null) {
@@ -42,6 +47,9 @@ export interface SaveSleepPlanInput {
   bucket: string | null;
   bucket_label: string | null;
   overrides: SleepPlanOverrides;
+  method: SleepMethod;
+  chair_stage: number | null;
+  ferber_schedule: FerberSchedule | null;
 }
 
 export function useSaveSleepPlan() {
@@ -62,6 +70,10 @@ export function useSaveSleepPlan() {
         bucket: input.bucket,
         bucket_label: input.bucket_label,
         overrides: input.overrides as unknown as SleepPlanInsert["overrides"],
+        method: input.method,
+        chair_stage: input.chair_stage,
+        ferber_schedule:
+          input.ferber_schedule as unknown as SleepPlanInsert["ferber_schedule"],
       };
       const { data, error } = await supabase
         .from("sleep_plans")
