@@ -2051,6 +2051,65 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_visits: {
+        Row: {
+          child_id: string
+          created_at: string
+          doctor_name: string | null
+          email_reminders_enabled: boolean
+          id: string
+          location: string | null
+          notes: string | null
+          parent_id: string
+          reminder_1d_sent_at: string | null
+          reminder_7d_sent_at: string | null
+          scheduled_at: string
+          status: string
+          updated_at: string
+          visit_type: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          doctor_name?: string | null
+          email_reminders_enabled?: boolean
+          id?: string
+          location?: string | null
+          notes?: string | null
+          parent_id: string
+          reminder_1d_sent_at?: string | null
+          reminder_7d_sent_at?: string | null
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+          visit_type: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          doctor_name?: string | null
+          email_reminders_enabled?: boolean
+          id?: string
+          location?: string | null
+          notes?: string | null
+          parent_id?: string
+          reminder_1d_sent_at?: string | null
+          reminder_7d_sent_at?: string | null
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+          visit_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_visits_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sleep_logs: {
         Row: {
           child_id: string

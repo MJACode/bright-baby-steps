@@ -15,6 +15,7 @@ import { Stethoscope, Syringe, Smile, Plus, ChevronDown, Trash2, AlertTriangle }
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { safeFormatDate } from "@/lib/safeFormat";
+import { UpcomingVisitsSection } from "@/components/records/UpcomingVisitsSection";
 
 interface Props {
   childId: string;
@@ -545,6 +546,7 @@ export function MedicalTab({ childId, parentId, ageMonths }: Props) {
 
   return (
     <div className="space-y-6">
+      <UpcomingVisitsSection childId={childId} parentId={parentId} />
       <PediatricianSection childId={childId} parentId={parentId} hasActiveFlags={(activeFlagCount ?? 0) > 0} />
       <VaccinationsSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
       <DentalSection childId={childId} parentId={parentId} ageMonths={ageMonths} />

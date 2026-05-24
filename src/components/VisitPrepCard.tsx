@@ -50,6 +50,23 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
     enabled: !!activeChild,
   });
 
+  const { data: nextScheduledVisit } = useQuery({
+    queryKey: ["scheduled-visits", activeChild?.id, "next"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("scheduled_visits")
+        .select("id, scheduled_at")
+        .eq("child_id", activeChild!.id)
+        .eq("status", "scheduled")
+        .gte("scheduled_at", new Date().toISOString())
+        .order("scheduled_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      return data ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
   const addReminder = useMutation({
     mutationFn: async (text: string) => {
       await supabase.from("pediatrician_reminders").insert({
@@ -120,9 +137,13 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
 
   if (!activeChild) return null;
 
-  const nextAppt = activeChild.next_appointment
+  const legacyAppt = activeChild.next_appointment
     ? new Date(activeChild.next_appointment + "T00:00:00")
     : null;
+  const scheduledAppt = nextScheduledVisit?.scheduled_at
+    ? new Date(nextScheduledVisit.scheduled_at)
+    : null;
+  const nextAppt = scheduledAppt ?? legacyAppt;
   const daysUntil = nextAppt ? differenceInDays(nextAppt, new Date()) : null;
   const reminderCount = reminders.length;
 

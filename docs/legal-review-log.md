@@ -712,3 +712,60 @@ medication, supplement, or specific clinical-intervention recommendation
 **Code refs:** working branch `claude/investigate-sleep-coach-PcWKN`.
 
 ---
+
+## 2026-05-24 — Scheduled-visit reminder emails (new email type)
+
+**Scope:** New table `public.scheduled_visits` (forward-looking pediatric-
+appointment calendar) and new edge function `send-visit-reminder-email`. The
+function sends an opt-in transactional email to the row's `parent_id` 7 days
+and 1 day before an upcoming visit. Default off; toggle lives next to each
+visit in the new `UpcomingVisitsSection` UI (frontend work — separate
+delegation).
+
+**Trigger:** Doctor-visit-tracking feature (`tasks` plan
+`the-user-typically-knows-whimsical-donut.md`). Parents wanted a way to seed
+their first-year visit schedule and get proactive reminders.
+
+**Processing purpose:** Transactional service-of-the-product email reminding
+the account holder of an event they themselves entered into Grace Flare. No
+marketing content, no third-party sharing beyond the existing Resend
+subprocessor (already listed at `/subprocessors` and in Privacy § 4).
+Recipient is always the row's parent (no partner-routed email in v1).
+Personal data in the email body is limited to: child name (first name only
+in copy), scheduled date/time, visit type, doctor name (if entered),
+location (if entered). No health observations or log data.
+
+**Subprocessor impact:** None new. Resend is already disclosed; this is a new
+template under the existing data-processing relationship.
+
+**COPPA posture:** The visit row's child is already gated by the existing
+VPC email-plus + direct-notice flow at child creation, so no incremental
+parental-consent step is required to schedule a reminder. The opt-in toggle
+defaults to OFF per data-minimization principles — the email channel is
+strictly user-elected per visit.
+
+**Retention:** `scheduled_visits` rows live alongside the rest of the user's
+records and are purged by the same `_purge_user_data()` helper (cascade via
+`parent_id ON DELETE CASCADE` from `auth.users`). Inactive-account auto-
+purge at 24 months (Privacy § 8) covers them. Resend message logs are
+governed by Resend's own retention policy, disclosed at `/subprocessors`.
+
+**Risk levels surfaced:**
+- P0: none. The new email type fits squarely inside the transactional /
+  service-of-the-product carve-out under CAN-SPAM and within the scope of
+  Privacy § 4's existing Resend disclosure. No policy text changes required.
+- P1: none. Footer includes a single-row "switch them off in Records" line
+  so the off-ramp is one click away (matches the spirit of CAN-SPAM
+  unsubscribe even though transactional mail is exempt).
+- P2: when the per-user timezone column lands, swap the hardcoded
+  `America/New_York` formatter in `send-visit-reminder-email` for the user's
+  TZ and add the abbreviation to the subject line for non-ET users.
+
+**Outstanding:** None blocking. The function is not deployed yet (feature
+branch); deploy + production smoke-test happens after PR merge.
+
+**Code refs:** migration `supabase/migrations/20260524000000_scheduled_visits.sql`,
+edge function `supabase/functions/send-visit-reminder-email/index.ts`,
+extension to `supabase/functions/check-notifications/index.ts`.
+
+---
