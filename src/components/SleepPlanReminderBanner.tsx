@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Moon, Sparkles, Clock } from "lucide-react";
+import { AlertTriangle, Compass, Moon, Sparkles, Clock } from "lucide-react";
 import { startOfDay, differenceInMinutes } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -8,13 +8,19 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { parseHHmm, formatHHmm } from "@/lib/sleepPlan";
 import { cn } from "@/lib/utils";
+import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
+import { detectOffPlan, type OffPlanState } from "@/lib/sleepOffPlan";
+import {
+  useSleepAlertToast,
+  type SleepAlertKind,
+} from "@/hooks/useSleepAlertToast";
 
 interface SleepPlanReminderBannerProps {
   childId: string;
   childName: string;
 }
 
-type LastSleep = {
+type RecentLog = {
   id: string;
   started_at: string;
   ended_at: string | null;
@@ -28,6 +34,9 @@ type BannerState =
   | { kind: "bedtime-late"; title: string; body: string }
   | { kind: "wind-down-nap"; title: string; body: string }
   | { kind: "wind-down-bed"; title: string; body: string }
+  | { kind: "window-15min"; title: string; body: string }
+  | { kind: "window-exceeded"; title: string; body: string }
+  | { kind: "off-plan"; subkind: OffPlanState["kind"]; title: string; body: string }
   | { kind: "preview"; title: string; body: string | null };
 
 function nowMinutesSinceMidnight(now: Date): number {
@@ -41,8 +50,10 @@ function deriveState(args: {
   bedtimeEarliest: string | null;
   bedtimeLatest: string | null;
   wakeWindowLowMin: number | null;
+  wakeWindowHighMin: number | null;
   napCount: number | null;
-  lastSleep: LastSleep | null;
+  method: SleepMethod;
+  recentLogs: RecentLog[];
   hasNightTonight: boolean;
 }): BannerState | null {
   const {
@@ -52,20 +63,22 @@ function deriveState(args: {
     bedtimeEarliest,
     bedtimeLatest,
     wakeWindowLowMin,
+    wakeWindowHighMin,
     napCount,
-    lastSleep,
+    method,
+    recentLogs,
     hasNightTonight,
   } = args;
 
+  const lastSleep = recentLogs[0] ?? null;
   const nowMin = nowMinutesSinceMidnight(now);
   const isActiveSession = !!lastSleep && !lastSleep.ended_at;
   const activeDurationMin = isActiveSession
     ? differenceInMinutes(now, new Date(lastSleep!.started_at))
     : 0;
+  const methodCopy = getSleepMethodMeta(method).copy;
 
-  // 1. Active sleep session running past today's wake_time AND > 90 min
-  //    (a session that has overrun the planned wake — often an unplanned long
-  //    nap or a baby still asleep past the schedule). Empathy framing.
+  // 1. Active sleep session running past today's wake_time AND > 90 min — empathy.
   if (isActiveSession && activeDurationMin > 90 && wakeTime) {
     const wakeMin = parseHHmm(wakeTime);
     if (nowMin >= wakeMin) {
@@ -107,8 +120,26 @@ function deriveState(args: {
     }
   }
 
-  // 4. Next nap onset within 60 min: last ended_at + wake_window_low_min.
-  //    Only relevant for kids who still nap and we have a last-ended session.
+  // 4. Window exceeded — last ended_at + (wake_window_high + 30) ago, no new sleep.
+  if (
+    !isActiveSession &&
+    lastSleep?.ended_at &&
+    wakeWindowHighMin !== null
+  ) {
+    const minutesSinceEnd = Math.round(
+      (now.getTime() - new Date(lastSleep.ended_at).getTime()) / 60_000,
+    );
+    if (minutesSinceEnd > wakeWindowHighMin + 30) {
+      return {
+        kind: "window-exceeded",
+        title: "Wake window's stretched",
+        body: methodCopy.windowExceeded,
+      };
+    }
+  }
+
+  // 5. window-15min — 10-15 min before predicted nap. Sits *before* the
+  //    existing 60-min wind-down so the tighter cue takes priority.
   if (
     !isActiveSession &&
     lastSleep?.ended_at &&
@@ -119,16 +150,36 @@ function deriveState(args: {
     const predictedNapMs =
       new Date(lastSleep.ended_at).getTime() + wakeWindowLowMin * 60_000;
     const minutesUntilNap = Math.round((predictedNapMs - now.getTime()) / 60_000);
-    if (minutesUntilNap > 0 && minutesUntilNap <= 60) {
+    if (minutesUntilNap > 0 && minutesUntilNap <= 15) {
       return {
-        kind: "wind-down-nap",
-        title: `Wind-down for nap in ~${minutesUntilNap} min`,
-        body: "Dim the lights, lower stimulation, finish the bottle.",
+        kind: "window-15min",
+        title: `Nap in ~${minutesUntilNap} min`,
+        body: methodCopy.windDownNap,
       };
     }
   }
 
-  // 5. Bedtime today within 60 min (now + 60 >= bedtime_earliest, no night yet).
+  // 6. Next nap onset within 60 min — wider wind-down cue.
+  if (
+    !isActiveSession &&
+    lastSleep?.ended_at &&
+    wakeWindowLowMin !== null &&
+    napCount !== null &&
+    napCount > 0
+  ) {
+    const predictedNapMs =
+      new Date(lastSleep.ended_at).getTime() + wakeWindowLowMin * 60_000;
+    const minutesUntilNap = Math.round((predictedNapMs - now.getTime()) / 60_000);
+    if (minutesUntilNap > 15 && minutesUntilNap <= 60) {
+      return {
+        kind: "wind-down-nap",
+        title: `Wind-down for nap in ~${minutesUntilNap} min`,
+        body: methodCopy.windDownNap,
+      };
+    }
+  }
+
+  // 7. Bedtime today within 60 min.
   if (!isActiveSession && bedtimeEarliest && !hasNightTonight) {
     const bedEarliestMin = parseHHmm(bedtimeEarliest);
     const minutesUntilBed = bedEarliestMin - nowMin;
@@ -136,16 +187,34 @@ function deriveState(args: {
       return {
         kind: "wind-down-bed",
         title: `Bedtime in ~${minutesUntilBed} min`,
-        body: `Start the wind-down — target lights-out around ${formatClock(bedtimeEarliest)}.`,
+        body: methodCopy.windDownBed,
       };
     }
   }
 
-  // 6. Quiet preview: next nap or next bedtime, lower visual weight.
+  // 8. Off-plan detector — common failure modes with method-aware coaching.
+  const offPlan = detectOffPlan(
+    recentLogs,
+    {
+      method,
+      wake_window_high_min: wakeWindowHighMin,
+      bedtime_latest: bedtimeLatest,
+    },
+    now,
+  );
+  if (offPlan) {
+    return {
+      kind: "off-plan",
+      subkind: offPlan.kind,
+      title: offPlan.title,
+      body: offPlan.body,
+    };
+  }
+
+  // 9. Quiet preview: next nap or next bedtime, lower visual weight.
   if (!hasNightTonight && bedtimeEarliest) {
     const bedEarliestMin = parseHHmm(bedtimeEarliest);
     if (nowMin < bedEarliestMin) {
-      // If we can predict a nap before bedtime, prefer that.
       if (
         lastSleep?.ended_at &&
         wakeWindowLowMin !== null &&
@@ -155,10 +224,7 @@ function deriveState(args: {
         const predictedNapMs =
           new Date(lastSleep.ended_at).getTime() + wakeWindowLowMin * 60_000;
         const predictedMin = nowMinutesSinceMidnight(new Date(predictedNapMs));
-        if (
-          predictedNapMs > now.getTime() &&
-          predictedMin < bedEarliestMin
-        ) {
+        if (predictedNapMs > now.getTime() && predictedMin < bedEarliestMin) {
           return {
             kind: "preview",
             title: `Next nap around ${formatClock(formatHHmm(predictedMin))}`,
@@ -186,21 +252,51 @@ function formatClock(hhmm: string): string {
   return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
 }
 
+function pickMethod(value: unknown): SleepMethod {
+  if (
+    value === "gentle_foundations" ||
+    value === "pick_up_put_down" ||
+    value === "chair" ||
+    value === "ferber" ||
+    value === "extinction" ||
+    value === "fading"
+  ) {
+    return value;
+  }
+  return "gentle_foundations";
+}
+
+function bannerToAlertKind(state: BannerState): SleepAlertKind | null {
+  switch (state.kind) {
+    case "window-15min":
+      return "window-15min";
+    case "window-exceeded":
+      return "window-exceeded";
+    case "off-plan":
+      if (state.subkind === "window_blown") return "off-plan-window-blown";
+      if (state.subkind === "false_start") return "off-plan-false-start";
+      if (state.subkind === "short_nap_streak") return "off-plan-short-nap-streak";
+      if (state.subkind === "bedtime_drift") return "off-plan-bedtime-drift";
+      return "off-plan";
+    default:
+      return null;
+  }
+}
+
 export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminderBannerProps) {
   const { data: savedPlan } = useSleepPlan(childId);
 
-  const { data: lastSleep } = useQuery<LastSleep | null>({
-    queryKey: ["last-sleep", childId],
+  const { data: recentLogs } = useQuery<RecentLog[]>({
+    queryKey: ["sleep-recent-logs", childId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sleep_logs")
         .select("id, started_at, ended_at, sleep_type, duration_minutes")
         .eq("child_id", childId)
         .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(10);
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
     enabled: !!childId,
     refetchInterval: 60_000,
@@ -225,7 +321,7 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
   });
 
   // Bump a tick every 60s so derived state re-runs even when the queries are
-  // cached and `lastSleep` doesn't change. The query refetchInterval already
+  // cached and `recentLogs` doesn't change. The query refetchInterval already
   // re-renders when data shifts, but countdown copy needs to refresh on the
   // minute even without new data.
   const [, setTick] = useState(0);
@@ -234,31 +330,53 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
     return () => clearInterval(id);
   }, []);
 
-  if (!savedPlan) return null;
+  const planMethod = pickMethod(savedPlan?.method);
 
-  const state = deriveState({
-    now: new Date(),
-    childName,
-    wakeTime: savedPlan.wake_time,
-    bedtimeEarliest: savedPlan.bedtime_earliest,
-    bedtimeLatest: savedPlan.bedtime_latest,
-    wakeWindowLowMin: savedPlan.wake_window_low_min,
-    napCount: savedPlan.nap_count,
-    lastSleep: lastSleep ?? null,
-    hasNightTonight: !!nightTonight,
+  const state = savedPlan
+    ? deriveState({
+        now: new Date(),
+        childName,
+        wakeTime: savedPlan.wake_time,
+        bedtimeEarliest: savedPlan.bedtime_earliest,
+        bedtimeLatest: savedPlan.bedtime_latest,
+        wakeWindowLowMin: savedPlan.wake_window_low_min,
+        wakeWindowHighMin: savedPlan.wake_window_high_min,
+        napCount: savedPlan.nap_count,
+        method: planMethod,
+        recentLogs: recentLogs ?? [],
+        hasNightTonight: !!nightTonight,
+      })
+    : null;
+
+  const alertKind = state ? bannerToAlertKind(state) : null;
+  useSleepAlertToast({
+    childId,
+    kind: alertKind,
+    title: state?.title ?? null,
+    body: state && "body" in state ? (state.body ?? null) : null,
   });
 
-  if (!state) return null;
+  if (!savedPlan || !state) return null;
 
   const Icon =
     state.kind === "empathy"
       ? Sparkles
-      : state.kind === "wind-down-nap" || state.kind === "wind-down-bed"
-        ? Clock
-        : Moon;
+      : state.kind === "window-exceeded"
+        ? AlertTriangle
+        : state.kind === "off-plan"
+          ? Compass
+          : state.kind === "wind-down-nap" ||
+              state.kind === "wind-down-bed" ||
+              state.kind === "window-15min"
+            ? Clock
+            : Moon;
 
   const isPreview = state.kind === "preview";
   const isEmpathy = state.kind === "empathy";
+  const isAlert =
+    state.kind === "window-exceeded" ||
+    state.kind === "off-plan" ||
+    state.kind === "window-15min";
 
   return (
     <Card
@@ -268,14 +386,16 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
           ? "bg-sleep/5 border-sleep/15"
           : isEmpathy
             ? "bg-sleep/10 border-sleep/20"
-            : "bg-sleep/10 border-sleep/25"
+            : isAlert
+              ? "bg-sleep/15 border-sleep/30"
+              : "bg-sleep/10 border-sleep/25",
       )}
     >
       <CardContent className={cn("p-4 flex items-start gap-3", isPreview && "py-3")}>
         <div
           className={cn(
             "rounded-full bg-sleep/15 flex items-center justify-center shrink-0",
-            isPreview ? "w-8 h-8" : "w-10 h-10"
+            isPreview ? "w-8 h-8" : "w-10 h-10",
           )}
         >
           <Icon className={cn("text-sleep", isPreview ? "w-4 h-4" : "w-5 h-5")} />
@@ -284,12 +404,12 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
           <p
             className={cn(
               "font-display font-bold leading-tight",
-              isPreview ? "text-sm" : "text-base"
+              isPreview ? "text-sm" : "text-base",
             )}
           >
             {state.title}
           </p>
-          {state.body && (
+          {"body" in state && state.body && (
             <p className="text-sm text-foreground/85 leading-snug mt-1">
               {state.body}
             </p>

@@ -23,7 +23,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { openChat } from "@/lib/chatOpener";
 import { buildSleepPlan, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
-import { useSaveSleepPlan, useSleepPlan, type SleepPlanOverrides } from "@/hooks/useSleepPlan";
+import { useSaveSleepPlan, useSleepPlan, type FerberSchedule, type SleepPlanOverrides } from "@/hooks/useSleepPlan";
+import { SleepMethodPicker } from "@/components/SleepMethodPicker";
+import {
+  DEFAULT_FERBER_INTERVALS,
+  SLEEP_METHODS,
+  getSleepMethodMeta,
+  isMethodEligible,
+  type SleepMethod,
+} from "@/lib/sleepMethods";
 
 interface SleepPlanDialogProps {
   open: boolean;
@@ -31,6 +39,7 @@ interface SleepPlanDialogProps {
   childId: string;
   childName: string;
   ageMonths: number;
+  ageDays?: number;
   logs: PlanLog[];
 }
 
@@ -40,6 +49,9 @@ interface LocalOverrideState {
   bedtime_latest: string | null;
   nap_count: number | null;
   overrides: SleepPlanOverrides;
+  method: SleepMethod;
+  chair_stage: number | null;
+  ferber_schedule: FerberSchedule | null;
 }
 
 const EMPTY_OVERRIDES: LocalOverrideState = {
@@ -48,6 +60,9 @@ const EMPTY_OVERRIDES: LocalOverrideState = {
   bedtime_latest: null,
   nap_count: null,
   overrides: {},
+  method: "gentle_foundations",
+  chair_stage: null,
+  ferber_schedule: null,
 };
 
 export function SleepPlanDialog({
@@ -56,8 +71,10 @@ export function SleepPlanDialog({
   childId,
   childName,
   ageMonths,
+  ageDays,
   logs,
 }: SleepPlanDialogProps) {
+  const resolvedAgeDays = ageDays ?? Math.round(ageMonths * 30.44);
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const { data: savedRow } = useSleepPlan(childId);
@@ -75,6 +92,8 @@ export function SleepPlanDialog({
     if (hydratedRef.current) return;
     if (savedRow) {
       const o = (savedRow.overrides ?? {}) as SleepPlanOverrides;
+      const savedMethod = SLEEP_METHODS.find((m) => m.id === savedRow.method)?.id ?? "gentle_foundations";
+      const savedSchedule = savedRow.ferber_schedule as unknown as FerberSchedule | null;
       setLocal({
         wake_time: savedRow.wake_time,
         bedtime_earliest: savedRow.bedtime_earliest,
@@ -85,6 +104,12 @@ export function SleepPlanDialog({
           bedtime: !!o.bedtime,
           nap_count: !!o.nap_count,
         },
+        method: savedMethod,
+        chair_stage: savedRow.chair_stage,
+        ferber_schedule:
+          savedSchedule && Array.isArray(savedSchedule.intervals)
+            ? savedSchedule
+            : null,
       });
       hydratedRef.current = true;
     } else if (savedRow === null) {
@@ -122,6 +147,15 @@ export function SleepPlanDialog({
 
   const handleSave = async () => {
     if (!user) return;
+    if (!isMethodEligible(local.method, resolvedAgeDays)) {
+      const meta = getSleepMethodMeta(local.method);
+      toast({
+        title: "Method needs more time",
+        description: `${meta.name} is recommended at ${Math.round(meta.minAgeWeeks / 4)}+ months adjusted age. Pick a different method to save.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const bedtimeFragment = plan.bedtimeRange.earliest && plan.bedtimeRange.latest
@@ -138,6 +172,13 @@ export function SleepPlanDialog({
         created_by: user.id,
       });
       if (memoryError) throw memoryError;
+
+      const chairStage =
+        local.method === "chair" ? local.chair_stage ?? 1 : null;
+      const ferberSchedule: FerberSchedule | null =
+        local.method === "ferber"
+          ? local.ferber_schedule ?? { intervals: DEFAULT_FERBER_INTERVALS }
+          : null;
 
       await saveSleepPlan.mutateAsync({
         child_id: childId,
@@ -157,6 +198,9 @@ export function SleepPlanDialog({
           bedtime: !!local.overrides.bedtime,
           nap_count: !!local.overrides.nap_count,
         },
+        method: local.method,
+        chair_stage: chairStage,
+        ferber_schedule: ferberSchedule,
       });
 
       toast({ title: "Plan saved", description: "We'll reference it in chats and briefings." });
@@ -207,6 +251,23 @@ export function SleepPlanDialog({
     }));
   };
 
+  const applyMethod = (next: SleepMethod) => {
+    setLocal((prev) => {
+      const isChair = next === "chair";
+      const isFerber = next === "ferber";
+      return {
+        ...prev,
+        method: next,
+        chair_stage: isChair ? prev.chair_stage ?? 1 : null,
+        ferber_schedule: isFerber
+          ? prev.ferber_schedule ?? { intervals: DEFAULT_FERBER_INTERVALS }
+          : null,
+      };
+    });
+  };
+
+  const selectedMethodMeta = getSleepMethodMeta(local.method);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
@@ -225,6 +286,30 @@ export function SleepPlanDialog({
         </div>
 
         <div className="px-6 pb-6 space-y-4">
+          {/* Method picker */}
+          <Card className="border-0 bg-card">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-sleep" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+                  Sleep method
+                </p>
+              </div>
+              <p className="text-sm text-foreground/80 leading-snug">
+                <span className="font-semibold text-foreground">
+                  {selectedMethodMeta.name}
+                </span>
+                {" — "}
+                {selectedMethodMeta.oneLineDescription}
+              </p>
+              <SleepMethodPicker
+                value={local.method}
+                onChange={applyMethod}
+                ageDays={resolvedAgeDays}
+              />
+            </CardContent>
+          </Card>
+
           {/* Total sleep target */}
           <Card className="border-0 bg-sleep-bg">
             <CardContent className="p-4 space-y-2">
