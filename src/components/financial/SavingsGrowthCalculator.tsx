@@ -207,11 +207,11 @@ export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartA
                 </linearGradient>
               </defs>
               <XAxis
-                dataKey="year"
+                dataKey="age"
                 tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(y) => `Y${y}`}
+                tickFormatter={(a) => `Age ${a}`}
               />
               <YAxis
                 tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
@@ -228,7 +228,7 @@ export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartA
                   boxShadow: "0 4px 12px hsl(var(--foreground) / 0.08)",
                   fontSize: 12,
                 }}
-                labelFormatter={(y) => `Year ${y}`}
+                labelFormatter={(a) => `Age ${a}`}
                 formatter={(value: number, name) => [formatUSD(value), name === "balance" ? "Total" : "Contributed"]}
               />
               <Legend
