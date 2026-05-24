@@ -1258,6 +1258,57 @@ export type Database = {
           },
         ]
       }
+      ferber_check_ins: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          interval_index: number
+          night_number: number
+          parent_id: string
+          performed_at: string | null
+          scheduled_at: string
+          sleep_log_id: string | null
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          interval_index: number
+          night_number: number
+          parent_id: string
+          performed_at?: string | null
+          scheduled_at: string
+          sleep_log_id?: string | null
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          interval_index?: number
+          night_number?: number
+          parent_id?: string
+          performed_at?: string | null
+          scheduled_at?: string
+          sleep_log_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferber_check_ins_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ferber_check_ins_sleep_log_id_fkey"
+            columns: ["sleep_log_id"]
+            isOneToOne: false
+            referencedRelation: "sleep_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_checklist_items: {
         Row: {
           annual_limit_note: string | null
@@ -2123,9 +2174,12 @@ export type Database = {
           bedtime_latest: string | null
           bucket: string | null
           bucket_label: string | null
+          chair_stage: number | null
           child_id: string
           created_at: string
+          ferber_schedule: Json | null
           id: string
+          method: string
           nap_count: number | null
           overrides: Json
           parent_id: string
@@ -2141,9 +2195,12 @@ export type Database = {
           bedtime_latest?: string | null
           bucket?: string | null
           bucket_label?: string | null
+          chair_stage?: number | null
           child_id: string
           created_at?: string
+          ferber_schedule?: Json | null
           id?: string
+          method?: string
           nap_count?: number | null
           overrides?: Json
           parent_id: string
@@ -2159,9 +2216,12 @@ export type Database = {
           bedtime_latest?: string | null
           bucket?: string | null
           bucket_label?: string | null
+          chair_stage?: number | null
           child_id?: string
           created_at?: string
+          ferber_schedule?: Json | null
           id?: string
+          method?: string
           nap_count?: number | null
           overrides?: Json
           parent_id?: string

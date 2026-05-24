@@ -41,6 +41,11 @@ export type AgeBucket =
   | "2-3yr"
   | "3yr+";
 
+// `MethodFlavor` selects the *coaching tone* for triage content (cry-it-out,
+// gentle, or neutral). It is intentionally separate from `SleepMethod` in
+// `@/lib/sleepMethods` — that one is the parent's chosen method on the sleep
+// plan. The triage content table below keys per-flavor variants, so swapping
+// in the 6-method enum here would mean rewriting every entry.
 export type MethodFlavor = "moc" | "tcb" | "neutral";
 
 export interface TriageContent {
