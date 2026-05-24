@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { KidSavingsComparison } from "@/components/financial/KidSavingsComparison";
+import { SavingsGrowthCalculator } from "@/components/financial/SavingsGrowthCalculator";
 
 function getFinancialPrompt(ageMonths: number) {
   if (ageMonths < 3) return {
@@ -203,6 +204,8 @@ export default function FinancialPage() {
       )}
 
       <KidSavingsComparison />
+
+      <SavingsGrowthCalculator defaultStartAge={Math.floor(ageMonths / 12)} />
 
       {/* Checklist */}
       {isLoading ? (

@@ -29,6 +29,7 @@ import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
 import BottleTimer from "@/components/feeding/BottleTimer";
+import PumpInlineTimer from "@/components/feeding/PumpInlineTimer";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 
 const foodCategories = [
@@ -334,20 +335,16 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               )}
 
               {feedType === "pump" && (
-                <div className="space-y-2">
-                  <Label>Side</Label>
-                  <div className="flex gap-2">
-                    {["left", "right", "both"].map((s) => (
-                      <Button key={s} type="button" variant={side === s ? "default" : "outline"} size="sm" className="flex-1 capitalize touch-target" onClick={() => setSide(s)}>
-                        {s}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {feedType === "pump" && (
                 <div className="space-y-3">
+                  <PumpInlineTimer
+                    childId={activeChild.id}
+                    side={side}
+                    onSideChange={setSide}
+                    onDurationChange={handleTimerDuration}
+                    onActiveRowChange={handleActiveRowChange}
+                    initialMinutes={durationMin ? Number(durationMin) : undefined}
+                    editMode={!!editingId}
+                  />
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label>Left Breast (oz)</Label>
@@ -363,10 +360,6 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                       Total: {((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)).toFixed(1)} oz
                     </p>
                   )}
-                  <div className="space-y-1">
-                    <Label>Duration (min)</Label>
-                    <Input type="number" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} placeholder="20" />
-                  </div>
                 </div>
               )}
 
