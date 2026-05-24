@@ -260,6 +260,11 @@ Deno.serve(async (req) => {
           message: `📋 ${child.name}'s appointment is tomorrow! Tap Visit Prep to review your questions.`,
           type: "appointment_reminder",
         });
+        // Block #6 (scheduled_visits) checks `recentTypes.has("appointment_reminder")`
+        // before pushing its own in-app cue. Without this add(), a user with both
+        // `children.next_appointment` set AND a `scheduled_visits` row in the same
+        // window would receive two appointment_reminder notifications per tick.
+        recentTypes.add("appointment_reminder");
       }
     }
 
@@ -379,9 +384,171 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 6. Scheduled-visit reminders (7-day + 1-day).
+    //
+    // Scans `scheduled_visits` for status='scheduled' rows within the next
+    // 8 days for this child. Dedupe is layered:
+    //   - DB:  reminder_7d_sent_at / reminder_1d_sent_at stamps (canonical)
+    //   - App: the 3h `recentTypes` set prevents same-run double-fires when
+    //         the row's scheduled_at sits exactly on a boundary across ticks
+    //
+    // Email fan-out only goes to the row's parent_id (per the plan's "no
+    // partner-routed email in v1" decision). In-app notifications still fan
+    // out to partners via the block below — that's the existing convention
+    // for every notification type.
+    const eightDaysFromNow = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: upcomingVisits } = await supabase
+      .from("scheduled_visits")
+      .select(
+        "id, scheduled_at, visit_type, doctor_name, location, email_reminders_enabled, reminder_7d_sent_at, reminder_1d_sent_at",
+      )
+      .eq("child_id", child.id)
+      .eq("parent_id", userId)
+      .eq("status", "scheduled")
+      .gt("scheduled_at", now.toISOString())
+      .lte("scheduled_at", eightDaysFromNow);
+
+    if (upcomingVisits && upcomingVisits.length > 0) {
+      // Email is sent to the row's parent_id — look up once per child loop.
+      let parentEmail: string | null = null;
+      const needsEmail = upcomingVisits.some((v) => {
+        if (!v.email_reminders_enabled) return false;
+        const ms = new Date(v.scheduled_at).getTime() - now.getTime();
+        const days = ms / (1000 * 60 * 60 * 24);
+        if (days <= 1 && !v.reminder_1d_sent_at) return true;
+        if (days <= 7 && !v.reminder_7d_sent_at) return true;
+        return false;
+      });
+      if (needsEmail) {
+        const { data: userRow } = await supabase.auth.admin.getUserById(userId);
+        parentEmail = userRow?.user?.email ?? null;
+      }
+
+      for (const visit of upcomingVisits) {
+        const ms = new Date(visit.scheduled_at).getTime() - now.getTime();
+        const days = ms / (1000 * 60 * 60 * 24);
+
+        // Per-row dispatch flag: tracks whether *this tick* already handled
+        // this row (either successfully or with a pending email retry). The
+        // 1d branch sets this to prevent the 7d branch from also firing on the
+        // same tick, even when we deliberately did NOT stamp because the email
+        // failed and we want the next tick to retry. Using a local boolean
+        // instead of the DB stamp keeps the "no double-email per tick" guard
+        // independent from the "did the email actually land" guard.
+        let dispatched = false;
+
+        // 1-day window (also covers anything that slipped past 1d but is still
+        // > 0 hours away — better to send late than skip).
+        if (days <= 1 && !visit.reminder_1d_sent_at) {
+          if (!recentTypes.has("appointment_reminder")) {
+            notifications.push({
+              user_id: userId,
+              child_id: child.id,
+              message: `📋 ${child.name}'s appointment is tomorrow! Tap Visit Prep to review your questions.`,
+              type: "appointment_reminder",
+            });
+            recentTypes.add("appointment_reminder");
+          }
+          // In-app cue is always considered delivered (it's a DB insert at the
+          // bottom of this fn). The email is the conditional, retryable side.
+          // Order: send email FIRST (if enabled), then stamp only on success;
+          // otherwise the next tick re-attempts because the stamp is still NULL.
+          let emailOk = true;
+          if (visit.email_reminders_enabled && parentEmail) {
+            emailOk = false;
+            try {
+              const resp = await fetch(`${supabaseUrl}/functions/v1/send-visit-reminder-email`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${serviceRoleKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  email: parentEmail,
+                  child_name: child.name,
+                  scheduled_at: visit.scheduled_at,
+                  visit_type: visit.visit_type,
+                  doctor_name: visit.doctor_name,
+                  location: visit.location,
+                  days_until: 1,
+                }),
+              });
+              emailOk = resp.ok;
+              if (!resp.ok) {
+                // Log status only — never raw bodies, child health data may
+                // pass through these endpoints (per .claude/rules/api.md).
+                console.error("send-visit-reminder-email 1d non-2xx", resp.status, "visit", visit.id);
+              }
+            } catch (err) {
+              const code = err instanceof Error ? err.name : "unknown_error";
+              console.error("send-visit-reminder-email 1d fetch failed", code, "visit", visit.id);
+            }
+          }
+          if (emailOk) {
+            await supabase
+              .from("scheduled_visits")
+              .update({ reminder_1d_sent_at: now.toISOString() })
+              .eq("id", visit.id);
+          }
+          dispatched = true;
+        }
+
+        // 7-day window (only for rows we haven't 7d-stamped yet, and only if
+        // the 1d branch did not already dispatch this tick).
+        if (!dispatched && days <= 7 && !visit.reminder_7d_sent_at) {
+          if (!recentTypes.has("appointment_reminder")) {
+            notifications.push({
+              user_id: userId,
+              child_id: child.id,
+              message: `🗓️ ${child.name}'s appointment is in a week. Tap Visit Prep to start your questions list.`,
+              type: "appointment_reminder",
+            });
+            recentTypes.add("appointment_reminder");
+          }
+          let emailOk = true;
+          if (visit.email_reminders_enabled && parentEmail) {
+            emailOk = false;
+            try {
+              const resp = await fetch(`${supabaseUrl}/functions/v1/send-visit-reminder-email`, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${serviceRoleKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  email: parentEmail,
+                  child_name: child.name,
+                  scheduled_at: visit.scheduled_at,
+                  visit_type: visit.visit_type,
+                  doctor_name: visit.doctor_name,
+                  location: visit.location,
+                  days_until: 7,
+                }),
+              });
+              emailOk = resp.ok;
+              if (!resp.ok) {
+                console.error("send-visit-reminder-email 7d non-2xx", resp.status, "visit", visit.id);
+              }
+            } catch (err) {
+              const code = err instanceof Error ? err.name : "unknown_error";
+              console.error("send-visit-reminder-email 7d fetch failed", code, "visit", visit.id);
+            }
+          }
+          if (emailOk) {
+            await supabase
+              .from("scheduled_visits")
+              .update({ reminder_7d_sent_at: now.toISOString() })
+              .eq("id", visit.id);
+          }
+          dispatched = true;
+        }
+      }
+    }
+
     // Also notify partners — fans out every notif queued for this child in
     // this iteration to each active partner. Mirrors the existing pattern;
-    // covers all 5 sleep-plan types plus the legacy 4.
+    // covers all 5 sleep-plan types plus the legacy 4 and the visit reminders.
     const { data: partners } = await supabase
       .from("partner_access")
       .select("partner_id")
