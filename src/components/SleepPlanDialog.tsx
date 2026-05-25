@@ -12,7 +12,6 @@ import {
   Pencil,
   Save,
   ShieldCheck,
-  Sun,
   TrendingDown,
   Info,
 } from "lucide-react";
@@ -81,7 +80,7 @@ export function SleepPlanDialog({
   const saveSleepPlan = useSaveSleepPlan();
 
   const [local, setLocal] = useState<LocalOverrideState>(EMPTY_OVERRIDES);
-  const [editingTile, setEditingTile] = useState<null | "wake" | "bedtime" | "naps">(null);
+  const [editingTile, setEditingTile] = useState<null | "wake" | "bedtime">(null);
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -223,7 +222,6 @@ export function SleepPlanDialog({
 
   const wakeLocked = !!local.overrides.wake_time;
   const bedtimeLocked = !!local.overrides.bedtime;
-  const napsLocked = !!local.overrides.nap_count;
 
   const applyWake = (value: string | null) => {
     setLocal((prev) => ({
@@ -240,14 +238,6 @@ export function SleepPlanDialog({
       bedtime_earliest: earliest,
       bedtime_latest: latest,
       overrides: { ...prev.overrides, bedtime: hasAny },
-    }));
-  };
-
-  const applyNapCount = (count: number | null) => {
-    setLocal((prev) => ({
-      ...prev,
-      nap_count: count,
-      overrides: { ...prev.overrides, nap_count: count !== null },
     }));
   };
 
@@ -333,42 +323,6 @@ export function SleepPlanDialog({
                 </p>
               )}
               <p className="text-xs text-muted-foreground">{plan.totalSleep.source}</p>
-            </CardContent>
-          </Card>
-
-          {/* Naps */}
-          <Card className="border-0 bg-card">
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Sun className="w-4 h-4 text-sleep" />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                    Naps today
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="touch-target -mt-2 -mr-2 text-muted-foreground hover:text-sleep"
-                  onClick={() => setEditingTile("naps")}
-                  aria-label="Edit nap count"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <p className="font-display text-2xl font-bold text-foreground">
-                  {plan.naps.typical === 0 ? "No naps typical" : `${plan.naps.typical} nap${plan.naps.typical === 1 ? "" : "s"}`}
-                </p>
-                {napsLocked && <Lock className="w-3.5 h-3.5 text-sleep" />}
-              </div>
-              {plan.naps.transitionAhead && (
-                <p className="text-sm text-foreground/70">{plan.naps.transitionAhead}</p>
-              )}
-              {plan.naps.note && (
-                <p className="text-xs text-muted-foreground">{plan.naps.note}</p>
-              )}
             </CardContent>
           </Card>
 
@@ -637,15 +591,6 @@ export function SleepPlanDialog({
             setEditingTile(null);
           }}
         />
-        <NapsEditDialog
-          open={editingTile === "naps"}
-          onOpenChange={(o) => setEditingTile(o ? "naps" : null)}
-          initialCount={local.nap_count}
-          onApply={(count) => {
-            applyNapCount(count);
-            setEditingTile(null);
-          }}
-        />
       </DialogContent>
     </Dialog>
   );
@@ -800,83 +745,3 @@ function BedtimeEditDialog({
   );
 }
 
-interface NapsEditDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialCount: number | null;
-  onApply: (count: number | null) => void;
-}
-
-function NapsEditDialog({ open, onOpenChange, initialCount, onApply }: NapsEditDialogProps) {
-  const [count, setCount] = useState<number>(initialCount ?? 2);
-
-  useEffect(() => {
-    if (open) setCount(initialCount ?? 2);
-  }, [open, initialCount]);
-
-  const dec = () => setCount((c) => Math.max(0, c - 1));
-  const inc = () => setCount((c) => Math.min(6, c + 1));
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogTitle className="font-display text-lg font-bold">Naps today</DialogTitle>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-foreground/80">How many naps?</p>
-            <div className="flex items-center justify-center gap-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={dec}
-                disabled={count <= 0}
-                className="touch-target w-14 text-xl font-bold"
-                aria-label="Decrease nap count"
-              >
-                −
-              </Button>
-              <span className="font-display text-3xl font-bold w-10 text-center tabular-nums">
-                {count}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={inc}
-                disabled={count >= 6}
-                className="touch-target w-14 text-xl font-bold"
-                aria-label="Increase nap count"
-              >
-                +
-              </Button>
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              onClick={() => onApply(count)}
-              className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white"
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onApply(null)}
-              className="w-full touch-target"
-            >
-              Use age-based default
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              className="w-full touch-target text-muted-foreground"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
