@@ -2102,65 +2102,6 @@ export type Database = {
         }
         Relationships: []
       }
-      scheduled_visits: {
-        Row: {
-          child_id: string
-          created_at: string
-          doctor_name: string | null
-          email_reminders_enabled: boolean
-          id: string
-          location: string | null
-          notes: string | null
-          parent_id: string
-          reminder_1d_sent_at: string | null
-          reminder_7d_sent_at: string | null
-          scheduled_at: string
-          status: string
-          updated_at: string
-          visit_type: string
-        }
-        Insert: {
-          child_id: string
-          created_at?: string
-          doctor_name?: string | null
-          email_reminders_enabled?: boolean
-          id?: string
-          location?: string | null
-          notes?: string | null
-          parent_id: string
-          reminder_1d_sent_at?: string | null
-          reminder_7d_sent_at?: string | null
-          scheduled_at: string
-          status?: string
-          updated_at?: string
-          visit_type: string
-        }
-        Update: {
-          child_id?: string
-          created_at?: string
-          doctor_name?: string | null
-          email_reminders_enabled?: boolean
-          id?: string
-          location?: string | null
-          notes?: string | null
-          parent_id?: string
-          reminder_1d_sent_at?: string | null
-          reminder_7d_sent_at?: string | null
-          scheduled_at?: string
-          status?: string
-          updated_at?: string
-          visit_type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scheduled_visits_child_id_fkey"
-            columns: ["child_id"]
-            isOneToOne: false
-            referencedRelation: "children"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       sleep_logs: {
         Row: {
           child_id: string
@@ -2671,9 +2612,170 @@ export type Database = {
         Returns: Json
       }
       delete_user_account: { Args: never; Returns: undefined }
+      get_allergens: { Args: { _child_id: string }; Returns: Json }
+      get_child_profile: { Args: { _child_id: string }; Returns: Json }
+      get_growth: {
+        Args: { _child_id: string }
+        Returns: {
+          child_id: string
+          created_at: string
+          head_circumference_cm: number | null
+          id: string
+          is_pediatrician_visit: boolean
+          length_cm: number | null
+          logged_at: string
+          notes: string | null
+          weight_oz: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "weight_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_illnesses: {
+        Args: { _active_only?: boolean; _child_id: string }
+        Returns: Json
+      }
+      get_milestones: {
+        Args: { _child_id: string; _status?: string }
+        Returns: Json
+      }
+      get_recent_diapers: {
+        Args: { _child_id: string; _hours?: number }
+        Returns: {
+          child_id: string
+          color: string | null
+          consistency: string | null
+          created_at: string
+          diaper_type: string
+          flag_for_attention: boolean | null
+          id: string
+          logged_at: string
+          notes: string | null
+          parent_id: string
+          source: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "diaper_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_recent_feeds: {
+        Args: { _child_id: string; _hours?: number }
+        Returns: {
+          active_side: string | null
+          amount_oz: number | null
+          amount_oz_left: number | null
+          amount_oz_right: number | null
+          child_id: string
+          created_at: string
+          duration_minutes: number | null
+          duration_minutes_left: number | null
+          duration_minutes_right: number | null
+          feeding_type: string
+          food_category: string | null
+          food_description: string | null
+          id: string
+          logged_at: string
+          notes: string | null
+          parent_id: string
+          reaction_description: string | null
+          reaction_noted: boolean | null
+          side: string | null
+          side_started_at: string | null
+          source: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "feeding_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_recent_sleep: {
+        Args: { _child_id: string; _hours?: number }
+        Returns: {
+          child_id: string
+          created_at: string
+          duration_minutes: number | null
+          ended_at: string | null
+          id: string
+          notes: string | null
+          parent_id: string
+          paused_accumulated_seconds: number
+          paused_at: string | null
+          quality: string | null
+          sleep_type: string
+          source: string
+          started_at: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sleep_logs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_summary: {
+        Args: { _child_id: string; _days?: number }
+        Returns: Json
+      }
+      get_vaccinations: {
+        Args: { _child_id: string; _upcoming_only?: boolean }
+        Returns: {
+          child_id: string
+          created_at: string
+          date_administered: string | null
+          declined: boolean
+          id: string
+          lot_number: string | null
+          next_due_date: string | null
+          parent_id: string
+          provider_name: string | null
+          updated_at: string
+          vaccine_name: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "vaccinations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_partner_access: {
         Args: { _owner_id: string; _user_id: string }
         Returns: boolean
+      }
+      list_accessible_children: {
+        Args: never
+        Returns: {
+          archived_at: string | null
+          birth_weight_oz: number | null
+          created_at: string
+          date_of_birth: string
+          discharge_weight_oz: number | null
+          due_date: string | null
+          gender: string | null
+          id: string
+          is_expected: boolean
+          is_premature: boolean | null
+          name: string
+          next_appointment: string | null
+          parent_id: string
+          photo_url: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "children"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       lookup_partner_invitation: {
         Args: { _invite_code: string }
