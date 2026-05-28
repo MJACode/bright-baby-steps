@@ -100,6 +100,11 @@ export default function Auth() {
       sessionStorage.removeItem("pending_invite");
       return <Navigate to={`/invite/${pendingInvite}`} replace />;
     }
+    const postLoginRedirect = sessionStorage.getItem("post_login_redirect");
+    if (postLoginRedirect) {
+      sessionStorage.removeItem("post_login_redirect");
+      return <Navigate to={postLoginRedirect} replace />;
+    }
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -18,6 +18,7 @@ import FeedingPage from "./pages/dashboard/FeedingPage";
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
 import GrowthPage from "./pages/dashboard/GrowthPage";
 import ProfilePage from "./pages/dashboard/ProfilePage";
+import McpConsentPage from "./pages/McpConsentPage";
 import NotFound from "./pages/NotFound";
 import WeeklyInsightsPage from "./pages/dashboard/WeeklyInsightsPage";
 import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/faq" element={<FAQPage />} />
+              <Route path="/settings/connect-claude/consent" element={<McpConsentPage />} />
               <Route path="/subprocessors" element={<SubprocessorsPage />} />
               <Route path="/rights-request" element={<RightsRequestPage />} />
               <Route path="/vpc-confirm" element={<VpcConfirmPage />} />

@@ -36,6 +36,11 @@ export default function DashboardLayout() {
   }
 
   if (!session) {
+    // Stash the deep link (e.g. the OAuth consent screen) so Auth can return
+    // the user here after login with all query params intact.
+    try {
+      sessionStorage.setItem("post_login_redirect", location.pathname + location.search);
+    } catch {}
     return <Navigate to="/auth" replace />;
   }
 
