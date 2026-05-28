@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info, RotateCcw, Check, Wrench } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info, RotateCcw, Check } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
@@ -285,8 +285,13 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
     let routedSkill: SkillId | undefined = opts.forceSkill;
     // In-flight tool-call list for the assistant message currently streaming.
     // Mirrored into the messages array via `upsertAssistant` / `applyToolCalls`
-    // so React re-renders the pill row as each frame arrives.
-    let toolCalls: ToolCallSummary[] = [];
+    // so React re-renders the pill row as each frame arrives. `pending` is a
+    // local UI-only flag. Pills are live-session-only — the `chat_messages`
+    // table doesn't store tool calls, and `saveMessages` only writes
+    // {role, content}. Reopening a conversation shows the final text answer
+    // without pills, which is the intended UX (pills are turn-in-flight UI).
+    type LiveToolCall = ToolCallSummary & { pending: boolean };
+    let toolCalls: LiveToolCall[] = [];
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -336,18 +341,29 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
 
       const upsertAssistant = (content: string, skill?: SkillId) => {
         const displayContent = content.trim();
+        const callsSnapshot: LiveToolCall[] | undefined = toolCalls.length ? toolCalls.slice() : undefined;
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
             return prev.map((m, i) =>
               i === prev.length - 1
-                ? { ...m, content: displayContent, ...(skill ? { routedSkill: skill } : {}) }
+                ? {
+                    ...m,
+                    content: displayContent,
+                    ...(skill ? { routedSkill: skill } : {}),
+                    ...(callsSnapshot ? { toolCalls: callsSnapshot } : {}),
+                  }
                 : m,
             );
           }
           return [
             ...prev,
-            { role: "assistant", content: displayContent, ...(skill ? { routedSkill: skill } : {}) },
+            {
+              role: "assistant",
+              content: displayContent,
+              ...(skill ? { routedSkill: skill } : {}),
+              ...(callsSnapshot ? { toolCalls: callsSnapshot } : {}),
+            },
           ];
         });
       };
@@ -364,6 +380,54 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
             );
           }
           return [...prev, { role: "assistant", content: "", routedSkill: skill }];
+        });
+      };
+
+      // Sync the in-flight toolCalls list onto the streaming assistant message
+      // (creating it as an empty bubble if no text has arrived yet — the pills
+      // render above the bubble in the same flex-col).
+      const applyToolCalls = () => {
+        const snapshot: LiveToolCall[] = toolCalls.slice();
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant") {
+            return prev.map((m, i) =>
+              i === prev.length - 1 ? { ...m, toolCalls: snapshot } : m,
+            );
+          }
+          return [
+            ...prev,
+            {
+              role: "assistant",
+              content: "",
+              ...(routedSkill ? { routedSkill } : {}),
+              toolCalls: snapshot,
+            },
+          ];
+        });
+      };
+
+      // Mid-stream error frame from the edge function — flag the current
+      // assistant message so the inline notice renders. Stream may still
+      // continue with [DONE] from the SSE writer's finally block.
+      const markStreamError = () => {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant") {
+            setStreamErrorIndex(prev.length - 1);
+            return prev;
+          }
+          const next = [
+            ...prev,
+            {
+              role: "assistant" as const,
+              content: "",
+              ...(routedSkill ? { routedSkill } : {}),
+              ...(toolCalls.length ? { toolCalls: toolCalls.slice() } : {}),
+            },
+          ];
+          setStreamErrorIndex(next.length - 1);
+          return next;
         });
       };
 
@@ -398,6 +462,47 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
             } catch {
               // Malformed preamble — ignore and let the content stream through.
             }
+            continue;
+          }
+
+          if (eventName === "tool_use") {
+            try {
+              const parsed = JSON.parse(dataStr) as { name?: string };
+              if (parsed.name) {
+                toolCalls = [...toolCalls, { name: parsed.name, ok: false, pending: true }];
+                applyToolCalls();
+              }
+            } catch {
+              // Ignore malformed tool_use frame; the result frame will follow.
+            }
+            continue;
+          }
+
+          if (eventName === "tool_result") {
+            try {
+              const parsed = JSON.parse(dataStr) as { name?: string; ok?: boolean };
+              if (parsed.name) {
+                // Resolve the earliest still-pending call with a matching
+                // name. Handles parallel tool_use blocks in a single Claude
+                // turn without needing the edge to emit a correlation id.
+                const idx = toolCalls.findIndex((c) => c.name === parsed.name && c.pending);
+                if (idx !== -1) {
+                  toolCalls = toolCalls.map((c, i) =>
+                    i === idx ? { name: c.name, ok: parsed.ok === true, pending: false } : c,
+                  );
+                } else {
+                  toolCalls = [...toolCalls, { name: parsed.name, ok: parsed.ok === true, pending: false }];
+                }
+                applyToolCalls();
+              }
+            } catch {
+              // Ignore malformed tool_result frame.
+            }
+            continue;
+          }
+
+          if (eventName === "error") {
+            markStreamError();
             continue;
           }
 
@@ -690,6 +795,9 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
             msg.role === "assistant" && msg.routedSkill && HEALTH_SKILLS.has(msg.routedSkill);
           const showFinanceNotice =
             msg.role === "assistant" && msg.routedSkill === "financial";
+          const toolCalls = msg.role === "assistant" ? msg.toolCalls : undefined;
+          const showStreamError = msg.role === "assistant" && streamErrorIndex === i;
+          const hasBubbleContent = msg.role === "user" || msg.content.length > 0;
           return (
             <div key={i} className={cn("flex flex-col gap-1", msg.role === "user" ? "items-end" : "items-start")}>
               {badge && (
@@ -703,16 +811,50 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
                   {badge.label}
                 </span>
               )}
-              <div
-                className={cn(
-                  "max-w-[85%] text-sm leading-relaxed",
-                  msg.role === "user"
-                    ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-sm"
-                    : "bg-muted/80 border border-border/40 text-foreground rounded-2xl rounded-bl-md px-3.5 py-2.5",
-                )}
-              >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              </div>
+              {toolCalls && toolCalls.length > 0 && (
+                <div className="max-w-[85%] flex flex-wrap gap-1">
+                  {toolCalls.map((call, ci) => {
+                    const pending = (call as ToolCallSummary & { pending?: boolean }).pending === true;
+                    const failed = !pending && !call.ok;
+                    return (
+                      <span
+                        key={ci}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold",
+                          failed ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary",
+                        )}
+                      >
+                        {pending ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : failed ? (
+                          <AlertTriangle className="w-3 h-3" />
+                        ) : (
+                          <Check className="w-3 h-3" />
+                        )}
+                        <span>{toolLabel(call.name)}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {hasBubbleContent && (
+                <div
+                  className={cn(
+                    "max-w-[85%] text-sm leading-relaxed",
+                    msg.role === "user"
+                      ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-3.5 py-2.5 shadow-sm"
+                      : "bg-muted/80 border border-border/40 text-foreground rounded-2xl rounded-bl-md px-3.5 py-2.5",
+                  )}
+                >
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              )}
+              {showStreamError && (
+                <div className="max-w-[85%] flex items-start gap-1.5 px-2.5 py-1.5 rounded-md bg-destructive/10 text-xs text-destructive">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                  <span>Something interrupted that reply — please try again.</span>
+                </div>
+              )}
               {showHealthNotice && (
                 <div className="max-w-[85%] flex items-start gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
