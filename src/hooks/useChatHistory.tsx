@@ -3,6 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+// Compact summary of a single Claude tool-use turn surfaced to the chat UI.
+// Args/payloads are deliberately omitted — only the registry name + outcome
+// are kept so persisted history rows can't leak child data on export.
+export type ToolCallSummary = {
+  name: string;
+  ok: boolean;
+};
+
 export type Message = {
   role: "user" | "assistant";
   content: string;
@@ -16,6 +24,9 @@ export type Message = {
     | "developmental"
     | "nutrition"
     | "sleep";
+  // In-flight + completed tool calls surfaced by the chat function during a
+  // Claude tool-use turn. Optional so legacy saved-history rows still load.
+  toolCalls?: ToolCallSummary[];
 };
 
 export interface Conversation {

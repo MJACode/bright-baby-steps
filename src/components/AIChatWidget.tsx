@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info, RotateCcw } from "lucide-react";
+import { Send, X, Bot, Loader2, Moon, UtensilsCrossed, Droplets, CheckCircle2, Stethoscope, Speech, Wallet, Brain, Apple, BedDouble, Mic, MicOff, AlertTriangle, Sparkles, Square, Zap, Info, RotateCcw, Check, Wrench } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,7 +12,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useChildContext } from "@/hooks/useChildContext";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { useChatHistory, type Message } from "@/hooks/useChatHistory";
+import { useChatHistory, type Message, type ToolCallSummary } from "@/hooks/useChatHistory";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useChatUsage } from "@/hooks/useChatUsage";
 import { onChatOpen } from "@/lib/chatOpener";
@@ -36,6 +36,27 @@ const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description
   { id: "sleep", label: "Sleep", icon: BedDouble, description: "Schedules, training & regressions", color: "bg-sleep/15 text-sleep" },
   { id: "financial", label: "Financial", icon: Wallet, description: "529s, tax credits & budgeting", color: "bg-finance/15 text-finance" },
 ];
+
+// Human-friendly labels for the child-data tools the chat function may call.
+// Keep terse and parent-tone — these render in a compact pill above the
+// streaming reply. Unknown names fall back to "Looking things up".
+const TOOL_LABELS: Record<string, string> = {
+  list_accessible_children: "Checking children",
+  get_child_profile: "Looking up profile",
+  get_recent_sleep: "Reading sleep log",
+  get_recent_feeds: "Reading feeding log",
+  get_recent_diapers: "Reading diaper log",
+  get_growth: "Reading growth history",
+  get_milestones: "Reading milestones",
+  get_illnesses: "Reading illness history",
+  get_vaccinations: "Reading vaccinations",
+  get_allergens: "Reading allergens",
+  get_summary: "Summarising recent activity",
+};
+
+function toolLabel(name: string): string {
+  return TOOL_LABELS[name] ?? "Looking things up";
+}
 
 // One starter from each non-general expert. The server-side router picks the
 // right specialist from the prompt text — users no longer pick a skill.
@@ -92,6 +113,9 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
   const [pendingAction, setPendingAction] = useState<LogAction | null>(null);
   const [actionSaving, setActionSaving] = useState(false);
   const [currentConvoId, setCurrentConvoId] = useState<string | null>(null);
+  // Index of the assistant message that took a mid-stream `event: error` frame.
+  // Cleared on the next user send / new chat so a fresh reply doesn't carry it.
+  const [streamErrorIndex, setStreamErrorIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -256,8 +280,13 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
     setMessages(updatedMessages);
     setInput("");
     setIsLoading(true);
+    setStreamErrorIndex(null);
     let assistantContent = "";
     let routedSkill: SkillId | undefined = opts.forceSkill;
+    // In-flight tool-call list for the assistant message currently streaming.
+    // Mirrored into the messages array via `upsertAssistant` / `applyToolCalls`
+    // so React re-renders the pill row as each frame arrives.
+    let toolCalls: ToolCallSummary[] = [];
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -267,7 +296,12 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ messages: updatedMessages, skill: opts.forceSkill ?? "auto", context: childContext || undefined }),
+          body: JSON.stringify({
+            messages: updatedMessages,
+            skill: opts.forceSkill ?? "auto",
+            context: childContext || undefined,
+            childId: activeChildId || undefined,
+          }),
         }
       );
 
@@ -600,7 +634,7 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
                 variant="ghost"
                 size="sm"
                 className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); setPendingAction(null); }}
+                onClick={() => { chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); setPendingAction(null); setStreamErrorIndex(null); }}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 New chat
