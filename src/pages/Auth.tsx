@@ -100,9 +100,11 @@ export default function Auth() {
       sessionStorage.removeItem("pending_invite");
       return <Navigate to={`/invite/${pendingInvite}`} replace />;
     }
-    const postLoginRedirect = sessionStorage.getItem("post_login_redirect");
+    // localStorage (not sessionStorage) so the deep link survives a Capacitor
+    // WebView cold-start, same as the pending_invite deep-link pattern.
+    const postLoginRedirect = localStorage.getItem("post_login_redirect");
     if (postLoginRedirect) {
-      sessionStorage.removeItem("post_login_redirect");
+      localStorage.removeItem("post_login_redirect");
       return <Navigate to={postLoginRedirect} replace />;
     }
     return <Navigate to="/dashboard" replace />;

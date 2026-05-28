@@ -10,7 +10,11 @@ import { Sparkles, ShieldCheck, AlertTriangle } from "lucide-react";
 const APPROVE_URL =
   "https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/mcp/oauth/approve";
 
+// Must stay in sync with the MCP server's read scope (CHILD_DATA_TOOLS in
+// supabase/functions/_shared/childDataTools.ts) — a mismatch is a § 5
+// misrepresentation. "Profile" covers get_child_profile / list_accessible_children.
 const READ_ONLY_CATEGORIES = [
+  "Profile",
   "Sleep",
   "Feeds",
   "Diapers",
@@ -28,6 +32,7 @@ export default function McpConsentPage() {
   const { children } = useChildren();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cancelled, setCancelled] = useState(false);
 
   if (loading) {
     return (
@@ -39,9 +44,12 @@ export default function McpConsentPage() {
 
   if (!session) {
     // Preserve the full consent deep link (all OAuth query params) so Auth
-    // returns the user to this exact URL after they sign in.
+    // returns the user to this exact URL after they sign in. localStorage (not
+    // sessionStorage) so it survives a Capacitor WebView cold-start — Claude
+    // hands the user an external deep link, exactly the case the pending_invite
+    // pattern uses localStorage for.
     try {
-      sessionStorage.setItem("post_login_redirect", location.pathname + location.search);
+      localStorage.setItem("post_login_redirect", location.pathname + location.search);
     } catch {}
     return <Navigate to="/auth" replace />;
   }
@@ -111,12 +119,52 @@ export default function McpConsentPage() {
     }
   };
 
-  const handleDeny = () => {
-    if (!redirectUri) return;
-    const denyUrl =
-      redirectUri + "?error=access_denied" + (state ? "&state=" + encodeURIComponent(state) : "");
-    window.location.href = denyUrl;
+  // Only bounce back to the client's redirect_uri if it's a sane web scheme.
+  // The legitimate flow always arrives here via the backend's /oauth/authorize,
+  // which has already validated redirect_uri against the registered client — but
+  // this route is directly reachable, so guard against a crafted redirect_uri
+  // (javascript:, data:, etc.) being used as a one-click open-redirect on deny.
+  const isSafeWebRedirect = (uri: string): boolean => {
+    try {
+      const u = new URL(uri);
+      return (
+        u.protocol === "https:" ||
+        (u.protocol === "http:" &&
+          (u.hostname === "localhost" || u.hostname === "127.0.0.1"))
+      );
+    } catch {
+      return false;
+    }
   };
+
+  const handleDeny = () => {
+    if (redirectUri && isSafeWebRedirect(redirectUri)) {
+      const denyUrl =
+        redirectUri + "?error=access_denied" + (state ? "&state=" + encodeURIComponent(state) : "");
+      window.location.href = denyUrl;
+      return;
+    }
+    // No safe redirect target — don't open-redirect; show an in-page cancelled state.
+    setCancelled(true);
+  };
+
+  if (cancelled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 bg-muted rounded-xl flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <CardTitle className="font-display text-2xl">Connection cancelled</CardTitle>
+            <CardDescription>
+              No access was granted. You can close this tab and return to Claude.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   if (missingRequired) {
     return (
@@ -155,7 +203,7 @@ export default function McpConsentPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Read-only access
             </p>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Claude can read these records. It can never add, change, or delete anything.
+              This connection is read-only — Claude cannot add, change, or delete your records through it.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {READ_ONLY_CATEGORIES.map((cat) => (
@@ -174,8 +222,11 @@ export default function McpConsentPage() {
             When you approve, your child's data is sent to <strong>your own Claude</strong> and
             processed under <strong>Anthropic's</strong> terms for that Claude product. This is
             you sharing your data with your own AI tool — it is separate from Grace Flare's
-            in-app AI features and from how Grace Flare itself uses Anthropic. You can revoke this
-            connection any time at Settings → Connect to Claude.
+            in-app AI features and from how Grace Flare itself uses Anthropic. Once your child's
+            data is in your own Claude, Grace Flare can no longer control or delete it — it's kept
+            and managed under your Claude account, not by us, so deleting data in Grace Flare won't
+            remove copies already read into Claude. You can revoke this connection any time at
+            Settings → Connect to Claude.
           </p>
 
           {error && (

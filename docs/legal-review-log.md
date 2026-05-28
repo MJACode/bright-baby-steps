@@ -769,3 +769,80 @@ edge function `supabase/functions/send-visit-reminder-email/index.ts`,
 extension to `supabase/functions/check-notifications/index.ts`.
 
 ---
+
+## 2026-05-28 — "Connect to Claude" remote MCP integration (new child-data egress)
+
+**Scope:** Consent screen `src/pages/McpConsentPage.tsx`, Privacy §§ 4–5
+(`src/pages/PrivacyPage.tsx`), `src/pages/SubprocessorsPage.tsx` (Anthropic
+entry extended, not duplicated). Backend egress path: edge function
+`supabase/functions/mcp/index.ts` + migration
+`supabase/migrations/20260528100000_mcp_oauth.sql`. New disclosure blocks are
+tagged `{/* LEGAL: MCP Stage 2 */}` / `{/* LEGAL: reviewed copy */}`.
+
+**Trigger:** New optional feature — a parent connects **their own** Claude
+(Claude.ai / Claude Desktop) to Grace Flare over an OAuth 2.1 remote MCP
+server and grants it **read-only** access to their child's tracked data.
+First child-data egress path to a customer-controlled external AI client.
+
+**Processing purpose:** Parent-directed disclosure of child logs to the
+parent's own Claude product. Read-only scope, matching the live MCP server
+tool surface (`CHILD_DATA_TOOLS`): profile, sleep, feeds, diapers, growth,
+milestones, illnesses, vaccinations, allergens (+ a derived weekly summary).
+
+**Subprocessor impact:** No new subprocessor. Anthropic is already disclosed;
+its `/subprocessors` entry was **extended** (same legal entity, same DPA on
+the Grace-Flare→Anthropic transport leg) to note that data delivered into the
+parent's own Claude is additionally governed by that parent's separate
+Anthropic agreement. 30-day subprocessor-change notice **not** triggered (no
+add/replace).
+
+**COPPA analysis:** The disclosure is parent-initiated to a parent-controlled
+tool, so it does not constitute a third-party "disclosure" requiring fresh
+verifiable parental consent under 16 CFR § 312.5(b); the existing email-plus
+VPC + direct-notice cover collection. Residual: data leaves Grace Flare's
+deletion/retention reach once read into the parent's Claude — now disclosed to
+the parent on the consent screen and in Privacy § 4 (FTC Act § 5).
+
+**Risk levels surfaced (legal agent pass):**
+- P0: none.
+- P1 (a) Consent screen was silent on loss-of-control/deletion. **Resolved** —
+  added the "once your child's data is in your own Claude, Grace Flare can no
+  longer control or delete it … deleting in Grace Flare won't remove copies
+  already read into Claude" sentence (`McpConsentPage.tsx`).
+- P1 (b) Privacy § 4 had a "dual-master" contradiction (same data governed by
+  both our DPA and the user's Anthropic agreement). **Resolved** — re-scoped
+  per leg: our DPA covers the transmission; once in the user's Claude, their
+  Anthropic agreement governs, outside our control.
+- P1 (c) Consent category list must equal the live MCP read scope (else a § 5
+  misrepresentation). **Resolved** — added "Profile" to the list so it matches
+  `CHILD_DATA_TOOLS`; added an in-code comment tying the list to the server
+  scope. (A shared constant across consent/subprocessors/server is a P2
+  follow-up.)
+- P2: softened the absolute "can never add/change/delete anything" to scope the
+  promise to the connection; minor § 5 wording. **Applied.**
+
+**Security note (QA):** the consent route is directly reachable, so the Deny
+button now guards against an open-redirect — it only bounces to the client's
+`redirect_uri` if it parses as `https:` (or `http://localhost`), otherwise it
+shows an in-page "Connection cancelled" state. Revocation at Settings →
+Connect to Claude maps to a real token kill: `revoke_my_mcp_connection` stamps
+`revoked_at`, and the `/mcp` endpoint rejects revoked/expired tokens.
+
+**Outstanding:**
+- Confirm `delete_user_account()` deletion copy does not over-promise: data
+  already read into a parent's Claude is outside our reach (true today; the
+  consent + Privacy § 4 language now says so). No code change required.
+- Shared category constant across consent page / SubprocessorsPage / MCP
+  server scope (P2 hygiene).
+- Outside-counsel items if/when commissioned: (1) is parent-directed MCP
+  disclosure correctly outside § 312.5 fresh-VPC, or does the grant itself
+  need a VPC-grade step; (2) residual controller/§5 liability after data lands
+  in the parent's Claude; (3) enforceability of the "same DPA / separate
+  relationship" dual-basis framing. Re-validate before any EEA/UK launch
+  (currently geo-blocked).
+
+**Code refs:** policy text + consent UI at commit `e99f067` (redlines applied
+in the follow-up commit on branch `claude/mcp-child-data-queries-2bjf9`);
+backend egress at commit `4516e75`.
+
+---
