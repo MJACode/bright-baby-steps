@@ -26,5 +26,6 @@ jobs:
           supabase functions deploy reactivate-nudge --no-verify-jwt --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
           supabase functions deploy inactive-account-purge --no-verify-jwt --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
           supabase functions deploy delete-account --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+          supabase functions deploy mcp --no-verify-jwt --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

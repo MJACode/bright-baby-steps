@@ -16,6 +16,7 @@ import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, Sparkles, HelpCir
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
+import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
 
@@ -150,6 +151,9 @@ export default function ProfilePage() {
 
       {/* Partner Management */}
       <PartnerManagement />
+
+      {/* Connect to Claude (MCP) */}
+      <ConnectClaudeSettings />
 
       {/* Preferences */}
       <Card className="border-0 bg-muted/50">

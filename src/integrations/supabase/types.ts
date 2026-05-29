@@ -1534,6 +1534,123 @@ export type Database = {
           },
         ]
       }
+      mcp_access_tokens: {
+        Row: {
+          client_id: string
+          client_name: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          last_used_at: string | null
+          refresh_hash: string | null
+          resource: string
+          revoked_at: string | null
+          scope: string | null
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          client_name?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          last_used_at?: string | null
+          refresh_hash?: string | null
+          resource: string
+          revoked_at?: string | null
+          scope?: string | null
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_used_at?: string | null
+          refresh_hash?: string | null
+          resource?: string
+          revoked_at?: string | null
+          scope?: string | null
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mcp_authorization_grants: {
+        Row: {
+          client_id: string
+          code_challenge: string
+          code_challenge_method: string
+          code_hash: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          redirect_uri: string
+          resource: string
+          scope: string | null
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          code_challenge: string
+          code_challenge_method?: string
+          code_hash: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          redirect_uri: string
+          resource: string
+          scope?: string | null
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          code_challenge?: string
+          code_challenge_method?: string
+          code_hash?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          redirect_uri?: string
+          resource?: string
+          scope?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      mcp_clients: {
+        Row: {
+          client_id: string
+          client_name: string
+          client_secret_hash: string | null
+          created_at: string
+          redirect_uris: string[]
+          token_endpoint_auth_method: string
+        }
+        Insert: {
+          client_id: string
+          client_name: string
+          client_secret_hash?: string | null
+          created_at?: string
+          redirect_uris: string[]
+          token_endpoint_auth_method?: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string
+          client_secret_hash?: string | null
+          created_at?: string
+          redirect_uris?: string[]
+          token_endpoint_auth_method?: string
+        }
+        Relationships: []
+      }
       medication_logs: {
         Row: {
           child_id: string
@@ -2777,6 +2894,17 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_my_mcp_connections: {
+        Args: never
+        Returns: {
+          client_name: string
+          created_at: string
+          expires_at: string
+          id: string
+          last_used_at: string
+          revoked_at: string
+        }[]
+      }
       lookup_partner_invitation: {
         Args: { _invite_code: string }
         Returns: Json
@@ -2786,6 +2914,7 @@ export type Database = {
         Args: { _target_uid: string }
         Returns: undefined
       }
+      revoke_my_mcp_connection: { Args: { _id: string }; Returns: boolean }
       users_with_no_logs_since: {
         Args: { since: string }
         Returns: {

@@ -36,6 +36,13 @@ export default function DashboardLayout() {
   }
 
   if (!session) {
+    // Stash the deep link (e.g. the OAuth consent screen) so Auth can return
+    // the user here after login with all query params intact. localStorage (not
+    // sessionStorage) so it survives a Capacitor WebView cold-start from a deep
+    // link, matching the pending_invite pattern.
+    try {
+      localStorage.setItem("post_login_redirect", location.pathname + location.search);
+    } catch {}
     return <Navigate to="/auth" replace />;
   }
 

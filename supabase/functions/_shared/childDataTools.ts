@@ -211,6 +211,23 @@ export const CHILD_DATA_TOOLS: AnthropicTool[] = [
   },
 ];
 
+// MCP `tools/list` shape. The MCP spec uses `inputSchema` (camelCase) where
+// Anthropic's tool-use API uses `input_schema`. Same JSON Schema underneath —
+// this is purely a key rename so both surfaces stay in sync from one registry.
+export interface McpTool {
+  name: string;
+  description: string;
+  inputSchema: AnthropicTool["input_schema"];
+}
+
+export function toMcpTools(): McpTool[] {
+  return CHILD_DATA_TOOLS.map((t) => ({
+    name: t.name,
+    description: t.description,
+    inputSchema: t.input_schema,
+  }));
+}
+
 // Build a name-keyed lookup once so dispatch is O(1) and unknown names are
 // rejected uniformly.
 const TOOL_BY_NAME: Record<string, AnthropicTool> = Object.fromEntries(
