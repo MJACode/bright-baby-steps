@@ -21,7 +21,10 @@
 // are unauthenticated or use their own bearer scheme.
 //
 // MANUAL PREREQUISITES (see also mintUserJwt.ts):
-//   - SUPABASE_JWT_SECRET edge-function secret (NOT auto-injected).
+//   - JWT_SECRET edge-function secret (NOT auto-injected; Supabase reserves
+//     the `SUPABASE_` prefix, so it CANNOT be SUPABASE_JWT_SECRET). Value is
+//     the project's JWT signing secret from Dashboard -> Project Settings ->
+//     API -> JWT Settings -> "JWT Secret".
 //   - APP_URL edge-function secret (already set; send-vpc-email uses it).
 //
 // Logging discipline: never log token values, code values, or tool result
@@ -709,7 +712,7 @@ interface ResolvedToken {
 // Mcp-Session-Id is an opaque HMAC of user_id + nonce so we can both bind it to
 // a user and verify it without server-side session storage.
 async function makeSessionId(userId: string): Promise<string> {
-  const secret = Deno.env.get("SUPABASE_JWT_SECRET") ?? "mcp-session-fallback";
+  const secret = Deno.env.get("JWT_SECRET") ?? "mcp-session-fallback";
   const nonce = randomToken(8);
   const key = await crypto.subtle.importKey(
     "raw",
