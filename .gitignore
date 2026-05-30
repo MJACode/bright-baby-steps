@@ -46,3 +46,6 @@ CLAUDE.local.md
 # Supabase CLI local cache (per-developer)
 supabase/.temp/
 supabase/.branches/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

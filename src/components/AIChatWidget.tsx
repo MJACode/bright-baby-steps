@@ -296,13 +296,17 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("Not authenticated");
+      // Strip UI-only fields (routedSkill / toolCalls) before sending — Anthropic
+      // rejects unknown properties on messages with `Extra inputs are not
+      // permitted`. The edge function also sanitizes as the canonical guard.
+      const wireMessages = updatedMessages.map((m) => ({ role: m.role, content: m.content }));
       const resp = await fetch(
         `https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/chat`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
           body: JSON.stringify({
-            messages: updatedMessages,
+            messages: wireMessages,
             skill: opts.forceSkill ?? "auto",
             context: childContext || undefined,
             childId: activeChildId || undefined,
