@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMcpConnections } from "@/hooks/useMcpConnections";
 import { usePremium } from "@/hooks/usePremium";
 import { APP_URL } from "@/lib/appUrl";
@@ -12,6 +12,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 import {
   Sparkles,
   Copy,
@@ -28,6 +30,7 @@ const MCP_SERVER_URL = `${APP_URL}/mcp`;
 export default function ConnectClaudeSettings() {
   const { data: connections = [], isLoading, revoke } = useMcpConnections();
   const { isPremium, isLoading: premiumLoading } = usePremium();
+  const navigate = useNavigate();
 
   const copyText = async (text: string) => {
     if (Capacitor.isNativePlatform()) {
@@ -38,10 +41,23 @@ export default function ConnectClaudeSettings() {
     toast({ title: "Server URL copied to clipboard! 📋" });
   };
 
-  // Show the upgrade prompt instead of the setup card on free tier. We still
-  // render the active-connections list below so partner caregivers (bound to an
-  // owner's tier) or anyone with grandfathered tokens can still see and revoke.
-  const showUpgradeCard = !premiumLoading && !isPremium;
+  // Free-tier path: URL is visible but locked. Any tap on the URL row OR the
+  // copy button surfaces this toast with an Upgrade CTA — never silently copies
+  // a URL the user can't actually authorize against, but also doesn't hide
+  // what they'd unlock.
+  const showFlarePlusOnlyToast = () => {
+    toast({
+      title: "Connecting Claude is a Flare+ feature",
+      description: "Upgrade to let your own Claude read your tracked data over a secure, read-only connection.",
+      action: (
+        <ToastAction altText="Upgrade to Flare+" onClick={() => navigate("/upgrade")}>
+          Upgrade
+        </ToastAction>
+      ),
+    });
+  };
+
+  const locked = !premiumLoading && !isPremium;
 
   return (
     <Card className="border-0 bg-muted/50">
@@ -55,7 +71,7 @@ export default function ConnectClaudeSettings() {
           Connect your own Claude (Claude.ai or Claude Desktop) to read your baby's tracked data and answer your questions. Access is <strong>read-only</strong> — Claude can read your logs but can never change or delete anything.
         </p>
 
-        {showUpgradeCard ? (
+        {locked && (
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Lock className="w-4 h-4 text-primary" />
@@ -68,65 +84,86 @@ export default function ConnectClaudeSettings() {
               <Link to="/upgrade">See Flare+</Link>
             </Button>
           </div>
-        ) : (
-          <>
-            {/* Server URL to paste into Claude */}
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold">Server URL</p>
-              <div className="flex items-center gap-2 bg-background rounded-lg px-3 py-2">
-                <Plug className="w-4 h-4 text-primary shrink-0" />
-                <p className="text-xs truncate flex-1 font-mono">{MCP_SERVER_URL}</p>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0"
-                  onClick={() => copyText(MCP_SERVER_URL)}
-                  aria-label="Copy server URL"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                In Claude, add a custom connector and paste this URL. Claude will ask you to sign in and approve access.
-              </p>
-            </div>
-
-            {/* How to connect — step-by-step */}
-            <Collapsible>
-              <CollapsibleTrigger className="w-full">
-                <div className="flex items-center gap-2 bg-background rounded-lg px-3 py-2">
-                  <HelpCircle className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-xs font-semibold flex-1 text-left">How to connect</span>
-                  <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
-                </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2 px-1">
-                <ol className="text-xs text-muted-foreground leading-relaxed space-y-2 list-decimal pl-5">
-                  <li>
-                    Open <strong>Claude.ai</strong> in your browser, or <strong>Claude Desktop</strong>, and go to <strong>Settings</strong> → <strong>Connectors</strong> (sometimes labeled "Custom connectors").
-                  </li>
-                  <li>
-                    Choose <strong>Add a connector</strong> (or <strong>Custom connector</strong>) and paste the server URL shown above.
-                  </li>
-                  <li>
-                    Claude will open a Grace Flare consent screen. Sign in if asked, then tap <strong>Approve access</strong>.
-                  </li>
-                  <li>
-                    Back in Claude, ask things like:
-                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
-                      <li><em>"What's our nap pattern this week?"</em></li>
-                      <li><em>"How much did the baby eat yesterday?"</em></li>
-                      <li><em>"What milestones has she hit so far?"</em></li>
-                    </ul>
-                  </li>
-                  <li>
-                    You can revoke access any time from this same settings card.
-                  </li>
-                </ol>
-              </CollapsibleContent>
-            </Collapsible>
-          </>
         )}
+
+        {/* Server URL — visible on both tiers. On free tier it's greyed and any
+            tap surfaces the Flare+ toast instead of copying. */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold flex items-center gap-1.5">
+            Server URL
+            {locked && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
+                <Lock className="w-3 h-3" /> Flare+
+              </span>
+            )}
+          </p>
+          <div
+            className={cn(
+              "flex items-center gap-2 bg-background rounded-lg px-3 py-2",
+              locked && "opacity-60 cursor-pointer",
+            )}
+            onClick={locked ? showFlarePlusOnlyToast : undefined}
+            role={locked ? "button" : undefined}
+            aria-label={locked ? "Server URL — Flare+ only" : undefined}
+          >
+            <Plug className="w-4 h-4 text-primary shrink-0" />
+            <p className="text-xs truncate flex-1 font-mono">{MCP_SERVER_URL}</p>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (locked) showFlarePlusOnlyToast();
+                else copyText(MCP_SERVER_URL);
+              }}
+              aria-label={locked ? "Copy disabled — Flare+ only" : "Copy server URL"}
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {locked
+              ? "Available with Flare+. Upgrade to copy this URL and connect your Claude."
+              : "In Claude, add a custom connector and paste this URL. Claude will ask you to sign in and approve access."}
+          </p>
+        </div>
+
+        {/* How to connect — informational, rendered for both tiers so free
+            users can see what they'd be setting up. */}
+        <Collapsible>
+          <CollapsibleTrigger className="w-full">
+            <div className="flex items-center gap-2 bg-background rounded-lg px-3 py-2">
+              <HelpCircle className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs font-semibold flex-1 text-left">How to connect</span>
+              <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2 px-1">
+            <ol className="text-xs text-muted-foreground leading-relaxed space-y-2 list-decimal pl-5">
+              <li>
+                Open <strong>Claude.ai</strong> in your browser, or <strong>Claude Desktop</strong>, and go to <strong>Settings</strong> → <strong>Connectors</strong> (sometimes labeled "Custom connectors").
+              </li>
+              <li>
+                Choose <strong>Add a connector</strong> (or <strong>Custom connector</strong>) and paste the server URL shown above.
+              </li>
+              <li>
+                Claude will open a Grace Flare consent screen. Sign in if asked, then tap <strong>Approve access</strong>.
+              </li>
+              <li>
+                Back in Claude, ask things like:
+                <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                  <li><em>"What's our nap pattern this week?"</em></li>
+                  <li><em>"How much did the baby eat yesterday?"</em></li>
+                  <li><em>"What milestones has she hit so far?"</em></li>
+                </ul>
+              </li>
+              <li>
+                You can revoke access any time from this same settings card.
+              </li>
+            </ol>
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Active connections */}
         <div className="space-y-2">
