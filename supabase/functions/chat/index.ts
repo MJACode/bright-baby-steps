@@ -320,8 +320,21 @@ serve(async (req) => {
     // Local working copy of the messages array. The agentic loop mutates this
     // across tool-use turns: append the assistant message (text + tool_use
     // blocks) and a user message with tool_result blocks, then call again.
+    //
+    // Sanitize each incoming message down to {role, content}. The widget tracks
+    // UI-only fields like `routedSkill` and `toolCalls` on its in-memory
+    // assistant messages, and ships the whole array back as conversation
+    // history. Anthropic strictly rejects unknown properties with
+    // `messages.N.<field> Extra inputs are not permitted`, so we strip here as
+    // the canonical guard (defense-in-depth in case any client forgets).
     // deno-lint-ignore no-explicit-any
-    const workingMessages: any[] = Array.isArray(messages) ? [...messages] : [];
+    const workingMessages: any[] = Array.isArray(messages)
+      ? messages
+          .filter((m: unknown): m is { role: unknown; content: unknown } =>
+            !!m && typeof m === "object" && "role" in m && "content" in m,
+          )
+          .map((m) => ({ role: m.role, content: m.content }))
+      : [];
 
     // Helper to build a turn's Anthropic request body. The final allowed turn
     // drops `tools` so Claude is forced to wrap up rather than request lookups
