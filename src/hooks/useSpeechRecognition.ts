@@ -32,22 +32,29 @@ export function useSpeechRecognition({ onResult, onInterim }: UseSpeechRecogniti
       if (permission.speechRecognition !== "granted") return;
 
       setIsListening(true);
+
+      let finalTranscript = "";
+
+      await SpeechRecognition.removeAllListeners();
+
+      SpeechRecognition.addListener("partialResults", (data: { matches: string[] }) => {
+        finalTranscript = data.matches?.[0] ?? "";
+        onInterim?.(finalTranscript);
+      });
+
+      SpeechRecognition.addListener("listeningState", async (data: { status: string }) => {
+        if (data.status === "stopped") {
+          setIsListening(false);
+          if (finalTranscript.trim()) onResult(finalTranscript.trim());
+          await SpeechRecognition.removeAllListeners();
+        }
+      });
+
       await SpeechRecognition.start({
         language: "en-US",
         maxResults: 1,
         popup: false,
         partialResults: true,
-      });
-
-      SpeechRecognition.addListener("partialResults", (data: { matches: string[] }) => {
-        const interim = data.matches?.[0] ?? "";
-        onInterim?.(interim);
-      });
-
-      SpeechRecognition.addListener("listeningState", (data: { status: string }) => {
-        if (data.status === "stopped") {
-          setIsListening(false);
-        }
       });
     } else {
       const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
