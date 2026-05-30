@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,9 +59,22 @@ interface Props {
   childId: string;
   parentId: string;
   ageMonths: number;
+  /** When the child row was created. Used together with retroactiveCompletedAt
+   *  to suppress flags during the new-account grace period. */
+  childCreatedAt: string;
+  /** Set when the parent finishes or skips the onboarding milestone catch-up. */
+  retroactiveCompletedAt: string | null;
 }
 
-export function MilestoneFlags({ categories, milestoneStatuses, childId, parentId, ageMonths }: Props) {
+export function MilestoneFlags({
+  categories,
+  milestoneStatuses,
+  childId,
+  parentId,
+  ageMonths,
+  childCreatedAt,
+  retroactiveCompletedAt,
+}: Props) {
   const queryClient = useQueryClient();
   const [dismissingMilestone, setDismissingMilestone] = useState<MilestoneRow | null>(null);
   const [selectedReason, setSelectedReason] = useState<string>(DISMISS_REASONS[0]);
@@ -96,6 +110,19 @@ export function MilestoneFlags({ categories, milestoneStatuses, childId, parentI
   }, [flagRecords]);
 
   const activeFlags = useMemo(() => {
+    // New-account grace period: if the parent hasn't completed (or explicitly
+    // skipped) the retroactive catch-up AND the child was added within the last
+    // 14 days, suppress flags entirely. This stops a parent who signs up with a
+    // 6-month-old from being greeted by a wall of red flags for milestones they
+    // never had a chance to log.
+    if (
+      isInRetroactiveGracePeriod({
+        created_at: childCreatedAt,
+        retroactive_setup_completed_at: retroactiveCompletedAt,
+      })
+    ) {
+      return [];
+    }
     if (!categories) return [];
     const flagged: MilestoneRow[] = [];
     categories.forEach((cat) => {
@@ -116,7 +143,7 @@ export function MilestoneFlags({ categories, milestoneStatuses, childId, parentI
       return (a.age_months_concern_flag ?? 0) - (b.age_months_concern_flag ?? 0);
     });
     return flagged;
-  }, [categories, milestoneStatuses, ageMonths, dismissedIds]);
+  }, [categories, milestoneStatuses, ageMonths, dismissedIds, childCreatedAt, retroactiveCompletedAt]);
 
   const dismissFlag = useMutation({
     mutationFn: async ({ milestoneId, severity, reason }: { milestoneId: string; severity: Severity; reason: string }) => {
