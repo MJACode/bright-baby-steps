@@ -1,37 +1,25 @@
 import { useState } from "react";
-import { Navigate, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { MCP_READ_CATEGORIES } from "@/lib/mcpReadCategories";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Sparkles, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Sparkles, ShieldCheck, AlertTriangle, Lock } from "lucide-react";
 
 const APPROVE_URL =
   "https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/mcp/oauth/approve";
 
-// Must stay in sync with the MCP server's read scope (CHILD_DATA_TOOLS in
-// supabase/functions/_shared/childDataTools.ts) — a mismatch is a § 5
-// misrepresentation. "Profile" covers get_child_profile / list_accessible_children.
-const READ_ONLY_CATEGORIES = [
-  "Profile",
-  "Sleep",
-  "Feeds",
-  "Diapers",
-  "Growth",
-  "Milestones",
-  "Illnesses",
-  "Vaccinations",
-  "Allergens",
-];
-
 export default function McpConsentPage() {
   const { session, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const { children } = useChildren();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsUpgrade, setNeedsUpgrade] = useState(false);
   const [cancelled, setCancelled] = useState(false);
 
   if (loading) {
@@ -100,6 +88,18 @@ export default function McpConsentPage() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
+        // Flare+ gate from the edge function — render an upgrade CTA instead of
+        // a plain error toast so the next step is obvious.
+        if (
+          res.status === 403 &&
+          payload?.error === "access_denied" &&
+          typeof payload?.error_description === "string" &&
+          payload.error_description.includes("Flare+")
+        ) {
+          setNeedsUpgrade(true);
+          setSubmitting(false);
+          return;
+        }
         const description =
           payload?.error_description ||
           "We couldn't complete the connection. Close this window and try adding the connector in Claude again.";
@@ -147,6 +147,41 @@ export default function McpConsentPage() {
     // No safe redirect target — don't open-redirect; show an in-page cancelled state.
     setCancelled(true);
   };
+
+  if (needsUpgrade) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+              <Lock className="w-6 h-6 text-primary" />
+            </div>
+            <CardTitle className="font-display text-2xl">Flare+ unlocks this</CardTitle>
+            <CardDescription>
+              Connecting your own Claude to {childLabel} is part of Flare+. Upgrade
+              once and your Claude can read your tracked logs over a secure,
+              read-only connection — revoke any time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button
+              className="w-full touch-target"
+              onClick={() => navigate("/upgrade")}
+            >
+              See Flare+
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full touch-target"
+              onClick={handleDeny}
+            >
+              Not now
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (cancelled) {
     return (
@@ -206,12 +241,12 @@ export default function McpConsentPage() {
               This connection is read-only — Claude cannot add, change, or delete your records through it.
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {READ_ONLY_CATEGORIES.map((cat) => (
+              {MCP_READ_CATEGORIES.map((cat) => (
                 <span
-                  key={cat}
+                  key={cat.label}
                   className="text-[10px] font-semibold bg-background rounded-full px-2 py-1 text-foreground/80"
                 >
-                  {cat}
+                  {cat.label}
                 </span>
               ))}
             </div>

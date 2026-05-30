@@ -846,3 +846,54 @@ in the follow-up commit on branch `claude/mcp-child-data-queries-2bjf9`);
 backend egress at commit `4516e75`.
 
 ---
+
+## 2026-05-30 — MCP follow-ups: Flare+ gate + shared categories (disclosure expansion)
+
+**Scope:** `supabase/functions/mcp/index.ts` (`handleApprove`),
+`src/components/ConnectClaudeSettings.tsx`, `src/pages/McpConsentPage.tsx`,
+`src/pages/SubprocessorsPage.tsx`, new `src/lib/mcpReadCategories.ts` (single
+source of truth for category labels surfaced to users).
+
+**Trigger:** P2 hygiene flagged in the 2026-05-28 entry — the consent screen
+list, the SubprocessorsPage Anthropic-entry list, and the live MCP server
+scope (`CHILD_DATA_TOOLS`) had to be kept in sync manually. Now driven by one
+typed constant + a regression test that asserts every category maps to a real
+`CHILD_DATA_TOOLS` name and every canonical tool is covered.
+
+**Disclosure delta worth noting:** the SubprocessorsPage Anthropic
+`dataCategories` line previously enumerated 8 buckets ("sleep, feeds,
+diapers, growth, milestones, illnesses, vaccinations, allergens"). The new
+constant adds **two more** that were always in the live MCP scope but had
+been omitted from the user-facing list: **profile** (name, gender, DOB,
+age-in-days, birth/discharge weight, next appointment, photo URL — exposed by
+`get_child_profile` + `list_accessible_children`) and **summary** (the
+aggregated weekly rollup from `get_summary`). This is an **expansion of
+disclosure** (more truthful, no behavioral change), aligning the stated scope
+with the actual server scope. Risk classification: **P0 fix of a pre-existing
+under-disclosure**, shipped same-day — the previous list under-disclosed two
+categories that were in fact transmitted.
+
+**Other change in scope:** Flare+ gate on `/oauth/approve` (returns 403
+`access_denied` with an upgrade pointer for non-premium users). Existing
+access tokens keep working — only new grants are blocked. This is a
+commercial tier decision, not a privacy / disclosure change; no policy text
+updates required.
+
+**Risk levels surfaced:**
+- P0 (legal): prior under-disclosure of `profile` and `summary` categories.
+  Resolved by driving the user-facing list from the same constant as the
+  consent UI, then mirroring labels in the SubprocessorsPage copy.
+- P1: none.
+- P2: the shared constant is mirrored from `CHILD_DATA_TOOLS` (different
+  runtime — Deno edge function vs. React) rather than imported. A regression
+  test (`src/test/mcpReadCategories.test.ts`) catches drift; treat that test
+  as the binding contract.
+
+**Code refs:** branch `claude/mcp-stage2-followups`, commit `a8299e5`.
+
+**Outstanding:** none new. Outside-counsel items from the 2026-05-28 entry
+remain open (parent-directed MCP disclosure vs. § 312.5 fresh-VPC; residual
+controller liability after data lands in the parent's Claude; "same DPA /
+separate relationship" enforceability).
+
+---

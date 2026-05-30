@@ -414,6 +414,28 @@ async function handleApprove(req: Request, origin: string) {
   }
   const userId = userData.user.id;
 
+  // Flare+ gate: connecting an external Claude is a premium-tier feature.
+  // Only NEW grants are blocked here — existing access tokens keep working so
+  // the user isn't yanked offline mid-billing-cycle. Gate is on the connecting
+  // user's own subscription; partner caregivers (added via Partner Access) are
+  // not auto-elevated by an owner's Flare+ status and must connect from their
+  // own paid account. Revisit if that surfaces as a real complaint.
+  const admin = adminClient();
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("tier, status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const isPremium =
+    sub?.tier === "plus" && (sub?.status === "active" || sub?.status === "trialing");
+  if (!isPremium) {
+    return oauthError(
+      "access_denied",
+      `Connecting an external Claude requires Flare+. Upgrade at ${origin}/upgrade to enable this connection.`,
+      403,
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -446,7 +468,6 @@ async function handleApprove(req: Request, origin: string) {
   }
 
   // Re-validate client + redirect_uri.
-  const admin = adminClient();
   const { data: client } = await admin
     .from("mcp_clients")
     .select("client_id, redirect_uris")
