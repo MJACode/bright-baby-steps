@@ -8,12 +8,14 @@
 // the same secret and Supabase Auth will accept it.
 //
 // MANUAL PREREQUISITE — READ THIS:
-//   SUPABASE_JWT_SECRET is NOT one of the secrets Supabase auto-injects into
-//   edge functions (only SUPABASE_URL / SUPABASE_ANON_KEY /
-//   SUPABASE_SERVICE_ROLE_KEY / SUPABASE_DB_URL are auto-injected). You MUST
-//   set it manually as an edge-function secret:
+//   The project's JWT signing secret is NOT auto-injected into edge functions
+//   (only SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY /
+//   SUPABASE_DB_URL are auto-injected). You MUST set it manually as an
+//   edge-function secret. Supabase reserves the `SUPABASE_` prefix for
+//   platform-managed secrets, so this MUST be named `JWT_SECRET` (NOT
+//   `SUPABASE_JWT_SECRET`):
 //     Dashboard -> Project Settings -> API -> JWT Settings -> "JWT Secret"
-//     then add it under Edge Functions -> Secrets as SUPABASE_JWT_SECRET.
+//     copy the value, then add it under Edge Functions -> Secrets as JWT_SECRET.
 //   Without it, mintUserJwt throws and every tools/call fails.
 //
 // Implemented with Web Crypto (crypto.subtle HMAC-SHA256) to avoid pulling a
@@ -41,12 +43,13 @@ export async function mintUserJwt(
   userId: string,
   ttlSeconds = 60,
 ): Promise<string> {
-  const secret = Deno.env.get("SUPABASE_JWT_SECRET");
+  const secret = Deno.env.get("JWT_SECRET");
   if (!secret) {
     throw new Error(
-      "SUPABASE_JWT_SECRET is not set. It is NOT auto-injected into edge " +
-        "functions — set it manually (Project Settings -> API -> JWT Secret) " +
-        "as an edge-function secret named SUPABASE_JWT_SECRET.",
+      "JWT_SECRET is not set. It is NOT auto-injected into edge functions — " +
+        "set it manually (Project Settings -> API -> JWT Secret) as an " +
+        "edge-function secret named JWT_SECRET. Supabase reserves the " +
+        "SUPABASE_ prefix, so it cannot be called SUPABASE_JWT_SECRET.",
     );
   }
 
