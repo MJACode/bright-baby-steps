@@ -15,8 +15,12 @@ import type { SyncChoice } from "@/components/onboarding/PartnerRolePicker";
 import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
 import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
+import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
+import { getAgeInMonths } from "@/hooks/useChildren";
 
 type PrimaryInterest = "sleep_feeding" | "developmental" | "speech" | "financial";
+
+type RetroactiveStatus = "achieved" | "emerging" | "not_yet";
 
 interface WizardState {
   name: string;
@@ -26,6 +30,7 @@ interface WizardState {
   interest: PrimaryInterest | null;
   sync: SyncChoice | null;
   inviteCode: string | null;
+  retroactiveMilestones: Record<string, RetroactiveStatus>;
 }
 
 const EMPTY_STATE: WizardState = {
@@ -36,6 +41,7 @@ const EMPTY_STATE: WizardState = {
   interest: null,
   sync: null,
   inviteCode: null,
+  retroactiveMilestones: {},
 };
 
 // Draft persistence so a user who clicks the second VPC email link in a new
@@ -124,11 +130,19 @@ export function OnboardingWizard() {
   const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [needsDirectNotice, setNeedsDirectNotice] = useState(false);
   const [state, setState] = useState<WizardState>(() => (user ? loadDraft(user.id)?.state ?? EMPTY_STATE : EMPTY_STATE));
+  // Captured after the child INSERT succeeds so the step-6 catch-up can write
+  // child_speech rows + stamp retroactive_setup_completed_at against the right row.
+  const [createdChildId, setCreatedChildId] = useState<string | null>(null);
 
+  // Steps 1–5 are required inputs. Step 6 is an optional catch-up shown only
+  // for children >= 1 month old; newborns skip from step 5 straight to step 7.
   const TOTAL_STEPS = 5;
 
   useEffect(() => {
     if (!user) return;
+    // Once the child has been created (step 6+), the wizard is no longer
+    // restartable from a draft — the dashboard banner handles re-entry to the
+    // catch-up, so stop persisting draft state here.
     if (step >= 6) return;
     saveDraft(user.id, { step, state });
   }, [user, step, state]);
@@ -159,13 +173,27 @@ export function OnboardingWizard() {
         return;
       }
 
-      const { error: childError } = await supabase.from("children").insert({
-        parent_id: user.id,
-        name: state.name.trim(),
-        date_of_birth: state.dob,
-        is_premature: state.isPremature ?? false,
-        due_date: state.isPremature && state.dueDate ? state.dueDate : null,
-      });
+      const ageMonths = getAgeInMonths(
+        state.dob,
+        state.isPremature ?? false,
+        state.isPremature && state.dueDate ? state.dueDate : null
+      );
+      const skipCatchUp = ageMonths < 1;
+
+      const { data: childRow, error: childError } = await supabase
+        .from("children")
+        .insert({
+          parent_id: user.id,
+          name: state.name.trim(),
+          date_of_birth: state.dob,
+          is_premature: state.isPremature ?? false,
+          due_date: state.isPremature && state.dueDate ? state.dueDate : null,
+          // Newborns skip the catch-up entirely — stamp at INSERT so the
+          // MilestonesPage banner never fires for them.
+          retroactive_setup_completed_at: skipCatchUp ? new Date().toISOString() : null,
+        })
+        .select("id")
+        .single();
       if (childError) throw childError;
 
       await supabase
@@ -178,7 +206,8 @@ export function OnboardingWizard() {
         .eq("id", user.id);
 
       clearDraft(user.id);
-      setStep(6);
+      setCreatedChildId(childRow.id);
+      setStep(skipCatchUp ? 7 : 6);
     } catch (err) {
       console.error("Onboarding save failed", err);
       toast({
@@ -214,8 +243,32 @@ export function OnboardingWizard() {
     );
   }
 
-  // Step 6: personalized welcome
-  if (step === 6 && state.interest) {
+  // Step 6: retroactive milestone catch-up — only for children >= 1 month old.
+  // For newborns we skip straight to step 7 from saveAndAdvance().
+  if (step === 6 && createdChildId) {
+    const ageMonths = getAgeInMonths(
+      state.dob,
+      state.isPremature ?? false,
+      state.isPremature && state.dueDate ? state.dueDate : null
+    );
+    return (
+      <div className="flex flex-col min-h-[60vh] px-6 pt-8 pb-8 max-w-sm mx-auto">
+        <RetroactiveMilestoneCatchUp
+          childId={createdChildId}
+          childName={firstName}
+          ageMonths={ageMonths}
+          initialMarks={state.retroactiveMilestones}
+          onMarksChange={(marks) =>
+            setState((s) => ({ ...s, retroactiveMilestones: marks }))
+          }
+          onDone={() => setStep(7)}
+        />
+      </div>
+    );
+  }
+
+  // Step 7: personalized welcome
+  if (step === 7 && state.interest) {
     const features = INTEREST_FEATURES[state.interest];
     const cta = INTEREST_CTA[state.interest];
     return (

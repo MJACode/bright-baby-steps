@@ -16,6 +16,7 @@ import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { safeFormatDate } from "@/lib/safeFormat";
 import { UpcomingVisitsSection } from "@/components/records/UpcomingVisitsSection";
+import { useChildren, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 
 interface Props {
   childId: string;
@@ -514,9 +515,17 @@ function DentalSection({ childId, parentId, ageMonths }: { childId: string; pare
 }
 
 export function MedicalTab({ childId, parentId, ageMonths }: Props) {
+  const { activeChild } = useChildren();
+  // Match the suppression used by MilestoneFlags + MilestonesPage banner so a
+  // parent who just signed up with a backdated child doesn't see "you have
+  // active milestone flags" under Pediatrician Visits before they've had a
+  // chance to log anything.
+  const inGracePeriod = activeChild ? isInRetroactiveGracePeriod(activeChild) : false;
+
   const { data: activeFlagCount } = useQuery({
-    queryKey: ["active-flag-count", childId],
+    queryKey: ["active-flag-count", childId, inGracePeriod],
     queryFn: async () => {
+      if (inGracePeriod) return 0;
       const { data: speech } = await supabase
         .from("speech")
         .select("id, age_months_concern_flag")
