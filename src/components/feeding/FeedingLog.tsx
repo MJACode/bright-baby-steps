@@ -442,6 +442,17 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                 </div>
               )}
 
+              {!activeRow && (
+                <div className="space-y-1">
+                  <Label>When</Label>
+                  <MobileDateTimePicker
+                    value={loggedAt}
+                    onChange={setLoggedAt}
+                    maxDate={new Date()}
+                  />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <Label>Notes (optional)</Label>
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
