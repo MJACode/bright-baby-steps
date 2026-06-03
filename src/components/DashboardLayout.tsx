@@ -58,7 +58,7 @@ export default function DashboardLayout() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Top header — single row */}
-      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border">
+      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border safe-area-top">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <Link to="/dashboard" aria-label="Home" className="shrink-0">
