@@ -160,6 +160,15 @@
     padding-bottom: calc(var(--tab-bar-height) + env(safe-area-inset-bottom));
   }
 
+  /* Pushes the sticky header below the status bar / notch on
+     viewport-fit=cover, so header content doesn't ride under the status
+     bar; the frosted bar background fills the inset band above it. Must
+     live in @layer utilities (like .pb-tab-bar) so it out-ranks Tailwind's
+     p-* — in @layer base it loses to a sibling p-4. */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
   /* Opt-in for Card-as-Link surfaces. Not on the Card primitive itself. */
   .card-hover {
     @apply transition-transform active:scale-[0.99];

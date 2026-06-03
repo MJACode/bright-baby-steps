@@ -7,7 +7,7 @@ export default function CaregiverHome() {
   const { activeChild } = useChildren();
   if (!activeChild) return null;
   return (
-    <div className="p-4 space-y-4 max-w-md mx-auto pb-32">
+    <div className="px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-32 space-y-4 max-w-md mx-auto">
       <header>
         <p className="text-xs text-muted-foreground">Caring for</p>
         <h1 className="font-display text-3xl font-bold">{activeChild.name}</h1>
