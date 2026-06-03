@@ -8,10 +8,11 @@ import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useActiveSleep, useElapsedSeconds, type SleepType } from "@/hooks/useActiveSleep";
 import { getErrorMessage } from "@/lib/handleRlsError";
+import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 
 interface SleepTimerProps {
   childId: string | undefined;
-  onManualSubmit: (durationMinutes: number, sleepType: SleepType) => Promise<void> | void;
+  onManualSubmit: (durationMinutes: number, sleepType: SleepType, endedAt: Date) => Promise<void> | void;
   isSavingManual?: boolean;
 }
 
@@ -24,6 +25,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
   const [manualOpen, setManualOpen] = useState(false);
   const [manualHours, setManualHours] = useState("");
   const [manualMinutes, setManualMinutes] = useState("");
+  const [manualEndedAt, setManualEndedAt] = useState<Date>(new Date());
 
   const offsetChips: { label: string; value: number }[] = [
     { label: "Now", value: 0 },
@@ -81,10 +83,11 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
     const mins = Number(manualMinutes) || 0;
     const totalMins = hrs * 60 + mins;
     if (totalMins > 0) {
-      await onManualSubmit(totalMins, pendingSleepType);
+      await onManualSubmit(totalMins, pendingSleepType, manualEndedAt);
       setManualOpen(false);
       setManualHours("");
       setManualMinutes("");
+      setManualEndedAt(new Date());
     }
   };
 
@@ -271,7 +274,13 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
               <ChevronDown className={cn("w-3 h-3 transition-transform", manualOpen && "rotate-180")} />
             </button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
+          <CollapsibleContent className="pt-3 space-y-3">
+            <MobileDateTimePicker
+              value={manualEndedAt}
+              onChange={setManualEndedAt}
+              maxDate={new Date()}
+              label="When did it end?"
+            />
             <div className="flex items-end gap-2">
               <div className="flex-1 space-y-1">
                 <Label className="text-xs">Hours</Label>

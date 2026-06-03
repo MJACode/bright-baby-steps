@@ -9,6 +9,7 @@ export type SolidFeedDraft = {
 };
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
+import { getErrorMessage } from "@/lib/handleRlsError";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
@@ -441,6 +442,10 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   )}
                 </div>
               )}
+
+              <div className="space-y-1">
+                <MobileDateTimePicker value={loggedAt} onChange={setLoggedAt} maxDate={new Date()} label="When" />
+              </div>
 
               <div className="space-y-1">
                 <Label>Notes (optional)</Label>

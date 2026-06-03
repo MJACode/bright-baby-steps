@@ -384,9 +384,9 @@ export default function SleepPage() {
     setEditDialogOpen(true);
   };
 
-  const handleTimerComplete = useCallback(async (durationMinutes: number, sleepType: "nap" | "night") => {
+  const handleTimerComplete = useCallback(async (durationMinutes: number, sleepType: "nap" | "night", endedAt: Date) => {
     setSavingTimer(true);
-    const endTime = new Date();
+    const endTime = endedAt;
     const startTime = new Date(endTime.getTime() - durationMinutes * 60 * 1000);
     try {
       await addLog.mutateAsync({
