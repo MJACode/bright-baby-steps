@@ -14,8 +14,11 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
+import type { Tables } from "@/integrations/supabase/types";
 
 const DEFAULT_SUPPLEMENTS = ["Vitamin D", "Iron"];
+
+type Supplement = Tables<"supplements">;
 
 export default function SupplementTracker() {
   const { user } = useAuth();
@@ -52,16 +55,39 @@ export default function SupplementTracker() {
       });
       if (error) throw error;
     },
+    onMutate: async (name: string) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<Supplement[]>(queryKey);
+      const tempRow: Supplement = {
+        id: crypto.randomUUID(),
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+        name,
+        is_active: true,
+        started_at: startDate,
+        stopped_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        form: null,
+        frequency: null,
+        notes: null,
+      };
+      queryClient.setQueryData<Supplement[]>(queryKey, (old) => [...(old ?? []), tempRow]);
+      return { prev };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey });
       toast({ title: "Supplement added! 💊" });
     },
-    onError: (err) => {
+    onError: (err, _name, ctx) => {
+      queryClient.setQueryData(queryKey, ctx?.prev);
       toast({
         title: "Couldn't add supplement",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -77,16 +103,31 @@ export default function SupplementTracker() {
         .eq("id", id);
       if (error) throw error;
     },
+    onMutate: async ({ id, isActive }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<Supplement[]>(queryKey);
+      queryClient.setQueryData<Supplement[]>(queryKey, (old) =>
+        (old ?? []).map((s) =>
+          s.id === id
+            ? { ...s, is_active: isActive, stopped_at: isActive ? null : new Date().toISOString().split("T")[0] }
+            : s,
+        ),
+      );
+      return { prev };
+    },
     onSuccess: (_, { isActive }) => {
-      queryClient.invalidateQueries({ queryKey });
       toast({ title: isActive ? "Supplement restarted ✅" : "Supplement stopped" });
     },
-    onError: (err) => {
+    onError: (err, _vars, ctx) => {
+      queryClient.setQueryData(queryKey, ctx?.prev);
       toast({
         title: "Couldn't update supplement",
         description: err instanceof Error ? err.message : "Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey });
     },
   });
 
@@ -167,7 +208,13 @@ export default function SupplementTracker() {
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           Active ({activeSupps.length})
         </p>
-        {activeSupps.length > 0 ? activeSupps.map(supp => (
+        {isLoading ? (
+          <Card className="border border-dashed border-border">
+            <CardContent className="p-4 text-center">
+              <p className="text-sm text-muted-foreground">Loading supplements…</p>
+            </CardContent>
+          </Card>
+        ) : activeSupps.length > 0 ? activeSupps.map(supp => (
           <Card key={supp.id} className="border-0 bg-success/10">
             <CardContent className="p-4 flex items-center justify-between">
               <div>
