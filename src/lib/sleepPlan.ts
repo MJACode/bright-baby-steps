@@ -63,6 +63,11 @@ export interface SleepPlan {
   naps: NapInfo;
   wakeWindow: WakeWindowRange;
   bedtimeRange: BedtimeRange;
+  predictedBedtime: {
+    time: string | null;
+    basis: string;
+    hasSignal: boolean;
+  };
   bedtimeRoutine: {
     minComponents: number;
     minMinutes: number;
@@ -288,6 +293,16 @@ function diffInMinutes(later: string, earlier: string): number {
   return parseHHmm(later) - parseHHmm(earlier);
 }
 
+// Clamp an HH:mm value into a [min, max] HH:mm window. min/max are inclusive.
+function clampHHmm(value: string, min: string, max: string): string {
+  const v = parseHHmm(value);
+  const lo = parseHHmm(min);
+  const hi = parseHHmm(max);
+  if (v < lo) return formatHHmm(lo);
+  if (v > hi) return formatHHmm(hi);
+  return value;
+}
+
 export interface SavedSleepPlan {
   wake_time: string | null;
   bedtime_earliest: string | null;
@@ -392,6 +407,8 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
   // 0-3 mo skip the structured day in favor of a newborn-flexibility note.
   const sampleDay: SampleDayEntry[] = [];
   let newbornNote: string | null = null;
+  let predictedBedtimeTime: string | null = null;
+  let predictedBedtimeBasis = "";
 
   if (bucket === "0-3mo") {
     newbornNote =
@@ -425,6 +442,20 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
       sampleDay.push({ time: cursor, activity: "Wake from nap 3" });
     }
 
+    if (bedtimeOverride && bedtimeOverride.earliest && bedtimeOverride.earliest === bedtimeOverride.latest) {
+      predictedBedtimeTime = bedtimeOverride.earliest;
+      predictedBedtimeBasis = "fixed";
+    } else {
+      const predicted = addMinutes(cursor, wakeWindow.low);
+      // Clamp into the resolved bedtimeRange (an override window if one exists,
+      // otherwise the age-band default) rather than the raw default.
+      predictedBedtimeTime =
+        bedtimeRange.earliest && bedtimeRange.latest
+          ? clampHHmm(predicted, bedtimeRange.earliest, bedtimeRange.latest)
+          : predicted;
+      predictedBedtimeBasis = `a ${wakeAnchor} wake and ${naps.typical} nap${naps.typical === 1 ? "" : "s"}`;
+    }
+
     const routineStart = addMinutes(bedtimeAnchor, -30);
     sampleDay.push({ time: routineStart, activity: "Start bedtime routine" });
     sampleDay.push({ time: bedtimeAnchor, activity: "Lights out" });
@@ -437,6 +468,11 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
     naps,
     wakeWindow,
     bedtimeRange,
+    predictedBedtime: {
+      time: predictedBedtimeTime,
+      basis: predictedBedtimeBasis,
+      hasSignal: predictedBedtimeBasis === "fixed" ? true : hasEnoughLogs,
+    },
     bedtimeRoutine: BEDTIME_ROUTINE,
     safeSleep,
     sleepTrainingNote,

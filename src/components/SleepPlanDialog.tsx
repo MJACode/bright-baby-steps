@@ -7,11 +7,13 @@ import {
   Bed,
   Clock,
   ListChecks,
-  Lock,
+  Minus,
   MessageCircle,
-  Pencil,
+  Moon,
+  Plus,
   Save,
   ShieldCheck,
+  Sparkles,
   TrendingDown,
   Info,
 } from "lucide-react";
@@ -21,7 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { openChat } from "@/lib/chatOpener";
-import { buildSleepPlan, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
+import { buildSleepPlan, NAPS_BY_BRACKET, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
 import { useSaveSleepPlan, useSleepPlan, type FerberSchedule, type SleepPlanOverrides } from "@/hooks/useSleepPlan";
 import { SleepMethodPicker } from "@/components/SleepMethodPicker";
 import {
@@ -31,6 +33,26 @@ import {
   isMethodEligible,
   type SleepMethod,
 } from "@/lib/sleepMethods";
+
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m.toString().padStart(2, "0")} ${period}`;
+}
+
+function StateChip({ adjusted }: { adjusted: boolean }) {
+  return (
+    <span
+      className={cn(
+        "text-xs font-semibold px-2 py-0.5 rounded-md",
+        adjusted ? "bg-sleep/15 text-sleep" : "bg-muted text-muted-foreground",
+      )}
+    >
+      {adjusted ? "Adjusted" : "Auto"}
+    </span>
+  );
+}
 
 interface SleepPlanDialogProps {
   open: boolean;
@@ -80,7 +102,6 @@ export function SleepPlanDialog({
   const saveSleepPlan = useSaveSleepPlan();
 
   const [local, setLocal] = useState<LocalOverrideState>(EMPTY_OVERRIDES);
-  const [editingTile, setEditingTile] = useState<null | "wake" | "bedtime">(null);
   const hydratedRef = useRef(false);
 
   useEffect(() => {
@@ -220,9 +241,6 @@ export function SleepPlanDialog({
     onOpenChange(false);
   };
 
-  const wakeLocked = !!local.overrides.wake_time;
-  const bedtimeLocked = !!local.overrides.bedtime;
-
   const applyWake = (value: string | null) => {
     setLocal((prev) => ({
       ...prev,
@@ -238,6 +256,14 @@ export function SleepPlanDialog({
       bedtime_earliest: earliest,
       bedtime_latest: latest,
       overrides: { ...prev.overrides, bedtime: hasAny },
+    }));
+  };
+
+  const applyNaps = (n: number | null) => {
+    setLocal((prev) => ({
+      ...prev,
+      nap_count: n,
+      overrides: { ...prev.overrides, nap_count: n !== null },
     }));
   };
 
@@ -258,6 +284,19 @@ export function SleepPlanDialog({
 
   const selectedMethodMeta = getSleepMethodMeta(local.method);
 
+  const wakeAdjusted = !!local.overrides.wake_time;
+  const wakeDisplay = local.overrides.wake_time && local.wake_time ? local.wake_time : "07:00";
+
+  const napTypical = NAPS_BY_BRACKET[plan.bucket].typical;
+  const napAdjusted = !!local.overrides.nap_count;
+  const napValue = napAdjusted && typeof local.nap_count === "number" ? local.nap_count : napTypical;
+  const napMin = Math.max(0, napTypical - 1);
+  const napMax = napTypical + 1;
+
+  const bedtimeFixed = !!local.overrides.bedtime;
+
+  const pb = plan.predictedBedtime;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto p-0">
@@ -276,145 +315,310 @@ export function SleepPlanDialog({
         </div>
 
         <div className="px-6 pb-6 space-y-4">
-          {/* Method picker */}
-          <Card className="border-0 bg-card">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-sleep" />
-                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                  Sleep method
-                </p>
-              </div>
-              <p className="text-sm text-foreground/80 leading-snug">
-                <span className="font-semibold text-foreground">
-                  {selectedMethodMeta.name}
-                </span>
-                {" — "}
-                {selectedMethodMeta.oneLineDescription}
-              </p>
-              <SleepMethodPicker
-                value={local.method}
-                onChange={applyMethod}
-                ageDays={resolvedAgeDays}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Total sleep target */}
+          {/* Tonight at a glance */}
           <Card className="border-0 bg-sleep-bg">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Bed className="w-4 h-4 text-sleep" />
+                <Moon className="w-4 h-4 text-sleep" />
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                  Total sleep target
+                  Tonight at a glance
                 </p>
               </div>
-              <p className="font-display text-2xl font-bold text-foreground">
-                {plan.totalSleep.low}-{plan.totalSleep.high} hours per 24h
-              </p>
-              {showObserved && observedInRange && (
-                <p className="text-sm text-foreground/80">
-                  You're at {plan.observed.totalHours}h — right on target.
+
+              {pb.time === null ? (
+                <p className="text-sm text-foreground/85 leading-relaxed">
+                  {plan.newbornNote}
+                </p>
+              ) : pb.basis === "fixed" ? (
+                <>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-display text-2xl font-bold text-foreground">
+                      Bedtime {to12h(pb.time)} · fixed
+                    </p>
+                    <StateChip adjusted />
+                  </div>
+                  <p className="text-sm text-foreground/80">
+                    You've set this one yourself.
+                  </p>
+                </>
+              ) : pb.hasSignal ? (
+                <>
+                  <p className="font-display text-2xl font-bold text-foreground">
+                    Likely bedtime ~{to12h(pb.time)}
+                  </p>
+                  <p className="text-sm text-foreground/80">
+                    Based on {pb.basis}. This shifts as the day goes.
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm text-foreground/85 leading-relaxed">
+                  We'll predict {childName}'s bedtime once we've logged a few
+                  nights — for now, aim for the {plan.bedtimeRange.earliest}–
+                  {plan.bedtimeRange.latest} window.
                 </p>
               )}
-              {showObserved && !observedInRange && plan.observed.totalHours !== null && plan.observed.totalHours < plan.totalSleep.low && (
-                <p className="text-sm text-foreground/80">
-                  You're at {plan.observed.totalHours}h — see the tip below.
+
+              <details className="group">
+                <summary className="cursor-pointer touch-target inline-flex items-center text-sm font-semibold text-sleep">
+                  Why?
+                </summary>
+                <p className="text-sm text-foreground/80 leading-relaxed mt-1">
+                  We take your wake time, add {napValue} nap
+                  {napValue === 1 ? "" : "s"} and a final wake window, and land
+                  bedtime inside the typical {plan.bucketLabel} range.
                 </p>
-              )}
-              <p className="text-xs text-muted-foreground">{plan.totalSleep.source}</p>
+              </details>
             </CardContent>
           </Card>
 
-          {/* Wake windows */}
+          {/* How we'll help */}
           <Card className="border-0 bg-card">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-sleep" />
+                <Sparkles className="w-4 h-4 text-sleep" />
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                  Wake windows
+                  How we'll help
                 </p>
               </div>
-              <p className="font-display text-2xl font-bold text-foreground">
-                {plan.wakeWindow.display}
-              </p>
-              <p className="text-sm text-foreground/70">between sleeps</p>
-              <p className="text-xs text-muted-foreground">{plan.wakeWindow.footnote}</p>
+              <ul className="space-y-2 text-sm text-foreground/85">
+                <li className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
+                  <span>Tell us when your baby woke — we'll map the day's naps and bedtime.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
+                  <span>About 15 min before each nap, we'll nudge you to start winding down.</span>
+                </li>
+              </ul>
+              <details className="group">
+                <summary className="cursor-pointer touch-target inline-flex items-center text-sm font-semibold text-sleep">
+                  See more
+                </summary>
+                <ul className="space-y-2 text-sm text-foreground/85 mt-2">
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
+                    <span>If a wake window runs long, we'll give a gentle heads-up — no clock-watching.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
+                    <span>We learn your baby's real patterns from your logs and adjust as they grow.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
+                    <span>Each week we'll show what's trending and celebrate what's working.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
+                    <span>If bedtime drifts later, we'll suggest small 15-minute shifts, at your pace.</span>
+                  </li>
+                </ul>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Reminders are timed around your baby's day.
+                </p>
+              </details>
             </CardContent>
           </Card>
 
-          {/* Anchor times */}
+          {/* Your plan */}
           <Card className="border-0 bg-card">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-sleep" />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                    Today's anchor times
-                  </p>
-                </div>
-                <div className="flex items-center -mt-2 -mr-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="touch-target text-muted-foreground hover:text-sleep"
-                    onClick={() => setEditingTile("wake")}
-                    aria-label="Edit wake time"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-sleep" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+                  Your plan
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-muted-foreground">Wake</p>
-                  <div className="flex items-center gap-2">
-                    <p className="font-display text-lg font-bold">
-                      {plan.observed.wakeTime ?? "07:00 (your call)"}
-                    </p>
-                    {wakeLocked && <Lock className="w-3.5 h-3.5 text-sleep" />}
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-muted-foreground">Bedtime</p>
-                    <Button
+
+              {/* Wake */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="pt-2">
+                  <p className="text-sm font-semibold text-foreground">Wake</p>
+                  {wakeAdjusted && (
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="touch-target h-7 w-7 -mt-1 text-muted-foreground hover:text-sleep"
-                      onClick={() => setEditingTile("bedtime")}
-                      aria-label="Edit bedtime"
+                      onClick={() => applyWake(null)}
+                      className="text-xs font-semibold text-sleep underline mt-1"
                     >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-display text-lg font-bold">
-                      {plan.bedtimeRange.label
-                        ? "Flexible"
-                        : plan.observed.bedtime ?? plan.bedtimeRange.earliest ?? "—"}
-                    </p>
-                    {bedtimeLocked && <Lock className="w-3.5 h-3.5 text-sleep" />}
-                  </div>
-                  {plan.bedtimeRange.earliest && plan.bedtimeRange.latest && (
-                    <p className="text-xs text-muted-foreground">
-                      Target {plan.bedtimeRange.earliest}-{plan.bedtimeRange.latest}
-                    </p>
+                      Reset to auto
+                    </button>
                   )}
                 </div>
+                <div className="flex items-center gap-2">
+                  <StateChip adjusted={wakeAdjusted} />
+                  <Input
+                    type="time"
+                    value={wakeDisplay}
+                    onChange={(e) => applyWake(e.target.value || null)}
+                    className="touch-target w-32 text-base md:text-sm"
+                    aria-label="Wake time"
+                  />
+                </div>
               </div>
-              {plan.bedtimeRange.label && (
-                <p className="text-xs text-muted-foreground">{plan.bedtimeRange.label}</p>
-              )}
+
+              {/* Naps a day */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="pt-2">
+                  <p className="text-sm font-semibold text-foreground">Naps a day</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {napAdjusted
+                      ? `You're planning ${napValue}.`
+                      : `Around ${napTypical} is typical right now.`}
+                  </p>
+                  {napAdjusted && (
+                    <button
+                      type="button"
+                      onClick={() => applyNaps(null)}
+                      className="text-xs font-semibold text-sleep underline mt-1"
+                    >
+                      Reset to auto
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <StateChip adjusted={napAdjusted} />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="touch-target"
+                      onClick={() => applyNaps(Math.max(napMin, napValue - 1))}
+                      disabled={napValue <= napMin}
+                      aria-label="One fewer nap"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <span className="font-display text-lg font-bold tabular-nums w-6 text-center">
+                      {napValue}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="touch-target"
+                      onClick={() => applyNaps(Math.min(napMax, napValue + 1))}
+                      disabled={napValue >= napMax}
+                      aria-label="One more nap"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Method */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-sleep" />
+                  <p className="text-sm font-semibold text-foreground">Method</p>
+                </div>
+                <p className="text-sm text-foreground/80 leading-snug">
+                  <span className="font-semibold text-foreground">
+                    {selectedMethodMeta.name}
+                  </span>
+                  {" — "}
+                  {selectedMethodMeta.oneLineDescription}
+                </p>
+                <SleepMethodPicker
+                  value={local.method}
+                  onChange={applyMethod}
+                  ageDays={resolvedAgeDays}
+                />
+              </div>
+
+              {/* Fixed bedtime */}
+              <details className="group">
+                <summary className="cursor-pointer touch-target inline-flex items-center text-sm font-semibold text-foreground">
+                  We have a fixed bedtime
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <Input
+                    type="time"
+                    value={local.bedtime_earliest ?? "19:00"}
+                    onChange={(e) =>
+                      applyBedtime(e.target.value || null, e.target.value || null)
+                    }
+                    className="touch-target w-32 text-base md:text-sm"
+                    aria-label="Fixed bedtime"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      onClick={() =>
+                        applyBedtime(
+                          local.bedtime_earliest ?? "19:00",
+                          local.bedtime_earliest ?? "19:00",
+                        )
+                      }
+                      className="touch-target bg-sleep hover:bg-sleep/90 text-white"
+                    >
+                      Save
+                    </Button>
+                    {bedtimeFixed && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => applyBedtime(null, null)}
+                        className="touch-target"
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </details>
+            </CardContent>
+          </Card>
+
+          {/* Targets */}
+          <Card className="border-0 bg-card">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                    Total sleep
+                  </p>
+                  <p className="font-display text-xl font-bold text-foreground">
+                    {plan.totalSleep.low}-{plan.totalSleep.high}h/24h
+                  </p>
+                  {showObserved && observedInRange && (
+                    <p className="text-xs text-foreground/70">
+                      You're at {plan.observed.totalHours}h — on target.
+                    </p>
+                  )}
+                  <details className="group">
+                    <summary className="cursor-pointer touch-target inline-flex items-center text-xs font-semibold text-sleep">
+                      Why?
+                    </summary>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {plan.totalSleep.source}
+                    </p>
+                  </details>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
+                    Wake windows
+                  </p>
+                  <p className="font-display text-xl font-bold text-foreground">
+                    {plan.wakeWindow.display}
+                  </p>
+                  <p className="text-xs text-foreground/70">between sleeps</p>
+                  <details className="group">
+                    <summary className="cursor-pointer touch-target inline-flex items-center text-xs font-semibold text-sleep">
+                      Why?
+                    </summary>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {plan.wakeWindow.footnote}
+                    </p>
+                  </details>
+                </div>
+              </div>
               {plan.adjustmentTip && (
-                <div className="flex items-start gap-2 rounded-lg bg-sleep/10 p-3 mt-1">
+                <div className="flex items-start gap-2 rounded-lg bg-sleep/10 p-3 mt-3">
                   <TrendingDown className="w-4 h-4 text-sleep shrink-0 mt-0.5" />
                   <p className="text-sm text-foreground/85 leading-relaxed">{plan.adjustmentTip}</p>
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">{plan.bedtimeRange.source}</p>
             </CardContent>
           </Card>
 
@@ -541,6 +745,15 @@ export function SleepPlanDialog({
             </ul>
           </details>
 
+          {/* Not-medical-advice line — personalized, computed guidance warrants
+              one unobtrusive disclaimer alongside the ToS umbrella. */}
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Grace Flare's sleep guidance is general wellness information, not
+            medical advice. Every baby is different — check with your
+            pediatrician about your child's sleep, and always follow safe-sleep
+            guidance.
+          </p>
+
           {/* Footer CTAs */}
           <div className={cn("flex flex-col gap-2 pt-2")}>
             <Button
@@ -571,177 +784,7 @@ export function SleepPlanDialog({
             </Button>
           </div>
         </div>
-
-        <WakeEditDialog
-          open={editingTile === "wake"}
-          onOpenChange={(o) => setEditingTile(o ? "wake" : null)}
-          initialValue={local.wake_time}
-          onApply={(value) => {
-            applyWake(value);
-            setEditingTile(null);
-          }}
-        />
-        <BedtimeEditDialog
-          open={editingTile === "bedtime"}
-          onOpenChange={(o) => setEditingTile(o ? "bedtime" : null)}
-          initialEarliest={local.bedtime_earliest}
-          initialLatest={local.bedtime_latest}
-          onApply={(earliest, latest) => {
-            applyBedtime(earliest, latest);
-            setEditingTile(null);
-          }}
-        />
       </DialogContent>
     </Dialog>
   );
 }
-
-interface WakeEditDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialValue: string | null;
-  onApply: (value: string | null) => void;
-}
-
-function WakeEditDialog({ open, onOpenChange, initialValue, onApply }: WakeEditDialogProps) {
-  const [value, setValue] = useState(initialValue ?? "07:00");
-
-  useEffect(() => {
-    if (open) setValue(initialValue ?? "07:00");
-  }, [open, initialValue]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogTitle className="font-display text-lg font-bold">Wake time</DialogTitle>
-        <div className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-foreground/80" htmlFor="wake-time-input">
-              Anchor wake time
-            </label>
-            <Input
-              id="wake-time-input"
-              type="time"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="touch-target"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              onClick={() => onApply(value || null)}
-              className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white"
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onApply(null)}
-              className="w-full touch-target"
-            >
-              Use age-based default
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              className="w-full touch-target text-muted-foreground"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface BedtimeEditDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialEarliest: string | null;
-  initialLatest: string | null;
-  onApply: (earliest: string | null, latest: string | null) => void;
-}
-
-function BedtimeEditDialog({
-  open,
-  onOpenChange,
-  initialEarliest,
-  initialLatest,
-  onApply,
-}: BedtimeEditDialogProps) {
-  const [earliest, setEarliest] = useState(initialEarliest ?? "19:00");
-  const [latest, setLatest] = useState(initialLatest ?? "20:00");
-
-  useEffect(() => {
-    if (open) {
-      setEarliest(initialEarliest ?? "19:00");
-      setLatest(initialLatest ?? "20:00");
-    }
-  }, [open, initialEarliest, initialLatest]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogTitle className="font-display text-lg font-bold">Bedtime window</DialogTitle>
-        <div className="space-y-4 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-foreground/80" htmlFor="bedtime-earliest">
-                Earliest
-              </label>
-              <Input
-                id="bedtime-earliest"
-                type="time"
-                value={earliest}
-                onChange={(e) => setEarliest(e.target.value)}
-                className="touch-target"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-semibold text-foreground/80" htmlFor="bedtime-latest">
-                Latest
-              </label>
-              <Input
-                id="bedtime-latest"
-                type="time"
-                value={latest}
-                onChange={(e) => setLatest(e.target.value)}
-                className="touch-target"
-              />
-            </div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              onClick={() => onApply(earliest || null, latest || null)}
-              className="w-full touch-target bg-sleep hover:bg-sleep/90 text-white"
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onApply(null, null)}
-              className="w-full touch-target"
-            >
-              Use age-based default
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              className="w-full touch-target text-muted-foreground"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
