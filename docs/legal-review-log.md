@@ -897,3 +897,42 @@ controller liability after data lands in the parent's Claude; "same DPA /
 separate relationship" enforceability).
 
 ---
+
+## 2026-06-04 — SleepPlanDialog predicted-bedtime + "How we'll help" copy
+
+**Scope:** Redesigned the sleep-plan dialog so bedtime is shown as a computed
+*prediction* (derived from wake time + nap schedule + age-band wake windows)
+rather than a parent-typed value, and added a "How we'll help" section
+describing coaching reminders/insights. The new personalized, computed,
+health-adjacent output prompted this review (in-house `legal` agent pass).
+
+**Findings / resolutions:**
+- Predicted bedtime is framed as a non-prescriptive forecast ("Likely bedtime
+  ~7:15 PM", "This shifts as the day goes"), never an instruction — acceptable
+  [LOW].
+- "healthy range" → "typical range" softened to avoid a normative clinical
+  claim [LOW, fixed].
+- Coaching bullets ("~15 min before each nap we'll nudge you", "wake window
+  runs long → gentle heads-up", weekly trends, 15-min bedtime-drift shifts)
+  are FTC §5 product-behavior promises. **Verified the jobs actually fire** in
+  `supabase/functions/check-notifications/index.ts` (`sleep_plan_winddown`,
+  `sleep_window_15min`, `sleep_window_exceeded`, off-plan/`bedtime_drift`). No
+  "never overnight"/quiet-hours promise present (that feature doesn't exist) —
+  confirmed absent [LOW].
+- No outcome guarantees ("will sleep through the night" etc.) present.
+- Safe-sleep ABCs unchanged: still under-12mo gated, AAP (Moon et al. 2022)
+  wording verbatim with inline source [LOW].
+- **Decision:** added one unobtrusive in-product "general wellness information,
+  not medical advice — check with your pediatrician" line in the dialog, since
+  the output is now personalized + computed. Narrow, conscious augmentation of
+  the ToS-umbrella posture for this surface; posture otherwise unchanged
+  (US-only v1, no outside counsel).
+
+**Code refs:** branch `claude/prevent-page-shift-K3WnY`; files
+`src/components/SleepPlanDialog.tsx`, `src/lib/sleepPlan.ts`.
+
+**Outstanding (outside-counsel):** whether a computed, child-specific predicted
+bedtime requires a stronger in-product "not medical advice" disclaimer than the
+ToS umbrella for US consumer-wellness v1.
+
+---
