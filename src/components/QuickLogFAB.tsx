@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -233,7 +234,7 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!activeChild || !user) throw new Error("No active child");
-      const payload: Record<string, unknown> = {
+      const payload: TablesInsert<"feeding_logs"> = {
         child_id: activeChild.id,
         parent_id: user.id,
         feeding_type: feedingType,

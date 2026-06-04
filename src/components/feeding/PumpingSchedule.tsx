@@ -90,7 +90,7 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
     queryKey: ["pumping-schedule", activeChild?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("pumping_schedules" as any)
+        .from("pumping_schedules")
         .select("*")
         .eq("child_id", activeChild!.id)
         .eq("parent_id", user!.id)
@@ -170,13 +170,13 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
       };
       if (schedule?.id) {
         const { error } = await supabase
-          .from("pumping_schedules" as any)
+          .from("pumping_schedules")
           .update(payload)
           .eq("id", schedule.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("pumping_schedules" as any)
+          .from("pumping_schedules")
           .insert(payload);
         if (error) throw error;
       }

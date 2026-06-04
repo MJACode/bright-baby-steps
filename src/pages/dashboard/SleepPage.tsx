@@ -28,6 +28,7 @@ import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
+import { getErrorMessage } from "@/lib/handleRlsError";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import type { FerberSchedule } from "@/hooks/useSleepPlan";
