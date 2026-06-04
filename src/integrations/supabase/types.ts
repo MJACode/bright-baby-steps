@@ -2171,6 +2171,63 @@ export type Database = {
         }
         Relationships: []
       }
+      pumping_schedules: {
+        Row: {
+          child_id: string
+          created_at: string
+          day_end_time: string
+          day_start_time: string
+          frequency_hours: number
+          id: string
+          is_active: boolean
+          notes: string | null
+          parent_id: string
+          pump_notifications_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          day_end_time?: string
+          day_start_time?: string
+          frequency_hours?: number
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          parent_id: string
+          pump_notifications_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          day_end_time?: string
+          day_start_time?: string
+          frequency_hours?: number
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          parent_id?: string
+          pump_notifications_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pumping_schedules_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pumping_schedules_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rights_requests: {
         Row: {
           acknowledged_at: string | null
@@ -2221,6 +2278,65 @@ export type Database = {
           verified_at?: string | null
         }
         Relationships: []
+      }
+      scheduled_visits: {
+        Row: {
+          child_id: string
+          created_at: string
+          doctor_name: string | null
+          email_reminders_enabled: boolean
+          id: string
+          location: string | null
+          notes: string | null
+          parent_id: string
+          reminder_1d_sent_at: string | null
+          reminder_7d_sent_at: string | null
+          scheduled_at: string
+          status: string
+          updated_at: string
+          visit_type: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          doctor_name?: string | null
+          email_reminders_enabled?: boolean
+          id?: string
+          location?: string | null
+          notes?: string | null
+          parent_id: string
+          reminder_1d_sent_at?: string | null
+          reminder_7d_sent_at?: string | null
+          scheduled_at: string
+          status?: string
+          updated_at?: string
+          visit_type: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          doctor_name?: string | null
+          email_reminders_enabled?: boolean
+          id?: string
+          location?: string | null
+          notes?: string | null
+          parent_id?: string
+          reminder_1d_sent_at?: string | null
+          reminder_7d_sent_at?: string | null
+          scheduled_at?: string
+          status?: string
+          updated_at?: string
+          visit_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_visits_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sleep_logs: {
         Row: {
