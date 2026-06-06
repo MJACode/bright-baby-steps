@@ -6,7 +6,14 @@ const config: CapacitorConfig = {
   appName: 'Grace Flare',
   webDir: 'dist',
   ios: {
-    contentInset: 'automatic', // respects safe area / notch automatically
+    // 'never' lets the WebView render edge-to-edge under the notch / home
+    // indicator so the page's own CSS handles the safe area via
+    // env(safe-area-inset-*) (see .safe-area-top / .safe-area-bottom in
+    // index.css + viewport-fit=cover). 'automatic' made WKWebView ALSO inset
+    // the content, double-counting the insets: the page got pushed up,
+    // exposing the WebView's black backing below the bottom tab bar, and the
+    // tab labels were clipped against the home indicator.
+    contentInset: 'never',
     limitsNavigationsToAppBoundDomains: true,
   },
   plugins: {
