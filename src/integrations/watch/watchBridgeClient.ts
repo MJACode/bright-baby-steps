@@ -1,4 +1,8 @@
-// src/integrations/watch/watchBridge.ts
+// src/integrations/watch/watchBridgeClient.ts
+//
+// (Named *Client to avoid a case-insensitive filesystem collision with the
+//  WatchBridge.tsx component — macOS/HFS+ treats watchBridge.ts and
+//  WatchBridge.tsx as the same path, which broke the Codemagic web build.)
 //
 // Thin bridge between the web app's Supabase session and the native iOS
 // WatchConnectivity layer (`ios-watch-glue/WatchSessionBridgePlugin.swift`).
