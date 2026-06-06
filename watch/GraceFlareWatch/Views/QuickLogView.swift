@@ -36,7 +36,9 @@ struct QuickLogView: View {
                 Text(status)
                     .font(.caption2)
                     .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(.thinMaterial, in: Capsule())
+                    // Plain translucent pill: Material (.thinMaterial) is
+                    // watchOS 10+, but this target deploys to watchOS 9.0.
+                    .background(Color.black.opacity(0.6), in: Capsule())
                     .padding(.bottom, 4)
             }
         }
