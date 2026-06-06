@@ -135,6 +135,25 @@
     color-scheme: light;
   }
 
+  /* iOS rubber-band fix: lock html/body to the viewport so the document
+     itself never scrolls. Document-level scrolling inside a WKWebView lets
+     iOS rubber-band the entire WebView scroll view, exposing its black
+     backing through the top/bottom. With no document scroll, #root becomes
+     the single scroll container and any bounce is contained inside it. */
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  #root {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Nunito', system-ui, -apple-system, sans-serif;
