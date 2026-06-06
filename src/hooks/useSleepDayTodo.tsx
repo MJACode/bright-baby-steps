@@ -37,20 +37,15 @@ export function useSleepDayTodo(childId: string | undefined) {
   const setWakeAnchor = useMutation({
     mutationFn: async (when: Date) => {
       if (!childId || !user) throw new Error("Sign in to set the wake time.");
-      // Omit completed_items: on insert it takes its '{}' default, and on
-      // conflict only wake_anchor is in the SET clause — so a wake-time edit
-      // can't clobber a concurrent check-off.
-      const { error } = await supabase
-        .from("sleep_day_todos")
-        .upsert(
-          {
-            child_id: childId,
-            parent_id: user.id,
-            plan_date: planDate,
-            wake_anchor: when.toISOString(),
-          },
-          { onConflict: "child_id,plan_date" },
-        );
+      // Server-side, owner-keyed upsert: the RPC stamps parent_id with the
+      // child's owner (children.parent_id), so the shared row stays visible to
+      // owner + partners, and it only touches wake_anchor — never clobbering a
+      // concurrent check-off in completed_items.
+      const { error } = await supabase.rpc("set_sleep_todo_wake_anchor", {
+        p_child_id: childId,
+        p_plan_date: planDate,
+        p_wake_anchor: when.toISOString(),
+      });
       if (error) throw error;
     },
     onSuccess: invalidate,
