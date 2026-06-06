@@ -35,7 +35,7 @@ export function ActiveSessionBanner() {
   if (!showSleep && !showFeed) return null;
 
   return (
-    <div className="sticky top-14 z-30">
+    <div className="shrink-0">
       {showSleep && <SleepStrip activeSleep={activeSleep!} elapsed={sleepElapsed} />}
       {showFeed && <FeedStrip activeFeed={activeFeed!} />}
     </div>
