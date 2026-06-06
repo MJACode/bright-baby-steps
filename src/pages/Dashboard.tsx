@@ -4,23 +4,15 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Flame, UtensilsCrossed, Moon, Droplets, Star, Sparkles } from "lucide-react";
+import { Flame, Sparkles } from "lucide-react";
 import { openChat } from "@/lib/chatOpener";
-import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
+import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
-import { cn } from "@/lib/utils";
-
-const QUICK_NAV = [
-  { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", tile: "bg-feeding-bg", chip: "bg-feeding/15 text-feeding", label_color: "text-feeding" },
-  { label: "Sleep", icon: Moon, path: "/dashboard/sleep", tile: "bg-sleep-bg", chip: "bg-sleep/15 text-sleep", label_color: "text-sleep" },
-  { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", tile: "bg-diapers-bg", chip: "bg-diapers/15 text-diapers", label_color: "text-diapers" },
-  { label: "Milestone", icon: Star, path: "/dashboard/milestones", tile: "bg-milestones-bg", chip: "bg-milestones/15 text-milestones", label_color: "text-milestones" },
-] as const;
 
 
 export default function Dashboard() {
@@ -87,24 +79,9 @@ export default function Dashboard() {
       {/* Today's Briefing */}
       {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
-      {/* Quick nav grid — primary log entry points */}
-      <div className="grid grid-cols-4 gap-3 p-3.5">
-        {QUICK_NAV.map((item) => (
-          <Link
-            key={item.label}
-            to={item.path}
-            className={cn(
-              "flex flex-col items-center justify-center gap-1.5 p-3 rounded-2xl border-0 active:scale-[0.97] transition-transform touch-target",
-              item.tile,
-            )}
-          >
-            <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", item.chip)}>
-              <item.icon className="w-6 h-6" strokeWidth={2} />
-            </div>
-            <span className={cn("text-xs font-semibold", item.label_color)}>{item.label}</span>
-          </Link>
-        ))}
-      </div>
+      {/* Quick nav grid — primary log entry points, each with a live timer or
+          "last logged" hint */}
+      <QuickNavGrid childId={activeChild?.id} />
 
       {/* Quick Log with AI — opens the layout-level chat dialog via chatOpener */}
       <button
