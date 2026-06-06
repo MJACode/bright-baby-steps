@@ -15,7 +15,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import { pushWatchContext } from "@/integrations/watch/watchBridge";
+import { pushWatchContext } from "@/integrations/watch/watchBridgeClient";
 
 export function WatchBridge() {
   const { session } = useAuth();
