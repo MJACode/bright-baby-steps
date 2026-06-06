@@ -399,17 +399,16 @@ workflows:
           # by inject_watch_target.rb (from the UUIDs the signing step exported).
           # Here we only pass the shared DEVELOPMENT_TEAM + Manual style; each
           # target's specifier comes from the project.
-          XCARGS="DEVELOPMENT_TEAM=$TEAM_ID CODE_SIGN_STYLE=Manual"
-          echo "Archive xcargs: $XCARGS"
-
           # --- Export options (Xcode 16) -------------------------------------
           # Xcode 16's `-exportArchive` renamed the App Store export method from
           # `app-store` to `app-store-connect` and hard-rejects the old value
           # ("exportOptionsPlist error for key \"method\" ... but found
-          # app-store"). codemagic-cli-tools' auto-generated plist still emits
-          # `app-store`, so we write our own: new method + manual signing + a
-          # per-target provisioningProfiles map (UUIDs exported to $CM_ENV by the
-          # signing step). Fall back to the locally-decoded values if unset.
+          # app-store"). codemagic-cli-tools' `build-ipa` GENERATES its own
+          # export plist (still with `app-store`) and ignores a user-supplied
+          # one, so we drive xcodebuild directly below with this plist instead.
+          # method + manual signing + a per-target provisioningProfiles map
+          # (UUIDs exported to $CM_ENV by the signing step); fall back to the
+          # locally-decoded values if unset.
           EXPORT_TEAM="${DEVELOPMENT_TEAM:-$TEAM_ID}"
           EXPORT_IOS_UUID="${IOS_PROFILE_UUID:-$PROFILE_UUID}"
           EXPORT_OPTS=/tmp/export_options.plist
@@ -432,32 +431,40 @@ workflows:
           PLIST
           echo "--- export_options.plist ---"; cat "$EXPORT_OPTS"
 
-          # NOTE on the `=` syntax for --archive-flags: the value
-          # `-allowProvisioningUpdates` starts with `-`, which Python's
-          # argparse refuses to consume as a positional value (thinks it's
-          # another flag). Using `--archive-flags=...` joins them into a
-          # single token so argparse parses it correctly.
+          # Drive xcodebuild directly (not `xcode-project build-ipa`) so the
+          # export uses OUR plist. The archive args mirror exactly what the
+          # build-ipa archive ran successfully (DEVELOPMENT_TEAM + Manual +
+          # Apple Distribution identity); per-target provisioning specifiers
+          # come from the .pbxproj (written by inject_watch_target.rb).
           if [ -d "$XCODE_WORKSPACE" ]; then
-            echo "Building from workspace: $XCODE_WORKSPACE"
-            xcode-project build-ipa \
-              --workspace "$XCODE_WORKSPACE" \
-              --scheme "$XCODE_SCHEME" \
-              --archive-flags=-allowProvisioningUpdates \
-              --archive-xcargs "$XCARGS" \
-              --export-options-plist "$EXPORT_OPTS"
+            PROJ_FLAGS=(-workspace "$XCODE_WORKSPACE")
+            echo "Archiving from workspace: $XCODE_WORKSPACE"
           elif [ -d "ios/App/App.xcodeproj" ]; then
-            echo "No workspace found; building from xcodeproj (SPM layout)"
-            xcode-project build-ipa \
-              --project "ios/App/App.xcodeproj" \
-              --scheme "$XCODE_SCHEME" \
-              --archive-flags=-allowProvisioningUpdates \
-              --archive-xcargs "$XCARGS" \
-              --export-options-plist "$EXPORT_OPTS"
+            PROJ_FLAGS=(-project "ios/App/App.xcodeproj")
+            echo "Archiving from xcodeproj (SPM layout)"
           else
             echo "ERROR: neither $XCODE_WORKSPACE nor ios/App/App.xcodeproj exists"
             ls -la ios/ ios/App/ 2>/dev/null
             exit 1
           fi
+
+          ARCHIVE_PATH="build/ios/xcarchive/App.xcarchive"
+          mkdir -p "$(dirname "$ARCHIVE_PATH")" build/ios/ipa
+
+          xcodebuild "${PROJ_FLAGS[@]}" \
+            -scheme "$XCODE_SCHEME" \
+            -archivePath "$ARCHIVE_PATH" \
+            -allowProvisioningUpdates \
+            DEVELOPMENT_TEAM="$EXPORT_TEAM" \
+            CODE_SIGN_STYLE=Manual \
+            "CODE_SIGN_IDENTITY=Apple Distribution" \
+            archive
+
+          xcodebuild -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist "$EXPORT_OPTS" \
+            -allowProvisioningUpdates
 
     artifacts:
       - build/ios/ipa/*.ipa
