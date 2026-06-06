@@ -7,14 +7,12 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type SleepDayTodoRow = Database["public"]["Tables"]["sleep_day_todos"]["Row"];
 
-function todayKey(): string {
-  return format(new Date(), "yyyy-MM-dd");
-}
-
 export function useSleepDayTodo(childId: string | undefined) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const planDate = todayKey();
+  // Recompute on every render (NOT memoized) so the 60s tick in useSleepTodo
+  // rolls this over at midnight without remounting the hook.
+  const planDate = format(new Date(), "yyyy-MM-dd");
 
   const query = useQuery<SleepDayTodoRow | null>({
     queryKey: ["sleep-day-todo", childId, planDate],
@@ -39,6 +37,9 @@ export function useSleepDayTodo(childId: string | undefined) {
   const setWakeAnchor = useMutation({
     mutationFn: async (when: Date) => {
       if (!childId || !user) throw new Error("Sign in to set the wake time.");
+      // Omit completed_items: on insert it takes its '{}' default, and on
+      // conflict only wake_anchor is in the SET clause — so a wake-time edit
+      // can't clobber a concurrent check-off.
       const { error } = await supabase
         .from("sleep_day_todos")
         .upsert(
@@ -47,7 +48,6 @@ export function useSleepDayTodo(childId: string | undefined) {
             parent_id: user.id,
             plan_date: planDate,
             wake_anchor: when.toISOString(),
-            completed_items: query.data?.completed_items ?? [],
           },
           { onConflict: "child_id,plan_date" },
         );
@@ -59,22 +59,13 @@ export function useSleepDayTodo(childId: string | undefined) {
   const toggleItem = useMutation({
     mutationFn: async (id: string) => {
       if (!childId || !user) throw new Error("Sign in to update the plan.");
-      const current = query.data?.completed_items ?? [];
-      const next = current.includes(id)
-        ? current.filter((c) => c !== id)
-        : [...current, id];
-      const { error } = await supabase
-        .from("sleep_day_todos")
-        .upsert(
-          {
-            child_id: childId,
-            parent_id: user.id,
-            plan_date: planDate,
-            wake_anchor: query.data?.wake_anchor ?? null,
-            completed_items: next,
-          },
-          { onConflict: "child_id,plan_date" },
-        );
+      // Atomic server-side toggle of one id — avoids the read-modify-write
+      // lost-update race when two devices check off items concurrently.
+      const { error } = await supabase.rpc("toggle_sleep_todo_item", {
+        p_child_id: childId,
+        p_plan_date: planDate,
+        p_item: id,
+      });
       if (error) throw error;
     },
     onSuccess: invalidate,

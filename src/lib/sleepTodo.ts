@@ -26,6 +26,7 @@ export interface SleepTodoLog {
   started_at: string;
   ended_at: string | null;
   sleep_type: string;
+  source?: string;
 }
 
 export interface SleepTodoPlanLike {
@@ -106,9 +107,11 @@ export function buildSleepTodo(opts: {
     .sort(
       (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime(),
     );
-  // An in-progress nap (timer started, not yet ended).
+  // An in-progress nap (timer started, not yet ended). Only timer sleeps count
+  // as active — voice/manual logs can have a NULL ended_at without being live,
+  // which would otherwise show a phantom "in progress" nap.
   const activeNap = todayLogs.find(
-    (l) => l.sleep_type === "nap" && !l.ended_at,
+    (l) => l.sleep_type === "nap" && !l.ended_at && l.source === "timer",
   );
 
   let napsMatched = 0;
@@ -223,10 +226,11 @@ export function buildSleepTodo(opts: {
     });
   }
 
-  // Countdown lives on the first not-yet-done actionable item.
+  // Countdown lives on the genuinely-next item. An "active" (in-progress) item
+  // is excluded so the countdown/highlight lands on the next "now"/"upcoming"
+  // item rather than the nap that's already underway.
   const firstActionable = items.find(
-    (it) =>
-      it.status === "now" || it.status === "upcoming" || it.status === "active",
+    (it) => it.status === "now" || it.status === "upcoming",
   );
   if (firstActionable && firstActionable.suggestedAt) {
     firstActionable.minutesUntil = differenceInMinutes(

@@ -3117,6 +3117,25 @@ export type Database = {
         Returns: undefined
       }
       revoke_my_mcp_connection: { Args: { _id: string }; Returns: boolean }
+      toggle_sleep_todo_item: {
+        Args: { p_child_id: string; p_item: string; p_plan_date: string }
+        Returns: {
+          child_id: string
+          completed_items: string[]
+          created_at: string
+          id: string
+          parent_id: string
+          plan_date: string
+          updated_at: string
+          wake_anchor: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sleep_day_todos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       users_with_no_logs_since: {
         Args: { since: string }
         Returns: {

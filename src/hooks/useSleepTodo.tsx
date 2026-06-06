@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { startOfDay, endOfDay, format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { buildSleepTodo, type SleepTodoLog } from "@/lib/sleepTodo";
 
 export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: plan, isLoading: planLoading } = useSleepPlan(childId ?? null);
   const { active, start, stop } = useActiveSleep(childId);
   const {
@@ -28,7 +29,7 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sleep_logs")
-        .select("started_at, ended_at, sleep_type")
+        .select("started_at, ended_at, sleep_type, source")
         .eq("child_id", childId!)
         .gte("started_at", startOfDay(new Date()).toISOString())
         .lte("started_at", endOfDay(new Date()).toISOString())
@@ -62,11 +63,28 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
       variant: "destructive",
     });
 
+  // useActiveSleep's invalidate doesn't prefix-match this card's day-logs key,
+  // so refetch it explicitly on start/stop or the card lags up to 60s.
+  const invalidateTodayLogs = () =>
+    queryClient.invalidateQueries({
+      queryKey: ["sleep-today-logs", childId, today],
+    });
+
   const startNap = () =>
-    start.mutate({ sleep_type: "nap" }, { onError: onMutationError });
+    start.mutate(
+      { sleep_type: "nap" },
+      { onSuccess: invalidateTodayLogs, onError: onMutationError },
+    );
   const startBedtime = () =>
-    start.mutate({ sleep_type: "night" }, { onError: onMutationError });
-  const stopActive = () => stop.mutate(undefined, { onError: onMutationError });
+    start.mutate(
+      { sleep_type: "night" },
+      { onSuccess: invalidateTodayLogs, onError: onMutationError },
+    );
+  const stopActive = () =>
+    stop.mutate(undefined, {
+      onSuccess: invalidateTodayLogs,
+      onError: onMutationError,
+    });
   const handleToggle = (id: string) =>
     toggleItem.mutate(id, { onError: onMutationError });
   const setWakeTime = (when: Date) =>

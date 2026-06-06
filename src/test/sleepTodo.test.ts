@@ -12,11 +12,16 @@ function at(hhmm: string): Date {
   return d;
 }
 
-function napLog(start: string, end: string | null): SleepTodoLog {
+function napLog(
+  start: string,
+  end: string | null,
+  source = "timer",
+): SleepTodoLog {
   return {
     started_at: at(start).toISOString(),
     ended_at: end ? at(end).toISOString() : null,
     sleep_type: "nap",
+    source,
   };
 }
 
@@ -173,6 +178,54 @@ describe("buildSleepTodo", () => {
       completedItems: ["routine"],
     });
     expect(allDone).toBe(true);
+  });
+
+  it("treats a timer nap with null ended_at as active", () => {
+    const { items } = buildSleepTodo({
+      now: at("09:30"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [napLog("09:00", null, "timer")],
+      completedItems: [],
+    });
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    expect(nap1.status).toBe("active");
+  });
+
+  it("does NOT treat a voice nap with null ended_at as active", () => {
+    // Voice/manual logs can have a NULL ended_at without being in-progress; the
+    // engine must not surface a phantom active nap from them.
+    const { items } = buildSleepTodo({
+      now: at("09:30"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [napLog("09:00", null, "voice")],
+      completedItems: [],
+    });
+    expect(items.some((i) => i.status === "active")).toBe(false);
+  });
+
+  it("puts the countdown on the next upcoming item while a nap is active", () => {
+    // nap1 is active (timer, not ended). Countdown must skip the active nap and
+    // land on the next projected nap, not the in-progress one.
+    const { items } = buildSleepTodo({
+      now: at("09:30"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [napLog("09:00", null, "timer")],
+      completedItems: [],
+    });
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    expect(nap1.status).toBe("active");
+    expect(nap1.minutesUntil).toBeUndefined();
+
+    const withCountdown = items.filter((i) => i.minutesUntil !== undefined);
+    expect(withCountdown).toHaveLength(1);
+    expect(withCountdown[0].status === "now" || withCountdown[0].status === "upcoming").toBe(true);
+    expect(withCountdown[0].id).not.toBe("nap-1");
   });
 
   it("surfaces a signed minutesUntil only on the first actionable item", () => {
