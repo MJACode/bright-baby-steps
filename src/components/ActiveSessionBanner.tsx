@@ -10,13 +10,7 @@ import {
   elapsedSecondsBoth,
   elapsedSecondsBottle,
 } from "@/hooks/useActiveFeed";
-
-function formatElapsed(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
+import { formatElapsed } from "@/lib/formatDuration";
 
 export function ActiveSessionBanner() {
   const { activeChild } = useChildren();
