@@ -185,16 +185,14 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:2 string ieuznbvvwdvhtirzwkly.supabase.co" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :WKAppBoundDomains:3 string api.country.is" "$PLIST"
 
-      - name: Bump CFBundleVersion
-        # App Store Connect rejects an upload whose CFBundleVersion matches
-        # any previous build. Use a Unix timestamp for guaranteed monotonic
-        # uniqueness without a separate counter file. CFBundleShortVersionString
-        # (the user-facing 1.0 / 1.1 / etc.) is left to Xcode project settings;
-        # update it manually in ios/App/App.xcodeproj when shipping a new
-        # marketing version.
+      - name: Install xcodeproj gem (watch target injection)
+        # The Apple Watch companion target can't be committed inside ios/
+        # (regenerated every build), so watch/project/inject_watch_target.rb
+        # adds it to the freshly-generated project. That script needs the
+        # `xcodeproj` Ruby gem. The mac_mini_m2 image ships system Ruby; install
+        # the pinned gem version from watch/project/Gemfile.
         script: |
-          cd ios/App
-          xcrun agvtool new-version -all "$(date +%s)"
+          gem install xcodeproj -v 1.25.0 --no-document
 
       - name: Set up code signing
         # Manual signing flow — replaces Codemagic's `environment.ios_signing`
@@ -243,6 +241,16 @@ workflows:
             --type IOS_APP_STORE \
             --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
+          # Second profile for the watch app. The same iOS Distribution cert
+          # signs both targets; only the provisioning profile differs. NOTE:
+          # `--create` makes the PROFILE, not the App ID — the identifier
+          # com.graceflare.app.watchkitapp must already exist in the Apple
+          # Developer Portal Identifiers list, exactly like the host bundle id.
+          app-store-connect fetch-signing-files "${BUNDLE_ID}.watchkitapp" \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
+            --create
           keychain add-certificates
           xcode-project use-profiles
 
@@ -252,6 +260,75 @@ workflows:
           ls -la "$HOME/Library/MobileDevice/Certificates/" 2>/dev/null || true
           echo "--- Keychain identities ---"
           security find-identity -v -p codesigning || true
+
+          # Resolve the newest provisioning profile per target bundle id and
+          # export exactly ONE UUID each (+ a single DEVELOPMENT_TEAM) to $CM_ENV
+          # for inject_watch_target.rb. xcodebuild applies a single global
+          # PROVISIONING_PROFILE_SPECIFIER, which is wrong for two bundle ids, so
+          # the specifiers live in the .pbxproj instead. Profiles accumulate on
+          # reused CI machines, so we pick the newest by CreationDate per App ID
+          # (not the first match) and echo the resolved values to the log so a
+          # wrong/empty value is visible.
+          python3 - "$BUNDLE_ID" >> "$CM_ENV" <<'PY'
+          import os, sys, glob, plistlib, subprocess
+          bundle = sys.argv[1]
+          dirs = [
+              os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+              os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+          ]
+          best = {}  # app-id -> (creation_epoch, uuid, team)
+          for d in dirs:
+              for p in glob.glob(os.path.join(d, "*.mobileprovision")) + glob.glob(os.path.join(d, "*.provisionprofile")):
+                  try:
+                      pl = plistlib.loads(subprocess.run(["security", "cms", "-D", "-i", p], capture_output=True).stdout)
+                  except Exception:
+                      continue
+                  appid = pl.get("Entitlements", {}).get("application-identifier", "")
+                  uuid = pl.get("UUID", "")
+                  team = (pl.get("TeamIdentifier") or [""])[0]
+                  cd = pl.get("CreationDate")
+                  epoch = cd.timestamp() if cd else 0.0
+                  cur = best.get(appid)
+                  if cur is None or epoch > cur[0]:
+                      best[appid] = (epoch, uuid, team)
+          def pick(suffix):
+              target = "." + bundle + suffix
+              for appid, (epoch, uuid, team) in best.items():
+                  if appid.endswith(target):
+                      return uuid, team
+              return "", ""
+          ios_uuid, ios_team = pick("")
+          watch_uuid, watch_team = pick(".watchkitapp")
+          team = ios_team or watch_team
+          out = []
+          if team: out.append("DEVELOPMENT_TEAM=" + team)
+          if ios_uuid: out.append("IOS_PROFILE_UUID=" + ios_uuid)
+          if watch_uuid: out.append("WATCH_PROFILE_UUID=" + watch_uuid)
+          print("\n".join(out))
+          sys.stderr.write("Resolved signing -> " + (" ".join(out) if out else "NONE FOUND") + "\n")
+          PY
+
+      - name: Inject watchOS target + iOS glue
+        # Adds the single SwiftUI watch app target (com.graceflare.app.watchkitapp),
+        # the Embed Watch Content phase, per-target signing (using the UUIDs the
+        # signing step exported to $CM_ENV), and copies the WatchConnectivity
+        # glue from ios-watch-glue/ into the App target. See watch/README.md.
+        # Runs AFTER signing (needs the profile UUIDs) and BEFORE the version
+        # bump (so agvtool -all also bumps the new watch target).
+        script: |
+          set -ex
+          ruby watch/project/inject_watch_target.rb
+
+      - name: Bump CFBundleVersion (all targets)
+        # App Store Connect rejects an upload whose CFBundleVersion matches any
+        # previous build. Unix timestamp = guaranteed monotonic uniqueness.
+        # `-all` bumps every target in the project — including the watch target,
+        # whose CFBundleVersion must match the host app. Runs after injection so
+        # the watch target exists. CFBundleShortVersionString (marketing 1.0 …)
+        # is left to project settings; update manually when shipping.
+        script: |
+          cd ios/App
+          xcrun agvtool new-version -all "$(date +%s)"
 
       - name: Build and export IPA
         # Capacitor 8 supports both CocoaPods (workspace) and Swift Package
@@ -314,13 +391,15 @@ workflows:
           echo "Profile name:  $PROFILE_NAME"
           echo "Profile UUID:  $PROFILE_UUID"
 
-          # Use the UUID (not the name) as PROVISIONING_PROFILE_SPECIFIER.
-          # `xcode-project build-ipa --archive-xcargs` forwards the value
-          # to xcodebuild by splitting on whitespace, so a name like
-          # `Grace Flare ios_app_store 1778718709` gets mangled into four
-          # tokens. UUIDs are guaranteed space-free, and xcodebuild's
-          # specifier accepts either name or UUID.
-          XCARGS="DEVELOPMENT_TEAM=$TEAM_ID PROVISIONING_PROFILE_SPECIFIER=$PROFILE_UUID CODE_SIGN_STYLE=Manual"
+          # TWO targets (App + GraceFlareWatch) now need DIFFERENT provisioning
+          # profiles, so we CANNOT pass a single global
+          # PROVISIONING_PROFILE_SPECIFIER on the command line — that would force
+          # one profile onto both bundle ids and fail. The per-target
+          # PROVISIONING_PROFILE_SPECIFIER values were written into the .pbxproj
+          # by inject_watch_target.rb (from the UUIDs the signing step exported).
+          # Here we only pass the shared DEVELOPMENT_TEAM + Manual style; each
+          # target's specifier comes from the project.
+          XCARGS="DEVELOPMENT_TEAM=$TEAM_ID CODE_SIGN_STYLE=Manual"
           echo "Archive xcargs: $XCARGS"
 
           # NOTE on the `=` syntax for --archive-flags: the value
