@@ -80,7 +80,13 @@ watch_target.build_configurations.each do |config|
   bs["TARGETED_DEVICE_FAMILY"]           = "4" # Apple Watch
   bs["SWIFT_VERSION"]                    = "5.0"
   bs["ASSETCATALOG_COMPILER_APPICON_NAME"] = "AppIcon"
-  bs["SKIP_INSTALL"]                     = "NO"
+  # YES because this watch app is EMBEDDED into the iOS host (via the Embed
+  # Watch Content phase below), not installed standalone. With NO, the watch
+  # app is ALSO emitted as a second top-level app in the archive's
+  # Products/Applications, so xcodebuild -exportArchive sees two apps, can't
+  # pick a single distribution method, and fails with an empty valid-methods
+  # set + "IDEDistributionMethodManagerError: Unknown Distribution Error".
+  bs["SKIP_INSTALL"]                     = "YES"
   bs["MARKETING_VERSION"]                = "1.0"
   bs["CURRENT_PROJECT_VERSION"]          = "1" # agvtool -all overwrites at build time
   bs["CODE_SIGN_STYLE"]                  = "Manual"
