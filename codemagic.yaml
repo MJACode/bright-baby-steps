@@ -402,6 +402,36 @@ workflows:
           XCARGS="DEVELOPMENT_TEAM=$TEAM_ID CODE_SIGN_STYLE=Manual"
           echo "Archive xcargs: $XCARGS"
 
+          # --- Export options (Xcode 16) -------------------------------------
+          # Xcode 16's `-exportArchive` renamed the App Store export method from
+          # `app-store` to `app-store-connect` and hard-rejects the old value
+          # ("exportOptionsPlist error for key \"method\" ... but found
+          # app-store"). codemagic-cli-tools' auto-generated plist still emits
+          # `app-store`, so we write our own: new method + manual signing + a
+          # per-target provisioningProfiles map (UUIDs exported to $CM_ENV by the
+          # signing step). Fall back to the locally-decoded values if unset.
+          EXPORT_TEAM="${DEVELOPMENT_TEAM:-$TEAM_ID}"
+          EXPORT_IOS_UUID="${IOS_PROFILE_UUID:-$PROFILE_UUID}"
+          EXPORT_OPTS=/tmp/export_options.plist
+          cat > "$EXPORT_OPTS" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${EXPORT_TEAM}</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>uploadSymbols</key><true/>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key><string>${EXPORT_IOS_UUID}</string>
+              <key>${BUNDLE_ID}.watchkitapp</key><string>${WATCH_PROFILE_UUID}</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+          echo "--- export_options.plist ---"; cat "$EXPORT_OPTS"
+
           # NOTE on the `=` syntax for --archive-flags: the value
           # `-allowProvisioningUpdates` starts with `-`, which Python's
           # argparse refuses to consume as a positional value (thinks it's
@@ -413,14 +443,16 @@ workflows:
               --workspace "$XCODE_WORKSPACE" \
               --scheme "$XCODE_SCHEME" \
               --archive-flags=-allowProvisioningUpdates \
-              --archive-xcargs "$XCARGS"
+              --archive-xcargs "$XCARGS" \
+              --export-options-plist "$EXPORT_OPTS"
           elif [ -d "ios/App/App.xcodeproj" ]; then
             echo "No workspace found; building from xcodeproj (SPM layout)"
             xcode-project build-ipa \
               --project "ios/App/App.xcodeproj" \
               --scheme "$XCODE_SCHEME" \
               --archive-flags=-allowProvisioningUpdates \
-              --archive-xcargs "$XCARGS"
+              --archive-xcargs "$XCARGS" \
+              --export-options-plist "$EXPORT_OPTS"
           else
             echo "ERROR: neither $XCODE_WORKSPACE nor ios/App/App.xcodeproj exists"
             ls -la ios/ ios/App/ 2>/dev/null
