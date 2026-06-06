@@ -13,6 +13,9 @@ import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X, Sparkle
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
+import { SpeechClass } from "@/components/SpeechClass";
+import { MilestonesPremiumCard } from "@/components/MilestonesPremiumCard";
+import { PremiumGate } from "@/components/PremiumGate";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { MilestoneFlags } from "@/components/milestones/MilestoneFlags";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -448,6 +451,8 @@ export default function MilestonesPage() {
                   </Card>
                 )}
 
+              <MilestonesPremiumCard />
+
               <button
                 onClick={() => isPremium ? setPhotoDetectorOpen(true) : setPhotoUpsellOpen(true)}
                 className="w-full flex items-center gap-3 p-4 rounded-2xl bg-milestones/5 border border-milestones/20 active:scale-[0.99] transition-transform text-left touch-target"
@@ -653,6 +658,17 @@ export default function MilestonesPage() {
               </Dialog>
 
               <WordSoundJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
+
+              {ageMonths >= 9 && (
+                <PremiumGate feature="speech-class" variant="replace">
+                  <SpeechClass
+                    childId={activeChild.id}
+                    childName={activeChild.name}
+                    ageMonths={ageMonths}
+                    isPremature={activeChild.is_premature ?? false}
+                  />
+                </PremiumGate>
+              )}
             </>
           )}
         </TabsContent>
