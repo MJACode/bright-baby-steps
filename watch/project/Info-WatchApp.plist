@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist for the single-target SwiftUI watchOS app (watchOS 9+).
+  WKApplication=true marks this as a modern single-target watch app (no separate
+  WatchKit extension). WKCompanionAppBundleIdentifier ties it to the iOS host.
+  NSMicrophoneUsageDescription is required because CryRecorder uses the mic.
+  inject_watch_target.rb sets the watch target's INFOPLIST_FILE to this file.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>Grace Flare</string>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>$(PRODUCT_NAME)</string>
+  <key>CFBundlePackageType</key>
+  <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>WKApplication</key>
+  <true/>
+  <key>WKCompanionAppBundleIdentifier</key>
+  <string>com.graceflare.app</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Grace Flare uses the microphone to analyze your baby's cry on your watch. Audio is processed on-device and never leaves your Apple Watch.</string>
+</dict>
+</plist>

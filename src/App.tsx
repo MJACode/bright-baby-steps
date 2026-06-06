@@ -10,6 +10,7 @@ import AcceptInvite from "./pages/AcceptInvite";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import { DeepLinkHandler } from "./components/DeepLinkHandler";
+import { WatchBridge } from "./integrations/watch/WatchBridge";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SleepPage from "./pages/dashboard/SleepPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
@@ -45,6 +46,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <DeepLinkHandler />
+          <WatchBridge />
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />

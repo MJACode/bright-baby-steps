@@ -1,0 +1,6 @@
+# Pins the xcodeproj gem used by inject_watch_target.rb so CI is reproducible.
+# Run `bundle install` (or `gem install xcodeproj -v 1.25.0`) before invoking
+# the injection script.
+source "https://rubygems.org"
+
+gem "xcodeproj", "1.25.0"
