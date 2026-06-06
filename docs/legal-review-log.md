@@ -991,3 +991,52 @@ exposure a free equivalent would not; (b) whether § 4 should be rewritten with 
 catch-all AI-features category to reduce per-feature disclosure-maintenance risk.
 Both deferred to the pre-fundraise / pre-EU outside-counsel pass per the standing
 US-v1 posture.
+
+---
+
+## 2026-06-06 — Apple Watch companion (groundwork): on-device cry audio + log writes
+
+**Scope:** First groundwork increment for a native watchOS companion app
+(single SwiftUI target, `com.graceflare.app.watchkitapp`). From the wrist a
+parent can record quick taps (feed/diaper/sleep), start/stop sleep & feed
+timers, and run **cry analysis** (record a short clip → suggested bucket). This
+review was triggered because the feature captures **microphone audio about a
+child** on a new device surface (CLAUDE.md → "Update the log every time you touch
+… consent/retention/deletion … or any user-visible legal text"). In-house pass.
+
+**Findings / resolutions:**
+- **Audio stays on-device.** The watch cry classifier
+  (`watch/GraceFlareWatch/Cry/CryFeatures.swift` + `CryClassifier.swift`) is a
+  line-for-line Swift port of `src/lib/cryFeatures.ts`. Like the web/phone
+  `useCryAnalyzer`, it extracts features + classifies locally; **raw audio is
+  never uploaded**. Only the derived `features` JSON + bucket + confidence are
+  written to `cry_analyses` (same row shape as the phone) [LOW]. No change to
+  the no-audio-upload privacy property → no substantive PrivacyPage rewrite
+  required. **Action item:** confirm PrivacyPage's microphone/audio language
+  reads as device-agnostic (covers "on your Apple Watch"); soften only if it
+  currently names the phone specifically.
+- **No new consent surface / no watch sign-in.** The watch never creates a
+  child or an account and has no login UI; it only operates against an
+  already-consented account whose Supabase session the phone relays via
+  WatchConnectivity. The existing COPPA email-plus VPC gate and `children` RLS
+  cover all watch-written rows (parent's own JWT, `parent_id = auth.uid()`).
+  **Conclusion: no separate watch VPC gate needed** [LOW].
+- **Data egress unchanged.** Watch writes hit the same Supabase PostgREST
+  endpoints as the web app under the parent's JWT; no new subprocessor, no new
+  third party. `/subprocessors` unchanged.
+- **Mic permission disclosure.** The watch `Info.plist`
+  (`watch/project/Info-WatchApp.plist`) carries `NSMicrophoneUsageDescription`
+  stating audio is processed on-device and never leaves the watch — matches the
+  in-product non-diagnostic framing ("a suggestion, not a diagnosis / trust your
+  gut + your pediatrician") preserved in `CryView.swift` [LOW].
+
+**Code refs:** branch `claude/apple-watch-recording-uymXk`; files under
+`watch/`, `ios-watch-glue/`, `src/integrations/watch/`. No DB migration (the
+`source` CHECK already allows `'watch'`/`'timer'`; `cry_analyses` unchanged).
+
+**Outstanding (outside-counsel):** none specific to this surface beyond the
+standing US-only / consumer-wellness posture. Re-review if watch audio ever
+moves off-device (e.g. server-side cry classification) or if HealthKit
+integration is added.
+
+---

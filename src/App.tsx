@@ -10,6 +10,7 @@ import AcceptInvite from "./pages/AcceptInvite";
 import DashboardLayout from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import { DeepLinkHandler } from "./components/DeepLinkHandler";
+import { WatchBridge } from "./integrations/watch/WatchBridge";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SleepPage from "./pages/dashboard/SleepPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
@@ -26,6 +27,7 @@ import RecordsPage from "./pages/dashboard/RecordsPage";
 import CalendarPage from "./pages/dashboard/CalendarPage";
 import CryAnalyzerPage from "./pages/dashboard/CryAnalyzerPage";
 import MorePage from "./pages/dashboard/MorePage";
+import FindSlpPage from "./pages/dashboard/FindSlpPage";
 import Upgrade from "@/pages/Upgrade";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
@@ -44,6 +46,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <DeepLinkHandler />
+          <WatchBridge />
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -67,6 +70,7 @@ const App = () => (
                 <Route path="calendar" element={<CalendarPage />} />
                 <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
                 <Route path="more" element={<MorePage />} />
+                <Route path="find-slp" element={<FindSlpPage />} />
               </Route>
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
