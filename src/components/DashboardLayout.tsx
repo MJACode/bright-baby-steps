@@ -9,7 +9,6 @@ import { UserCircle, Home, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
-import { cn } from "@/lib/utils";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { AIChatWidget } from "@/components/AIChatWidget";
 
@@ -56,9 +55,15 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    // Pin the app shell to the viewport and let <main> be the only scroll
+    // container. The chrome (header + bottom tabs) are plain flex children, not
+    // position:fixed/sticky — fixed/sticky descendants of an inner momentum-
+    // scroll container jitter and mis-hit-test on iOS WKWebView, which made the
+    // screen drift and the tab bar untappable. `fixed inset-0` sizes the shell
+    // to the viewport without depending on a height chain up to #root.
+    <div className="fixed inset-0 flex flex-col bg-background">
       {/* Top header — single row */}
-      <header className="sticky top-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border safe-area-top">
+      <header className="shrink-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border safe-area-top">
         <div className="flex items-center justify-between h-14 px-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <Link to="/dashboard" aria-label="Home" className="shrink-0">
@@ -91,8 +96,10 @@ export default function DashboardLayout() {
 
       {!isOnboarding && <ActiveSessionBanner />}
 
-      {/* Main content */}
-      <main className={cn("flex-1 px-4 py-5 max-w-lg mx-auto w-full", !isOnboarding && "pb-tab-bar")}>
+      {/* Main content — the single scroll container. min-h-0 lets it shrink
+          inside the flex column so it scrolls instead of pushing the tab bar
+          off-screen; overscroll-contain keeps any bounce inside it. */}
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 max-w-lg mx-auto w-full">
         <Outlet />
       </main>
 
