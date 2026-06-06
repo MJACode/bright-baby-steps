@@ -50,8 +50,10 @@ export function QuickNavGrid({ childId }: { childId: string | undefined }) {
       return { text: `${formatElapsed(sleepElapsed)}${activeSleep.paused_at ? " · paused" : ""}`, live: !activeSleep.paused_at };
     }
     if (label === "Food" && activeFeed) {
-      const paused = !activeFeed.active_side;
-      return { text: `${formatElapsed(feedElapsedSeconds(activeFeed))}${paused ? " · paused" : ""}`, live: !paused };
+      const elapsed = feedElapsedSeconds(activeFeed);
+      // Mirror FeedStrip's predicate exactly so the two surfaces never disagree.
+      const paused = !activeFeed.active_side && elapsed > 0;
+      return { text: `${formatElapsed(elapsed)}${paused ? " · paused" : ""}`, live: !paused };
     }
     const lastAt =
       label === "Food" ? last.feeding :
