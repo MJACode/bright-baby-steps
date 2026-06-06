@@ -52,6 +52,10 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     headline: "Doctor-ready in one tap.",
     sub: "Generate PDF reports for pediatrician visits with all logs and notes.",
   },
+  "speech-class": {
+    headline: "A weekly speech practice plan, built for your baby.",
+    sub: "Flare+ turns your Word & Sound Journal into a guided 7-day plan — one small activity a day, tuned to her age.",
+  },
 };
 
 const PERKS = [

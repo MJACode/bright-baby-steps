@@ -2615,6 +2615,47 @@ export type Database = {
           },
         ]
       }
+      speech_practice_plans: {
+        Row: {
+          child_id: string
+          completed_days: number[]
+          created_at: string
+          id: string
+          parent_id: string
+          plan: Json
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          child_id: string
+          completed_days?: number[]
+          created_at?: string
+          id?: string
+          parent_id: string
+          plan: Json
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          child_id?: string
+          completed_days?: number[]
+          created_at?: string
+          id?: string
+          parent_id?: string
+          plan?: Json
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "speech_practice_plans_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           created_at: string
