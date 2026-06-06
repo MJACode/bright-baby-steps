@@ -5,12 +5,14 @@ interface Preferences {
   showBriefing: boolean;
   showNotifications: boolean;
   calendarView: "day" | "week";
+  lastSlpZip: string;
 }
 
 const defaults: Preferences = {
   showBriefing: true,
   showNotifications: true,
   calendarView: "day",
+  lastSlpZip: "",
 };
 
 function loadPrefs(key: string): Preferences {
