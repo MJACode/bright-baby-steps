@@ -14,7 +14,7 @@ export function BottomTabBar() {
   const location = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/80 backdrop-blur-xl backdrop-saturate-150 shadow-[0_-1px_0_0_hsl(var(--border))] safe-area-bottom">
+    <nav className="shrink-0 z-50 bg-card/80 backdrop-blur-xl backdrop-saturate-150 shadow-[0_-1px_0_0_hsl(var(--border))] safe-area-bottom">
       <div className="flex items-stretch justify-around h-[var(--tab-bar-height)] max-w-lg mx-auto">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
