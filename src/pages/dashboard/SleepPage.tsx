@@ -28,6 +28,7 @@ import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
+import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
 import { getErrorMessage } from "@/lib/handleRlsError";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
@@ -629,6 +630,29 @@ export default function SleepPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {savedPlan && !isLoadingPlan && (
+        <Card className="border bg-sleep/5 border-sleep/20">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-sleep" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+                {getSleepMethodMeta(savedPlan.method as SleepMethod).name} tonight
+              </p>
+            </div>
+            <ol className="space-y-2 text-sm text-foreground/85">
+              {getSleepMethodMeta(savedPlan.method as SleepMethod).guide.tonightSteps.map((step, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="mt-0.5 w-5 h-5 rounded-full bg-sleep/15 text-sleep text-xs font-semibold flex items-center justify-center shrink-0">
+                    {i + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
 
       {showChairCard && savedPlan && (
         <ChairStageCard childId={activeChild.id} plan={savedPlan} />

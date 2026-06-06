@@ -18,6 +18,16 @@ export interface SleepMethodCopy {
   falseStart: string;
   shortNapStreak: string;
   bedtimeDrift: string;
+  onTrack: string;
+}
+
+// Proactive guidance: what to *do* tonight and what to expect. Kept separate
+// from the reactive `copy` strings so the plan dialog and dashboard can teach
+// the method up front, before anything goes off-plan.
+export interface SleepMethodGuide {
+  howItWorks: string;
+  tonightSteps: string[];
+  firstNights: string;
 }
 
 export interface SleepMethodMeta {
@@ -27,6 +37,7 @@ export interface SleepMethodMeta {
   minAgeWeeks: number;
   allowsCrying: boolean;
   copy: SleepMethodCopy;
+  guide: SleepMethodGuide;
 }
 
 // Cry-tolerating methods are gated to 16 weeks adjusted age per AAP guidance.
@@ -53,6 +64,20 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
         "Two short naps in a row. Try a slightly longer wake window before the next sleep, or lean into a contact nap to recharge.",
       bedtimeDrift:
         "Bedtime has been creeping later. Aim to start the wind-down 15 min earlier tomorrow.",
+      onTrack:
+        "Your steady routines are doing the work — your baby is settling well.",
+    },
+    guide: {
+      howItWorks:
+        "You build sleep on predictable rhythms and plenty of comfort. There's no crying to wait out — you stay close and respond, and consistency does the teaching.",
+      tonightSteps: [
+        "Watch for sleepy cues and start the wind-down a little before your baby is overtired.",
+        "Dim the lights and run the same short routine in the same order every time.",
+        "Lay your baby down drowsy but awake, and offer your hand, a shush, or a pat.",
+        "If your baby fusses, comfort them however they need — pick up, rock, or feed — then try settling again.",
+      ],
+      firstNights:
+        "This is the gentlest path, so expect gradual change over a couple of weeks rather than overnight. Each consistent night makes the next one easier.",
     },
   },
   {
@@ -75,6 +100,20 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
         "Short naps add up. Try one or two pick-up / put-down cycles instead of ending the nap.",
       bedtimeDrift:
         "Bedtime drift can mean wake windows are off. Start the routine 15 min earlier tomorrow.",
+      onTrack:
+        "Your calm pick-up / put-down rhythm is paying off — fewer cycles each night.",
+    },
+    guide: {
+      howItWorks:
+        "When your baby cries, you pick them up and soothe to calm-but-awake, then lay them back down. You repeat as needed — your baby is never left to cry alone.",
+      tonightSteps: [
+        "Run your usual wind-down and lay your baby down calm but still awake.",
+        "If they cry, pick them up and soothe just until they're calm — not all the way to sleep.",
+        "Lay them back down awake as soon as they settle.",
+        "Repeat the cycle as many times as it takes, staying patient and quiet.",
+      ],
+      firstNights:
+        "The first night or two can take many cycles — that's normal and expected. Within a week most babies need far fewer pick-ups to settle.",
     },
   },
   {
@@ -97,6 +136,21 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
         "Short naps don't undo chair progress. Hold at your current stage tonight.",
       bedtimeDrift:
         "If bedtime keeps drifting, hold at the current chair stage another few nights before advancing.",
+      onTrack:
+        "Your baby is settling with you nearby — you're ready to ease the chair back a stage soon.",
+    },
+    guide: {
+      howItWorks:
+        "You sit in a chair beside the crib while your baby falls asleep, then move the chair a little farther away every few nights until you're out of the room. Your presence is the comfort that fades, not your baby.",
+      tonightSteps: [
+        "Finish your wind-down and put your baby down awake.",
+        "Sit in the chair at your current stage's position next to the crib.",
+        "Soothe with quiet voice and light touch as needed — less interaction as you move through the stages.",
+        "Stay in the chair until your baby is asleep, then leave the room.",
+        "Hold this stage for a few nights before moving the chair farther away.",
+      ],
+      firstNights:
+        "Expect some protest the first few nights at each new chair position — that settles as your baby gets used to the distance. Most families move a stage every three to five nights.",
     },
   },
   {
@@ -119,6 +173,20 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
         "Use the same interval schedule for naps. Two short naps doesn't mean the method isn't working.",
       bedtimeDrift:
         "If bedtime's drifting, the schedule may need a 15-min shift before the next adjustment.",
+      onTrack:
+        "Your check-ins are getting shorter and calmer — your baby is learning to settle.",
+    },
+    guide: {
+      howItWorks:
+        "After the bedtime routine you check in at set, progressively longer intervals. Each check is brief and reassuring — you let the gaps grow night over night so your baby learns to fall asleep on their own.",
+      tonightSteps: [
+        "Run your wind-down, put your baby down awake, and leave the room.",
+        "If they protest, wait your first interval — about 3 minutes on night one — before the first check-in.",
+        "Keep each check-in short: a calm word and reassurance, no picking up, then step out.",
+        "Lengthen the wait before each check (around 3, then 5, then 10 minutes) and repeat until your baby is asleep.",
+      ],
+      firstNights:
+        "The intervals start short and stretch as you go, and they grow a little longer each night. Most families see noticeably calmer bedtimes within three to seven nights.",
     },
   },
   {
@@ -141,6 +209,20 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
         "Short naps happen during extinction. Stay the course — most plans show progress within a week.",
       bedtimeDrift:
         "Check that the routine and lights-out time haven't shifted. Consistency is what makes this work.",
+      onTrack:
+        "You held steady and it's working — your baby is falling asleep on their own.",
+    },
+    guide: {
+      howItWorks:
+        "After your bedtime routine, you say goodnight and don't return until morning (apart from safety or feeds you've planned). It's the most direct approach — your baby learns to self-settle quickly because the routine stays completely consistent.",
+      tonightSteps: [
+        "Run a calm, full bedtime routine so your baby is relaxed and fed.",
+        "Say your goodnight phrase, put your baby down awake, and leave the room.",
+        "Hold steady through any protest — consistency is what makes this work.",
+        "Check only for genuine safety needs, then return in the morning at your usual wake time.",
+      ],
+      firstNights:
+        "The first one to three nights are the hardest and often the loudest — but this method also brings the fastest results. Most babies settle dramatically by night three or four.",
     },
   },
   {
@@ -163,6 +245,20 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
         "Short naps can mean the day's a touch off. Hold your bedtime fade target and try again tomorrow.",
       bedtimeDrift:
         "Drift is part of fading. Push bedtime 15 min later for 3 nights, then resume fading earlier.",
+      onTrack:
+        "Sleep onset is getting quick — you're ready to nudge bedtime a touch earlier.",
+    },
+    guide: {
+      howItWorks:
+        "You start bedtime at the time your baby naturally falls asleep, so put-down and sleep happen close together. Once that's reliable, you move bedtime 15 minutes earlier every few nights until you reach the time you want.",
+      tonightSteps: [
+        "Put your baby down at their current natural sleep-onset time, not an aspirational early bedtime.",
+        "Run your wind-down so they're drowsy right as you lay them down.",
+        "If they fall asleep quickly for a few nights, move bedtime 15 minutes earlier.",
+        "If lights-out starts running long, slide bedtime later again for a few nights, then resume fading.",
+      ],
+      firstNights:
+        "Early on, bedtime may feel later than you'd like — that's the point, and it makes settling fast. Over a couple of weeks you'll fade it earlier 15 minutes at a time.",
     },
   },
 ];

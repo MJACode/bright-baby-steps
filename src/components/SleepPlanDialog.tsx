@@ -371,49 +371,39 @@ export function SleepPlanDialog({
             </CardContent>
           </Card>
 
-          {/* How we'll help */}
+          {/* How this method works */}
           <Card className="border-0 bg-card">
             <CardContent className="p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-sleep" />
                 <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                  How we'll help
+                  How {selectedMethodMeta.name} works
                 </p>
               </div>
-              <ul className="space-y-2 text-sm text-foreground/85">
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
-                  <span>Tell us when your baby woke — we'll map the day's naps and bedtime.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
-                  <span>About 15 min before each nap, we'll nudge you to start winding down.</span>
-                </li>
-              </ul>
+              <p className="text-sm text-foreground/85 leading-relaxed">
+                {selectedMethodMeta.guide.howItWorks}
+              </p>
+
+              <p className="text-sm font-semibold text-foreground pt-1">
+                What to do tonight
+              </p>
+              <ol className="space-y-2 text-sm text-foreground/85">
+                {selectedMethodMeta.guide.tonightSteps.map((step, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className="mt-0.5 w-5 h-5 rounded-full bg-sleep/15 text-sleep text-xs font-semibold flex items-center justify-center shrink-0">
+                      {i + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+
               <details className="group">
                 <summary className="cursor-pointer touch-target inline-flex items-center text-sm font-semibold text-sleep">
-                  See more
+                  What to expect the first few nights
                 </summary>
-                <ul className="space-y-2 text-sm text-foreground/85 mt-2">
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
-                    <span>If a wake window runs long, we'll give a gentle heads-up — no clock-watching.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
-                    <span>We learn your baby's real patterns from your logs and adjust as they grow.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
-                    <span>Each week we'll show what's trending and celebrate what's working.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-sleep shrink-0" />
-                    <span>If bedtime drifts later, we'll suggest small 15-minute shifts, at your pace.</span>
-                  </li>
-                </ul>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Reminders are timed around your baby's day.
+                <p className="text-sm text-foreground/85 leading-relaxed mt-2">
+                  {selectedMethodMeta.guide.firstNights}
                 </p>
               </details>
             </CardContent>
