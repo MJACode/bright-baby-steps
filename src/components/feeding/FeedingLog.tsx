@@ -443,6 +443,17 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                 </div>
               )}
 
+              {!activeRow && (
+                <div className="space-y-1">
+                  <Label>When</Label>
+                  <MobileDateTimePicker
+                    value={loggedAt}
+                    onChange={setLoggedAt}
+                    maxDate={new Date()}
+                  />
+                </div>
+              )}
+
               <div className="space-y-1">
                 <MobileDateTimePicker value={loggedAt} onChange={setLoggedAt} maxDate={new Date()} label="When" />
               </div>
