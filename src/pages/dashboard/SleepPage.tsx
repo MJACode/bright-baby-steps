@@ -25,6 +25,7 @@ import SleepTimer from "@/components/sleep/SleepTimer";
 import { SleepTriageCard } from "@/components/SleepTriageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
+import { SleepTodoCard } from "@/components/sleep/SleepTodoCard";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
@@ -674,6 +675,12 @@ export default function SleepPage() {
           }}
         />
       )}
+
+      <SleepTodoCard
+        childId={activeChild.id}
+        ageMonths={ageMonths}
+        childName={activeChild.name ?? "your baby"}
+      />
 
       <SleepPlanReminderBanner
         childId={activeChild.id}
