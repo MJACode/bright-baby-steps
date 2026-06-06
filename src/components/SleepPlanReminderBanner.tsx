@@ -37,6 +37,7 @@ type BannerState =
   | { kind: "window-15min"; title: string; body: string }
   | { kind: "window-exceeded"; title: string; body: string }
   | { kind: "off-plan"; subkind: OffPlanState["kind"]; title: string; body: string }
+  | { kind: "on-track"; title: string; body: string }
   | { kind: "preview"; title: string; body: string | null };
 
 function nowMinutesSinceMidnight(now: Date): number {
@@ -211,6 +212,24 @@ function deriveState(args: {
     };
   }
 
+  // 8b. On-track — reaching here means step 8 found nothing off-plan. Only
+  //     claim it with evidence of execution: at least 2 completed sleeps in the
+  //     last ~36h, and no session running right now.
+  if (!isActiveSession) {
+    const completedRecently = recentLogs.filter(
+      (log) =>
+        log.ended_at !== null &&
+        differenceInMinutes(now, new Date(log.started_at)) <= 36 * 60,
+    );
+    if (completedRecently.length >= 2) {
+      return {
+        kind: "on-track",
+        title: "You're on track",
+        body: methodCopy.onTrack,
+      };
+    }
+  }
+
   // 9. Quiet preview: next nap or next bedtime, lower visual weight.
   if (!hasNightTonight && bedtimeEarliest) {
     const bedEarliestMin = parseHHmm(bedtimeEarliest);
@@ -359,7 +378,7 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
   if (!savedPlan || !state) return null;
 
   const Icon =
-    state.kind === "empathy"
+    state.kind === "empathy" || state.kind === "on-track"
       ? Sparkles
       : state.kind === "window-exceeded"
         ? AlertTriangle
@@ -372,7 +391,7 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
             : Moon;
 
   const isPreview = state.kind === "preview";
-  const isEmpathy = state.kind === "empathy";
+  const isEmpathy = state.kind === "empathy" || state.kind === "on-track";
   const isAlert =
     state.kind === "window-exceeded" ||
     state.kind === "off-plan" ||
