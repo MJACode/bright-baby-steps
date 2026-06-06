@@ -3,6 +3,7 @@ import { useAuth } from "./useAuth";
 
 interface Preferences {
   showBriefing: boolean;
+  briefingCollapsed: boolean;
   showNotifications: boolean;
   calendarView: "day" | "week";
   lastSlpZip: string;
@@ -10,6 +11,7 @@ interface Preferences {
 
 const defaults: Preferences = {
   showBriefing: true,
+  briefingCollapsed: false,
   showNotifications: true,
   calendarView: "day",
   lastSlpZip: "",
