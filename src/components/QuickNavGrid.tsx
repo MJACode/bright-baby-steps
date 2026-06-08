@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { UtensilsCrossed, Moon, Droplets, Star } from "lucide-react";
+import { UtensilsCrossed, Moon, Droplets, Star, Clock } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActiveSleep, useElapsedSeconds } from "@/hooks/useActiveSleep";
 import {
@@ -10,6 +11,12 @@ import {
   elapsedSecondsBottle,
 } from "@/hooks/useActiveFeed";
 import { useLastLogged } from "@/hooks/useLastLogged";
+import type {
+  LastFeeding,
+  LastSleep,
+  LastDiaper,
+  LastMilestone,
+} from "@/hooks/useLastLogged";
 import { formatElapsed, formatAgo } from "@/lib/formatDuration";
 
 const QUICK_NAV = [
@@ -36,6 +43,79 @@ function feedElapsedSeconds(feed: NonNullable<ReturnType<typeof useActiveFeed>["
   return elapsedSecondsBottle(feed);
 }
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const DIAPER_LABELS: Record<string, string> = { both: "Mixed", wet: "Wet", dirty: "Dirty" };
+
+type CardContent = {
+  icon?: LucideIcon;
+  primary: string;
+  primaryClamp?: boolean;
+  secondary?: string;
+  live: boolean;
+};
+
+function sleepContent(activeSleep: ReturnType<typeof useActiveSleep>["active"], sleepElapsed: number, last: LastSleep | null): CardContent {
+  if (activeSleep) {
+    const paused = !!activeSleep.paused_at;
+    return {
+      icon: Clock,
+      primary: formatElapsed(sleepElapsed),
+      secondary: paused ? "Paused" : "In progress",
+      live: !paused,
+    };
+  }
+  if (last) {
+    const duration = last.duration_minutes
+      ? formatElapsed(last.duration_minutes * 60)
+      : null;
+    const type = last.sleep_type ?? "";
+    const primary = duration
+      ? `${duration}${type ? ` ${type}` : ""}`
+      : "Last slept";
+    return { primary, secondary: formatAgo(last.at), live: false };
+  }
+  return { primary: "Tap to log sleep", live: false };
+}
+
+function foodContent(activeFeed: ReturnType<typeof useActiveFeed>["active"], last: LastFeeding | null): CardContent {
+  if (activeFeed) {
+    const elapsed = feedElapsedSeconds(activeFeed);
+    // Mirror FeedStrip's predicate exactly so the two surfaces never disagree.
+    const paused = !activeFeed.active_side && elapsed > 0;
+    return {
+      icon: Clock,
+      primary: formatElapsed(elapsed),
+      secondary: paused ? "Paused" : "Feeding…",
+      live: !paused,
+    };
+  }
+  if (last) {
+    const type = last.feeding_type ? capitalize(last.feeding_type) : "Fed";
+    let primary = type;
+    if (last.amount_oz != null) primary = `${type} · ${last.amount_oz} oz`;
+    else if (last.duration_minutes != null) primary = `${type} · ${last.duration_minutes}m`;
+    return { primary, secondary: formatAgo(last.at), live: false };
+  }
+  return { primary: "Tap to log a feed", live: false };
+}
+
+function diaperContent(last: LastDiaper | null): CardContent {
+  if (last) {
+    const type = last.diaper_type ?? "";
+    const primary = DIAPER_LABELS[type] ?? (type ? capitalize(type) : "Changed");
+    return { primary, secondary: formatAgo(last.at), live: false };
+  }
+  return { primary: "Tap to log a change", live: false };
+}
+
+function milestoneContent(last: LastMilestone | null): CardContent {
+  if (last && last.name) {
+    return { primary: last.name, primaryClamp: true, secondary: formatAgo(last.at), live: false };
+  }
+  return { primary: "No milestones yet", live: false };
+}
+
 export function QuickNavGrid({ childId }: { childId: string | undefined }) {
   const { active: activeSleep } = useActiveSleep(childId);
   const { active: activeFeed } = useActiveFeed(childId);
@@ -43,49 +123,50 @@ export function QuickNavGrid({ childId }: { childId: string | undefined }) {
   useSecondTicker(!!activeFeed && !!activeFeed.active_side);
   const last = useLastLogged(childId);
 
-  // Per-tile status line: a live timer when a session is running, otherwise a
-  // "last logged" hint. Keys off the tile label so the array stays declarative.
-  const statusFor = (label: string): { text: string; live: boolean } | null => {
-    if (label === "Sleep" && activeSleep) {
-      return { text: `${formatElapsed(sleepElapsed)}${activeSleep.paused_at ? " · paused" : ""}`, live: !activeSleep.paused_at };
+  const contentFor = (label: string): CardContent => {
+    switch (label) {
+      case "Sleep":
+        return sleepContent(activeSleep, sleepElapsed, last.sleep);
+      case "Food":
+        return foodContent(activeFeed, last.feeding);
+      case "Diaper":
+        return diaperContent(last.diaper);
+      default:
+        return milestoneContent(last.milestone);
     }
-    if (label === "Food" && activeFeed) {
-      const elapsed = feedElapsedSeconds(activeFeed);
-      // Mirror FeedStrip's predicate exactly so the two surfaces never disagree.
-      const paused = !activeFeed.active_side && elapsed > 0;
-      return { text: `${formatElapsed(elapsed)}${paused ? " · paused" : ""}`, live: !paused };
-    }
-    const lastAt =
-      label === "Food" ? last.feeding :
-      label === "Sleep" ? last.sleep :
-      label === "Diaper" ? last.diaper :
-      label === "Milestone" ? last.milestone : null;
-    return lastAt ? { text: formatAgo(lastAt), live: false } : null;
   };
 
   return (
-    <div className="grid grid-cols-4 gap-3 p-3.5">
+    <div className="grid grid-cols-2 gap-3 p-3.5">
       {QUICK_NAV.map((item) => {
-        const status = statusFor(item.label);
+        const content = contentFor(item.label);
+        const HeadIcon = content.icon ?? item.icon;
         return (
           <Link
             key={item.label}
             to={item.path}
             className={cn(
-              "flex flex-col items-center justify-start gap-1.5 p-3 rounded-2xl border-0 active:scale-[0.97] transition-transform touch-target",
+              "flex flex-col items-start justify-start gap-2 p-4 rounded-2xl border-0 active:scale-[0.97] transition-transform touch-target",
               item.tile,
             )}
           >
-            <div className={cn("w-11 h-11 rounded-xl flex items-center justify-center", item.chip)}>
-              <item.icon className="w-6 h-6" strokeWidth={2} />
-            </div>
-            <span className={cn("text-xs font-semibold", item.label_color)}>{item.label}</span>
-            <span className="flex items-center gap-1 min-h-[16px] text-xs text-muted-foreground tabular-nums">
-              {status?.live && (
-                <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", item.dot)} aria-hidden />
+            <div className="flex items-center gap-2 w-full">
+              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", item.chip)}>
+                <HeadIcon className="w-5 h-5" strokeWidth={2} />
+              </div>
+              <span className={cn("text-sm font-semibold", item.label_color)}>{item.label}</span>
+              {content.live && (
+                <span className={cn("w-2 h-2 rounded-full animate-pulse ml-auto", item.dot)} aria-hidden />
               )}
-              {status?.text ?? " "}
-            </span>
+            </div>
+            <div className="w-full">
+              <p className={cn("text-base font-semibold text-foreground tabular-nums", content.primaryClamp && "line-clamp-1")}>
+                {content.primary}
+              </p>
+              {content.secondary && (
+                <p className="text-xs text-muted-foreground">{content.secondary}</p>
+              )}
+            </div>
           </Link>
         );
       })}
