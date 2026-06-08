@@ -65,6 +65,9 @@ function InlineTimeEditor({
 
   const commit = () => {
     const [h, m] = value.split(":").map(Number);
+    // A type="time" input can be cleared to "" → NaN. Bail rather than build an
+    // Invalid Date that would throw on .toISOString() in the save handler.
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
     const next = new Date();
     next.setHours(h, m, 0, 0);
     onSave(next);
@@ -82,6 +85,7 @@ function InlineTimeEditor({
       <Button
         size="sm"
         onClick={commit}
+        disabled={!value}
         className="touch-target bg-sleep text-white hover:bg-sleep/90"
       >
         Save
