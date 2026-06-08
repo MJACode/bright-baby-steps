@@ -228,6 +228,86 @@ describe("buildSleepTodo", () => {
     expect(withCountdown[0].id).not.toBe("nap-1");
   });
 
+  it("(i) an override on nap-2 moves its suggestedAt and cascades to push nap-3 later", () => {
+    const base = buildSleepTodo({
+      now: at("08:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [],
+      completedItems: [],
+    });
+    const overridden = buildSleepTodo({
+      now: at("08:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [],
+      completedItems: [],
+      overrides: { "nap-2": at("13:00").toISOString() },
+    });
+
+    const nap2 = overridden.items.find((i) => i.id === "nap-2")!;
+    expect(nap2.suggestedAt!.getHours()).toBe(13);
+    expect(nap2.suggestedAt!.getMinutes()).toBe(0);
+    expect(nap2.isOverridden).toBe(true);
+
+    // Cascade: nap-3 is computed from the overridden nap-2 end (13:00+90+120),
+    // later than the un-overridden baseline nap-3.
+    const baseNap3 = base.items.find((i) => i.id === "nap-3")!;
+    const overNap3 = overridden.items.find((i) => i.id === "nap-3")!;
+    expect(overNap3.suggestedAt!.getTime()).toBeGreaterThan(baseNap3.suggestedAt!.getTime());
+  });
+
+  it("(ii) an override in the past → status 'now'", () => {
+    const { items } = buildSleepTodo({
+      now: at("14:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [],
+      completedItems: [],
+      overrides: { "nap-2": at("12:00").toISOString() },
+    });
+    const nap2 = items.find((i) => i.id === "nap-2")!;
+    expect(nap2.suggestedAt!.getHours()).toBe(12);
+    expect(nap2.status).toBe("now");
+  });
+
+  it("(iii) an override for a slot filled by a real logged nap is ignored", () => {
+    const { items } = buildSleepTodo({
+      now: at("11:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [napLog("09:00", "10:00")],
+      completedItems: [],
+      overrides: { "nap-1": at("08:00").toISOString() },
+    });
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    // Real log wins: nap-1 reflects the logged 09:00 start, not the 08:00 override.
+    expect(nap1.status).toBe("done");
+    expect(nap1.actualStart?.getHours()).toBe(9);
+    expect(nap1.isOverridden).toBeFalsy();
+  });
+
+  it("(iv) an override for bedtime past bedtime_latest is used verbatim, not clamped", () => {
+    const { items } = buildSleepTodo({
+      now: at("08:00"),
+      ageMonths: AGE_6_9,
+      plan: { ...PLAN_6_9, nap_count: 0, overrides: { nap_count: true } },
+      wakeAnchor: at("07:00"),
+      todayLogs: [],
+      completedItems: [],
+      overrides: { bedtime: at("21:30").toISOString() },
+    });
+    const bedtime = items.find((i) => i.id === "bedtime")!;
+    // bedtime_latest is 20:00; without clamping the override stays at 21:30.
+    expect(bedtime.suggestedAt!.getHours()).toBe(21);
+    expect(bedtime.suggestedAt!.getMinutes()).toBe(30);
+    expect(bedtime.isOverridden).toBe(true);
+  });
+
   it("surfaces a signed minutesUntil only on the first actionable item", () => {
     const { items } = buildSleepTodo({
       now: at("08:30"),

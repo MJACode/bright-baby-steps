@@ -2344,6 +2344,7 @@ export type Database = {
           completed_items: string[]
           created_at: string
           id: string
+          nap_overrides: Json
           parent_id: string
           plan_date: string
           updated_at: string
@@ -2354,6 +2355,7 @@ export type Database = {
           completed_items?: string[]
           created_at?: string
           id?: string
+          nap_overrides?: Json
           parent_id: string
           plan_date: string
           updated_at?: string
@@ -2364,6 +2366,7 @@ export type Database = {
           completed_items?: string[]
           created_at?: string
           id?: string
+          nap_overrides?: Json
           parent_id?: string
           plan_date?: string
           updated_at?: string
@@ -3117,6 +3120,31 @@ export type Database = {
         Returns: undefined
       }
       revoke_my_mcp_connection: { Args: { _id: string }; Returns: boolean }
+      set_sleep_todo_item_time: {
+        Args: {
+          p_child_id: string
+          p_item: string
+          p_plan_date: string
+          p_time: string
+        }
+        Returns: {
+          child_id: string
+          completed_items: string[]
+          created_at: string
+          id: string
+          nap_overrides: Json
+          parent_id: string
+          plan_date: string
+          updated_at: string
+          wake_anchor: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sleep_day_todos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_sleep_todo_wake_anchor: {
         Args: { p_child_id: string; p_plan_date: string; p_wake_anchor: string }
         Returns: {
@@ -3124,6 +3152,7 @@ export type Database = {
           completed_items: string[]
           created_at: string
           id: string
+          nap_overrides: Json
           parent_id: string
           plan_date: string
           updated_at: string
@@ -3143,6 +3172,7 @@ export type Database = {
           completed_items: string[]
           created_at: string
           id: string
+          nap_overrides: Json
           parent_id: string
           plan_date: string
           updated_at: string
