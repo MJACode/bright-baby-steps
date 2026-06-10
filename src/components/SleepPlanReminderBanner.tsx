@@ -11,9 +11,10 @@ import { cn } from "@/lib/utils";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
 import { detectOffPlan, type OffPlanState } from "@/lib/sleepOffPlan";
 import {
-  useSleepAlertToast,
+  useSleepAlertPopup,
   type SleepAlertKind,
-} from "@/hooks/useSleepAlertToast";
+} from "@/hooks/useSleepAlertPopup";
+import { SleepAlertPopup } from "@/components/SleepAlertPopup";
 
 interface SleepPlanReminderBannerProps {
   childId: string;
@@ -368,11 +369,12 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
     : null;
 
   const alertKind = state ? bannerToAlertKind(state) : null;
-  useSleepAlertToast({
+  const alertBody = state && "body" in state ? (state.body ?? null) : null;
+  const popup = useSleepAlertPopup({
     childId,
     kind: alertKind,
     title: state?.title ?? null,
-    body: state && "body" in state ? (state.body ?? null) : null,
+    triggerId: recentLogs?.[0]?.id ?? "none",
   });
 
   if (!savedPlan || !state) return null;
@@ -398,6 +400,7 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
     state.kind === "window-15min";
 
   return (
+    <>
     <Card
       className={cn(
         "border",
@@ -436,5 +439,14 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
         </div>
       </CardContent>
     </Card>
+    {alertKind && popup.visible && (
+      <SleepAlertPopup
+        title={state.title}
+        body={alertBody}
+        onDismiss={popup.dismiss}
+        onRemindLater={popup.remindLater}
+      />
+    )}
+    </>
   );
 }
