@@ -107,7 +107,7 @@ export default function MorePage() {
                       {tool.premium && !isPremium && (
                         <span className="inline-flex items-center gap-1 text-xs font-bold tracking-wider px-1.5 py-0.5 rounded bg-accent text-accent-foreground uppercase">
                           <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
-                          Plus
+                          Flare+
                         </span>
                       )}
                     </p>
