@@ -73,7 +73,7 @@ const CATEGORY_ORDER = [
   "Estate Planning",
 ];
 
-export default function FinancialPage() {
+export function FinancialTab() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();

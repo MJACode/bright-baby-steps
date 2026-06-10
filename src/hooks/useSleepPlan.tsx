@@ -12,6 +12,19 @@ export interface SleepPlanOverrides {
   nap_count?: boolean;
 }
 
+// `sleep_plans.overrides` is Json in the generated types — rows can carry
+// null, strings, or arrays. Narrow to real booleans at the read boundary so
+// consumers never truthy-check a stray "false" string.
+export function parseSleepPlanOverrides(json: SleepPlanRow["overrides"]): SleepPlanOverrides {
+  if (typeof json !== "object" || json === null || Array.isArray(json)) return {};
+  const o = json as Record<string, unknown>;
+  return {
+    wake_time: o.wake_time === true,
+    bedtime: o.bedtime === true,
+    nap_count: o.nap_count === true,
+  };
+}
+
 export interface FerberSchedule {
   intervals: number[][];
 }
