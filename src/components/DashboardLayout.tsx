@@ -5,12 +5,27 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
-import { UserCircle, Home, CalendarDays } from "lucide-react";
+import { UserCircle, Home, CalendarDays, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { AIChatWidget } from "@/components/AIChatWidget";
+
+// Secondary pages (no bottom-tab presence) get a back affordance to their
+// parent surface. Navigates to the parent route — not history back — so deep
+// links land somewhere sensible. Tab routes are intentionally absent.
+const backTargets: Record<string, { to: string; label: string }> = {
+  "/dashboard/records": { to: "/dashboard/more", label: "More" },
+  "/dashboard/growth": { to: "/dashboard/more", label: "More" },
+  "/dashboard/leaps": { to: "/dashboard/more", label: "More" },
+  "/dashboard/find-slp": { to: "/dashboard/more", label: "More" },
+  "/dashboard/cry-analyzer": { to: "/dashboard/more", label: "More" },
+  "/dashboard/weekly": { to: "/dashboard/more", label: "More" },
+  "/dashboard/analytics": { to: "/dashboard/more", label: "More" },
+  "/dashboard/profile": { to: "/dashboard", label: "Home" },
+  "/dashboard/calendar": { to: "/dashboard", label: "Home" },
+};
 
 export default function DashboardLayout() {
   const { session, loading } = useAuth();
@@ -100,6 +115,16 @@ export default function DashboardLayout() {
           inside the flex column so it scrolls instead of pushing the tab bar
           off-screen; overscroll-contain keeps any bounce inside it. */}
       <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 max-w-lg mx-auto w-full">
+        {!isOnboarding && backTargets[location.pathname] && (
+          <Link
+            to={backTargets[location.pathname].to}
+            aria-label={`Back to ${backTargets[location.pathname].label}`}
+            className="inline-flex items-center gap-0.5 min-h-[48px] min-w-[48px] -mt-3 -ml-2 pl-1 pr-3 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            {backTargets[location.pathname].label}
+          </Link>
+        )}
         <Outlet />
       </main>
 
