@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Droplets, AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInHours, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { toast } from "@/hooks/use-toast";
 import { PageInstructions } from "@/components/PageInstructions";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
@@ -34,7 +34,7 @@ export default function DiapersPage() {
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
   const [flag, setFlag] = useState(false);
-  const [logTime, setLogTime] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+  const [logTime, setLogTime] = useState<Date>(new Date());
   const [diaperType, setDiaperType] = useState<"wet" | "dirty" | "both">("dirty");
 
   const { data: logs } = useQuery({
@@ -47,7 +47,9 @@ export default function DiapersPage() {
         .order("logged_at", { ascending: false })
         .limit(100);
       if (error) throw error;
-      return data;
+      // Legacy FAB rows wrote "mixed" for wet+dirty; normalize so they count
+      // toward both totals and render correctly.
+      return data.map((d) => (d.diaper_type === "mixed" ? { ...d, diaper_type: "both" } : d));
     },
     enabled: !!activeChild,
   });
@@ -55,7 +57,7 @@ export default function DiapersPage() {
   const resetForm = () => {
     setEditingId(null);
     setDiaperType("dirty");
-    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
+    setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(new Date());
   };
 
   // Auto-open modal when navigated from FAB. Fire at most once per mount —
@@ -94,7 +96,7 @@ export default function DiapersPage() {
     setSelectedConsistency(log.consistency || "");
     setNotes(log.notes || "");
     setFlag(log.flag_for_attention || false);
-    setLogTime(format(new Date(log.logged_at), "yyyy-MM-dd'T'HH:mm"));
+    setLogTime(new Date(log.logged_at));
     setModalOpen(true);
   };
 
@@ -106,7 +108,7 @@ export default function DiapersPage() {
         consistency: selectedConsistency || null,
         notes: notes || null,
         flag_for_attention: flag,
-        logged_at: logTime ? new Date(logTime).toISOString() : new Date().toISOString(),
+        logged_at: logTime.toISOString(),
       };
       if (editingId) {
         const { error } = await supabase.from("diaper_logs").update(payload).eq("id", editingId);
@@ -354,17 +356,13 @@ export default function DiapersPage() {
               </Button>
             </div>
 
-            {/* Time — compact row at bottom */}
-            <div className="flex items-center gap-3 pt-1">
-              <Label className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">Time</Label>
-              <Input
-                type="datetime-local"
-                value={logTime}
-                onChange={(e) => setLogTime(e.target.value)}
-                max={format(new Date(), "yyyy-MM-dd'T'HH:mm")}
-                className="h-8 text-xs flex-1"
-              />
-            </div>
+            <MobileDateTimePicker
+              value={logTime}
+              onChange={setLogTime}
+              maxDate={new Date()}
+              label="Time"
+              className="pt-1"
+            />
 
             <div className="flex gap-2">
               <Button
@@ -379,8 +377,8 @@ export default function DiapersPage() {
               <Button
                 type="button"
                 onClick={() => {
-                  if (!logTime) {
-                    toast({ title: "Please set a time", variant: "destructive" });
+                  if (logTime.getTime() > Date.now()) {
+                    toast({ title: "That time is in the future", description: "Pick a time at or before now.", variant: "destructive" });
                     return;
                   }
                   if (diaperType !== "wet" && (!selectedColor || !selectedConsistency)) {

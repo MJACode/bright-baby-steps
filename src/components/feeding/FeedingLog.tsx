@@ -188,7 +188,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
 
   const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
     table: "feeding_logs",
-    invalidateKeys: [["feeding-logs"], ["feeding-trends-7d"], ["activity-feed"]],
+    invalidateKeys: [["feeding-logs"], ["feeding-trends-7d"], ["activity-feed"], ["last-nursing-side"]],
   });
 
   const handleDelete = () => {
@@ -278,6 +278,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
       queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", activeChild?.id] });
       queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      queryClient.invalidateQueries({ queryKey: ["last-nursing-side"] });
       setDialogOpen(false);
       resetForm();
       setActiveRow(null);

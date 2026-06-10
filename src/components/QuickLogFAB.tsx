@@ -1,6 +1,6 @@
 import { Plus, Moon, UtensilsCrossed, Droplets, Brain, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,57 @@ const INVALIDATE_KEYS = [
   "feeding-logs",
   "diaper-logs",
   "analytics-month",
+  "last-nursing-side",
 ];
+
+const TIME_AGO_OPTIONS = [
+  { label: "Now", value: 0 },
+  { label: "15m ago", value: 15 },
+  { label: "30m ago", value: 30 },
+  { label: "1h ago", value: 60 },
+];
+
+const chipTones = {
+  sleep: { selected: "bg-sleep text-white", idle: "bg-sleep-bg/60 text-sleep hover:bg-sleep-bg" },
+  feeding: { selected: "bg-feeding text-white", idle: "bg-feeding-bg/60 text-feeding hover:bg-feeding-bg" },
+} as const;
+
+function TimeAgoChips({
+  label,
+  tone,
+  value,
+  onChange,
+}: {
+  label: string;
+  tone: keyof typeof chipTones;
+  value: number;
+  onChange: (minutes: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+        {TIME_AGO_OPTIONS.map((opt) => {
+          const selected = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onChange(opt.value)}
+              className={cn(
+                "px-3 min-h-[48px] min-w-[48px] rounded-full text-sm font-semibold transition-colors",
+                selected ? chipTones[tone].selected : chipTones[tone].idle
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function QuickLogFAB() {
   const [open, setOpen] = useState(false);
@@ -155,19 +205,20 @@ function SleepQuickLog({ onDone }: { onDone: () => void }) {
   const invalidate = useQuickLogInvalidate();
   const [sleepType, setSleepType] = useState<"nap" | "night">("nap");
   const [minutes, setMinutes] = useState("");
+  const [endedAgoMin, setEndedAgoMin] = useState(0);
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!activeChild || !user) throw new Error("No active child");
       const mins = parseInt(minutes, 10);
       if (!mins || mins <= 0) throw new Error("Enter a duration in minutes");
-      const now = new Date();
+      const endedAt = new Date(Date.now() - endedAgoMin * 60_000);
       const { error } = await supabase.from("sleep_logs").insert({
         child_id: activeChild.id,
         parent_id: user.id,
         sleep_type: sleepType,
-        started_at: new Date(now.getTime() - mins * 60_000).toISOString(),
-        ended_at: now.toISOString(),
+        started_at: new Date(endedAt.getTime() - mins * 60_000).toISOString(),
+        ended_at: endedAt.toISOString(),
       });
       if (error) throw error;
     },
@@ -213,6 +264,7 @@ function SleepQuickLog({ onDone }: { onDone: () => void }) {
           onChange={(e) => setMinutes(e.target.value)}
         />
       </div>
+      <TimeAgoChips label="Ended" tone="sleep" value={endedAgoMin} onChange={setEndedAgoMin} />
       <Button
         className="w-full"
         disabled={mutation.isPending || !minutes}
@@ -232,6 +284,29 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
   const [feedingType, setFeedingType] = useState<"bottle" | "breast" | "solid">(prefs.lastFeedingType);
   const [oz, setOz] = useState(prefs.lastBottleOz);
   const [duration, setDuration] = useState("");
+  const [fedAgoMin, setFedAgoMin] = useState(0);
+  const [sideChoice, setSideChoice] = useState<"left" | "right" | null>(null);
+
+  const { data: lastSide } = useQuery({
+    queryKey: ["last-nursing-side", activeChild?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("feeding_logs")
+        .select("side")
+        .eq("child_id", activeChild!.id)
+        .eq("feeding_type", "breast")
+        .not("side", "is", null)
+        .order("logged_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.side ?? null;
+    },
+    enabled: !!activeChild,
+  });
+
+  const suggestedSide = lastSide === "left" ? "right" : lastSide === "right" ? "left" : null;
+  const side = sideChoice ?? suggestedSide;
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -240,10 +315,11 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
         child_id: activeChild.id,
         parent_id: user.id,
         feeding_type: feedingType,
-        logged_at: new Date().toISOString(),
+        logged_at: new Date(Date.now() - fedAgoMin * 60_000).toISOString(),
       };
       if (feedingType === "bottle" && oz) payload.amount_oz = parseFloat(oz);
       if (feedingType === "breast" && duration) payload.duration_minutes = parseInt(duration, 10);
+      if (feedingType === "breast" && side) payload.side = side;
       const { error } = await supabase.from("feeding_logs").insert(payload);
       if (error) throw error;
     },
@@ -293,19 +369,52 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
         </div>
       )}
       {feedingType === "breast" && (
-        <div className="space-y-1.5">
-          <Label htmlFor="qlog-feed-min" className="text-xs">Duration (minutes, optional)</Label>
-          <Input
-            id="qlog-feed-min"
-            type="number"
-            inputMode="numeric"
-            min={0}
-            placeholder="e.g. 15"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-          />
-        </div>
+        <>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Side</Label>
+            <div className="flex gap-2">
+              {(["left", "right"] as const).map((s) => (
+                <Button
+                  key={s}
+                  type="button"
+                  variant={side === s ? "default" : "outline"}
+                  className={cn("flex-1 capitalize min-h-[48px]", side === s && "bg-feeding hover:bg-feeding/90")}
+                  onClick={() => setSideChoice(s)}
+                >
+                  {s}
+                </Button>
+              ))}
+            </div>
+            {(lastSide === "left" || lastSide === "right") && (
+              <p className="text-xs text-muted-foreground">
+                Last time: <span className="capitalize">{lastSide}</span>
+                {suggestedSide && !sideChoice && (
+                  <>
+                    {" — starting "}
+                    <span className="capitalize">{suggestedSide}</span>
+                  </>
+                )}
+              </p>
+            )}
+            {lastSide === "both" && (
+              <p className="text-xs text-muted-foreground">Last time: both sides</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="qlog-feed-min" className="text-xs">Duration (minutes, optional)</Label>
+            <Input
+              id="qlog-feed-min"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="e.g. 15"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+          </div>
+        </>
       )}
+      <TimeAgoChips label="Fed" tone="feeding" value={fedAgoMin} onChange={setFedAgoMin} />
       <Button
         className="w-full"
         disabled={mutation.isPending}
@@ -321,7 +430,9 @@ function DiaperQuickLog({ onDone }: { onDone: () => void }) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const invalidate = useQuickLogInvalidate();
-  const [diaperType, setDiaperType] = useState<"wet" | "dirty" | "mixed">("wet");
+  // "both" matches DiapersPage's vocabulary — it counts toward wet AND dirty
+  // totals there; the FAB previously wrote "mixed", which counted as neither.
+  const [diaperType, setDiaperType] = useState<"wet" | "dirty" | "both">("wet");
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -347,7 +458,7 @@ function DiaperQuickLog({ onDone }: { onDone: () => void }) {
   return (
     <FormShell title="Log diaper" morePath="/dashboard/diapers" morePathLabel="More diaper options">
       <div className="flex gap-2">
-        {(["wet", "dirty", "mixed"] as const).map((t) => (
+        {(["wet", "dirty", "both"] as const).map((t) => (
           <Button
             key={t}
             type="button"
