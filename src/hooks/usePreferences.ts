@@ -8,6 +8,8 @@ interface Preferences {
   calendarView: "day" | "week";
   lastSlpZip: string;
   sleepPlanCollapsed: boolean;
+  lastFeedingType: "bottle" | "breast" | "solid";
+  lastBottleOz: string;
 }
 
 const defaults: Preferences = {
@@ -17,6 +19,8 @@ const defaults: Preferences = {
   calendarView: "day",
   lastSlpZip: "",
   sleepPlanCollapsed: false,
+  lastFeedingType: "bottle",
+  lastBottleOz: "",
 };
 
 function loadPrefs(key: string): Preferences {

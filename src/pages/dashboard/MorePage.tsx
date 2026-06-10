@@ -85,7 +85,7 @@ export default function MorePage() {
     <div className="space-y-5 pb-24">
       <div>
         <h1 className="font-display text-2xl font-bold">More</h1>
-        <p className="text-muted-foreground text-sm mt-1">Everything else that doesn't fit on the tab bar.</p>
+        <p className="text-muted-foreground text-sm mt-1">Records, growth, insights, and your account.</p>
       </div>
 
       <div className="space-y-2">
@@ -105,7 +105,7 @@ export default function MorePage() {
                     <p className="font-semibold text-sm flex items-center gap-2">
                       {tool.label}
                       {tool.premium && !isPremium && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-foreground text-warning uppercase font-mono">
+                        <span className="inline-flex items-center gap-1 text-xs font-bold tracking-wider px-1.5 py-0.5 rounded bg-accent text-accent-foreground uppercase">
                           <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
                           Plus
                         </span>

@@ -565,7 +565,7 @@ export default function SleepPage() {
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
                   <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
-                  <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
+                  <p>Tap a row in <strong>Recent sleeps</strong> to edit it.</p>
                 </div>
               </div>
             </PopoverContent>
@@ -778,7 +778,7 @@ export default function SleepPage() {
                   </p>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
+              <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
                 <Pencil className="w-4 h-4" />
               </Button>
             </CardContent>
