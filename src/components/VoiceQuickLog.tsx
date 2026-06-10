@@ -307,16 +307,30 @@ function EntryCard({
   const commitTime = (hhmm: string) => {
     setEditing(null);
     if (!hhmm) return;
+    // Compare against the input's defaultValue so an untouched blur is a
+    // true no-op — occurred_at carries seconds the time input can't express.
+    if (hhmm === format(hasValidTime ? time : new Date(), "HH:mm")) return;
     const [h, m] = hhmm.split(":").map(Number);
     if (Number.isNaN(h) || Number.isNaN(m)) return;
     const next = new Date(hasValidTime ? time : Date.now());
     next.setHours(h, m, 0, 0);
     const nextIso = next.toISOString();
-    if (nextIso === entry.occurred_at) return;
     const fields = { ...entry.fields };
     // Sleep saves anchor on fields.started_at when the parse provided one —
     // keep it in sync so the edited time actually drives the insert.
     if (typeof fields.started_at === "string") fields.started_at = nextIso;
+    // Range parses ("slept from 8 to 11") carry ended_at, and the save path
+    // prefers it over duration — shift it by the same delta so the duration
+    // shown on the card stays true; if it can't be shifted, drop it and let
+    // the duration-derived end win.
+    if (entry.type === "sleep" && typeof fields.ended_at === "string") {
+      const end = new Date(fields.ended_at);
+      if (hasValidTime && !isNaN(end.getTime())) {
+        fields.ended_at = new Date(end.getTime() + (next.getTime() - time.getTime())).toISOString();
+      } else if (durationMin !== null) {
+        delete fields.ended_at;
+      }
+    }
     onChange({ ...entry, occurred_at: nextIso, fields, edited: true });
   };
 
@@ -340,7 +354,7 @@ function EntryCard({
   };
 
   const chipClass =
-    "min-h-[48px] px-3 rounded-lg bg-muted/60 text-sm font-semibold hover:bg-muted active:scale-95 transition-colors";
+    "min-h-[48px] min-w-[48px] px-3 rounded-lg bg-muted/60 text-sm font-semibold hover:bg-muted active:scale-95 transition-colors";
   const inputClass =
     "min-h-[48px] rounded-lg border border-input bg-background px-2 text-base md:text-sm";
 
@@ -430,7 +444,7 @@ function EntryCard({
           )}
         </div>
         {!entry.edited && entry.confidence < 0.7 && (
-          <p className="text-xs text-[hsl(var(--warning))] mt-1">low confidence</p>
+          <p className="text-xs text-warning mt-1">low confidence</p>
         )}
       </div>
       <button
