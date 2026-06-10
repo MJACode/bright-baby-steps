@@ -47,7 +47,9 @@ export default function DiapersPage() {
         .order("logged_at", { ascending: false })
         .limit(100);
       if (error) throw error;
-      return data;
+      // Legacy FAB rows wrote "mixed" for wet+dirty; normalize so they count
+      // toward both totals and render correctly.
+      return data.map((d) => (d.diaper_type === "mixed" ? { ...d, diaper_type: "both" } : d));
     },
     enabled: !!activeChild,
   });

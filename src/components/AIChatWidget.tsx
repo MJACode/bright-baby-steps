@@ -205,7 +205,8 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
     }
     const diaperMatch = lower.match(/log\s+(?:a\s+)?(wet|dirty|mixed|diaper)/);
     if (diaperMatch) {
-      const dType = diaperMatch[1] === "diaper" ? "wet" : diaperMatch[1];
+      // Spoken "mixed" maps to the canonical "both" used by DiapersPage counts.
+      const dType = diaperMatch[1] === "diaper" ? "wet" : diaperMatch[1] === "mixed" ? "both" : diaperMatch[1];
       return { type: "diaper", label: `🧷 ${dType.charAt(0).toUpperCase() + dType.slice(1)} diaper`, data: { diaper_type: dType } };
     }
     return null;

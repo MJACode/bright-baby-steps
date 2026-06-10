@@ -12,6 +12,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X, Sparkles } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { SpeechClass } from "@/components/SpeechClass";
 import { MilestonesPremiumCard } from "@/components/MilestonesPremiumCard";
@@ -265,6 +266,33 @@ export default function MilestonesPage() {
       });
     },
   });
+
+  // Removing a photo only clears the reference — the Storage object stays —
+  // so undo just restores photo_url. Same undo-toast pattern as deletes.
+  const handleRemovePhoto = (cm: { id: string; photo_url: string | null }) => {
+    const previousUrl = cm.photo_url;
+    if (!previousUrl) return;
+    updateCustomPhoto.mutate(
+      { id: cm.id, photoUrl: null },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Photo removed",
+            duration: 5000,
+            action: (
+              <ToastAction
+                altText="Undo removing this photo"
+                className="touch-target"
+                onClick={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: previousUrl })}
+              >
+                Undo
+              </ToastAction>
+            ),
+          });
+        },
+      }
+    );
+  };
 
   // Deleting the row never touches the Storage object, so the undo re-insert
   // keeps photo_url pointing at the still-existing photo.
@@ -551,7 +579,7 @@ export default function MilestonesPage() {
                         key={cm.id}
                         milestone={cm}
                         onDelete={() => deleteCustomMilestone.mutate(cm)}
-                        onRemovePhoto={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: null })}
+                        onRemovePhoto={() => handleRemovePhoto(cm)}
                         onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
                       />
                     ))}

@@ -430,7 +430,9 @@ function DiaperQuickLog({ onDone }: { onDone: () => void }) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const invalidate = useQuickLogInvalidate();
-  const [diaperType, setDiaperType] = useState<"wet" | "dirty" | "mixed">("wet");
+  // "both" matches DiapersPage's vocabulary — it counts toward wet AND dirty
+  // totals there; the FAB previously wrote "mixed", which counted as neither.
+  const [diaperType, setDiaperType] = useState<"wet" | "dirty" | "both">("wet");
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -456,7 +458,7 @@ function DiaperQuickLog({ onDone }: { onDone: () => void }) {
   return (
     <FormShell title="Log diaper" morePath="/dashboard/diapers" morePathLabel="More diaper options">
       <div className="flex gap-2">
-        {(["wet", "dirty", "mixed"] as const).map((t) => (
+        {(["wet", "dirty", "both"] as const).map((t) => (
           <Button
             key={t}
             type="button"

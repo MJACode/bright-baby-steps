@@ -49,6 +49,7 @@ export function VoiceQuickLog({ open, onOpenChange }: Props) {
       queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
       queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
       queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
+      queryClient.invalidateQueries({ queryKey: ["last-nursing-side"] });
       setTimeout(() => {
         onOpenChange(false);
         reset();
