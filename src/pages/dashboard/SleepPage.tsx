@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays, formatDistanceToNow } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -31,7 +31,9 @@ import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
 import { getErrorMessage } from "@/lib/handleRlsError";
+import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import type { FerberSchedule } from "@/hooks/useSleepPlan";
 
@@ -379,6 +381,25 @@ export default function SleepPage() {
     },
   });
 
+  const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
+    table: "sleep_logs",
+    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["sleep-trends-7d"], ["activity-feed"]],
+  });
+
+  const handleDelete = () => {
+    const row = logs?.find((l) => l.id === editingId);
+    if (!row) return;
+    setEditDialogOpen(false);
+    setEditingId(null);
+    deleteLog.mutate(row, {
+      onSuccess: () => {
+        // Deleting an in-progress timer session must also cancel its scheduled
+        // "still sleeping?" notification, same as useActiveSleep's cancel path.
+        if (!row.ended_at && row.source === "timer") void cancelSessionNotification(row.id);
+      },
+    });
+  };
+
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
     setEditSleepType(log.sleep_type as "nap" | "night");
@@ -565,7 +586,7 @@ export default function SleepPage() {
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
                   <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
-                  <p>Tap a row in <strong>Recent sleeps</strong> to edit it.</p>
+                  <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
                 </div>
               </div>
             </PopoverContent>
@@ -756,6 +777,17 @@ export default function SleepPage() {
                 {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
               </Button>
             </div>
+            {editingId && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full touch-target gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleDelete}
+                disabled={updateLog.isPending || deleteLog.isPending}
+              >
+                <Trash2 className="w-4 h-4" /> Delete entry
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

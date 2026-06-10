@@ -26,6 +26,7 @@ import { usePremium } from "@/hooks/usePremium";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { format } from "date-fns";
+import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 
 function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
   milestone: any;
@@ -259,22 +260,12 @@ export default function MilestonesPage() {
     },
   });
 
-  const deleteCustomMilestone = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("custom_milestones").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
-      toast({ title: "Milestone removed" });
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't remove milestone",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
-    },
+  // Deleting the row never touches the Storage object, so the undo re-insert
+  // keeps photo_url pointing at the still-existing photo.
+  const deleteCustomMilestone = useDeleteWithUndo<NonNullable<typeof customMilestones>[0]>({
+    table: "custom_milestones",
+    invalidateKeys: [["custom-milestones"]],
+    entityLabel: "Milestone",
   });
 
   const handleCustomPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -553,7 +544,7 @@ export default function MilestonesPage() {
                       <CustomMilestoneCard
                         key={cm.id}
                         milestone={cm}
-                        onDelete={() => deleteCustomMilestone.mutate(cm.id)}
+                        onDelete={() => deleteCustomMilestone.mutate(cm)}
                         onRemovePhoto={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: null })}
                         onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
                       />
