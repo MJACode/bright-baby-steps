@@ -11,12 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Droplets, AlertTriangle, Pencil, Plus } from "lucide-react";
+import { Droplets, AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, differenceInHours, startOfWeek, addDays, isWithinInterval } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { PageInstructions } from "@/components/PageInstructions";
+import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 
 const colors = ["yellow", "green", "brown", "dark-brown", "black", "red"];
 const consistencies = ["watery", "loose", "soft", "formed", "hard/pellets"];
@@ -72,6 +73,19 @@ export default function DiapersPage() {
       window.history.replaceState({}, document.title);
     }
   }, [location.state, activeChild]);
+
+  const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
+    table: "diaper_logs",
+    invalidateKeys: [["diaper-logs"], ["activity-feed"]],
+  });
+
+  const handleDelete = () => {
+    const row = logs?.find((l) => l.id === editingId);
+    if (!row) return;
+    setModalOpen(false);
+    resetForm();
+    deleteLog.mutate(row);
+  };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
@@ -209,7 +223,7 @@ export default function DiapersPage() {
       <PageInstructions tint="diaper">
         <p><strong>Wet, Dirty, Both</strong> — tap one of the three big buttons for a one-tap log.</p>
         <p>Need to record color, consistency, or a rash? Tap the <strong>+</strong> button on the top right.</p>
-        <p>Tap the pencil on any row to edit it.</p>
+        <p>Tap the pencil on any row to edit or delete it.</p>
       </PageInstructions>
 
       {/* Three quick-add buttons: wet, dirty, both — for one-tap logging */}
@@ -381,6 +395,17 @@ export default function DiapersPage() {
                 {saveMutation.isPending ? "Saving..." : editingId ? "Update" : "Save"}
               </Button>
             </div>
+            {editingId && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full touch-target gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleDelete}
+                disabled={saveMutation.isPending || deleteLog.isPending}
+              >
+                <Trash2 className="w-4 h-4" /> Delete entry
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

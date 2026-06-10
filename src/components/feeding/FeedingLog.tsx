@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UtensilsCrossed, Plus, Pencil, ShieldAlert, AlertTriangle } from "lucide-react";
+import { UtensilsCrossed, Plus, Pencil, ShieldAlert, AlertTriangle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -32,6 +32,7 @@ import NursingTimer from "@/components/feeding/NursingTimer";
 import BottleTimer from "@/components/feeding/BottleTimer";
 import PumpInlineTimer from "@/components/feeding/PumpInlineTimer";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
+import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -182,6 +183,20 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const resetForm = () => {
     setEditingId(null);
     setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(new Date());
+  };
+
+  const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
+    table: "feeding_logs",
+    invalidateKeys: [["feeding-logs"], ["feeding-trends-7d"], ["activity-feed"]],
+  });
+
+  const handleDelete = () => {
+    const row = logs?.find((l) => l.id === editingId);
+    if (!row) return;
+    setDialogOpen(false);
+    resetForm();
+    setActiveRow(null);
+    deleteLog.mutate(row);
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
@@ -482,6 +497,17 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
                 </Button>
               </div>
+              {editingId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full touch-target gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={handleDelete}
+                  disabled={saveMutation.isPending || deleteLog.isPending}
+                >
+                  <Trash2 className="w-4 h-4" /> Delete entry
+                </Button>
+              )}
             </div>
           </DialogContent>
         </Dialog>

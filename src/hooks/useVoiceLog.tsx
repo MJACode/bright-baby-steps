@@ -27,6 +27,7 @@ export type ParsedEntry = {
   fields: Record<string, unknown>;
   confidence: number;
   summary: string;
+  edited?: boolean;
 };
 
 export type ParseResult = {

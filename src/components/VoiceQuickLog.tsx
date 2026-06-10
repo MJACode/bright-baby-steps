@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { Mic, MicOff, X, Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
@@ -226,16 +227,23 @@ function ReviewView({
   onRetry: () => void;
 }) {
   const remove = (idx: number) => onChange(entries.filter((_, i) => i !== idx));
+  const update = (idx: number, next: ParsedEntry) =>
+    onChange(entries.map((e, i) => (i === idx ? next : e)));
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        Review and confirm.
+        Review and confirm — tap a value to adjust it.
       </p>
 
       <div className="space-y-2">
         {entries.map((entry, idx) => (
-          <EntryCard key={idx} entry={entry} onRemove={() => remove(idx)} />
+          <EntryCard
+            key={idx}
+            entry={entry}
+            onChange={(next) => update(idx, next)}
+            onRemove={() => remove(idx)}
+          />
         ))}
         {entries.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
