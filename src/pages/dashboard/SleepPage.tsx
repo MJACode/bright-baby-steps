@@ -579,7 +579,7 @@ export default function SleepPage() {
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
                   <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
-                  <p>Tap a row in <strong>Recent sleeps</strong> to edit it.</p>
+                  <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
                 </div>
               </div>
             </PopoverContent>

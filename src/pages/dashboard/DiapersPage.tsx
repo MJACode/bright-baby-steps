@@ -223,7 +223,7 @@ export default function DiapersPage() {
       <PageInstructions tint="diaper">
         <p><strong>Wet, Dirty, Both</strong> — tap one of the three big buttons for a one-tap log.</p>
         <p>Need to record color, consistency, or a rash? Tap the <strong>+</strong> button on the top right.</p>
-        <p>Tap the pencil on any row to edit it.</p>
+        <p>Tap the pencil on any row to edit or delete it.</p>
       </PageInstructions>
 
       {/* Three quick-add buttons: wet, dirty, both — for one-tap logging */}
