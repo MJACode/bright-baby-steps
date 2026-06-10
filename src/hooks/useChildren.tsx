@@ -101,13 +101,16 @@ export function getAgeInMonths(dob: string, isPremature?: boolean, dueDate?: str
   return differenceInMonths(now, adjustedDate);
 }
 
-export function getAgeInWeeks(dob: string, isPremature?: boolean, dueDate?: string | null) {
+// Developmental leaps are timed from the DUE DATE, not the birth date — so this
+// prefers dueDate whenever it's present, regardless of the isPremature flag
+// (unlike getAge/getAgeInMonths, which only correct for prematurity).
+export function getAgeInWeeks(dob: string, isPremature?: boolean, dueDate?: string | null): number {
   const birthDate = new Date(dob);
   const now = new Date();
   // Return 0 for expected babies (not yet born)
   if (birthDate > now) return 0;
-  const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
-  return differenceInWeeks(now, adjustedDate);
+  const adjustedDate = dueDate ? new Date(dueDate) : birthDate;
+  return Math.max(0, differenceInWeeks(now, adjustedDate));
 }
 
 /** New-account grace window: until the parent finishes (or skips) the retroactive

@@ -11,6 +11,7 @@ import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
+import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
@@ -107,6 +108,9 @@ export default function Dashboard() {
 
       {/* Sleep Coach (Flare+) */}
       <SleepCoachCard activeChild={activeChild} />
+
+      {/* Developmental Leaps */}
+      <LeapCard activeChild={activeChild} />
 
       {/* Streak — celebrate active streaks only. The lapsed and never-logged
           nudges now live in TodaysBriefing's "watch" field. */}

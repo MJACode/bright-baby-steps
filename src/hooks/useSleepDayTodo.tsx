@@ -66,10 +66,26 @@ export function useSleepDayTodo(childId: string | undefined) {
     onSuccess: invalidate,
   });
 
+  const setItemTime = useMutation({
+    mutationFn: async (input: { item: string; time: Date | null }) => {
+      if (!childId || !user) throw new Error("Sign in to adjust the plan.");
+      const { error } = await supabase.rpc("set_sleep_todo_item_time", {
+        p_child_id: childId,
+        p_plan_date: planDate,
+        p_item: input.item,
+        p_time: input.time ? input.time.toISOString() : null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   return {
     row: query.data ?? null,
     isLoading: query.isLoading,
+    overrides: (query.data?.nap_overrides ?? {}) as Record<string, string>,
     setWakeAnchor,
     toggleItem,
+    setItemTime,
   };
 }

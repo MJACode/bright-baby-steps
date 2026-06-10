@@ -20,9 +20,12 @@ export interface SleepTodoItem {
   status: TodoStatus;
   minutesUntil?: number; // signed: + upcoming / - overdue, only on first non-done item
   checkable: boolean; // true only for "routine"
+  logId?: string;
+  isOverridden?: boolean;
 }
 
 export interface SleepTodoLog {
+  id?: string;
   started_at: string;
   ended_at: string | null;
   sleep_type: string;
@@ -66,8 +69,10 @@ export function buildSleepTodo(opts: {
   wakeAnchor: Date | null;
   todayLogs: SleepTodoLog[];
   completedItems: string[];
+  overrides?: Record<string, string>;
 }): { items: SleepTodoItem[]; wakeAnchor: Date; allDone: boolean } {
   const { now, ageMonths, plan, todayLogs, completedItems } = opts;
+  const overrides = opts.overrides ?? {};
 
   const bucket = getAgeBucket(ageMonths);
   const wwLow = plan?.wake_window_low_min ?? WAKE_WINDOW_BY_BRACKET[bucket].low;
@@ -135,6 +140,7 @@ export function buildSleepTodo(opts: {
         actualEnd: end,
         status: "done",
         checkable: false,
+        logId: log.id,
       });
       cursor = end;
       continue;
@@ -151,12 +157,14 @@ export function buildSleepTodo(opts: {
         actualStart: start,
         status: "active",
         checkable: false,
+        logId: activeNap.id,
       });
       cursor = addMinutes(start, napDur);
       continue;
     }
 
-    const suggestedAt = addMinutes(cursor, wwLow);
+    const overrideIso = overrides[id];
+    const suggestedAt = overrideIso ? new Date(overrideIso) : addMinutes(cursor, wwLow);
     cursor = addMinutes(suggestedAt, napDur);
 
     let status: TodoStatus;
@@ -175,6 +183,7 @@ export function buildSleepTodo(opts: {
       suggestedAt,
       status,
       checkable: false,
+      isOverridden: !!overrideIso,
     });
   }
 
@@ -205,10 +214,16 @@ export function buildSleepTodo(opts: {
       actualEnd: nightLog.ended_at ? new Date(nightLog.ended_at) : undefined,
       status: nightLog.ended_at ? "done" : "active",
       checkable: false,
+      logId: nightLog.id,
     });
   } else {
-    let bedtimeAt = addMinutes(cursor, wwLow);
-    if (bedEarliest && bedLatest) {
+    const bedtimeOverrideIso = overrides["bedtime"];
+    let bedtimeAt = bedtimeOverrideIso
+      ? new Date(bedtimeOverrideIso)
+      : addMinutes(cursor, wwLow);
+    // An explicit manual bedtime is honored even outside the window — only the
+    // computed path clamps into [earliest, latest].
+    if (!bedtimeOverrideIso && bedEarliest && bedLatest) {
       const lo = applyClockToDay(now, bedEarliest);
       const hi = applyClockToDay(now, bedLatest);
       if (bedtimeAt.getTime() < lo.getTime()) bedtimeAt = lo;
@@ -223,6 +238,7 @@ export function buildSleepTodo(opts: {
       suggestedAt: bedtimeAt,
       status,
       checkable: false,
+      isOverridden: !!bedtimeOverrideIso,
     });
   }
 

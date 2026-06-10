@@ -7,6 +7,7 @@ interface Preferences {
   showNotifications: boolean;
   calendarView: "day" | "week";
   lastSlpZip: string;
+  sleepPlanCollapsed: boolean;
 }
 
 const defaults: Preferences = {
@@ -15,6 +16,7 @@ const defaults: Preferences = {
   showNotifications: true,
   calendarView: "day",
   lastSlpZip: "",
+  sleepPlanCollapsed: false,
 };
 
 function loadPrefs(key: string): Preferences {

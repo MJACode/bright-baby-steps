@@ -3,7 +3,7 @@
 // Growth, Cry insights, Weekly insights, Profile.
 
 import { Link } from "react-router-dom";
-import { ChevronRight, FileText, Ear, TrendingUp, User, Sparkles, Scale, Speech } from "lucide-react";
+import { ChevronRight, FileText, Ear, TrendingUp, User, Sparkles, Scale, Speech, Brain } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -34,6 +34,14 @@ const tools: ToolItem[] = [
     path: "/dashboard/growth",
     colorClass: "bg-primary/10",
     iconClass: "text-primary",
+  },
+  {
+    label: "Developmental leaps",
+    description: "Understand your baby's growth spurts",
+    icon: Brain,
+    path: "/dashboard/leaps",
+    colorClass: "bg-milestones/10",
+    iconClass: "text-milestones",
   },
   {
     label: "Find a speech therapist",
