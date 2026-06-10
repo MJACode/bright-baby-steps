@@ -101,6 +101,15 @@ export function getAgeInMonths(dob: string, isPremature?: boolean, dueDate?: str
   return differenceInMonths(now, adjustedDate);
 }
 
+export function getAgeInWeeks(dob: string, isPremature?: boolean, dueDate?: string | null) {
+  const birthDate = new Date(dob);
+  const now = new Date();
+  // Return 0 for expected babies (not yet born)
+  if (birthDate > now) return 0;
+  const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
+  return differenceInWeeks(now, adjustedDate);
+}
+
 /** New-account grace window: until the parent finishes (or skips) the retroactive
  *  milestone catch-up, OR 14 days pass since the child row was created, suppress
  *  red-flag surfaces. Used by MilestoneFlags, MilestonesPage banner, and MedicalTab. */
