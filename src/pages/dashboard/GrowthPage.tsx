@@ -360,6 +360,16 @@ export default function GrowthPage() {
   // computable WHO percentile (sex set, age 0–24 months) make it in.
   const canComputePercentiles =
     activeChild?.gender === "male" || activeChild?.gender === "female";
+  // Past 24 months the WHO tables end, so new measurements can never join the
+  // trend — the empty state must not promise otherwise.
+  const pctlAgedOut =
+    !!activeChild &&
+    correctedAgeMonths(
+      activeChild.date_of_birth,
+      activeChild.due_date ?? null,
+      activeChild.is_premature ?? null,
+      new Date().toISOString(),
+    ) > 24;
   const pctlMetricLabel =
     pctlMetric === "weight" ? "Weight" : pctlMetric === "length" ? "Length" : "Head";
   const percentileSeries = !activeChild
@@ -703,7 +713,9 @@ export default function GrowthPage() {
             </div>
             {percentileSeries.length < 2 ? (
               <p className="text-sm text-muted-foreground text-center py-8 px-4">
-                Add another measurement to see the trend.
+                {pctlAgedOut
+                  ? "WHO percentile curves cover ages 0–24 months — earlier measurements show here."
+                  : "Add another measurement to see the trend."}
               </p>
             ) : (
               <ResponsiveContainer width="100%" height={160}>
