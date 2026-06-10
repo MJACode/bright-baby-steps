@@ -1040,3 +1040,52 @@ moves off-device (e.g. server-side cry classification) or if HealthKit
 integration is added.
 
 ---
+
+## 2026-06-10 — Developmental leaps ("leaps") feature — non-diagnostic guidance copy
+
+**Scope:** `src/lib/leaps.ts` (static leap reference content + timing windows),
+`src/pages/dashboard/LeapsPage.tsx`, `src/components/LeapCard.tsx`,
+`src/hooks/useLeaps.tsx`, migration `20260610000000_child_leaps.sql`
+(per-child leap notes table). In-house pass.
+**Trigger:** New user-visible developmental-guidance copy + a new child-data
+table — same consumer-wellness framing the log tracks for milestone / cry /
+speech-class surfaces (CLAUDE.md → "update the log every time you touch …
+user-visible legal text").
+**Risk levels surfaced:**
+- P0: none.
+- P1: none.
+- P2 (resolved):
+  - **Trademark / copyright hygiene** [LOW]. The "leaps" concept is popularized
+    by *The Wonder Weeks* (trademarked, with copyrighted charts/descriptions).
+    Mitigation baked in from design: all leap names, summaries, and sign lists in
+    `src/lib/leaps.ts` are **original Grace Flare wording** — no Wonder Weeks
+    names, text, or charts are reproduced. Only the **week-timing numbers** are
+    used, which are factual/uncopyrightable. No attribution or license needed.
+  - **Non-diagnostic voice + disclaimer** [LOW]. Copy stays celebratory, never
+    diagnostic ("may", "often", "many babies"); no "watch for delays" framing.
+    `LeapsPage.tsx` carries the standing "general guidance … not medical advice"
+    line, consistent with the milestone/cry/speech surfaces. No new health claim.
+  - **Data egress unchanged** [LOW]. `child_leaps` is written via the same
+    Supabase PostgREST endpoints under the parent's JWT; **no new subprocessor,
+    no new third party, no AI call** (the static leap content ships in the
+    bundle). `/subprocessors` unchanged. The optional "Ask about this leap" CTA
+    routes into the existing in-app `developmental` chat skill (Anthropic, already
+    disclosed) — no new egress path.
+  - **Deletion / retention** [LOW]. `child_leaps` has `ON DELETE CASCADE` on both
+    `child_id → children` and `parent_id → auth.users`, so it is purged by the
+    existing `delete_user_account()` / `_purge_user_data()` cascade and the
+    24-month inactive-account purge — no new line needed in those RPCs and no
+    change to PrivacyPage § 8 retention language. RLS mirrors `sleep_day_todos`
+    (SELECT via `has_partner_access`, writes via `partner_can_write`); confirmed
+    no new `get_advisors` security findings post-migration.
+
+**Code refs:** branch `claude/leaps-concept-parents-jsdnw7`; migration
+`20260610000000_child_leaps` applied to live (project `ieuznbvvwdvhtirzwkly`),
+verified via `information_schema.columns` + `pg_policies`.
+**Outstanding:** none specific to this surface beyond the standing US-only /
+consumer-wellness posture. Re-review if leap content ever becomes
+AI-generated/personalized (would add an Anthropic egress path) or if any
+"watch for delays" / screening framing is introduced (would shift it toward
+regulated health-claim territory).
+
+---

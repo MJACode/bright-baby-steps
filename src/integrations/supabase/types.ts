@@ -551,6 +551,47 @@ export type Database = {
           },
         ]
       }
+      child_leaps: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          leap_number: number
+          notes: string | null
+          parent_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          leap_number: number
+          notes?: string | null
+          parent_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          leap_number?: number
+          notes?: string | null
+          parent_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_leaps_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       child_memories: {
         Row: {
           category: string
