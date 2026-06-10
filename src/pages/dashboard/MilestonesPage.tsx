@@ -62,11 +62,11 @@ function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }:
           </div>
           <div className="flex items-center gap-1">
             {!milestone.photo_url && (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-milestones hover:text-milestones/80" onClick={onAddPhoto}>
+              <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 text-milestones hover:text-milestones/80" onClick={onAddPhoto} aria-label="Add photo">
                 <Camera className="w-4 h-4" />
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={onDelete}>
+            <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-destructive" onClick={onDelete} aria-label="Delete milestone">
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
@@ -441,7 +441,7 @@ export default function MilestonesPage() {
                           Finish setting up {activeChild.name}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Tell us which milestones {activeChild.name} has already reached so we don't flag them as missed.
+                          Mark what {activeChild.name} can already do so the timeline starts in the right place.
                         </p>
                         <Button
                           size="sm"

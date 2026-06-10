@@ -523,7 +523,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               </div>
               <div className="flex items-center gap-2">
                 {log.side && <Badge variant="outline" className="text-xs capitalize">{log.side}</Badge>}
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-feeding" onClick={() => openEdit(log)} aria-label="Edit feed">
+                <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-feeding" onClick={() => openEdit(log)} aria-label="Edit feed">
                   <Pencil className="w-4 h-4" />
                 </Button>
               </div>

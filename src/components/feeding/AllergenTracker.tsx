@@ -487,10 +487,6 @@ export default function AllergenTracker() {
           </div>
         )}
 
-        {/* Disclaimer */}
-        <p className="text-[10px] text-muted-foreground/60 text-center italic px-4">
-          These are general introduction guidelines, not medical advice. Always consult your pediatrician before introducing allergens, especially if your baby is at higher risk.
-        </p>
       </div>
     );
   }
@@ -612,8 +608,8 @@ export default function AllergenTracker() {
       <Card className="border-0 bg-secondary/50">
         <CardContent className="p-3 flex items-start gap-2">
           <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-          <p className="text-[10px] text-muted-foreground italic">
-            These are general introduction guidelines, not medical advice. Always consult your pediatrician before introducing allergens, especially if your baby is at higher risk.
+          <p className="text-xs text-muted-foreground italic">
+            General guidelines, not medical advice — check with your pediatrician before introducing new allergens.
           </p>
         </CardContent>
       </Card>

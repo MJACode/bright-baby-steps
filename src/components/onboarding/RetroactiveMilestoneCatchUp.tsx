@@ -119,8 +119,8 @@ export function RetroactiveMilestoneCatchUp({
         What has {childName} already done?
       </h2>
       <p className="text-muted-foreground text-sm mb-6">
-        Tap a milestone {childName} has reached so we don't flag it as missed. Skip anything you're
-        not sure about — you can update everything later.
+        Tap anything {childName} can already do — we'll start the timeline from there. Skip anything
+        you're not sure about — you can update everything later.
       </p>
 
       {isLoading ? (

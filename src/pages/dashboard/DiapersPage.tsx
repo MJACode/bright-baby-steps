@@ -209,7 +209,7 @@ export default function DiapersPage() {
       <PageInstructions tint="diaper">
         <p><strong>Wet, Dirty, Both</strong> — tap one of the three big buttons for a one-tap log.</p>
         <p>Need to record color, consistency, or a rash? Tap the <strong>+</strong> button on the top right.</p>
-        <p>Tap the pencil on any row to edit or delete it.</p>
+        <p>Tap the pencil on any row to edit it.</p>
       </PageInstructions>
 
       {/* Three quick-add buttons: wet, dirty, both — for one-tap logging */}
@@ -466,7 +466,7 @@ export default function DiapersPage() {
               </div>
               <div className="flex items-center gap-2">
                 {log.flag_for_attention && <AlertTriangle className="w-4 h-4 text-destructive" />}
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-diapers" onClick={() => openEdit(log)} aria-label="Edit diaper log">
+                <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-diapers" onClick={() => openEdit(log)} aria-label="Edit diaper log">
                   <Pencil className="w-4 h-4" />
                 </Button>
               </div>

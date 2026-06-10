@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { usePreferences } from "@/hooks/usePreferences";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "@/hooks/use-toast";
@@ -227,8 +228,9 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const invalidate = useQuickLogInvalidate();
-  const [feedingType, setFeedingType] = useState<"bottle" | "breast" | "solid">("bottle");
-  const [oz, setOz] = useState("");
+  const { prefs, setPrefs } = usePreferences();
+  const [feedingType, setFeedingType] = useState<"bottle" | "breast" | "solid">(prefs.lastFeedingType);
+  const [oz, setOz] = useState(prefs.lastBottleOz);
   const [duration, setDuration] = useState("");
 
   const mutation = useMutation({
@@ -247,6 +249,11 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
     },
     onSuccess: () => {
       invalidate();
+      setPrefs(
+        feedingType === "bottle" && oz
+          ? { lastFeedingType: feedingType, lastBottleOz: oz }
+          : { lastFeedingType: feedingType }
+      );
       toast({ title: "Feeding logged 🍼" });
       onDone();
     },

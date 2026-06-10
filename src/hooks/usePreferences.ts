@@ -8,6 +8,8 @@ interface Preferences {
   calendarView: "day" | "week";
   lastSlpZip: string;
   sleepPlanCollapsed: boolean;
+  lastFeedingType: "bottle" | "breast" | "solid";
+  lastBottleOz: string;
 }
 
 const defaults: Preferences = {
@@ -17,6 +19,8 @@ const defaults: Preferences = {
   calendarView: "day",
   lastSlpZip: "",
   sleepPlanCollapsed: false,
+  lastFeedingType: "bottle",
+  lastBottleOz: "",
 };
 
 function loadPrefs(key: string): Preferences {
@@ -36,11 +40,12 @@ export function usePreferences() {
 
   const setPrefs = useCallback(
     (updates: Partial<Preferences>) => {
-      setPrefsState((prev) => {
-        const next = { ...prev, ...updates };
-        localStorage.setItem(key, JSON.stringify(next));
-        return next;
-      });
+      // Write localStorage outside the state updater: updaters pending on a
+      // fiber that unmounts before rendering are discarded, which would drop
+      // the persisted write (e.g. quick-log sheets that close on save).
+      const next = { ...loadPrefs(key), ...updates };
+      localStorage.setItem(key, JSON.stringify(next));
+      setPrefsState(next);
     },
     [key]
   );
