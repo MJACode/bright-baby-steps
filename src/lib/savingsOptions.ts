@@ -1,5 +1,5 @@
 // Comparison data for the "Saving & investing for your child" section on
-// FinancialPage. Hardcoded here (not in Supabase) since contributions, tax
+// the Records Financial tab. Hardcoded here (not in Supabase) since contributions, tax
 // thresholds, and rules change yearly — easier to keep in source under PR
 // review than hot-edit via the DB. Numbers reference 2026 figures; please
 // verify current-year limits before shipping.

@@ -4,7 +4,7 @@ import { startOfDay, endOfDay, format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useSleepPlan } from "@/hooks/useSleepPlan";
+import { parseSleepPlanOverrides, useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { useSleepDayTodo } from "@/hooks/useSleepDayTodo";
 import { buildSleepTodo, type SleepTodoLog } from "@/lib/sleepTodo";
@@ -51,7 +51,7 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const built = buildSleepTodo({
     now: new Date(),
     ageMonths,
-    plan: plan ?? null,
+    plan: plan ? { ...plan, overrides: parseSleepPlanOverrides(plan.overrides) } : null,
     wakeAnchor: row?.wake_anchor ? new Date(row.wake_anchor) : null,
     todayLogs: todayLogs ?? [],
     completedItems: row?.completed_items ?? [],

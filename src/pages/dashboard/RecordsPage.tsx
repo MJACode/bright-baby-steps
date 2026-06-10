@@ -7,7 +7,7 @@ import { FileText, Stethoscope, Activity, DollarSign, Sparkles } from "lucide-re
 import { MedicalTab } from "@/components/records/MedicalTab";
 import { EarlyInterventionTab } from "@/components/records/EarlyInterventionTab";
 import { NewBabyChecklistTab } from "@/components/records/NewBabyChecklistTab";
-import FinancialPage from "@/pages/dashboard/FinancialPage";
+import { FinancialTab } from "@/components/records/FinancialTab";
 
 const VALID_TABS = ["newbaby", "medical", "financial", "ei"] as const;
 
@@ -79,7 +79,7 @@ export default function RecordsPage() {
         </TabsContent>
 
         <TabsContent value="financial" className="mt-4">
-          <FinancialPage />
+          <FinancialTab />
         </TabsContent>
 
         <TabsContent value="ei" className="mt-4">
