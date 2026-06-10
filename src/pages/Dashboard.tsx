@@ -13,6 +13,7 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
+import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
 
@@ -83,6 +84,9 @@ export default function Dashboard() {
       {/* Quick nav grid — primary log entry points, each with a live timer or
           "last logged" hint */}
       <QuickNavGrid childId={activeChild?.id} />
+
+      {/* What to expect this week — age-based developmental content, surfaced high */}
+      <WhatToExpectCard activeChild={activeChild} />
 
       {/* Quick Log with AI — opens the layout-level chat dialog via chatOpener */}
       <button

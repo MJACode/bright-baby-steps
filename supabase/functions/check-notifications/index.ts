@@ -248,6 +248,44 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 3b. Weekly developmental content nudge (7-day cadence)
+    //
+    // Warm, non-diagnostic nudge pointing the parent at the Milestones tab
+    // for this week's developmental update. The in-app card owns the actual
+    // content — this block only fires the nudge.
+    //
+    // Dedupe is 7 days, which the shared 24h `recent` pull above CANNOT see
+    // (it only knows about the last 24h). So we run a dedicated 7-day lookup
+    // for an existing `weekly_development` notification and only push when it
+    // comes back empty. The 3h `recentTypes` set is not consulted here for the
+    // same reason — its window is far narrower than this type's cadence.
+    {
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const dob = new Date(child.date_of_birth);
+      const ageMonths = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+
+      // Only nudge for a born child within the 0–24 month content range.
+      if (dob <= now && ageMonths >= 0 && ageMonths <= 24) {
+        const { data: recentWeekly } = await supabase
+          .from("notifications")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("child_id", child.id)
+          .eq("type", "weekly_development")
+          .gte("created_at", sevenDaysAgo)
+          .limit(1);
+
+        if (!recentWeekly || recentWeekly.length === 0) {
+          notifications.push({
+            user_id: userId,
+            child_id: child.id,
+            message: `📚 This week with ${child.name}: see what to expect in their development. Tap Milestones for this week's update.`,
+            type: "weekly_development",
+          });
+        }
+      }
+    }
+
     // 4. Appointment within 24 hours
     if (!recentTypes.has("appointment_reminder") && child.next_appointment) {
       const apptDate = new Date(child.next_appointment);

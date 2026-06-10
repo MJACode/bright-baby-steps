@@ -69,6 +69,7 @@ export function NotificationBell() {
     sleep_window_15min: "⏰",
     sleep_window_exceeded: "🚨",
     sleep_off_plan: "🧭",
+    weekly_development: "📚",
   };
 
   return (

@@ -24,6 +24,7 @@ import { PhotoMilestoneDetector } from "@/components/PhotoMilestoneDetector";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { usePremium } from "@/hooks/usePremium";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
+import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { format } from "date-fns";
 
 function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
@@ -408,6 +409,9 @@ export default function MilestonesPage() {
             <AddChildDialog />
           ) : (
             <>
+              {/* What to expect this week — age-based developmental content, above the checklist */}
+              <WhatToExpectCard activeChild={activeChild} />
+
               <p className="text-xs text-muted-foreground italic">
                 ⚠️ Every child develops at their own pace. Consult your pediatrician with concerns.
               </p>
