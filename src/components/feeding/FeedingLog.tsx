@@ -33,6 +33,7 @@ import BottleTimer from "@/components/feeding/BottleTimer";
 import PumpInlineTimer from "@/components/feeding/PumpInlineTimer";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
+import { cancelSessionNotification } from "@/lib/sessionNotifications";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -196,7 +197,13 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     setDialogOpen(false);
     resetForm();
     setActiveRow(null);
-    deleteLog.mutate(row);
+    deleteLog.mutate(row, {
+      onSuccess: () => {
+        // Deleting an in-progress timer feed must also cancel its scheduled
+        // session notification, same as useActiveFeed's cancel path.
+        if (row.duration_minutes === null && row.source === "timer") void cancelSessionNotification(row.id);
+      },
+    });
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {

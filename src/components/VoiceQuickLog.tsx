@@ -282,17 +282,55 @@ function ReviewView({
   );
 }
 
+function fieldNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() && !Number.isNaN(Number(v))) return Number(v);
+  return null;
+}
+
 function EntryCard({
   entry,
+  onChange,
   onRemove,
 }: {
   entry: ParsedEntry;
+  onChange: (next: ParsedEntry) => void;
   onRemove: () => void;
 }) {
+  const [editing, setEditing] = useState<"time" | "amount" | "duration" | null>(null);
+
   const time = new Date(entry.occurred_at);
-  const timeLabel = isNaN(time.getTime())
-    ? ""
-    : time.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const hasValidTime = !isNaN(time.getTime());
+  const amountOz = fieldNumber(entry.fields?.amount_oz);
+  const durationMin = fieldNumber(entry.fields?.duration_minutes);
+
+  const commitTime = (hhmm: string) => {
+    setEditing(null);
+    if (!hhmm) return;
+    const [h, m] = hhmm.split(":").map(Number);
+    if (Number.isNaN(h) || Number.isNaN(m)) return;
+    const next = new Date(hasValidTime ? time : Date.now());
+    next.setHours(h, m, 0, 0);
+    const nextIso = next.toISOString();
+    if (nextIso === entry.occurred_at) return;
+    const fields = { ...entry.fields };
+    // Sleep saves anchor on fields.started_at when the parse provided one —
+    // keep it in sync so the edited time actually drives the insert.
+    if (typeof fields.started_at === "string") fields.started_at = nextIso;
+    onChange({ ...entry, occurred_at: nextIso, fields, edited: true });
+  };
+
+  const commitNumber = (key: "amount_oz" | "duration_minutes", raw: string) => {
+    setEditing(null);
+    const next = fieldNumber(raw);
+    if (next === null || next <= 0) return;
+    if (next === fieldNumber(entry.fields?.[key])) return;
+    const fields = { ...entry.fields, [key]: next };
+    // Sleep derives ended_at from started_at + duration on save; drop any
+    // parsed ended_at so the edited duration wins.
+    if (key === "duration_minutes" && entry.type === "sleep") delete fields.ended_at;
+    onChange({ ...entry, fields, edited: true });
+  };
 
   const colorMap: Record<string, string> = {
     feeding: "bg-feeding/10 text-feeding",
@@ -300,6 +338,11 @@ function EntryCard({
     diaper: "bg-diapers/10 text-diapers",
     milestone: "bg-primary/10 text-primary",
   };
+
+  const chipClass =
+    "min-h-[48px] px-3 rounded-lg bg-muted/60 text-sm font-semibold hover:bg-muted active:scale-95 transition-colors";
+  const inputClass =
+    "min-h-[48px] rounded-lg border border-input bg-background px-2 text-base md:text-sm";
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3 flex items-start gap-3">
@@ -313,17 +356,87 @@ function EntryCard({
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{entry.summary}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {timeLabel}
-          {entry.confidence < 0.7 && (
-            <span className="ml-2 text-amber-600">low confidence</span>
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+          {editing === "time" ? (
+            <input
+              type="time"
+              autoFocus
+              defaultValue={format(hasValidTime ? time : new Date(), "HH:mm")}
+              onBlur={(e) => commitTime(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+              className={cn(inputClass, "w-28")}
+              aria-label="Time"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditing("time")}
+              className={chipClass}
+              aria-label="Edit time"
+            >
+              {hasValidTime ? format(time, "h:mm a") : "Set time"}
+            </button>
           )}
-        </p>
+          {amountOz !== null &&
+            (editing === "amount" ? (
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                min="0"
+                autoFocus
+                defaultValue={amountOz}
+                onBlur={(e) => commitNumber("amount_oz", e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                className={cn(inputClass, "w-20")}
+                aria-label="Amount in ounces"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditing("amount")}
+                className={chipClass}
+                aria-label="Edit amount"
+              >
+                {amountOz} oz
+              </button>
+            ))}
+          {durationMin !== null &&
+            (editing === "duration" ? (
+              <input
+                type="number"
+                inputMode="numeric"
+                step="1"
+                min="0"
+                autoFocus
+                defaultValue={durationMin}
+                onBlur={(e) => commitNumber("duration_minutes", e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+                className={cn(inputClass, "w-20")}
+                aria-label="Duration in minutes"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditing("duration")}
+                className={chipClass}
+                aria-label="Edit duration"
+              >
+                {durationMin} min
+              </button>
+            ))}
+          {entry.edited && (
+            <span className="text-xs font-semibold text-primary">edited</span>
+          )}
+        </div>
+        {!entry.edited && entry.confidence < 0.7 && (
+          <p className="text-xs text-[hsl(var(--warning))] mt-1">low confidence</p>
+        )}
       </div>
       <button
         onClick={onRemove}
         aria-label="Remove"
-        className="w-7 h-7 rounded-full hover:bg-muted flex items-center justify-center shrink-0"
+        className="w-12 h-12 -my-2 -mr-2 rounded-full hover:bg-muted flex items-center justify-center shrink-0"
       >
         <MicOff className="w-3.5 h-3.5 text-muted-foreground" />
       </button>

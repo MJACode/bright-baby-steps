@@ -31,6 +31,7 @@ import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
 import { getErrorMessage } from "@/lib/handleRlsError";
+import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
@@ -382,7 +383,7 @@ export default function SleepPage() {
 
   const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
     table: "sleep_logs",
-    invalidateKeys: [["sleep-logs"], ["sleep-trends-7d"], ["activity-feed"]],
+    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["sleep-trends-7d"], ["activity-feed"]],
   });
 
   const handleDelete = () => {
@@ -390,7 +391,13 @@ export default function SleepPage() {
     if (!row) return;
     setEditDialogOpen(false);
     setEditingId(null);
-    deleteLog.mutate(row);
+    deleteLog.mutate(row, {
+      onSuccess: () => {
+        // Deleting an in-progress timer session must also cancel its scheduled
+        // "still sleeping?" notification, same as useActiveSleep's cancel path.
+        if (!row.ended_at && row.source === "timer") void cancelSessionNotification(row.id);
+      },
+    });
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
