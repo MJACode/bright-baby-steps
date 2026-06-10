@@ -13,12 +13,14 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: plan, isLoading: planLoading } = useSleepPlan(childId ?? null);
-  const { active, start, stop } = useActiveSleep(childId);
+  const { active, start, stop, editStart } = useActiveSleep(childId);
   const {
     row,
     isLoading: todoLoading,
+    overrides,
     setWakeAnchor,
     toggleItem,
+    setItemTime,
   } = useSleepDayTodo(childId);
 
   const today = format(new Date(), "yyyy-MM-dd");
@@ -29,7 +31,7 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sleep_logs")
-        .select("started_at, ended_at, sleep_type, source")
+        .select("id, started_at, ended_at, sleep_type, source")
         .eq("child_id", childId!)
         .gte("started_at", startOfDay(new Date()).toISOString())
         .lte("started_at", endOfDay(new Date()).toISOString())
@@ -53,6 +55,7 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     wakeAnchor: row?.wake_anchor ? new Date(row.wake_anchor) : null,
     todayLogs: todayLogs ?? [],
     completedItems: row?.completed_items ?? [],
+    overrides,
   });
 
   const onMutationError = (err: unknown) =>
@@ -90,6 +93,28 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const setWakeTime = (when: Date) =>
     setWakeAnchor.mutate(when, { onError: onMutationError });
 
+  const editActiveStart = (when: Date) =>
+    editStart.mutate(when, {
+      onSuccess: invalidateTodayLogs,
+      onError: onMutationError,
+    });
+
+  const editDoneStart = async (logId: string, when: Date) => {
+    try {
+      const { error } = await supabase
+        .from("sleep_logs")
+        .update({ started_at: when.toISOString() })
+        .eq("id", logId);
+      if (error) throw error;
+      invalidateTodayLogs();
+    } catch (err) {
+      onMutationError(err);
+    }
+  };
+
+  const setItemTimeOverride = (item: string, when: Date | null) =>
+    setItemTime.mutate({ item, time: when }, { onError: onMutationError });
+
   return {
     items: built.items,
     allDone: built.allDone,
@@ -101,6 +126,9 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     stopActive,
     toggleItem: handleToggle,
     setWakeTime,
+    editActiveStart,
+    editDoneStart,
+    setItemTimeOverride,
     isStarting: start.isPending,
     isStopping: stop.isPending,
     isLoading: planLoading || logsLoading || todoLoading,

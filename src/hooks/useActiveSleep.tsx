@@ -69,6 +69,7 @@ export function useActiveSleep(childId: string | undefined) {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["sleep-logs", "active", childId] });
     queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
+    queryClient.invalidateQueries({ queryKey: ["sleep-today-logs"] });
     queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
   };
 
@@ -162,9 +163,21 @@ export function useActiveSleep(childId: string | undefined) {
     onSuccess: invalidate,
   });
 
+  const editStart = useMutation({
+    mutationFn: async (when: Date) => {
+      if (!active) return;
+      const { error } = await supabase
+        .from("sleep_logs")
+        .update({ started_at: when.toISOString() })
+        .eq("id", active.id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
   const isStale = !!active && Date.now() - new Date(active.started_at).getTime() > STALE_AFTER_MS;
 
-  return { active, isLoading, isStale, start, pause, resume, stop, cancel };
+  return { active, isLoading, isStale, start, pause, resume, stop, cancel, editStart };
 }
 
 // Live-updating elapsed-seconds value derived from a server row.
