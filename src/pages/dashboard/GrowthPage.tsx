@@ -152,6 +152,7 @@ export default function GrowthPage() {
   const [setupOpen, setSetupOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pctlMetric, setPctlMetric] = useState<"weight" | "length" | "head">("weight");
 
   // Log measurement form state
   const [logDate, setLogDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -354,6 +355,49 @@ export default function GrowthPage() {
     }));
 
   const birthWeightLine = birthOzVal ? birthOzVal / 16 : undefined;
+
+  // Percentile-over-time series for the selected metric. Only entries with a
+  // computable WHO percentile (sex set, age 0–24 months) make it in.
+  const canComputePercentiles =
+    activeChild?.gender === "male" || activeChild?.gender === "female";
+  // Past 24 months the WHO tables end, so new measurements can never join the
+  // trend — the empty state must not promise otherwise.
+  const pctlAgedOut =
+    !!activeChild &&
+    correctedAgeMonths(
+      activeChild.date_of_birth,
+      activeChild.due_date ?? null,
+      activeChild.is_premature ?? null,
+      new Date().toISOString(),
+    ) > 24;
+  const pctlMetricLabel =
+    pctlMetric === "weight" ? "Weight" : pctlMetric === "length" ? "Length" : "Head";
+  const percentileSeries = !activeChild
+    ? []
+    : logs.flatMap((l) => {
+        const value =
+          pctlMetric === "weight"
+            ? l.weight_oz
+            : pctlMetric === "length"
+            ? l.length_cm
+            : l.head_circumference_cm;
+        if (value == null) return [];
+        const ageM = correctedAgeMonths(
+          activeChild.date_of_birth,
+          activeChild.due_date ?? null,
+          activeChild.is_premature ?? null,
+          l.logged_at,
+        );
+        const fn =
+          pctlMetric === "weight"
+            ? weightPercentile
+            : pctlMetric === "length"
+            ? lengthPercentile
+            : headPercentile;
+        const pctl = fn(value, activeChild.gender, ageM);
+        if (pctl == null) return [];
+        return [{ date: format(parseISO(l.logged_at), "M/d"), pctl }];
+      });
 
   const openEdit = (log: typeof logs[number]) => {
     setEditingId(log.id);
@@ -635,6 +679,93 @@ export default function GrowthPage() {
             </ResponsiveContainer>
             <p className="text-xs text-muted-foreground text-center mt-1">
               Larger dots = pediatrician visits · dashed line = birth weight
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Percentile over time — "is she staying on her curve" */}
+      {canComputePercentiles && logs.length > 0 && (
+        <Card className="border-0 bg-card/60">
+          <CardHeader className="pb-1 pt-3 px-4">
+            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              Percentile over time
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-2 pb-3">
+            <div className="flex gap-1 px-2 pb-1" role="group" aria-label="Percentile metric">
+              {(["weight", "length", "head"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPctlMetric(m)}
+                  aria-pressed={pctlMetric === m}
+                  className={cn(
+                    "flex-1 min-h-[48px] rounded-lg text-sm font-semibold transition-colors",
+                    pctlMetric === m
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {m === "weight" ? "Weight" : m === "length" ? "Length" : "Head"}
+                </button>
+              ))}
+            </div>
+            {percentileSeries.length < 2 ? (
+              <p className="text-sm text-muted-foreground text-center py-8 px-4">
+                {pctlAgedOut
+                  ? "WHO percentile curves cover ages 0–24 months — earlier measurements show here."
+                  : "Add another measurement to see the trend."}
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={percentileSeries} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={[0, 100]}
+                    ticks={[0, 25, 50, 75, 100]}
+                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: "0.75rem",
+                      border: "none",
+                      background: "hsl(var(--card))",
+                      boxShadow: "0 4px 12px hsl(var(--foreground) / 0.08)",
+                      fontSize: 12,
+                    }}
+                    formatter={(v: number) => [`${formatPercentile(v)} percentile`, pctlMetricLabel]}
+                  />
+                  <ReferenceLine
+                    y={50}
+                    stroke="hsl(var(--muted-foreground) / 0.3)"
+                    strokeDasharray="4 3"
+                    label={{
+                      value: "50th",
+                      position: "right",
+                      fontSize: 10,
+                      fill: "hsl(var(--muted-foreground))",
+                    }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="pctl"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: "hsl(var(--primary))" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+            <p className="text-xs text-muted-foreground text-center mt-1 px-4">
+              Staying near the same line matters more than the number itself.
             </p>
           </CardContent>
         </Card>

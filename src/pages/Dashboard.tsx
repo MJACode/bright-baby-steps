@@ -78,15 +78,10 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Today's Briefing */}
-      {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
-
       {/* Quick nav grid — primary log entry points, each with a live timer or
-          "last logged" hint */}
+          "last logged" hint. First thing under the greeting: at 3am this answers
+          "when did she last eat / how long has he been down". */}
       <QuickNavGrid childId={activeChild?.id} />
-
-      {/* What to expect this week — age-based developmental content, surfaced high */}
-      <WhatToExpectCard activeChild={activeChild} />
 
       {/* Quick Log with AI — opens the layout-level chat dialog via chatOpener */}
       <button
@@ -102,6 +97,12 @@ export default function Dashboard() {
           <p className="text-xs text-muted-foreground mt-0.5">Log a feed, nap, or ask Grace Flare AI a question.</p>
         </div>
       </button>
+
+      {/* Today's Briefing */}
+      {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
+
+      {/* What to expect this week — age-based developmental content */}
+      <WhatToExpectCard activeChild={activeChild} />
 
       {/* Visit Prep */}
       <VisitPrepCard activeChild={activeChild} />

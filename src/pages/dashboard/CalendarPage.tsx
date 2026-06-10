@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { isValid, parseISO } from "date-fns";
 import { useChildren } from "@/hooks/useChildren";
 import { useDayEvents, type DayEvent } from "@/hooks/useDayEvents";
 import { useWeekEvents } from "@/hooks/useWeekEvents";
@@ -15,8 +17,23 @@ export default function CalendarPage() {
   const { activeChild } = useChildren();
   const { prefs, setPrefs } = usePreferences();
   const view = prefs.calendarView;
-  const [date, setDate] = useState<Date>(new Date());
+  const location = useLocation();
+  // Hand-off from Analytics day-dots: "yyyy-MM-dd" in router state opens that
+  // day directly in day view.
+  const handoffDate = (location.state as { date?: string } | null)?.date;
+  const [date, setDate] = useState<Date>(() => {
+    const d = handoffDate ? parseISO(handoffDate) : null;
+    return d && isValid(d) ? d : new Date();
+  });
   const [selected, setSelected] = useState<DayEvent | null>(null);
+
+  useEffect(() => {
+    if (!handoffDate) return;
+    const d = parseISO(handoffDate);
+    if (!isValid(d)) return;
+    setDate(d);
+    setPrefs({ calendarView: "day" });
+  }, [handoffDate, setPrefs]);
 
   const { events: dayEvents, isLoading: dayLoading } = useDayEvents(
     activeChild?.id,

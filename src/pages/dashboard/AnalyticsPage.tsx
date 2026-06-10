@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   Moon,
@@ -27,7 +27,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren, getAge } from "@/hooks/useChildren";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -67,8 +67,8 @@ const dayKey = (d: Date | string) => format(typeof d === "string" ? new Date(d) 
 
 export default function AnalyticsPage() {
   const { activeChild } = useChildren();
+  const navigate = useNavigate();
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => startOfMonth(new Date()));
-  const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
 
   const childId = activeChild?.id;
 
@@ -140,11 +140,6 @@ export default function AnalyticsPage() {
     );
   }
 
-  const selectedKey = selectedDay ? dayKey(selectedDay) : null;
-  const selectedSleep = selectedKey ? data?.sleep.filter((l) => dayKey(l.started_at) === selectedKey) ?? [] : [];
-  const selectedFeeding = selectedKey ? data?.feeding.filter((l) => dayKey(l.logged_at) === selectedKey) ?? [] : [];
-  const selectedDiapers = selectedKey ? data?.diapers.filter((l) => dayKey(l.logged_at) === selectedKey) ?? [] : [];
-
   return (
     <div className="space-y-5">
       <div>
@@ -162,13 +157,31 @@ export default function AnalyticsPage() {
             Activity Calendar
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-2 pb-3 flex justify-center">
+        <CardContent className="px-2 pb-3">
           <Calendar
             mode="single"
             month={visibleMonth}
             onMonthChange={setVisibleMonth}
-            selected={selectedDay}
-            onSelect={setSelectedDay}
+            onSelect={(day) => {
+              if (day && dotsByDay.has(dayKey(day))) {
+                navigate("/dashboard/calendar", { state: { date: dayKey(day) } });
+              }
+            }}
+            disabled={(day) => !dotsByDay.has(dayKey(day))}
+            className="w-full p-2"
+            classNames={{
+              months: "flex flex-col w-full",
+              month: "space-y-4 w-full",
+              table: "w-full border-collapse",
+              head_row: "flex w-full",
+              head_cell: "flex-1 text-muted-foreground rounded-md font-normal text-[0.8rem]",
+              row: "flex w-full mt-1",
+              cell: "flex-1 h-12 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+              day: cn(
+                buttonVariants({ variant: "ghost" }),
+                "h-12 w-full min-h-[48px] p-0 font-normal aria-selected:opacity-100",
+              ),
+            }}
             components={{
               DayContent: ({ date }) => {
                 const cats = dotsByDay.get(dayKey(date));
@@ -185,6 +198,9 @@ export default function AnalyticsPage() {
               },
             }}
           />
+          <p className="text-xs text-muted-foreground text-center pt-1">
+            Tap a day with dots to see its full timeline.
+          </p>
         </CardContent>
       </Card>
 
@@ -193,36 +209,6 @@ export default function AnalyticsPage() {
         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-feeding" /> Feeding</span>
         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-diapers" /> Diapers</span>
       </div>
-
-      {selectedDay && (
-        <Card className="border-0 bg-card/60">
-          <CardContent className="px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                {format(selectedDay, "EEE, MMM d")}
-              </p>
-              <button
-                type="button"
-                className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
-                onClick={() => setSelectedDay(undefined)}
-              >
-                Clear
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Badge className="bg-sleep-bg text-sleep border-0 hover:bg-sleep-bg/90">
-                <Moon className="w-3 h-3 mr-1" /> {selectedSleep.length} sleep
-              </Badge>
-              <Badge className="bg-feeding-bg text-feeding border-0 hover:bg-feeding-bg/90">
-                <Utensils className="w-3 h-3 mr-1" /> {selectedFeeding.length} feedings
-              </Badge>
-              <Badge className="bg-diapers-bg text-diapers border-0 hover:bg-diapers-bg/90">
-                <Baby className="w-3 h-3 mr-1" /> {selectedDiapers.length} diapers
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="space-y-1 pt-2">
         <h2 className="font-display font-bold text-sm">7-Day Trends</h2>
