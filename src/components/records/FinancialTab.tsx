@@ -12,11 +12,12 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { differenceInCalendarDays } from "date-fns";
 import { KidSavingsComparison } from "@/components/financial/KidSavingsComparison";
 import { SavingsGrowthCalculator } from "@/components/financial/SavingsGrowthCalculator";
 
-function getFinancialPrompt(ageMonths: number) {
-  if (ageMonths < 3) return {
+function getFinancialPrompt(ageMonths: number, ageDays: number) {
+  if (ageDays <= 30) return {
     message: "Now is a great time to add your baby to your health insurance — most plans have a 30-day special enrollment window.",
     icon: Shield, key: "fin-prompt-0-3",
   };
@@ -34,8 +35,8 @@ function getFinancialPrompt(ageMonths: number) {
   };
 }
 
-function AgePromptBanner({ ageMonths }: { ageMonths: number }) {
-  const prompt = getFinancialPrompt(ageMonths);
+function AgePromptBanner({ ageMonths, ageDays }: { ageMonths: number; ageDays: number }) {
+  const prompt = getFinancialPrompt(ageMonths, ageDays);
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(prompt.key) === "1");
 
   if (dismissed) return null;
@@ -160,6 +161,11 @@ export function FinancialTab() {
     ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
     : 0;
 
+  // Insurance enrollment is a legal deadline from actual birth — raw DOB, not adjusted age.
+  const ageDays = activeChild
+    ? differenceInCalendarDays(new Date(), new Date(activeChild.date_of_birth))
+    : 0;
+
   return (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -174,7 +180,7 @@ export function FinancialTab() {
         </p>
       </div>
 
-      {activeChild && <AgePromptBanner ageMonths={ageMonths} />}
+      {activeChild && <AgePromptBanner ageMonths={ageMonths} ageDays={ageDays} />}
 
       <Card className="border-0 bg-finance-bg">
         <CardContent className="p-4 space-y-2">
