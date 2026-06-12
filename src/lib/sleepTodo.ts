@@ -174,14 +174,18 @@ export function buildSleepTodo(opts: {
       l.sleep_type === "nap" && !l.ended_at && l.source === "timer" && isTodayDayNap(l),
   );
 
-  // Projected naps can't land past the end of today's awake window, and once
-  // the clock is inside the night window no further naps get suggested.
-  // Timestamp comparison (not clock-minutes) so a cascade that wraps past
-  // midnight still skips.
+  // Projected naps skip on any of three clauses: (1) the timestamp lands past
+  // the end of today's awake window — timestamp comparison (not clock-minutes)
+  // so a cascade that wraps past midnight still skips; (2) the evening clock
+  // has reached the night window — heading to bedtime, no more naps today;
+  // (3) the projection itself lands in the night window — a post-midnight
+  // wake anchor (e.g. a night segment ending 00:20) would otherwise project
+  // overnight naps. Early-morning hours (00:00-06:00) deliberately don't
+  // blanket-skip, so a 2 AM night-feed view still shows the day's plan ahead.
   const dayEnd = bedLatest
     ? applyClockToDay(now, bedLatest)
     : addMinutes(dayStart, nightStartMin);
-  const nowIsNight = isNightClockMinutes(clockMinutes(now), nightStartMin);
+  const nowIsEvening = clockMinutes(now) >= nightStartMin;
 
   let napsMatched = 0;
   let activeNapConsumed = false;
@@ -232,7 +236,11 @@ export function buildSleepTodo(opts: {
     cursor = addMinutes(suggestedAt, napDur);
 
     let status: TodoStatus;
-    if (suggestedAt.getTime() > dayEnd.getTime() || nowIsNight) {
+    if (
+      suggestedAt.getTime() > dayEnd.getTime() ||
+      nowIsEvening ||
+      isNightClockMinutes(clockMinutes(suggestedAt), nightStartMin)
+    ) {
       status = "skipped";
     } else if (suggestedAt.getTime() <= now.getTime()) {
       status = "now";

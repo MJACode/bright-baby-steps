@@ -487,6 +487,57 @@ describe("buildSleepTodo — night-window classification", () => {
     expect(nap3.status).toBe("skipped");
   });
 
+  it("a 2:30 AM night-feed view shows bedtime active and the day's naps upcoming, not skipped", () => {
+    // Night sleep still running (timer, no end) — no ended night segment yet,
+    // so the wake anchor falls back to the 07:00 wake clock and the upcoming
+    // day's plan must render ahead, not struck through.
+    const { wakeAnchor, items } = buildSleepTodo({
+      now: at("02:30"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [log(atYesterday("20:30"), null, "night", "timer")],
+      completedItems: [],
+    });
+
+    expect(wakeAnchor.getHours()).toBe(7);
+    expect(wakeAnchor.getMinutes()).toBe(0);
+
+    const bedtime = items.find((i) => i.id === "bedtime")!;
+    expect(bedtime.status).toBe("active");
+
+    const naps = items.filter((i) => i.kind === "nap");
+    expect(naps.length).toBeGreaterThan(0);
+    expect(naps.every((i) => i.status === "upcoming")).toBe(true);
+  });
+
+  it("a night segment ending just after midnight doesn't project overnight naps", () => {
+    // wakeAnchor = 00:20 → nap1 at 01:05 and nap2 at 03:50 land inside the
+    // night window and skip; nap3 at 06:35 is the first daytime projection.
+    const { wakeAnchor, items } = buildSleepTodo({
+      now: at("02:00"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [log(atYesterday("20:30"), at("00:20"), "night")],
+      completedItems: [],
+    });
+
+    expect(wakeAnchor.getHours()).toBe(0);
+    expect(wakeAnchor.getMinutes()).toBe(20);
+
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    const nap2 = items.find((i) => i.id === "nap-2")!;
+    const nap3 = items.find((i) => i.id === "nap-3")!;
+    expect(nap1.suggestedAt!.getHours()).toBe(1);
+    expect(nap1.status).toBe("skipped");
+    expect(nap2.suggestedAt!.getHours()).toBe(3);
+    expect(nap2.status).toBe("skipped");
+    expect(nap3.suggestedAt!.getHours()).toBe(6);
+    expect(nap3.suggestedAt!.getMinutes()).toBe(35);
+    expect(nap3.status).toBe("upcoming");
+  });
+
   it("ignores yesterday's afternoon nap when filling today's slots", () => {
     const { items } = buildSleepTodo({
       now: at("08:00"),
