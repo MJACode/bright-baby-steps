@@ -7,6 +7,8 @@ import { Sparkles } from "lucide-react";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { useToast } from "@/hooks/use-toast";
+import { getAgeBucket } from "@/lib/sleepTriage";
+import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
 import { PremiumGate } from "@/components/PremiumGate";
 import { cn } from "@/lib/utils";
 
@@ -129,7 +131,13 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
 
   const handleStartNap = async () => {
     try {
-      await start.mutateAsync({ sleep_type: "nap" });
+      // Quick-starting inside the night window logs a night sleep, not a nap,
+      // so the Today's Sleep Plan card doesn't anchor a fresh day off it.
+      const nightStartMin = resolveNightStartMin(null, getAgeBucket(data?.ageMonths ?? 0));
+      const sleepType = isNightClockMinutes(clockMinutes(new Date()), nightStartMin)
+        ? "night"
+        : "nap";
+      await start.mutateAsync({ sleep_type: sleepType });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Please try again.";
       toast({

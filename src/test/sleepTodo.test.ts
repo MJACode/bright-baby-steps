@@ -1,4 +1,12 @@
-import { buildSleepTodo, type SleepTodoLog, type SleepTodoPlanLike } from "@/lib/sleepTodo";
+import { startOfDay } from "date-fns";
+
+import {
+  buildSleepTodo,
+  isNightClockMinutes,
+  resolveNightStartMin,
+  type SleepTodoLog,
+  type SleepTodoPlanLike,
+} from "@/lib/sleepTodo";
 
 // getAgeBucket / the bracket tables import from sleepTriage + sleepPlan, which
 // pull no React or Supabase deps, so no module mocks are needed here.
@@ -10,6 +18,27 @@ function at(hhmm: string): Date {
   const d = new Date();
   d.setHours(h, m, 0, 0);
   return d;
+}
+
+// Same clock, one calendar day earlier — for overnight-sleep fixtures.
+function atYesterday(hhmm: string): Date {
+  const d = at(hhmm);
+  d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function log(
+  start: Date,
+  end: Date | null,
+  sleep_type: string,
+  source = "timer",
+): SleepTodoLog {
+  return {
+    started_at: start.toISOString(),
+    ended_at: end ? end.toISOString() : null,
+    sleep_type,
+    source,
+  };
 }
 
 function napLog(
@@ -322,5 +351,181 @@ describe("buildSleepTodo", () => {
     // nap1 at 09:00, now 08:30 → +30.
     expect(withCountdown[0].id).toBe("nap-1");
     expect(withCountdown[0].minutesUntil).toBe(30);
+  });
+});
+
+// 0-3mo via plan: null + ageMonths 1 — bucket defaults: wwLow 45, 4 naps,
+// no bedtime range → night starts at the 20:00 fallback.
+describe("buildSleepTodo — night-window classification", () => {
+  it("renders a 9 PM timer 'nap' as bedtime in progress, not Nap 1 anchoring a fresh day", () => {
+    const now = at("21:13");
+    const { items } = buildSleepTodo({
+      now,
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [log(at("21:13"), null, "nap", "timer")],
+      completedItems: [],
+    });
+
+    const bedtime = items.find((i) => i.id === "bedtime")!;
+    expect(bedtime.status).toBe("active");
+    expect(bedtime.actualStart?.getHours()).toBe(21);
+    expect(bedtime.actualStart?.getMinutes()).toBe(13);
+
+    const naps = items.filter((i) => i.kind === "nap");
+    expect(naps.some((i) => i.status === "active")).toBe(false);
+    expect(naps.every((i) => i.status === "skipped")).toBe(true);
+
+    // Nothing cascades onto the next calendar day.
+    for (const item of items) {
+      if (item.suggestedAt) {
+        expect(startOfDay(item.suggestedAt).getTime()).toBe(startOfDay(now).getTime());
+      }
+    }
+  });
+
+  it("skips all projected naps at night and lands the countdown on bedtime", () => {
+    const { items } = buildSleepTodo({
+      now: at("21:00"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [],
+      completedItems: [],
+    });
+    expect(
+      items.filter((i) => i.kind === "nap").every((i) => i.status === "skipped"),
+    ).toBe(true);
+    const withCountdown = items.filter((i) => i.minutesUntil !== undefined);
+    expect(withCountdown).toHaveLength(1);
+    expect(withCountdown[0].id).toBe("bedtime");
+  });
+
+  it("anchors the day on a night sleep started yesterday that ended this morning", () => {
+    const { wakeAnchor, items } = buildSleepTodo({
+      now: at("07:00"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [log(atYesterday("20:30"), at("06:40"), "night")],
+      completedItems: [],
+    });
+    expect(wakeAnchor.getHours()).toBe(6);
+    expect(wakeAnchor.getMinutes()).toBe(40);
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    expect(nap1.suggestedAt!.getHours()).toBe(7);
+    expect(nap1.suggestedAt!.getMinutes()).toBe(25);
+  });
+
+  it("treats a pre-dawn 'nap' as a night re-sleep: it re-anchors wake but never fills Nap 1", () => {
+    const { wakeAnchor, items } = buildSleepTodo({
+      now: at("09:00"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [
+        log(atYesterday("20:30"), at("03:10"), "night"),
+        log(at("03:40"), at("05:50"), "nap"),
+      ],
+      completedItems: [],
+    });
+    expect(wakeAnchor.getHours()).toBe(5);
+    expect(wakeAnchor.getMinutes()).toBe(50);
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    expect(nap1.status).not.toBe("done");
+    expect(nap1.suggestedAt!.getHours()).toBe(6);
+    expect(nap1.suggestedAt!.getMinutes()).toBe(35);
+  });
+
+  it("a night segment ending after the 13:00 cutoff doesn't anchor the day", () => {
+    const { wakeAnchor } = buildSleepTodo({
+      now: at("14:00"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [log(atYesterday("20:30"), at("13:30"), "night")],
+      completedItems: [],
+    });
+    expect(wakeAnchor.getHours()).toBe(7);
+    expect(wakeAnchor.getMinutes()).toBe(0);
+  });
+
+  it("a completed evening 'nap' fills the bedtime row and completes the day", () => {
+    const { items, allDone } = buildSleepTodo({
+      now: at("22:00"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: null,
+      todayLogs: [log(at("20:45"), at("21:30"), "nap")],
+      completedItems: [],
+    });
+    const bedtime = items.find((i) => i.id === "bedtime")!;
+    expect(bedtime.status).toBe("done");
+    expect(
+      items.filter((i) => i.kind === "nap").every((i) => i.status === "skipped"),
+    ).toBe(true);
+    expect(allDone).toBe(true);
+  });
+
+  it("skips a projected nap that cascades past midnight even though its clock time looks early", () => {
+    const { items } = buildSleepTodo({
+      now: at("18:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [],
+      completedItems: [],
+      overrides: { "nap-2": at("22:45").toISOString() },
+    });
+    // nap-3 cascades from the overridden nap-2 to ~02:15 the next day; a
+    // clock-minutes check would read 02:15 as "before bedtime_latest".
+    const nap3 = items.find((i) => i.id === "nap-3")!;
+    expect(startOfDay(nap3.suggestedAt!).getTime()).toBeGreaterThan(
+      startOfDay(at("18:00")).getTime(),
+    );
+    expect(nap3.status).toBe("skipped");
+  });
+
+  it("ignores yesterday's afternoon nap when filling today's slots", () => {
+    const { items } = buildSleepTodo({
+      now: at("08:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [log(atYesterday("15:00"), atYesterday("16:00"), "nap")],
+      completedItems: [],
+    });
+    const nap1 = items.find((i) => i.id === "nap-1")!;
+    expect(nap1.status).toBe("upcoming");
+    expect(nap1.actualStart).toBeUndefined();
+  });
+});
+
+describe("isNightClockMinutes", () => {
+  const fallback = 20 * 60;
+
+  it("classifies evening and pre-dawn clocks as night", () => {
+    expect(isNightClockMinutes(21 * 60, fallback)).toBe(true);
+    expect(isNightClockMinutes(3 * 60, fallback)).toBe(true);
+  });
+
+  it("classifies daytime clocks as day", () => {
+    expect(isNightClockMinutes(10 * 60, fallback)).toBe(false);
+    expect(isNightClockMinutes(19 * 60 + 30, fallback)).toBe(false);
+  });
+});
+
+describe("resolveNightStartMin", () => {
+  it("plan bedtime_earliest wins over the bracket default", () => {
+    expect(resolveNightStartMin({ bedtime_earliest: "21:00" }, "6-9mo")).toBe(21 * 60);
+  });
+
+  it("bracket bedtime_earliest wins over the 20:00 fallback", () => {
+    expect(resolveNightStartMin(null, "6-9mo")).toBe(19 * 60);
+  });
+
+  it("falls back to 20:00 when both plan and bracket are null", () => {
+    expect(resolveNightStartMin(null, "0-3mo")).toBe(20 * 60);
   });
 });

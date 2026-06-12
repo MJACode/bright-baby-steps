@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { startOfDay, endOfDay, format } from "date-fns";
+import { addHours, startOfDay, endOfDay, format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { parseSleepPlanOverrides, useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { useSleepDayTodo } from "@/hooks/useSleepDayTodo";
-import { buildSleepTodo, type SleepTodoLog } from "@/lib/sleepTodo";
+import { getAgeBucket } from "@/lib/sleepTriage";
+import {
+  buildSleepTodo,
+  clockMinutes,
+  isNightClockMinutes,
+  resolveNightStartMin,
+  type SleepTodoLog,
+} from "@/lib/sleepTodo";
 
 export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const { toast } = useToast();
@@ -29,11 +36,13 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     enabled: !!childId,
     refetchInterval: 60_000,
     queryFn: async () => {
+      // Lower bound is yesterday noon so overnight sleeps (bedtime started
+      // yesterday evening, re-sleeps ending this morning) reach the engine.
       const { data, error } = await supabase
         .from("sleep_logs")
         .select("id, started_at, ended_at, sleep_type, source")
         .eq("child_id", childId!)
-        .gte("started_at", startOfDay(new Date()).toISOString())
+        .gte("started_at", addHours(startOfDay(new Date()), -12).toISOString())
         .lte("started_at", endOfDay(new Date()).toISOString())
         .order("started_at", { ascending: true });
       if (error) throw error;
@@ -48,10 +57,15 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     return () => clearInterval(id);
   }, []);
 
+  const planLike = plan
+    ? { ...plan, overrides: parseSleepPlanOverrides(plan.overrides) }
+    : null;
+  const nightStartMin = resolveNightStartMin(planLike, getAgeBucket(ageMonths));
+
   const built = buildSleepTodo({
     now: new Date(),
     ageMonths,
-    plan: plan ? { ...plan, overrides: parseSleepPlanOverrides(plan.overrides) } : null,
+    plan: planLike,
     wakeAnchor: row?.wake_anchor ? new Date(row.wake_anchor) : null,
     todayLogs: todayLogs ?? [],
     completedItems: row?.completed_items ?? [],
@@ -73,9 +87,15 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
       queryKey: ["sleep-today-logs", childId, today],
     });
 
+  // A "nap" started inside the night window is really bedtime — store it as
+  // night so buildSleepPlan's raw sleep_type aggregates stay clean.
   const startNap = () =>
     start.mutate(
-      { sleep_type: "nap" },
+      {
+        sleep_type: isNightClockMinutes(clockMinutes(new Date()), nightStartMin)
+          ? "night"
+          : "nap",
+      },
       { onSuccess: invalidateTodayLogs, onError: onMutationError },
     );
   const startBedtime = () =>
@@ -119,7 +139,15 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     items: built.items,
     allDone: built.allDone,
     wakeAnchor: built.wakeAnchor,
-    hasWakeSignal: !!row?.wake_anchor || (todayLogs ?? []).length > 0,
+    // Logs that neither started nor ended today (the widened query reaches back
+    // to yesterday noon) don't count as a wake signal for today.
+    hasWakeSignal:
+      !!row?.wake_anchor ||
+      (todayLogs ?? []).some(
+        (l) =>
+          new Date(l.started_at) >= startOfDay(new Date()) ||
+          (l.ended_at && new Date(l.ended_at) >= startOfDay(new Date())),
+      ),
     active,
     startNap,
     startBedtime,
