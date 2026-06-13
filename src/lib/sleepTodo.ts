@@ -58,8 +58,43 @@ function applyClockToDay(dayRef: Date, hhmm: string): Date {
 }
 
 // Minutes-since-midnight for a Date, in local time.
-function clockMinutes(d: Date): number {
+export function clockMinutes(d: Date): number {
   return d.getHours() * 60 + d.getMinutes();
+}
+
+// Latest plausible morning wake — a night-sleep end after this is a late nap
+// or odd log, not the day's wake anchor.
+export const DAY_CUTOFF = "13:00";
+// Sleeps starting before this are overnight re-sleeps, not the day's first nap.
+export const EARLY_MORNING = "06:00";
+// Night start when both the plan and the bracket lack a bedtime_earliest
+// (effectively only 0-3mo). Newborns with 45-90 min wake windows legitimately
+// catnap until ~19:45; misclassifying a rare 20:30 catnap as bedtime is the
+// safe failure mode — a 9 PM "Nap 1" anchoring a fresh day is not.
+export const NIGHT_START_FALLBACK = "20:00";
+
+export function resolveNightStartMin(
+  plan: Pick<SleepTodoPlanLike, "bedtime_earliest"> | null,
+  bucket: AgeBucket,
+): number {
+  return parseHHmm(
+    plan?.bedtime_earliest ??
+      BEDTIME_RANGE_BY_BRACKET[bucket].earliest ??
+      NIGHT_START_FALLBACK,
+  );
+}
+
+export function isNightClockMinutes(min: number, nightStartMin: number): boolean {
+  return min >= nightStartMin || min < parseHHmm(EARLY_MORNING);
+}
+
+// A log counts as night sleep if it's typed that way OR started inside the
+// night window — resilient to historical logs mistyped as "nap" at bedtime.
+export function isEffectivelyNight(log: SleepTodoLog, nightStartMin: number): boolean {
+  return (
+    log.sleep_type === "night" ||
+    isNightClockMinutes(clockMinutes(new Date(log.started_at)), nightStartMin)
+  );
 }
 
 export function buildSleepTodo(opts: {
@@ -67,6 +102,9 @@ export function buildSleepTodo(opts: {
   ageMonths: number;
   plan: SleepTodoPlanLike | null;
   wakeAnchor: Date | null;
+  // Spans yesterday-noon → now so overnight sleeps (bedtime started yesterday,
+  // re-sleeps ending this morning) are visible to the wake-anchor and bedtime
+  // matchers below.
   todayLogs: SleepTodoLog[];
   completedItems: string[];
   overrides?: Record<string, string>;
@@ -85,13 +123,23 @@ export function buildSleepTodo(opts: {
   const wakeClock = plan?.wake_time ?? "07:00";
   const napDur = typicalNapDuration(bucket);
 
-  // Wake anchor: explicit override → today's night-log end → wake clock on today.
-  const nightEnded = todayLogs.find(
-    (l) => l.sleep_type === "night" && l.ended_at,
-  )?.ended_at;
+  const nightStartMin = resolveNightStartMin(plan, bucket);
+  const dayStart = startOfDay(now);
+  const dayCutoff = applyClockToDay(now, DAY_CUTOFF);
+
+  // Wake anchor: explicit override → latest night-sleep end this morning →
+  // wake clock on today. A 3 AM re-sleep ending 5:50 anchors only when no
+  // later night segment ends before the cutoff.
+  const lastNightEnd = todayLogs
+    .filter((l) => l.ended_at && isEffectivelyNight(l, nightStartMin))
+    .map((l) => new Date(l.ended_at as string))
+    .filter(
+      (end) =>
+        end.getTime() >= dayStart.getTime() && end.getTime() <= dayCutoff.getTime(),
+    )
+    .sort((a, b) => b.getTime() - a.getTime())[0];
   const wakeAnchor: Date =
-    opts.wakeAnchor ??
-    (nightEnded ? new Date(nightEnded) : applyClockToDay(now, wakeClock));
+    opts.wakeAnchor ?? lastNightEnd ?? applyClockToDay(now, wakeClock);
 
   const items: SleepTodoItem[] = [];
 
@@ -106,9 +154,15 @@ export function buildSleepTodo(opts: {
 
   let cursor = wakeAnchor;
 
+  // Only daytime naps that started today fill nap slots — yesterday's naps and
+  // night-window starts (bedtime mistyped as "nap", overnight re-sleeps) don't.
+  const isTodayDayNap = (l: SleepTodoLog) =>
+    new Date(l.started_at).getTime() >= dayStart.getTime() &&
+    !isEffectivelyNight(l, nightStartMin);
+
   // Completed naps in chronological order, to fill slots oldest-first.
   const completedNaps = todayLogs
-    .filter((l) => l.sleep_type === "nap" && l.ended_at)
+    .filter((l) => l.sleep_type === "nap" && l.ended_at && isTodayDayNap(l))
     .sort(
       (a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime(),
     );
@@ -116,8 +170,22 @@ export function buildSleepTodo(opts: {
   // as active — voice/manual logs can have a NULL ended_at without being live,
   // which would otherwise show a phantom "in progress" nap.
   const activeNap = todayLogs.find(
-    (l) => l.sleep_type === "nap" && !l.ended_at && l.source === "timer",
+    (l) =>
+      l.sleep_type === "nap" && !l.ended_at && l.source === "timer" && isTodayDayNap(l),
   );
+
+  // Projected naps skip on any of three clauses: (1) the timestamp lands past
+  // the end of today's awake window — timestamp comparison (not clock-minutes)
+  // so a cascade that wraps past midnight still skips; (2) the evening clock
+  // has reached the night window — heading to bedtime, no more naps today;
+  // (3) the projection itself lands in the night window — a post-midnight
+  // wake anchor (e.g. a night segment ending 00:20) would otherwise project
+  // overnight naps. Early-morning hours (00:00-06:00) deliberately don't
+  // blanket-skip, so a 2 AM night-feed view still shows the day's plan ahead.
+  const dayEnd = bedLatest
+    ? applyClockToDay(now, bedLatest)
+    : addMinutes(dayStart, nightStartMin);
+  const nowIsEvening = clockMinutes(now) >= nightStartMin;
 
   let napsMatched = 0;
   let activeNapConsumed = false;
@@ -168,7 +236,11 @@ export function buildSleepTodo(opts: {
     cursor = addMinutes(suggestedAt, napDur);
 
     let status: TodoStatus;
-    if (bedLatest && clockMinutes(suggestedAt) > parseHHmm(bedLatest)) {
+    if (
+      suggestedAt.getTime() > dayEnd.getTime() ||
+      nowIsEvening ||
+      isNightClockMinutes(clockMinutes(suggestedAt), nightStartMin)
+    ) {
       status = "skipped";
     } else if (suggestedAt.getTime() <= now.getTime()) {
       status = "now";
@@ -201,8 +273,29 @@ export function buildSleepTodo(opts: {
     });
   }
 
-  // Bedtime.
-  const nightLog = todayLogs.find((l) => l.sleep_type === "night");
+  // Bedtime: the latest log that is tonight's bedtime — an afternoon-or-later
+  // night log, an evening sleep mistyped as "nap", or a still-running night
+  // sleep (possibly started yesterday evening, e.g. viewed after midnight).
+  // The widened log window means a bare sleep_type === "night" check would
+  // match yesterday's bedtime.
+  const nightLog = [...todayLogs]
+    .sort(
+      (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+    )
+    .find((l) => {
+      const start = new Date(l.started_at);
+      if (l.sleep_type === "night" && start.getTime() >= dayCutoff.getTime()) {
+        return true;
+      }
+      if (
+        l.sleep_type === "nap" &&
+        start.getTime() >= dayStart.getTime() &&
+        clockMinutes(start) >= nightStartMin
+      ) {
+        return true;
+      }
+      return !l.ended_at && l.source === "timer" && isEffectivelyNight(l, nightStartMin);
+    });
   if (nightLog) {
     const start = new Date(nightLog.started_at);
     items.push({

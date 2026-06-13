@@ -29,10 +29,18 @@ export function predictNextNap(opts: {
     .filter((s) => s.ended_at)
     .map((s) => ({ start: new Date(s.started_at), end: new Date(s.ended_at!) }));
 
+  // No plan context here — suppress predictions whose window opens during
+  // typical night hours so the coach never suggests a nap at bedtime.
+  const isNightHour = (d: Date) => {
+    const h = getHours(d);
+    return h >= 20 || h < 6;
+  };
+
   const lastWake = completed.sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
   if (!lastWake) {
     const target = AGE_DEFAULTS_MIN(opts.ageMonths);
     const start = addMinutes(now, target - 30);
+    if (isNightHour(start)) return null;
     return {
       windowStart: start,
       windowEnd: addMinutes(start, 30),
@@ -67,8 +75,10 @@ export function predictNextNap(opts: {
     sameBucket.length >= 5 ? "high" : sameBucket.length >= 2 ? "medium" : "low";
 
   const center = addMinutes(lastWake, personal);
+  const windowStart = addMinutes(center, -15);
+  if (isNightHour(windowStart)) return null;
   return {
-    windowStart: addMinutes(center, -15),
+    windowStart,
     windowEnd: addMinutes(center, 15),
     confidence,
     reason: confidence === "high"

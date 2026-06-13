@@ -5,8 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { useToast } from "@/hooks/use-toast";
+import { getAgeBucket } from "@/lib/sleepTriage";
+import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
 import { PremiumGate } from "@/components/PremiumGate";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +77,7 @@ function deriveCoachState(now: Date, windowStart: Date, windowEnd: Date): CoachS
 
 export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null }) {
   const { data } = useSleepCoach(activeChild);
+  const { data: plan } = useSleepPlan(activeChild?.id ?? null);
   const pred = data?.prediction ?? null;
   const [now, setNow] = useState<Date>(() => new Date());
   const { active: activeSleep, start } = useActiveSleep(activeChild?.id);
@@ -129,7 +133,18 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
 
   const handleStartNap = async () => {
     try {
-      await start.mutateAsync({ sleep_type: "nap" });
+      // Quick-starting inside the night window logs a night sleep, not a nap,
+      // so the Today's Sleep Plan card doesn't anchor a fresh day off it.
+      // Resolve against the saved plan like useSleepTodo does — a family
+      // bedtime later than the bracket default must not classify as night.
+      const nightStartMin = resolveNightStartMin(
+        plan ?? null,
+        getAgeBucket(data?.ageMonths ?? 0),
+      );
+      const sleepType = isNightClockMinutes(clockMinutes(new Date()), nightStartMin)
+        ? "night"
+        : "nap";
+      await start.mutateAsync({ sleep_type: sleepType });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Please try again.";
       toast({
