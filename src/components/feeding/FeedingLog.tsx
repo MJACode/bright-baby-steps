@@ -30,7 +30,6 @@ import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
 import BottleTimer from "@/components/feeding/BottleTimer";
-import PumpInlineTimer from "@/components/feeding/PumpInlineTimer";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
@@ -225,8 +224,12 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
 
   const getPayload = () => ({
     feeding_type: feedType,
-    side: (feedType === "breast" || feedType === "pump") ? side || null : null,
-    duration_minutes: durationMin ? Number(durationMin) : null,
+    side: feedType === "breast"
+      ? side || null
+      : feedType === "pump"
+        ? (amountOzLeft && amountOzRight ? "both" : amountOzLeft ? "left" : amountOzRight ? "right" : null)
+        : null,
+    duration_minutes: feedType === "pump" ? null : durationMin ? Number(durationMin) : null,
     amount_oz: feedType === "pump"
       ? ((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)) || null
       : amountOz ? Number(amountOz) : null,
@@ -360,15 +363,6 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
 
               {feedType === "pump" && (
                 <div className="space-y-3">
-                  <PumpInlineTimer
-                    childId={activeChild.id}
-                    side={side}
-                    onSideChange={setSide}
-                    onDurationChange={handleTimerDuration}
-                    onActiveRowChange={handleActiveRowChange}
-                    initialMinutes={durationMin ? Number(durationMin) : undefined}
-                    editMode={!!editingId}
-                  />
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label>Left Breast (oz)</Label>
@@ -463,17 +457,6 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                       View Allergen Tracker →
                     </Button>
                   )}
-                </div>
-              )}
-
-              {!activeRow && (
-                <div className="space-y-1">
-                  <Label>When</Label>
-                  <MobileDateTimePicker
-                    value={loggedAt}
-                    onChange={setLoggedAt}
-                    maxDate={new Date()}
-                  />
                 </div>
               )}
 
