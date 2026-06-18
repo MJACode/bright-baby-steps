@@ -22,7 +22,6 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { useMemo } from "react";
 import SleepTimer from "@/components/sleep/SleepTimer";
-import { SleepTriageCard } from "@/components/SleepTriageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 import { SleepTodoCard } from "@/components/sleep/SleepTodoCard";
@@ -182,8 +181,8 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
       });
     }
 
-    // 3. Early waking pattern — uses the shared rule so both Insights and
-    // SleepTriageCard agree on what counts as "early waking."
+    // 3. Early waking pattern — uses the shared triage rule so Insights stays
+    // consistent with the rest of the app on what counts as "early waking."
     if (detectTriageReasons(logs, ageMonths).includes("early_waking")) {
       result.push({
         icon: <Sunrise className="w-5 h-5 text-sleep shrink-0" />,
@@ -593,8 +592,6 @@ export default function SleepPage() {
           </Popover>
         </div>
       </div>
-
-      <SleepTriageCard activeChild={activeChild} ageMonths={ageMonths} />
 
       <Card className="border bg-sleep/5 border-sleep/20">
         <CardContent className="p-4 flex items-center gap-3">
