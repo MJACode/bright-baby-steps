@@ -12,6 +12,7 @@ import {
   elapsedSecondsForSide,
   type ActiveFeedRow,
 } from "@/hooks/useActiveFeed";
+import { getErrorMessage } from "@/lib/handleRlsError";
 
 interface NursingTimerProps {
   childId: string | undefined;
@@ -121,7 +122,7 @@ export default function NursingTimer({
       const target = activeSide === next ? null : next;
       await setSide.mutateAsync({ nextSide: target });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "";
+      const msg = getErrorMessage(err);
       if (msg.includes("one_active_feed_per_child")) {
         toast({ title: "Already feeding", description: "A feed is already running on another device." });
       } else {
@@ -142,7 +143,7 @@ export default function NursingTimer({
     try {
       await cancel.mutateAsync();
     } catch (err) {
-      toast({ title: "Couldn't reset", description: err instanceof Error ? err.message : "", variant: "destructive" });
+      toast({ title: "Couldn't reset", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 
