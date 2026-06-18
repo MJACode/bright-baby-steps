@@ -9,6 +9,13 @@ import { toast } from "@/hooks/use-toast";
 
 const ASHA_DIRECTORY_URL = "https://find.asha.org/pro/";
 
+// ASHA ProFind is a Yext Search experience, which reads the `query` URL
+// parameter on load and auto-runs the search. Deep-linking the ZIP here means
+// the directory opens already filtered to the parent's area instead of the
+// unfiltered nationwide list.
+const buildAshaSearchUrl = (zip: string) =>
+  `${ASHA_DIRECTORY_URL}?query=${encodeURIComponent(zip)}`;
+
 export default function FindSlpPage() {
   const { prefs, setPrefs } = usePreferences();
   const [zip, setZip] = useState(prefs.lastSlpZip);
@@ -16,6 +23,8 @@ export default function FindSlpPage() {
   const isValidZip = /^\d{5}$/.test(zip);
 
   const handleSearch = async () => {
+    // Belt-and-suspenders: also copy the ZIP so the parent can paste it if
+    // ASHA ever changes how it reads the search parameter.
     let copied = false;
     try {
       await navigator.clipboard?.writeText(zip);
@@ -24,13 +33,13 @@ export default function FindSlpPage() {
       /* non-secure context or denied */
     }
 
-    window.open(ASHA_DIRECTORY_URL, "_blank", "noopener,noreferrer");
+    window.open(buildAshaSearchUrl(zip), "_blank", "noopener,noreferrer");
 
     toast({
       title: "Opening ASHA's directory",
       description: copied
-        ? `Your ZIP (${zip}) is copied. Just paste it into the search box.`
-        : `Enter your ZIP (${zip}) in the search box.`,
+        ? `Showing therapists near ${zip}. If the search box is empty, your ZIP is copied — just paste it.`
+        : `Showing therapists near ${zip}.`,
     });
 
     setPrefs({ lastSlpZip: zip });
@@ -47,8 +56,8 @@ export default function FindSlpPage() {
 
       <PageInstructions tint="milestones">
         <p>Enter your ZIP code below.</p>
-        <p>We open ASHA's certified-SLP directory (asha.org) in a new tab.</p>
-        <p>Your ZIP is copied so you can paste it straight into their search.</p>
+        <p>We open ASHA's certified-SLP directory (asha.org) in a new tab, already filtered to your area.</p>
+        <p>Your ZIP is also copied, so you can paste it straight into their search if needed.</p>
       </PageInstructions>
 
       <Card>
