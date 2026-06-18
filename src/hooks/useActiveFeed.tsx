@@ -79,6 +79,24 @@ export function useActiveFeed(childId: string | undefined) {
   const start = useMutation({
     mutationFn: async (input: { feeding_type: FeedingType; side?: FeedingSide | null }) => {
       const now = new Date().toISOString();
+      // Reclaim abandoned timer rows before inserting. The active-feed *query*
+      // above ignores sessions older than STALE_AFTER_MS (the user almost
+      // certainly forgot to stop them), so they never surface in the UI — but
+      // the one_active_feed_per_child unique index has no time window, so a
+      // stale row still blocks every new INSERT with a duplicate-key error,
+      // permanently bricking the timer for that child. Delete the orphans the
+      // query already treats as gone so a fresh session can start. A genuinely
+      // active recent session (inside the window) is left untouched, so a real
+      // cross-device collision still surfaces as "Already feeding".
+      const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
+      await supabase
+        .from("feeding_logs")
+        .delete()
+        .eq("child_id", childId!)
+        .eq("source", "timer")
+        .is("duration_minutes", null)
+        .lt("logged_at", cutoff);
+
       const { data, error } = await supabase
         .from("feeding_logs")
         .insert({
