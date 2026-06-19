@@ -15,6 +15,8 @@ import { useState } from "react";
 import { differenceInCalendarDays } from "date-fns";
 import { KidSavingsComparison } from "@/components/financial/KidSavingsComparison";
 import { SavingsGrowthCalculator } from "@/components/financial/SavingsGrowthCalculator";
+import { getFinanceCalendarEvents } from "@/lib/financeCalendar";
+import { CalendarClock } from "lucide-react";
 
 function getFinancialPrompt(ageMonths: number, ageDays: number) {
   if (ageDays <= 30) return {
@@ -58,6 +60,81 @@ function AgePromptBanner({ ageMonths, ageDays }: { ageMonths: number; ageDays: n
         >
           <X className="w-4 h-4" />
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Read-only "next few money dates" — the same recurring sources the Next-Step
+// feed computes (financeCalendar.ts), plus the insurance special-enrollment
+// window when it's still open. Reminder/education only; the section's disclaimer
+// and the page disclaimer both cover "not personalized advice".
+function UpcomingMoneyDates({
+  dateOfBirth,
+  ageDays,
+}: {
+  dateOfBirth: string;
+  ageDays: number;
+}) {
+  const now = new Date();
+  const rows: { label: string; when: string; daysUntil: number }[] = [];
+
+  const insuranceDaysLeft = Math.max(0, 30 - ageDays);
+  if (ageDays <= 30 && insuranceDaysLeft > 0) {
+    rows.push({
+      label: "Add baby to your health insurance",
+      when: `~${insuranceDaysLeft} days left — check your plan`,
+      daysUntil: insuranceDaysLeft,
+    });
+  }
+
+  for (const event of getFinanceCalendarEvents(now, dateOfBirth)) {
+    if (event.type === "tax-season") {
+      rows.push({ label: "Tax season", when: "open now — through ~Apr 15", daysUntil: 0 });
+    } else if (event.type === "open-enrollment") {
+      rows.push({
+        label: "Marketplace open enrollment",
+        when: "Marketplace window open — employer plans vary",
+        daysUntil: 0,
+      });
+    } else if (event.type === "birthday-savings") {
+      rows.push({
+        label: "Birthday — a moment to add to savings",
+        when:
+          event.daysUntil === 0
+            ? "today"
+            : event.daysUntil === 1
+              ? "in 1 day"
+              : `in ${event.daysUntil} days`,
+        daysUntil: event.daysUntil,
+      });
+    }
+  }
+
+  if (rows.length === 0) return null;
+
+  const visible = rows.sort((a, b) => a.daysUntil - b.daysUntil).slice(0, 3);
+
+  return (
+    <Card className="border-0 bg-finance-bg">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="w-4 h-4 text-finance shrink-0" />
+          <p className="text-xs font-bold uppercase tracking-wide text-finance">
+            Upcoming money dates
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {visible.map((row) => (
+            <li key={row.label} className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold">{row.label}</span>
+              <span className="text-xs text-muted-foreground shrink-0">{row.when}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-[11px] text-muted-foreground italic">
+          General guidance only — not personalized financial advice.
+        </p>
       </CardContent>
     </Card>
   );
@@ -181,6 +258,10 @@ export function FinancialTab() {
       </div>
 
       {activeChild && <AgePromptBanner ageMonths={ageMonths} ageDays={ageDays} />}
+
+      {activeChild && (
+        <UpcomingMoneyDates dateOfBirth={activeChild.date_of_birth} ageDays={ageDays} />
+      )}
 
       <Card className="border-0 bg-finance-bg">
         <CardContent className="p-4 space-y-2">

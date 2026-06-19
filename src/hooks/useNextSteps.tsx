@@ -8,6 +8,10 @@ import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { toast } from "@/hooks/use-toast";
 import { rankNextSteps, type NextStepItem } from "@/lib/nextSteps";
+import {
+  getFinanceCalendarEvents,
+  type FinanceCalendarType,
+} from "@/lib/financeCalendar";
 
 interface ChildLite {
   id: string;
@@ -150,6 +154,41 @@ function persistFinanceDismissed(parentId: string, itemIds: string[]) {
       financeDismissKey(parentId),
       JSON.stringify(itemIds),
     );
+  } catch {
+    // localStorage unavailable — the in-memory hide still holds for this session.
+  }
+}
+
+// Per-child, per-occurrence dismiss for the recurring finance-calendar items.
+// Keyed by occurrence year so a dismiss this year doesn't suppress next year's
+// recurrence (mirrors the milestone transient-dismiss scheme above).
+function financeCalendarDismissKey(
+  type: FinanceCalendarType,
+  year: number,
+  childId: string,
+): string {
+  return `nextstep_fincal_${type}_${year}_${childId}`;
+}
+
+function isFinanceCalendarDismissed(
+  type: FinanceCalendarType,
+  year: number,
+  childId: string,
+): boolean {
+  try {
+    return localStorage.getItem(financeCalendarDismissKey(type, year, childId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistFinanceCalendarDismissed(
+  type: FinanceCalendarType,
+  year: number,
+  childId: string,
+) {
+  try {
+    localStorage.setItem(financeCalendarDismissKey(type, year, childId), "1");
   } catch {
     // localStorage unavailable — the in-memory hide still holds for this session.
   }
@@ -333,12 +372,19 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         // FinancialTab writes "completed"; snooze/dismiss are localStorage-only.
         const suppressed = status === "completed" || locallyDismissed;
         const insuranceWindow = prompt.bracket === "fin-prompt-0-3";
+        const insuranceDaysLeft = Math.max(0, 30 - ageDays);
+        // Soft, plan-specific framing — never a guaranteed universal deadline,
+        // never a carrier name. The feed's disclaimer footer covers "not advice".
+        const insuranceMeta =
+          insuranceDaysLeft > 0
+            ? `~${insuranceDaysLeft} days left — check your plan`
+            : "check your plan's window — it varies";
         if (!suppressed) {
           out.push({
             id: `finance-${itemId}`,
             domain: "finance",
             title: prompt.title,
-            meta: prompt.meta,
+            meta: insuranceWindow ? insuranceMeta : prompt.meta,
             // The 30-day insurance window is the one time-boxed finance prompt.
             tier: insuranceWindow ? "soon" : "default",
             deeplink: {
@@ -347,12 +393,42 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
             },
             sortHints: insuranceWindow
               ? {
-                  daysUntil: Math.max(0, 30 - ageDays),
+                  daysUntil: insuranceDaysLeft,
                   order: order++,
                 }
               : { order: order++ },
           });
         }
+      }
+
+      // Recurring annual finance calendar — date-driven, education/reminder
+      // only. Evergreen tier (no deadline urgency); the finance domain-dominance
+      // cap (≤2 finance in top 3) keeps these from flooding the feed. The
+      // birthday nudge carries its days-until so it can lead the other two when
+      // it's close. Deep-link to the financial tab where the calendar lives.
+      const calendarEvents = getFinanceCalendarEvents(
+        now,
+        activeChild.date_of_birth,
+      );
+      for (const event of calendarEvents) {
+        if (isFinanceCalendarDismissed(event.type, event.year, activeChild.id)) {
+          continue;
+        }
+        out.push({
+          id: `fincal-${event.type}-${event.year}`,
+          domain: "finance",
+          title: event.title,
+          meta: event.meta,
+          tier: "default",
+          deeplink: {
+            kind: "route",
+            target: "/dashboard/records?tab=financial",
+          },
+          sortHints:
+            event.type === "birthday-savings"
+              ? { daysUntil: event.daysUntil, order: order++ }
+              : { order: order++ },
+        });
       }
     }
 
@@ -460,9 +536,33 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     [activeChild, dayKey],
   );
 
+  const dismissFinanceCalendarLocal = useCallback(
+    (type: FinanceCalendarType, year: number) => {
+      if (!activeChild) return;
+      persistFinanceCalendarDismissed(type, year, activeChild.id);
+      setDismissTick((n) => n + 1);
+    },
+    [activeChild],
+  );
+
   // finance ids carry the items-table UUID: `finance-<uuid>`.
+  // finance-calendar ids carry `fincal-<type>-<year>`.
   const financeItemIdOf = (item: NextStepItem) =>
-    item.domain === "finance" ? item.id.replace(/^finance-/, "") : null;
+    item.domain === "finance" && item.id.startsWith("finance-")
+      ? item.id.replace(/^finance-/, "")
+      : null;
+  const financeCalendarOf = (
+    item: NextStepItem,
+  ): { type: FinanceCalendarType; year: number } | null => {
+    if (item.domain !== "finance" || !item.id.startsWith("fincal-")) return null;
+    const rest = item.id.replace(/^fincal-/, "");
+    const lastDash = rest.lastIndexOf("-");
+    if (lastDash < 0) return null;
+    const type = rest.slice(0, lastDash) as FinanceCalendarType;
+    const year = Number(rest.slice(lastDash + 1));
+    if (Number.isNaN(year)) return null;
+    return { type, year };
+  };
   const milestoneIdOf = (item: NextStepItem) =>
     item.domain === "milestone" ? item.id.replace(/^milestone-/, "") : null;
 
@@ -471,6 +571,13 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       const itemId = financeItemIdOf(item);
       if (itemId) {
         completeFinanceItem.mutate(itemId);
+        return;
+      }
+      const calendar = financeCalendarOf(item);
+      if (calendar) {
+        // Reminder only — no DB write. Completing clears this occurrence; it
+        // recurs next year via the year-keyed dismiss.
+        dismissFinanceCalendarLocal(calendar.type, calendar.year);
         return;
       }
       const milestoneId = milestoneIdOf(item);
@@ -482,7 +589,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       }
       // Sleep / health items have no inline "complete" — they route to source.
     },
-    [completeFinanceItem, dismissMilestoneLocal],
+    [completeFinanceItem, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const snooze = useCallback(
@@ -492,10 +599,15 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         dismissFinanceLocal(itemId);
         return;
       }
+      const calendar = financeCalendarOf(item);
+      if (calendar) {
+        dismissFinanceCalendarLocal(calendar.type, calendar.year);
+        return;
+      }
       const milestoneId = milestoneIdOf(item);
       if (milestoneId) dismissMilestoneLocal(milestoneId);
     },
-    [dismissFinanceLocal, dismissMilestoneLocal],
+    [dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const dismiss = useCallback(
@@ -505,10 +617,15 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         dismissFinanceLocal(itemId);
         return;
       }
+      const calendar = financeCalendarOf(item);
+      if (calendar) {
+        dismissFinanceCalendarLocal(calendar.type, calendar.year);
+        return;
+      }
       const milestoneId = milestoneIdOf(item);
       if (milestoneId) dismissMilestoneLocal(milestoneId);
     },
-    [dismissFinanceLocal, dismissMilestoneLocal],
+    [dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const isLoading =

@@ -1157,3 +1157,49 @@ No DB migration.
   config rather than re-editing applied migrations.
 
 ---
+
+## 2026-06-19 — Phase 2 finance hero — insurance-window polish + recurring finance calendar
+
+**Scope:** `src/lib/financeCalendar.ts` (new), `src/hooks/useNextSteps.tsx`,
+`src/components/records/FinancialTab.tsx` (new "Upcoming money dates" section).
+In-house pass (legal + financial agents). Builds on the Phase 2 pre-build
+go/no-go memo (same date, above).
+**Trigger:** Net-new user-facing finance reminder copy on the dashboard feed +
+a new FinancialTab section — same FTC § 5 / financial-advice surface this log
+tracks (precedent: the 2026-06-19 "Next Step" feed entry on the same file).
+**Decisions / risk levels:**
+- **Features 1 (insurance-window polish) and 3 (recurring calendar: tax season,
+  open enrollment, birthday→savings) shipped** under the in-house GO-with-
+  conditions from the pre-build memo. Implementation verified against all
+  conditions:
+  - Insurance window framed variable ("~N days left — check your plan" /
+    "check your plan's window — it varies"); no carrier named, no guaranteed
+    universal deadline. [LOW]
+  - **Open-enrollment copy corrected** [MED → resolved]: initial draft said
+    "Health-plan open enrollment is open / review your coverage" — misleading
+    for employer-plan parents since the hardcoded window is the ACA Marketplace
+    (Nov 1–Dec 15). Rewritten to "Marketplace open enrollment is open / the
+    yearly ACA Marketplace window — employer plans may differ, so check yours."
+  - 529/UGMA/HYSA listed comparatively, non-directive; birthday nudge benefit-
+    framed, no provider named. [LOW]
+  - Child Tax Credit named only as "families with kids may qualify … — see your
+    checklist": **no dollar figure, no income input, no estimator** (the Feature
+    2 estimator remains NO-GO pending counsel). [LOW]
+  - Disclaimer present both page-level and inside the new section
+    (`FinancialTab.tsx`). [LOW]
+- **Estimator (Feature 2): NOT built** — remains NO-GO pending the outside-
+  counsel scoping opinion logged in the pre-build memo.
+**Code refs:** branch `claude/parenting-app-differentiation-z8ph7z`. No DB
+migration, no edge function, no new subprocessor — data-driven reminders
+computed client-side from today's date + child DOB; dismiss is a localStorage
+transient only.
+**Outstanding / re-flagged (now that Phase 2 drives traffic to them):**
+- The tax-season string routes to checklist data carrying stale `(2025)`
+  CTC/DCFSA figures — fix in flight (separate finance-figures-refresh PR).
+- **Sponsored finance-firm CTA** (`is_sponsored` / `sponsor_cta_url` in
+  `FinancialTab.tsx`) is live paid solicitation adjacent to children's-finance
+  content — flagged by the legal pass as its own FTC § 5 / state-insurance-
+  solicitation review item that needs a dedicated entry + disclosure before any
+  sponsor goes live. Not introduced by Phase 2; surfaced for follow-up.
+
+---
