@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Flame, Sparkles } from "lucide-react";
 import { openChat } from "@/lib/chatOpener";
+import { computeForgivingStreak } from "@/lib/streak";
 import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
@@ -15,6 +16,7 @@ import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { NextStepFeed } from "@/components/NextStepFeed";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
+import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
 
@@ -36,25 +38,16 @@ export default function Dashboard() {
     enabled: !!activeChild,
   });
 
-  // Streak calculation
+  // Streak calculation — forgiving: a single missed day won't break it.
   const { data: streakData } = useQuery({
     queryKey: ["streak", activeChild?.id],
     queryFn: async () => {
       const { data } = await supabase.from("sleep_logs").select("started_at")
         .eq("child_id", activeChild!.id).order("started_at", { ascending: false }).limit(100);
-      if (!data || data.length === 0) return { streak: 0, lastLogDate: null };
-      
-      const lastLogDate = new Date(data[0].started_at);
-      let streak = 0;
-      let checkDate = new Date();
-      for (let i = 0; i < 60; i++) {
-        const dateStr = format(checkDate, "yyyy-MM-dd");
-        const hasLog = data.some(l => format(new Date(l.started_at), "yyyy-MM-dd") === dateStr);
-        if (hasLog) { streak++; checkDate = new Date(checkDate.getTime() - 86400000); }
-        else if (i === 0) { checkDate = new Date(checkDate.getTime() - 86400000); }
-        else break;
-      }
-      return { streak, lastLogDate };
+      if (!data || data.length === 0) return { streak: 0, freezeUsed: false };
+
+      const dayKeys = data.map((l) => format(new Date(l.started_at), "yyyy-MM-dd"));
+      return computeForgivingStreak(dayKeys);
     },
     enabled: !!activeChild,
   });
@@ -129,13 +122,25 @@ export default function Dashboard() {
                 <Flame className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
-                <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
+                {streakData!.freezeUsed ? (
+                  <>
+                    <p className="font-bold text-sm">🔥 {streakData!.streak}-day streak — we saved it for you</p>
+                    <p className="text-xs text-muted-foreground">A missed day won't break it.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
+                    <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Share the week with family — weekly, dismissible nudge into the AI chat */}
+      <ShareWeekCard activeChild={activeChild} />
 
     </div>
   );

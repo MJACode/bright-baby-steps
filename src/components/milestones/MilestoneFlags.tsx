@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, ExternalLink, ChevronDown } from "lucide-react";
+import { AlertTriangle, ExternalLink, ChevronDown, Sparkles } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { openChat } from "@/lib/chatOpener";
+import { EarlyInterventionExplainer } from "./EarlyInterventionExplainer";
 
 type Severity = "watch" | "concern" | "act";
 
@@ -177,10 +179,10 @@ export function MilestoneFlags({
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <AlertTriangle className="w-5 h-5 text-orange-600" />
-        <h2 className="font-display font-bold text-lg">Things to bring up</h2>
+        <h2 className="font-display font-bold text-lg">A few skills to keep an eye on</h2>
       </div>
       <p className="text-xs text-muted-foreground italic">
-        These are SLP-reviewed prompts based on milestones not yet observed. They're conversation starters with your pediatrician — not diagnoses.
+        Every baby grows on their own timeline. These are skills your baby may not have shown yet — gentle prompts to share with your pediatrician, never a diagnosis.
       </p>
 
       <div className="space-y-2">
@@ -207,9 +209,28 @@ export function MilestoneFlags({
               {/* Expanded body */}
               {isExpanded && (
                 <CardContent className="px-3 pb-3 pt-0 space-y-3">
+                  {(sev === "concern" || sev === "act") && (
+                    <EarlyInterventionExplainer severity={sev} sourceUrl={m.clinical_source_url} />
+                  )}
+
                   {m.concern_flag_language && (
                     <p className="text-sm leading-relaxed text-foreground/90">{m.concern_flag_language}</p>
                   )}
+
+                  <Button
+                    variant="outline"
+                    className="w-full touch-target"
+                    onClick={() =>
+                      openChat({
+                        seedPrompt: `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${m.name}".`,
+                        forceSkill: "developmental",
+                      })
+                    }
+                  >
+                    <Sparkles className="w-4 h-4 mr-1.5" />
+                    Try an activity at home
+                  </Button>
+
                   <div className="flex items-center justify-between gap-2">
                     {m.clinical_source_url ? (
                       <a

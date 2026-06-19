@@ -1157,3 +1157,105 @@ No DB migration.
   config rather than re-editing applied migrations.
 
 ---
+
+## 2026-06-19 — Phase 2 finance hero — insurance-window polish + recurring finance calendar
+
+**Scope:** `src/lib/financeCalendar.ts` (new), `src/hooks/useNextSteps.tsx`,
+`src/components/records/FinancialTab.tsx` (new "Upcoming money dates" section).
+In-house pass (legal + financial agents). Builds on the Phase 2 pre-build
+go/no-go memo (same date, above).
+**Trigger:** Net-new user-facing finance reminder copy on the dashboard feed +
+a new FinancialTab section — same FTC § 5 / financial-advice surface this log
+tracks (precedent: the 2026-06-19 "Next Step" feed entry on the same file).
+**Decisions / risk levels:**
+- **Features 1 (insurance-window polish) and 3 (recurring calendar: tax season,
+  open enrollment, birthday→savings) shipped** under the in-house GO-with-
+  conditions from the pre-build memo. Implementation verified against all
+  conditions:
+  - Insurance window framed variable ("~N days left — check your plan" /
+    "check your plan's window — it varies"); no carrier named, no guaranteed
+    universal deadline. [LOW]
+  - **Open-enrollment copy corrected** [MED → resolved]: initial draft said
+    "Health-plan open enrollment is open / review your coverage" — misleading
+    for employer-plan parents since the hardcoded window is the ACA Marketplace
+    (Nov 1–Dec 15). Rewritten to "Marketplace open enrollment is open / the
+    yearly ACA Marketplace window — employer plans may differ, so check yours."
+  - 529/UGMA/HYSA listed comparatively, non-directive; birthday nudge benefit-
+    framed, no provider named. [LOW]
+  - Child Tax Credit named only as "families with kids may qualify … — see your
+    checklist": **no dollar figure, no income input, no estimator** (the Feature
+    2 estimator remains NO-GO pending counsel). [LOW]
+  - Disclaimer present both page-level and inside the new section
+    (`FinancialTab.tsx`). [LOW]
+- **Estimator (Feature 2): NOT built** — remains NO-GO pending the outside-
+  counsel scoping opinion logged in the pre-build memo.
+**Code refs:** branch `claude/parenting-app-differentiation-z8ph7z`. No DB
+migration, no edge function, no new subprocessor — data-driven reminders
+computed client-side from today's date + child DOB; dismiss is a localStorage
+transient only.
+**Outstanding / re-flagged (now that Phase 2 drives traffic to them):**
+- The tax-season string routes to checklist data carrying stale `(2025)`
+  CTC/DCFSA figures — fix in flight (separate finance-figures-refresh PR).
+- **Sponsored finance-firm CTA** (`is_sponsored` / `sponsor_cta_url` in
+  `FinancialTab.tsx`) is live paid solicitation adjacent to children's-finance
+  content — flagged by the legal pass as its own FTC § 5 / state-insurance-
+  solicitation review item that needs a dedicated entry + disclosure before any
+  sponsor goes live. Not introduced by Phase 2; surfaced for follow-up.
+
+---
+
+## 2026-06-19 — Phase 3 act-early milestone engine — Early Intervention hand-off
+
+**Scope:** `src/components/milestones/EarlyInterventionExplainer.tsx` (new),
+`src/components/milestones/MilestoneFlags.tsx`, `src/hooks/useNextSteps.tsx`
+(an `act`-severity redflag feed item), and migration
+`20260619163407_soften_concern_flag_language.sql` (softens 11 diagnostic
+`concern_flag_language` seed strings). In-house pass (developmental design +
+legal + SLP review). **Highest health-claim-sensitivity surface in the product
+to date** — first Early Intervention / developmental-concern hand-off.
+**Trigger:** First EI/developmental-concern hand-off; FTC § 5 health-claim and
+the CLAUDE.md "milestone copy celebratory, never diagnostic" brand rule.
+**Risk levels surfaced:**
+- **EI explainer + redflag feed item** [LOW — PASS]. Leads with normal-variation
+  reassurance before mentioning EI; header is a question ("Typical, or worth a
+  check-in?"), not an assertion; no banned terms (delay/behind/abnormal/etc.).
+  IDEA Part C facts verified accurate (free, state-run, birth–3, parent self-
+  referral, no diagnosis needed) — and correctly says the **evaluation** is free,
+  not all services (Part C § 303.521 permits sliding-scale service fees). CDC
+  number `1-800-232-4636` verified; "Find my state's program" CTA opens the
+  row's real `clinical_source_url` or falls back to the phone number — no
+  invented URLs. The dashboard redflag item ("A skill to check in on / free to
+  ask — no diagnosis needed") is reminder-framed, not an assessment claim; the
+  `"redflag"` token is style/sort only and never printed to the user (verified).
+- **Diagnostic `concern_flag_language` seed strings** [HIGH → resolved]. Legal
+  found the pre-existing SLP-authored flag strings rendered by `MilestoneFlags`
+  used diagnostic register ("red flag", "an evaluation is recommended" in the
+  app's own voice, "request a hearing test", and an unsubstantiated efficacy
+  claim "Research shows … significantly better outcomes"). Phase 3 amplified the
+  exposure by surrounding them with reassurance. **Resolved:** the SLP advisor
+  rewrote the 11 offending strings (17 others were already compliant) to non-
+  diagnostic, ASHA-aligned, pediatrician-conversation framing, preserving the
+  substantive signal; applied verbatim in the soften migration. The
+  "Research shows…" efficacy claim was deleted (replaced with the factual,
+  non-quantified "Early Intervention is free for children under 3 in the US").
+- **Ordering fix** [resolved]. `MilestoneFlags` previously rendered the specific
+  concern text above the reassurance; reordered so the reassuring explainer
+  leads for concern/act severity.
+**Code refs:** branch `claude/parenting-app-differentiation-z8ph7z`. No schema
+change (the migration only UPDATEs `concern_flag_language`); no new subprocessor;
+no new child-data egress (the activity CTA routes to the already-disclosed
+`developmental` chat skill; the EI CTA opens a URL/tel only).
+**Outstanding / for outside counsel when commissioned:**
+- No `act`-severity milestone is seeded today (highest seeded tier is
+  `concern`), so the `act`-only explainer line and the dashboard redflag item are
+  wired but cannot fire in production yet — **QA must exercise this surface the
+  moment the first `act` row is authored.**
+- Counsel questions logged: (a) does a home-screen redflag-tier developmental
+  reminder need a feed-level "we do not assess or diagnose your child"
+  disclaimer to cure any § 5 "implied assessment" exposure; (b) confirm no
+  launch state's Part C self-referral / free-evaluation rule is narrower than the
+  federal floor.
+- **Deploy step (human):** apply `20260619163407_soften_concern_flag_language.sql`
+  to live so the softened strings ship; the diagnostic strings are live until then.
+
+---

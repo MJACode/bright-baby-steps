@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, Sparkles, HelpCircle, Shield, Download, Trash2 } from "lucide-react";
+import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, Sparkles, HelpCircle, Shield, Download, Trash2, Moon } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
@@ -183,6 +183,19 @@ export default function ProfilePage() {
             <Switch
               checked={prefs.showNotifications}
               onCheckedChange={(checked) => setPrefs({ showNotifications: checked })}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Moon className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Calm mode</p>
+                <p className="text-xs text-muted-foreground">Hide sleep averages and comparisons</p>
+              </div>
+            </div>
+            <Switch
+              checked={prefs.calmMode}
+              onCheckedChange={(checked) => setPrefs({ calmMode: checked })}
             />
           </div>
         </CardContent>

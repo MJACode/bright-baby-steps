@@ -3,11 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { differenceInCalendarDays, differenceInMinutes, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { getAgeInMonths } from "@/hooks/useChildren";
+import { getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { toast } from "@/hooks/use-toast";
 import { rankNextSteps, type NextStepItem } from "@/lib/nextSteps";
+import {
+  getFinanceCalendarEvents,
+  type FinanceCalendarType,
+} from "@/lib/financeCalendar";
 
 interface ChildLite {
   id: string;
@@ -17,6 +21,8 @@ interface ChildLite {
   due_date?: string | null;
   is_expected?: boolean | null;
   next_appointment?: string | null;
+  created_at?: string | null;
+  retroactive_setup_completed_at?: string | null;
 }
 
 // Coach-state phrasing reused from SleepCoachCard:30-76 — only `coming-up` and
@@ -54,22 +60,24 @@ function deriveSleepFeed(
 
 // Finance age-prompt copy reused from FinancialTab:19-36 (benefit-framed,
 // never "$ you're owed"). `bracket` is the AgePromptBanner localStorage dismiss
-// key (FinancialTab.tsx:19-36). `seedTitle` is the EXACT title of the seeded
-// financial_checklist_items row (20260407000000_financial_checklist_overhaul.sql)
-// this prompt maps to — it resolves to that row's UUID, which is what
-// parent_financial_checklist.checklist_item_id actually FKs to.
+// key (FinancialTab.tsx:19-36). `seedTitle` is the EXACT title of the
+// financial_checklist_items row this prompt maps to — it resolves to that row's
+// UUID, which is what parent_financial_checklist.checklist_item_id FKs to.
+// NOTE: these titles are matched against the LIVE financial_checklist_items
+// seed (verified via Supabase), which diverges from the stale repo migration
+// 20260407000000 — keep them in sync with the live rows, not that file.
 function getFinancePrompt(ageMonths: number, ageDays: number) {
   if (ageDays <= 30)
     return {
       bracket: "fin-prompt-0-3",
-      seedTitle: "Add baby to your health insurance",
+      seedTitle: "Add your child to health insurance",
       title: "Add your baby to your health insurance",
       meta: "most plans allow ~30 days — check yours",
     };
   if (ageMonths < 6)
     return {
       bracket: "fin-prompt-3-6",
-      seedTitle: "Build or top up your emergency fund",
+      seedTitle: "Build a 3–6 month emergency fund",
       title: "Start a small emergency fund",
       meta: "even $500 cushions surprise costs",
     };
@@ -150,6 +158,41 @@ function persistFinanceDismissed(parentId: string, itemIds: string[]) {
       financeDismissKey(parentId),
       JSON.stringify(itemIds),
     );
+  } catch {
+    // localStorage unavailable — the in-memory hide still holds for this session.
+  }
+}
+
+// Per-child, per-occurrence dismiss for the recurring finance-calendar items.
+// Keyed by occurrence year so a dismiss this year doesn't suppress next year's
+// recurrence (mirrors the milestone transient-dismiss scheme above).
+function financeCalendarDismissKey(
+  type: FinanceCalendarType,
+  year: number,
+  childId: string,
+): string {
+  return `nextstep_fincal_${type}_${year}_${childId}`;
+}
+
+function isFinanceCalendarDismissed(
+  type: FinanceCalendarType,
+  year: number,
+  childId: string,
+): boolean {
+  try {
+    return localStorage.getItem(financeCalendarDismissKey(type, year, childId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistFinanceCalendarDismissed(
+  type: FinanceCalendarType,
+  year: number,
+  childId: string,
+) {
+  try {
+    localStorage.setItem(financeCalendarDismissKey(type, year, childId), "1");
   } catch {
     // localStorage unavailable — the in-memory hide still holds for this session.
   }
@@ -254,6 +297,32 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     enabled: !!activeChild,
   });
 
+  // Act-severity milestone flag — the highest-urgency developmental signal.
+  // Highest severity is always "act" (we filter to it); oldest-first by
+  // first_flagged_at picks the longest-standing one. Un-dismissed only.
+  // We respect the SAME retroactive grace-period suppression MilestoneFlags
+  // uses so this never fires for a freshly-added older child.
+  const actFlag = useQuery({
+    queryKey: ["next-steps-act-flag", activeChild?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("milestone_flags")
+        .select("milestone_id, severity, first_flagged_at, dismissed_at, speech:milestone_id(name)")
+        .eq("child_id", activeChild!.id)
+        .eq("severity", "act")
+        .is("dismissed_at", null)
+        .order("first_flagged_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const name = (data.speech as { name: string } | null)?.name ?? null;
+      if (!name) return null;
+      return { milestoneId: data.milestone_id, name };
+    },
+    enabled: !!activeChild && !activeChild.is_expected,
+  });
+
   // A re-render trigger for the localStorage-backed milestone dismiss.
   const [dismissTick, setDismissTick] = useState(0);
 
@@ -333,12 +402,19 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         // FinancialTab writes "completed"; snooze/dismiss are localStorage-only.
         const suppressed = status === "completed" || locallyDismissed;
         const insuranceWindow = prompt.bracket === "fin-prompt-0-3";
+        const insuranceDaysLeft = Math.max(0, 30 - ageDays);
+        // Soft, plan-specific framing — never a guaranteed universal deadline,
+        // never a carrier name. The feed's disclaimer footer covers "not advice".
+        const insuranceMeta =
+          insuranceDaysLeft > 0
+            ? `~${insuranceDaysLeft} days left — check your plan`
+            : "check your plan's window — it varies";
         if (!suppressed) {
           out.push({
             id: `finance-${itemId}`,
             domain: "finance",
             title: prompt.title,
-            meta: prompt.meta,
+            meta: insuranceWindow ? insuranceMeta : prompt.meta,
             // The 30-day insurance window is the one time-boxed finance prompt.
             tier: insuranceWindow ? "soon" : "default",
             deeplink: {
@@ -347,12 +423,42 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
             },
             sortHints: insuranceWindow
               ? {
-                  daysUntil: Math.max(0, 30 - ageDays),
+                  daysUntil: insuranceDaysLeft,
                   order: order++,
                 }
               : { order: order++ },
           });
         }
+      }
+
+      // Recurring annual finance calendar — date-driven, education/reminder
+      // only. Evergreen tier (no deadline urgency); the finance domain-dominance
+      // cap (≤2 finance in top 3) keeps these from flooding the feed. The
+      // birthday nudge carries its days-until so it can lead the other two when
+      // it's close. Deep-link to the financial tab where the calendar lives.
+      const calendarEvents = getFinanceCalendarEvents(
+        now,
+        activeChild.date_of_birth,
+      );
+      for (const event of calendarEvents) {
+        if (isFinanceCalendarDismissed(event.type, event.year, activeChild.id)) {
+          continue;
+        }
+        out.push({
+          id: `fincal-${event.type}-${event.year}`,
+          domain: "finance",
+          title: event.title,
+          meta: event.meta,
+          tier: "default",
+          deeplink: {
+            kind: "route",
+            target: "/dashboard/records?tab=financial",
+          },
+          sortHints:
+            event.type === "birthday-savings"
+              ? { daysUntil: event.daysUntil, order: order++ }
+              : { order: order++ },
+        });
       }
     }
 
@@ -378,6 +484,32 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       });
     }
 
+    // Act-severity milestone flag → exactly one redflag item. Suppressed during
+    // the new-account retroactive grace period (same gate as MilestoneFlags).
+    const inGracePeriod =
+      !!activeChild.created_at &&
+      isInRetroactiveGracePeriod({
+        created_at: activeChild.created_at,
+        retroactive_setup_completed_at:
+          activeChild.retroactive_setup_completed_at ?? null,
+      });
+    if (!inGracePeriod && actFlag.data) {
+      out.push({
+        id: `actflag-${actFlag.data.milestoneId}`,
+        domain: "milestone",
+        title: "A skill to check in on",
+        meta: "free to ask — no diagnosis needed",
+        tier: "redflag",
+        deeplink: {
+          kind: "chat",
+          target: "developmental",
+          forceSkill: "developmental",
+          seedPrompt: `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${actFlag.data.name}".`,
+        },
+        sortHints: { order: order++ },
+      });
+    }
+
     return rankNextSteps(out);
     // dismissTick forces recompute after a localStorage milestone dismiss.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -388,6 +520,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     finance.data,
     financeItems.data,
     milestones.data,
+    actFlag.data,
     user,
     dayKey,
     dismissTick,
@@ -435,6 +568,42 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     },
   });
 
+  // Dismissing the act-flag feed item writes dismissed_at to the SAME
+  // milestone_flags row MilestoneFlags owns (upsert shape mirrors
+  // MilestoneFlags.dismissFlag) — so clearing it here also clears the card on
+  // the Milestones tab. We map this feed action to the existing "seeking_eval"
+  // reason ("We're already on it"). Not a localStorage transient: the flag has a
+  // real DB home and a shared consumer, so we write to it.
+  const dismissActFlag = useMutation({
+    mutationFn: async (milestoneId: string) => {
+      if (!activeChild) return;
+      const { error } = await supabase.from("milestone_flags").upsert(
+        {
+          child_id: activeChild.id,
+          parent_id: user!.id,
+          milestone_id: milestoneId,
+          severity: "act",
+          last_evaluated_at: new Date().toISOString(),
+          dismissed_at: new Date().toISOString(),
+          dismissed_reason: "seeking_eval",
+        },
+        { onConflict: "child_id,milestone_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["next-steps-act-flag", activeChild?.id] });
+      queryClient.invalidateQueries({ queryKey: ["milestone-flags", activeChild?.id] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Couldn't update that",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const dismissFinanceLocal = useCallback(
     (itemId: string) => {
       if (!user) return;
@@ -460,17 +629,61 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     [activeChild, dayKey],
   );
 
+  const dismissFinanceCalendarLocal = useCallback(
+    (type: FinanceCalendarType, year: number) => {
+      if (!activeChild) return;
+      persistFinanceCalendarDismissed(type, year, activeChild.id);
+      setDismissTick((n) => n + 1);
+    },
+    [activeChild],
+  );
+
   // finance ids carry the items-table UUID: `finance-<uuid>`.
+  // finance-calendar ids carry `fincal-<type>-<year>`.
   const financeItemIdOf = (item: NextStepItem) =>
-    item.domain === "finance" ? item.id.replace(/^finance-/, "") : null;
+    item.domain === "finance" && item.id.startsWith("finance-")
+      ? item.id.replace(/^finance-/, "")
+      : null;
+  const financeCalendarOf = (
+    item: NextStepItem,
+  ): { type: FinanceCalendarType; year: number } | null => {
+    if (item.domain !== "finance" || !item.id.startsWith("fincal-")) return null;
+    const rest = item.id.replace(/^fincal-/, "");
+    const lastDash = rest.lastIndexOf("-");
+    if (lastDash < 0) return null;
+    const type = rest.slice(0, lastDash) as FinanceCalendarType;
+    const year = Number(rest.slice(lastDash + 1));
+    if (Number.isNaN(year)) return null;
+    return { type, year };
+  };
   const milestoneIdOf = (item: NextStepItem) =>
-    item.domain === "milestone" ? item.id.replace(/^milestone-/, "") : null;
+    item.domain === "milestone" && item.id.startsWith("milestone-")
+      ? item.id.replace(/^milestone-/, "")
+      : null;
+  // Act-flag ids carry the milestone UUID: `actflag-<uuid>`. Distinct from the
+  // celebratory `milestone-<uuid>` focus drill so the two don't collide.
+  const actFlagIdOf = (item: NextStepItem) =>
+    item.domain === "milestone" && item.id.startsWith("actflag-")
+      ? item.id.replace(/^actflag-/, "")
+      : null;
 
   const complete = useCallback(
     (item: NextStepItem) => {
+      const actId = actFlagIdOf(item);
+      if (actId) {
+        dismissActFlag.mutate(actId);
+        return;
+      }
       const itemId = financeItemIdOf(item);
       if (itemId) {
         completeFinanceItem.mutate(itemId);
+        return;
+      }
+      const calendar = financeCalendarOf(item);
+      if (calendar) {
+        // Reminder only — no DB write. Completing clears this occurrence; it
+        // recurs next year via the year-keyed dismiss.
+        dismissFinanceCalendarLocal(calendar.type, calendar.year);
         return;
       }
       const milestoneId = milestoneIdOf(item);
@@ -482,33 +695,53 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       }
       // Sleep / health items have no inline "complete" — they route to source.
     },
-    [completeFinanceItem, dismissMilestoneLocal],
+    [dismissActFlag, completeFinanceItem, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const snooze = useCallback(
     (item: NextStepItem) => {
+      const actId = actFlagIdOf(item);
+      if (actId) {
+        dismissActFlag.mutate(actId);
+        return;
+      }
       const itemId = financeItemIdOf(item);
       if (itemId) {
         dismissFinanceLocal(itemId);
         return;
       }
+      const calendar = financeCalendarOf(item);
+      if (calendar) {
+        dismissFinanceCalendarLocal(calendar.type, calendar.year);
+        return;
+      }
       const milestoneId = milestoneIdOf(item);
       if (milestoneId) dismissMilestoneLocal(milestoneId);
     },
-    [dismissFinanceLocal, dismissMilestoneLocal],
+    [dismissActFlag, dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const dismiss = useCallback(
     (item: NextStepItem) => {
+      const actId = actFlagIdOf(item);
+      if (actId) {
+        dismissActFlag.mutate(actId);
+        return;
+      }
       const itemId = financeItemIdOf(item);
       if (itemId) {
         dismissFinanceLocal(itemId);
         return;
       }
+      const calendar = financeCalendarOf(item);
+      if (calendar) {
+        dismissFinanceCalendarLocal(calendar.type, calendar.year);
+        return;
+      }
       const milestoneId = milestoneIdOf(item);
       if (milestoneId) dismissMilestoneLocal(milestoneId);
     },
-    [dismissFinanceLocal, dismissMilestoneLocal],
+    [dismissActFlag, dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const isLoading =
@@ -517,6 +750,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       milestones.isLoading ||
       finance.isLoading ||
       financeItems.isLoading ||
+      actFlag.isLoading ||
       visit.isLoading);
 
   const isError =
@@ -524,6 +758,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     milestones.isError ||
     finance.isError ||
     financeItems.isError ||
+    actFlag.isError ||
     visit.isError;
 
   return { items, isLoading, isError, complete, snooze, dismiss };
