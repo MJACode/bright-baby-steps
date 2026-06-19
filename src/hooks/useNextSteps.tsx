@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { differenceInCalendarDays, differenceInMinutes, format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { getAgeInMonths } from "@/hooks/useChildren";
+import { getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { toast } from "@/hooks/use-toast";
@@ -21,6 +21,8 @@ interface ChildLite {
   due_date?: string | null;
   is_expected?: boolean | null;
   next_appointment?: string | null;
+  created_at?: string | null;
+  retroactive_setup_completed_at?: string | null;
 }
 
 // Coach-state phrasing reused from SleepCoachCard:30-76 — only `coming-up` and
@@ -293,6 +295,32 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     enabled: !!activeChild,
   });
 
+  // Act-severity milestone flag — the highest-urgency developmental signal.
+  // Highest severity is always "act" (we filter to it); oldest-first by
+  // first_flagged_at picks the longest-standing one. Un-dismissed only.
+  // We respect the SAME retroactive grace-period suppression MilestoneFlags
+  // uses so this never fires for a freshly-added older child.
+  const actFlag = useQuery({
+    queryKey: ["next-steps-act-flag", activeChild?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("milestone_flags")
+        .select("milestone_id, severity, first_flagged_at, dismissed_at, speech:milestone_id(name)")
+        .eq("child_id", activeChild!.id)
+        .eq("severity", "act")
+        .is("dismissed_at", null)
+        .order("first_flagged_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      const name = (data.speech as { name: string } | null)?.name ?? null;
+      if (!name) return null;
+      return { milestoneId: data.milestone_id, name };
+    },
+    enabled: !!activeChild && !activeChild.is_expected,
+  });
+
   // A re-render trigger for the localStorage-backed milestone dismiss.
   const [dismissTick, setDismissTick] = useState(0);
 
@@ -454,6 +482,32 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       });
     }
 
+    // Act-severity milestone flag → exactly one redflag item. Suppressed during
+    // the new-account retroactive grace period (same gate as MilestoneFlags).
+    const inGracePeriod =
+      !!activeChild.created_at &&
+      isInRetroactiveGracePeriod({
+        created_at: activeChild.created_at,
+        retroactive_setup_completed_at:
+          activeChild.retroactive_setup_completed_at ?? null,
+      });
+    if (!inGracePeriod && actFlag.data) {
+      out.push({
+        id: `actflag-${actFlag.data.milestoneId}`,
+        domain: "milestone",
+        title: "A skill to check in on",
+        meta: "free to ask — no diagnosis needed",
+        tier: "redflag",
+        deeplink: {
+          kind: "chat",
+          target: "developmental",
+          forceSkill: "developmental",
+          seedPrompt: `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${actFlag.data.name}".`,
+        },
+        sortHints: { order: order++ },
+      });
+    }
+
     return rankNextSteps(out);
     // dismissTick forces recompute after a localStorage milestone dismiss.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -464,6 +518,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     finance.data,
     financeItems.data,
     milestones.data,
+    actFlag.data,
     user,
     dayKey,
     dismissTick,
@@ -505,6 +560,42 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     onError: (err: Error) => {
       toast({
         title: "Couldn't save that",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Dismissing the act-flag feed item writes dismissed_at to the SAME
+  // milestone_flags row MilestoneFlags owns (upsert shape mirrors
+  // MilestoneFlags.dismissFlag) — so clearing it here also clears the card on
+  // the Milestones tab. We map this feed action to the existing "seeking_eval"
+  // reason ("We're already on it"). Not a localStorage transient: the flag has a
+  // real DB home and a shared consumer, so we write to it.
+  const dismissActFlag = useMutation({
+    mutationFn: async (milestoneId: string) => {
+      if (!activeChild) return;
+      const { error } = await supabase.from("milestone_flags").upsert(
+        {
+          child_id: activeChild.id,
+          parent_id: user!.id,
+          milestone_id: milestoneId,
+          severity: "act",
+          last_evaluated_at: new Date().toISOString(),
+          dismissed_at: new Date().toISOString(),
+          dismissed_reason: "seeking_eval",
+        },
+        { onConflict: "child_id,milestone_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["next-steps-act-flag", activeChild?.id] });
+      queryClient.invalidateQueries({ queryKey: ["milestone-flags", activeChild?.id] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Couldn't update that",
         description: err.message,
         variant: "destructive",
       });
@@ -564,10 +655,23 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     return { type, year };
   };
   const milestoneIdOf = (item: NextStepItem) =>
-    item.domain === "milestone" ? item.id.replace(/^milestone-/, "") : null;
+    item.domain === "milestone" && item.id.startsWith("milestone-")
+      ? item.id.replace(/^milestone-/, "")
+      : null;
+  // Act-flag ids carry the milestone UUID: `actflag-<uuid>`. Distinct from the
+  // celebratory `milestone-<uuid>` focus drill so the two don't collide.
+  const actFlagIdOf = (item: NextStepItem) =>
+    item.domain === "milestone" && item.id.startsWith("actflag-")
+      ? item.id.replace(/^actflag-/, "")
+      : null;
 
   const complete = useCallback(
     (item: NextStepItem) => {
+      const actId = actFlagIdOf(item);
+      if (actId) {
+        dismissActFlag.mutate(actId);
+        return;
+      }
       const itemId = financeItemIdOf(item);
       if (itemId) {
         completeFinanceItem.mutate(itemId);
@@ -589,11 +693,16 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       }
       // Sleep / health items have no inline "complete" — they route to source.
     },
-    [completeFinanceItem, dismissFinanceCalendarLocal, dismissMilestoneLocal],
+    [dismissActFlag, completeFinanceItem, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const snooze = useCallback(
     (item: NextStepItem) => {
+      const actId = actFlagIdOf(item);
+      if (actId) {
+        dismissActFlag.mutate(actId);
+        return;
+      }
       const itemId = financeItemIdOf(item);
       if (itemId) {
         dismissFinanceLocal(itemId);
@@ -607,11 +716,16 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       const milestoneId = milestoneIdOf(item);
       if (milestoneId) dismissMilestoneLocal(milestoneId);
     },
-    [dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
+    [dismissActFlag, dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const dismiss = useCallback(
     (item: NextStepItem) => {
+      const actId = actFlagIdOf(item);
+      if (actId) {
+        dismissActFlag.mutate(actId);
+        return;
+      }
       const itemId = financeItemIdOf(item);
       if (itemId) {
         dismissFinanceLocal(itemId);
@@ -625,7 +739,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       const milestoneId = milestoneIdOf(item);
       if (milestoneId) dismissMilestoneLocal(milestoneId);
     },
-    [dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
+    [dismissActFlag, dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
   const isLoading =
@@ -634,6 +748,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       milestones.isLoading ||
       finance.isLoading ||
       financeItems.isLoading ||
+      actFlag.isLoading ||
       visit.isLoading);
 
   const isError =
@@ -641,6 +756,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     milestones.isError ||
     finance.isError ||
     financeItems.isError ||
+    actFlag.isError ||
     visit.isError;
 
   return { items, isLoading, isError, complete, snooze, dismiss };
