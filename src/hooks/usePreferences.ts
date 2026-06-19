@@ -14,7 +14,7 @@ interface Preferences {
 
 const defaults: Preferences = {
   showBriefing: true,
-  briefingCollapsed: false,
+  briefingCollapsed: true,
   showNotifications: true,
   calendarView: "day",
   lastSlpZip: "",

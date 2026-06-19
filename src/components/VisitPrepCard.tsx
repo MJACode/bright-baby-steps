@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -15,6 +15,7 @@ import { format, differenceInDays, subMonths } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { generateAndDownloadReport } from "@/services/reportDataService";
+import { onVisitPrepOpen } from "@/lib/visitPrepOpener";
 
 interface VisitPrepCardProps {
   activeChild: {
@@ -36,6 +37,8 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
   const [appointmentDate, setAppointmentDate] = useState<Date | undefined>(
     activeChild?.next_appointment ? new Date(activeChild.next_appointment + "T00:00:00") : undefined
   );
+
+  useEffect(() => onVisitPrepOpen(() => setSheetOpen(true)), []);
 
   const { data: reminders = [] } = useQuery({
     queryKey: ["pediatrician-reminders", activeChild?.id],

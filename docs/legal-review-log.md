@@ -1089,3 +1089,71 @@ AI-generated/personalized (would add an Anthropic egress path) or if any
 regulated health-claim territory).
 
 ---
+
+## 2026-06-19 — "Next Step" feed — cross-domain dashboard action copy (finance / health / milestone)
+
+**Scope:** `src/components/NextStepFeed.tsx`, `src/hooks/useNextSteps.tsx`.
+New Dashboard feed surfacing ranked, deadline-aware action prompts across
+sleep / milestone / finance / health. In-house pass (legal + developmental +
+financial agents).
+**Trigger:** Net-new user-facing finance and health advice-adjacent microcopy
+shown on the dashboard *before* the parent reaches the destination surfaces
+that carry disclaimers — exactly the FTC § 5 / health-claim / financial-advice
+surface this log paper-trails, even though no Privacy / Terms / consent /
+retention / subprocessor / geo-block code changed.
+**Risk levels surfaced:**
+- P0: none. P1: none.
+- P2 (resolved):
+  - **Advice-disclaimer proximity** [MED → resolved]. The feed mixes finance +
+    health prompts on the dashboard with no inline disclaimer; existing
+    softeners live only on tap-through surfaces (`FinancialTab.tsx:179`,
+    `AIChatWidget` medical disclaimer, visit-prep PDF) and `TermsPage` §3/§4.
+    Resolved by adding a single combined footer rendered whenever a finance- or
+    health-domain item is present: *"General guidance and reminders — not
+    medical or financial advice."* (`text-[11px] muted italic`, mirroring
+    `FinancialTab.tsx:179`). Not shown for sleep/milestone-only or empty/error
+    states.
+  - **Life-insurance product-steering** [MED → resolved]. `"a term policy brings
+    peace of mind"` edged from education into product steering (insurance-
+    licensing gray zone) and used a feelings/marketing voice. Rewritten to the
+    neutral, comparative `"term policies are usually the low-cost option"`.
+  - **Insurance-window as guarantee** [MED → resolved]. `"most plans give you a
+    30-day window"` softened to `"most plans allow ~30 days — check yours"` to
+    drop the implied universal entitlement (the special-enrollment window varies
+    30–60 days by plan). The "Soon" urgency tier is **retained** for this item —
+    the enrollment window is genuinely time-sensitive — paired with the softened
+    copy (counsel-optional residual; documented, not removed).
+  - **Custodial-Roth applicability** [LOW → resolved]. Savings prompt listed
+    "custodial Roth" as a headline option; it requires the *child* to have
+    earned income (inapplicable to an infant). Replaced with the universally
+    available "HYSA": `"529, UGMA, HYSA and more"`.
+  - **Milestone non-diagnostic voice** [LOW]. Copy already celebratory
+    ("may be coming up"); title softened from the imperative `Encourage …` to
+    `Coming up: …`, and the ✓ aria-label made milestone-specific ("Done for
+    today") so the check can't be misread as logging attainment. The ✓ writes a
+    transient day-scoped dismiss, never a `child_speech` `achieved` row —
+    confirmed, no health-attainment claim. No new AI egress (the milestone CTA
+    routes into the already-disclosed `developmental` chat skill).
+  - **Data egress / retention unchanged** [LOW]. The feed only reads existing
+    tables under the parent's JWT and writes finance completion back to the
+    existing `parent_financial_checklist` row (status `completed`) + a
+    localStorage transient for snooze/dismiss. No new table, no migration, no
+    new subprocessor. `/subprocessors` unchanged; existing deletion / 24-month
+    purge cascades already cover all touched tables.
+
+**Code refs:** branch `claude/parenting-app-differentiation-z8ph7z`, PR #149.
+No DB migration.
+**Outstanding (deferred):**
+- Two counsel-optional questions logged for the eventual outside-counsel pass:
+  (a) whether "term policies are usually the low-cost option," absent any product
+  recommendation or compensation, is protected general education or a state
+  insurance-code "solicitation"; (b) whether a single dashboard-level
+  "not medical or financial advice" footer is sufficient FTC § 5 proximity vs.
+  per-item inline disclaimers.
+- **Separate backend ticket (not this PR):** stale `(2025)` tax figures and
+  unstamped Child Tax Credit / DCFSA numbers in
+  `20260407000000_financial_checklist_overhaul.sql` and
+  `supabase/functions/_shared/personas.ts`; recommend a year-keyed runtime
+  config rather than re-editing applied migrations.
+
+---
