@@ -116,7 +116,11 @@ function NextStepRow({
         <button
           type="button"
           onClick={() => onComplete(item)}
-          aria-label={`Mark "${item.title}" done`}
+          aria-label={
+            item.domain === "milestone"
+              ? "Done for today"
+              : `Mark "${item.title}" done`
+          }
           className="touch-target shrink-0 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
         >
           <Check className="w-5 h-5" />
@@ -217,6 +221,10 @@ export function NextStepFeed({ activeChild }: { activeChild: ChildLite | null })
     onDismiss: dismiss,
   };
 
+  const showAdviceDisclaimer = items.some(
+    (item) => item.domain === "finance" || item.domain === "health",
+  );
+
   return (
     <Shell>
       <div className="mt-1 divide-y divide-border" aria-live="polite">
@@ -250,6 +258,11 @@ export function NextStepFeed({ activeChild }: { activeChild: ChildLite | null })
           </Collapsible>
         )}
       </div>
+      {showAdviceDisclaimer && (
+        <p className="text-[11px] text-muted-foreground italic mt-3">
+          General guidance and reminders — not medical or financial advice.
+        </p>
+      )}
     </Shell>
   );
 }

@@ -64,7 +64,7 @@ function getFinancePrompt(ageMonths: number, ageDays: number) {
       bracket: "fin-prompt-0-3",
       seedTitle: "Add baby to your health insurance",
       title: "Add your baby to your health insurance",
-      meta: "most plans give you a 30-day window",
+      meta: "most plans allow ~30 days — check yours",
     };
   if (ageMonths < 6)
     return {
@@ -76,19 +76,19 @@ function getFinancePrompt(ageMonths: number, ageDays: number) {
   if (ageMonths < 12)
     return {
       bracket: "fin-prompt-6-12",
-      seedTitle: "Open a 529 college savings plan",
-      title: "Compare ways to start saving for your child",
-      meta: "529, UGMA, custodial Roth and more",
+      seedTitle: "Review your life insurance coverage",
+      title: "Look into life insurance for your family",
+      meta: "term policies are usually the low-cost option",
     };
   return {
     bracket: "fin-prompt-12",
-    seedTitle: "Review your life insurance coverage",
-    title: "Look into life insurance for your family",
-    meta: "a term policy brings peace of mind",
+    seedTitle: "Open a 529 college savings plan",
+    title: "Compare ways to start saving for your child",
+    meta: "529, UGMA, HYSA and more",
   };
 }
 
-const MILESTONE_LOOKAHEAD_MONTHS = 4;
+const MILESTONE_LOOKAHEAD_MONTHS = 2;
 
 interface MilestoneRow {
   id: string;
@@ -174,7 +174,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
   const sleep = useSleepCoach(activeChild);
   useSleepPlan(activeChild?.id ?? null);
 
-  // Milestones — "coming up" = typical-start within the next ~4 months and not
+  // Milestones — "coming up" = typical-start within the next ~2 months and not
   // yet achieved. Celebratory, never diagnostic.
   const milestones = useQuery({
     queryKey: ["next-steps-milestones", activeChild?.id],
@@ -365,7 +365,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       out.push({
         id: `milestone-${nextMilestone.id}`,
         domain: "milestone",
-        title: `Encourage ${nextMilestone.name.toLowerCase()}`,
+        title: `Coming up: ${nextMilestone.name}`,
         meta: "a skill that may be coming up",
         tier: "default",
         deeplink: {
