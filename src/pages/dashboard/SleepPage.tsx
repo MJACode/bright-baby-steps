@@ -4,12 +4,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { usePreferences } from "@/hooks/usePreferences";
+import { useLeaps } from "@/hooks/useLeaps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2, Trash2 } from "lucide-react";
@@ -122,7 +125,19 @@ const sleepTips = [
 
 type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
 
-function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: number }) {
+function SleepInsights({
+  logs,
+  ageMonths,
+  calmMode,
+  onToggleCalm,
+  nightWakingReassurance,
+}: {
+  logs: SleepLogEntry[];
+  ageMonths: number;
+  calmMode: boolean;
+  onToggleCalm: (next: boolean) => void;
+  nightWakingReassurance: string | null;
+}) {
   const [isOpen, setIsOpen] = useState(true);
 
   const ageGroup = getAgeGroup(ageMonths);
@@ -161,14 +176,26 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
 
     if (recentLogs.length === 0) return { insights: result, napBreakdown: napBreakdownData };
 
-    // 1. Average daily sleep below age minimum
+    // 1. Average daily sleep below age minimum. Calm mode hides the mild
+    // comparison — it's the most anxiety-inducing aggregate on the page — but a
+    // LARGE shortfall (below ~70% of the age minimum) still surfaces a
+    // non-numeric, pediatrician-soft-out heads-up even in calm mode, so the one
+    // signal that could matter can't be toggled into silence. (Sleep-advisor
+    // review, 2026-06-19.)
     const avgDailyHours = (totalNapMin + totalNightMin) / daysWithData / 60;
     const minHours = ageMinSleepHours[ageGroup] ?? 11;
     if (avgDailyHours < minHours) {
-      result.push({
-        icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
-        text: "Your baby has been sleeping a bit less than average this week. A consistent bedtime routine can help.",
-      });
+      if (!calmMode) {
+        result.push({
+          icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
+          text: "Your baby has been sleeping a bit less than average this week. A consistent bedtime routine can help.",
+        });
+      } else if (avgDailyHours < minHours * 0.7) {
+        result.push({
+          icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
+          text: "Even in calm mode, a gentle heads-up: your baby's logged sleep has been well below the typical range this week. If that matches what you're seeing, it's worth mentioning at your next pediatrician visit.",
+        });
+      }
     }
 
     // 2. No naps in last 2 days
@@ -191,9 +218,9 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
     }
 
     return { insights: result.slice(0, 3), napBreakdown: napBreakdownData };
-  }, [logs, ageMonths]);
+  }, [logs, ageMonths, calmMode]);
 
-  if (insights.length === 0 && !napBreakdown) return null;
+  if (insights.length === 0 && !napBreakdown && !nightWakingReassurance) return null;
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
@@ -206,8 +233,34 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 space-y-3">
-        {/* Nap vs Night Breakdown */}
-        {napBreakdown && (
+        {/* Calm mode toggle — hides the numeric averages and age comparisons */}
+        <div className="flex items-center justify-between rounded-xl bg-sleep-bg/60 px-4 py-3 min-h-[48px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <CloudMoon className="w-4 h-4 text-sleep shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight">Calm mode — hide the numbers</p>
+              <p className="text-xs text-muted-foreground leading-snug">Swap the averages for reassurance.</p>
+            </div>
+          </div>
+          <Switch
+            checked={calmMode}
+            onCheckedChange={onToggleCalm}
+            aria-label="Calm mode — hide the numbers"
+          />
+        </div>
+
+        {/* Night-waking reassurance — only when a regression window or leap applies */}
+        {nightWakingReassurance && (
+          <Card className="border-0 bg-sleep-bg/60">
+            <CardContent className="p-3 flex items-start gap-3">
+              <Moon className="w-5 h-5 text-sleep shrink-0" />
+              <p className="text-sm text-foreground/80 leading-relaxed">{nightWakingReassurance}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Nap vs Night Breakdown — numeric averages, hidden in calm mode */}
+        {napBreakdown && !calmMode && (
           <Card className="border-0 bg-sleep-bg/60">
             <CardContent className="p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
@@ -233,6 +286,18 @@ function SleepInsights({ logs, ageMonths }: { logs: SleepLogEntry[]; ageMonths: 
                   Babies this age typically need {rec.naps} totaling {rec.napHours}, plus {rec.nightHours} overnight.
                 </p>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Calm-mode replacement for the numeric breakdown */}
+        {napBreakdown && calmMode && (
+          <Card className="border-0 bg-sleep-bg/60">
+            <CardContent className="p-4 flex items-start gap-3">
+              <Moon className="w-5 h-5 text-sleep shrink-0" />
+              <p className="text-sm text-foreground/80 leading-relaxed">
+                The numbers are tucked away. Your baby's sleep is finding its own rhythm — your logs are still here whenever you want them.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -286,9 +351,11 @@ function getAgeGroup(ageMonths: number): string {
 export default function SleepPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
+  const { prefs, setPrefs } = usePreferences();
   const queryClient = useQueryClient();
   const { data: coach } = useSleepCoach(activeChild ?? null);
   const { data: savedPlan, isLoading: isLoadingPlan } = useSleepPlan(activeChild?.id ?? null);
+  const { data: leaps } = useLeaps(activeChild ?? null);
 
   // Edit state
   const [showAll, setShowAll] = useState(false);
@@ -546,6 +613,21 @@ export default function SleepPage() {
   const ageGroup = getAgeGroup(ageMonths);
   const rec = sleepRecommendations[ageGroup];
 
+  // Calm, non-clinical reassurance tying more night wakings to normal
+  // development. Shown when a developmental leap is underway (stormy/sunny) or a
+  // regression window is detected in recent logs — reuse of the existing leap +
+  // triage logic, no new detection. Deliberately NOT attributed to a "leap"
+  // specifically (the triage path has no age ceiling, so the cause could be
+  // teething/schedule), and carries a pediatrician soft-out so reassurance never
+  // masks illness/pain/hunger. (Sleep-advisor review, 2026-06-19.)
+  const inLeapWindow =
+    leaps?.currentStatus.phase === "stormy" || leaps?.currentStatus.phase === "sunny";
+  const inRegressionWindow = detectTriageReasons(logs ?? [], ageMonths).includes("night_wakings");
+  const nightWakingReassurance =
+    inLeapWindow || inRegressionWindow
+      ? "More night wakings lately? Around this age that's very common — a leap, teething, or a schedule shift can all do it, and it usually passes within a week or two. If it lasts longer or comes with other symptoms, it's worth a quick check with your pediatrician."
+      : null;
+
   const activeSleepLog = logs?.find((l) => !l.ended_at) ?? null;
   const planMethod = savedPlan?.method ?? "gentle_foundations";
   const showFerberTimer =
@@ -713,7 +795,15 @@ export default function SleepPage() {
       </Card>
 
       {/* Sleep Insights */}
-      {activeChild && <SleepInsights logs={logs ?? []} ageMonths={ageMonths} />}
+      {activeChild && (
+        <SleepInsights
+          logs={logs ?? []}
+          ageMonths={ageMonths}
+          calmMode={prefs.calmMode}
+          onToggleCalm={(next) => setPrefs({ calmMode: next })}
+          nightWakingReassurance={nightWakingReassurance}
+        />
+      )}
 
 
 

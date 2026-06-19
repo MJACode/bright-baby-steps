@@ -10,6 +10,7 @@ interface Preferences {
   sleepPlanCollapsed: boolean;
   lastFeedingType: "bottle" | "breast" | "solid";
   lastBottleOz: string;
+  calmMode: boolean;
 }
 
 const defaults: Preferences = {
@@ -21,6 +22,7 @@ const defaults: Preferences = {
   sleepPlanCollapsed: false,
   lastFeedingType: "bottle",
   lastBottleOz: "",
+  calmMode: false,
 };
 
 function loadPrefs(key: string): Preferences {
