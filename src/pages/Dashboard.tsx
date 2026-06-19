@@ -13,6 +13,7 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
+import { NextStepFeed } from "@/components/NextStepFeed";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
@@ -82,6 +83,11 @@ export default function Dashboard() {
           "last logged" hint. First thing under the greeting: at 3am this answers
           "when did she last eat / how long has he been down". */}
       <QuickNavGrid childId={activeChild?.id} />
+
+      {/* The Next Step feed — one ranked, deadline-aware action list spanning
+          sleep, milestones, finance, and health. Routes into the detail cards
+          below; it does not replace them. */}
+      <NextStepFeed activeChild={activeChild} />
 
       {/* Quick Log with AI — opens the layout-level chat dialog via chatOpener */}
       <button

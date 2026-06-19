@@ -1,0 +1,255 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Check, MoreHorizontal, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { openChat } from "@/lib/chatOpener";
+import { openVisitPrep } from "@/lib/visitPrepOpener";
+import { useNextSteps } from "@/hooks/useNextSteps";
+import type { NextStepItem, NextStepDomain } from "@/lib/nextSteps";
+import type { SkillId } from "@/components/AIChatWidget";
+
+interface ChildLite {
+  id: string;
+  name: string;
+  date_of_birth: string;
+  is_premature?: boolean | null;
+  due_date?: string | null;
+  is_expected?: boolean | null;
+  next_appointment?: string | null;
+}
+
+const DOMAIN_DOT: Record<NextStepDomain, string> = {
+  sleep: "bg-sleep",
+  milestone: "bg-milestones",
+  finance: "bg-finance",
+  health: "bg-primary",
+};
+
+const VISIBLE_ROWS = 3;
+
+function NextStepRow({
+  item,
+  onComplete,
+  onSnooze,
+  onDismiss,
+}: {
+  item: NextStepItem;
+  onComplete: (item: NextStepItem) => void;
+  onSnooze: (item: NextStepItem) => void;
+  onDismiss: (item: NextStepItem) => void;
+}) {
+  const navigate = useNavigate();
+  // Sleep and health items route to their source surface; they have no inline
+  // "complete" — there's nothing to mark done from here.
+  const canComplete = item.domain === "finance" || item.domain === "milestone";
+
+  const handleOpen = () => {
+    const { kind, target, seedPrompt, forceSkill } = item.deeplink;
+    if (kind === "chat") {
+      openChat({ seedPrompt: seedPrompt ?? "", forceSkill: forceSkill as SkillId });
+      return;
+    }
+    if (kind === "sheet" && target === "visit-prep") {
+      openVisitPrep();
+      return;
+    }
+    if (kind === "route") navigate(target);
+  };
+
+  return (
+    <div className="flex items-stretch min-h-[64px]">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="flex flex-1 items-center gap-3 py-3 pl-1 pr-2 text-left min-w-0 touch-target active:opacity-70 transition-opacity"
+      >
+        <span
+          className={cn(
+            "w-2 h-2 rounded-full shrink-0",
+            DOMAIN_DOT[item.domain],
+          )}
+          aria-hidden
+        />
+        <span className="flex-1 min-w-0">
+          <span className="block font-sans font-semibold text-sm truncate">
+            {item.title}
+          </span>
+          <span
+            className={cn(
+              "block text-xs truncate mt-0.5",
+              item.tier === "redflag"
+                ? "text-destructive"
+                : item.tier === "soon"
+                  ? "text-accent"
+                  : "text-muted-foreground",
+            )}
+          >
+            {item.meta}
+          </span>
+        </span>
+        {item.tier === "soon" && (
+          <Badge
+            variant="outline"
+            className="shrink-0 text-accent border-accent/40 text-xs"
+          >
+            Soon
+          </Badge>
+        )}
+      </button>
+
+      {canComplete && (
+        <button
+          type="button"
+          onClick={() => onComplete(item)}
+          aria-label={`Mark "${item.title}" done`}
+          className="touch-target shrink-0 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+        >
+          <Check className="w-5 h-5" />
+        </button>
+      )}
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`More actions for "${item.title}"`}
+            className="touch-target shrink-0 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onSnooze(item)}>
+            Snooze
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onDismiss(item)}>
+            Not relevant
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+export function NextStepFeed({ activeChild }: { activeChild: ChildLite | null }) {
+  const { items, isLoading, isError, complete, snooze, dismiss } =
+    useNextSteps(activeChild);
+  const [expanded, setExpanded] = useState(false);
+
+  if (!activeChild) return null;
+
+  const Shell = ({ children }: { children: React.ReactNode }) => (
+    <Card className="border-0 bg-card rounded-2xl shadow-sm">
+      <CardContent className="p-4">
+        <div className="mb-1">
+          <h2 className="font-display font-bold text-base">Next steps</h2>
+          <p className="text-xs text-muted-foreground">
+            Sorted by what's most time-sensitive.
+          </p>
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  );
+
+  if (isLoading) {
+    return (
+      <Shell>
+        <div className="mt-2 divide-y divide-border">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3 min-h-[64px] py-3">
+              <Skeleton className="w-2 h-2 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/5" />
+                <Skeleton className="h-3 w-2/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Shell>
+    );
+  }
+
+  // Error stays calm — one neutral row, never an alarm.
+  if (isError) {
+    return (
+      <Shell>
+        <p className="text-sm text-muted-foreground py-3">
+          We couldn't load your next steps. Pull down to retry.
+        </p>
+      </Shell>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <Shell>
+        <p className="text-sm font-semibold py-1">Nothing needs you right now.</p>
+        <p className="text-xs text-muted-foreground">
+          That's a good place to be. When something's coming up, you'll see it
+          here first.
+        </p>
+      </Shell>
+    );
+  }
+
+  const visible = items.slice(0, VISIBLE_ROWS);
+  const overflow = items.slice(VISIBLE_ROWS);
+
+  const rowProps = {
+    onComplete: complete,
+    onSnooze: snooze,
+    onDismiss: dismiss,
+  };
+
+  return (
+    <Shell>
+      <div className="mt-1 divide-y divide-border" aria-live="polite">
+        {visible.map((item) => (
+          <NextStepRow key={item.id} item={item} {...rowProps} />
+        ))}
+
+        {overflow.length > 0 && (
+          <Collapsible open={expanded} onOpenChange={setExpanded}>
+            <CollapsibleContent>
+              <div className="divide-y divide-border">
+                {overflow.map((item) => (
+                  <NextStepRow key={item.id} item={item} {...rowProps} />
+                ))}
+              </div>
+            </CollapsibleContent>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full touch-target text-sm text-muted-foreground gap-1"
+              >
+                {expanded ? "See less" : `See ${overflow.length} more`}
+                <ChevronDown
+                  className={cn(
+                    "w-4 h-4 transition-transform",
+                    expanded && "rotate-180",
+                  )}
+                />
+              </Button>
+            </CollapsibleTrigger>
+          </Collapsible>
+        )}
+      </div>
+    </Shell>
+  );
+}
