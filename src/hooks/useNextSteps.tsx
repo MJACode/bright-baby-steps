@@ -60,22 +60,24 @@ function deriveSleepFeed(
 
 // Finance age-prompt copy reused from FinancialTab:19-36 (benefit-framed,
 // never "$ you're owed"). `bracket` is the AgePromptBanner localStorage dismiss
-// key (FinancialTab.tsx:19-36). `seedTitle` is the EXACT title of the seeded
-// financial_checklist_items row (20260407000000_financial_checklist_overhaul.sql)
-// this prompt maps to — it resolves to that row's UUID, which is what
-// parent_financial_checklist.checklist_item_id actually FKs to.
+// key (FinancialTab.tsx:19-36). `seedTitle` is the EXACT title of the
+// financial_checklist_items row this prompt maps to — it resolves to that row's
+// UUID, which is what parent_financial_checklist.checklist_item_id FKs to.
+// NOTE: these titles are matched against the LIVE financial_checklist_items
+// seed (verified via Supabase), which diverges from the stale repo migration
+// 20260407000000 — keep them in sync with the live rows, not that file.
 function getFinancePrompt(ageMonths: number, ageDays: number) {
   if (ageDays <= 30)
     return {
       bracket: "fin-prompt-0-3",
-      seedTitle: "Add baby to your health insurance",
+      seedTitle: "Add your child to health insurance",
       title: "Add your baby to your health insurance",
       meta: "most plans allow ~30 days — check yours",
     };
   if (ageMonths < 6)
     return {
       bracket: "fin-prompt-3-6",
-      seedTitle: "Build or top up your emergency fund",
+      seedTitle: "Build a 3–6 month emergency fund",
       title: "Start a small emergency fund",
       meta: "even $500 cushions surprise costs",
     };
