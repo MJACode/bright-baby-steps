@@ -1,7 +1,12 @@
 -- Reconcile public.financial_checklist_items with the live production seed.
 --
 -- Why: the earlier seed migrations (20260308215351, 20260407000000,
--- 20260619000000) drifted from production. Live carries 16 canonical rows with
+-- 20260407000001, 20260619000000) drifted from production. Notably
+-- 20260407000001 seeds a "Claim the $1,000 Government Baby Savings Account" row
+-- that does NOT exist on live (verified: live holds exactly these 16 ids, and
+-- no parent_financial_checklist row references anything outside them) — so this
+-- migration intentionally drops it on a fresh build to match production.
+-- Live carries 16 canonical rows with
 -- stable UUIDs that parent_financial_checklist.checklist_item_id FKs to, plus
 -- titles/copy that diverge from those files (e.g. "Add your child to health
 -- insurance", "Build a 3–6 month emergency fund"). A fresh `db reset` from the
