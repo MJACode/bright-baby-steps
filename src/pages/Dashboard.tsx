@@ -5,8 +5,7 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Flame, Sparkles, SlidersHorizontal } from "lucide-react";
-import { openChat } from "@/lib/chatOpener";
+import { Flame, SlidersHorizontal } from "lucide-react";
 import { computeForgivingStreak } from "@/lib/streak";
 import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
@@ -20,6 +19,7 @@ import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
+import { VoiceQuickLogButton } from "@/components/VoiceQuickLogButton";
 
 
 export default function Dashboard() {
@@ -87,20 +87,8 @@ export default function Dashboard() {
           below; it does not replace them. */}
       <NextStepFeed activeChild={activeChild} />
 
-      {/* Quick Log with AI — opens the layout-level chat dialog via chatOpener */}
-      <button
-        type="button"
-        onClick={() => openChat({ seedPrompt: "" })}
-        className="w-full flex items-center gap-3 p-4 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.99] touch-target text-left"
-      >
-        <div className="w-11 h-11 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-          <Sparkles className="w-5 h-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-display font-bold text-sm leading-tight">Quick Log with AI</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Log a feed, nap, or ask Grace Flare AI a question.</p>
-        </div>
-      </button>
+      {/* Voice-first quick log — premium-gated mic entry into VoiceQuickLog */}
+      <VoiceQuickLogButton />
 
       {/* Today's Briefing */}
       {isVisible("briefing") && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
