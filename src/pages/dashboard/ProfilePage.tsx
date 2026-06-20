@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, Sparkles, HelpCircle, Shield, Download, Trash2, Moon } from "lucide-react";
+import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
@@ -159,19 +159,6 @@ export default function ProfilePage() {
       <Card className="border-0 bg-muted/50">
         <CardContent className="p-4 space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preferences</p>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <div>
-                <p className="text-sm font-medium">Today's Briefing</p>
-                <p className="text-xs text-muted-foreground">AI daily summary on home screen</p>
-              </div>
-            </div>
-            <Switch
-              checked={prefs.showBriefing}
-              onCheckedChange={(checked) => setPrefs({ showBriefing: checked })}
-            />
-          </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-primary" />

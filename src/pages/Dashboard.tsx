@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAge } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Flame, Sparkles } from "lucide-react";
+import { Flame, Sparkles, SlidersHorizontal } from "lucide-react";
 import { openChat } from "@/lib/chatOpener";
 import { computeForgivingStreak } from "@/lib/streak";
 import { format } from "date-fns";
@@ -17,6 +18,7 @@ import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { NextStepFeed } from "@/components/NextStepFeed";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { ShareWeekCard } from "@/components/ShareWeekCard";
+import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
 
@@ -24,8 +26,11 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { activeChild, children, isLoading: childrenLoading } = useChildren();
   const { prefs } = usePreferences();
+  const [customizeOpen, setCustomizeOpen] = useState(false);
 
   const isNewUser = !childrenLoading && (!children || children.length === 0);
+
+  const isVisible = (id: string) => !prefs.hiddenHomeSections.includes(id);
 
   const { data: todayFeeds } = useQuery({
     queryKey: ["today-feeds", activeChild?.id],
@@ -98,19 +103,19 @@ export default function Dashboard() {
       </button>
 
       {/* Today's Briefing */}
-      {prefs.showBriefing && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
+      {isVisible("briefing") && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
 
       {/* What to expect this week — age-based developmental content */}
-      <WhatToExpectCard activeChild={activeChild} />
+      {isVisible("whatToExpect") && <WhatToExpectCard activeChild={activeChild} />}
 
       {/* Visit Prep */}
-      <VisitPrepCard activeChild={activeChild} />
+      {isVisible("visitPrep") && <VisitPrepCard activeChild={activeChild} />}
 
       {/* Sleep Coach (Flare+) */}
-      <SleepCoachCard activeChild={activeChild} />
+      {isVisible("sleepCoach") && <SleepCoachCard activeChild={activeChild} />}
 
       {/* Developmental Leaps */}
-      <LeapCard activeChild={activeChild} />
+      {isVisible("leaps") && <LeapCard activeChild={activeChild} />}
 
       {/* Streak — celebrate active streaks only. The lapsed and never-logged
           nudges now live in TodaysBriefing's "watch" field. */}
@@ -140,8 +145,18 @@ export default function Dashboard() {
       )}
 
       {/* Share the week with family — weekly, dismissible nudge into the AI chat */}
-      <ShareWeekCard activeChild={activeChild} />
+      {isVisible("shareWeek") && <ShareWeekCard activeChild={activeChild} />}
 
+      <button
+        type="button"
+        onClick={() => setCustomizeOpen(true)}
+        className="w-full flex items-center justify-center gap-2 touch-target text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <SlidersHorizontal className="w-4 h-4" />
+        Customize home
+      </button>
+
+      <CustomizeHomeSheet open={customizeOpen} onOpenChange={setCustomizeOpen} />
     </div>
   );
 }
