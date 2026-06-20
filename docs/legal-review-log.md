@@ -1259,3 +1259,64 @@ no new child-data egress (the activity CTA routes to the already-disclosed
   to live so the softened strings ship; the diagnostic strings are live until then.
 
 ---
+
+## 2026-06-20 — Sponsored financial content / advertising revenue model
+
+**Scope:** First advertising revenue line in the product. Adds clearly-labeled,
+first-party sponsored placements from financial firms to the Finance tab
+(Records), the disclosures that make them lawful, and an AI guardrail.
+**Files touched this pass:** `src/pages/PrivacyPage.tsx` (new "Advertising and
+sponsored content" section), `src/pages/TermsPage.tsx` (§ 4 addition),
+`src/components/.../FinancialTab.tsx` (sponsor card), supabase migrations
+(`sponsor_disclosure` column), `personas.ts` (financial guardrail).
+**Trigger:** Founder decision to monetise the Finance tab via sponsored
+placements; resolves the follow-up item flagged in the 2026-06-19 Phase 2 entry
+("Sponsored finance-firm CTA … needs a dedicated entry + disclosure before any
+sponsor goes live").
+
+**DECISION:** Grace Flare will display clearly-labeled, first-party sponsored
+placements from financial firms in the Finance tab (Records), as a revenue line.
+Lightweight "polish the existing sponsor flag" approach — **no ad-tracking
+infra** is built or planned for this pass.
+
+**DATA-FREE CONSTRAINT (the COPPA-safe line):** the deal structure is **flat-fee
+or unattributed-CPC only**. **ZERO** user- or child-level data, identifiers, or
+conversion postbacks leave Grace Flare to the sponsor; `sponsor_cta_url` carries
+no tracking params; `rel="noopener noreferrer sponsored"` is preserved on the
+CTA. A CPA-with-conversion-postback deal would be a COPPA disclosure event and is
+**out of scope** for this pass.
+
+**Risk levels surfaced:**
+- **FTC native-ad disclosure** [resolved]. 16 CFR Part 255 / .com Disclosures
+  require a clear-and-conspicuous "this is an ad" signal. Resolved via a
+  prominent top-of-card "Ad · Paid placement by {sponsor}" label (not muted) plus
+  an adjacent not-a-recommendation disclaimer.
+- **Investment-adviser / broker-dealer exposure** [resolved]. Resolved by not
+  naming or ranking specific products in editorial copy, by adjacency rules, and
+  by the not-advice disclaimer. The AI `financial` persona was hardened to never
+  name/recommend a specific product or provider or reference sponsored content.
+- **COPPA** [resolved]. Resolved via the data-free constraint above.
+- **Endorsement** [resolved]. Resolved via an explicit anti-endorsement
+  disclaimer ("sponsored content is advertising, not a recommendation or
+  endorsement by Grace Flare") in both Privacy and Terms.
+- **Privacy/Terms promise-vs-practice** [resolved]. Resolved by shipping the
+  Privacy "Advertising and sponsored content" section + the Terms § 4 addition in
+  the **same release** as the sponsor card, so the documents match the practice
+  the moment the feature is buildable.
+
+**SubprocessorsPage.tsx — intentionally UNCHANGED.** A data-free advertiser is
+not a subprocessor. Adding the sponsor to the subprocessor list was considered
+and rejected. Revisit only if any user- or child-level data ever flows to them
+(e.g. a conversion-postback deal), which would also re-open the COPPA analysis.
+
+**OUTSTANDING — OUTSIDE COUNSEL GATE (important):** a **LIVE paid deal**
+materially changes the risk profile and **should be reviewed by outside counsel
+(securities-regulation specialist) before public launch.** Specifically:
+(a) whether routing users to a specific securities product for pay triggers
+investment-adviser / broker-dealer or solicitor-referral registration;
+(b) FTC clear-and-conspicuous adequacy for the new-parent audience;
+(c) confirmation the data-free CPC/flat-fee structure is not a COPPA
+"disclosure". The build is **pitch-ready / demo-able now**; live activation
+stays **gated** until that sign-off.
+
+---

@@ -8,6 +8,8 @@ import { CheckCircle2, Clock, AlertTriangle, Lightbulb, Calendar } from "lucide-
 import { format } from "date-fns";
 import { resolveAllChecklistItems, type ChecklistItemKey, type ChecklistUrgency, type ResolvedChecklistItem } from "@/lib/checklistDeadlines";
 import { BirthCertificateForm } from "@/components/records/BirthCertificateTab";
+import { WhyThisMatters } from "@/components/records/WhyThisMatters";
+import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
 
 interface Props {
   childId: string;
@@ -26,11 +28,11 @@ const STATUS_LABELS: Record<ChecklistStatus, string> = {
   not_applicable: "N/A",
 };
 
-const URGENCY_STYLES: Record<ChecklistUrgency, { container: string; badge: string; label: string; icon: React.ComponentType<{ className?: string }> }> = {
-  overdue: { container: "border-red-300 bg-red-50", badge: "bg-red-200 text-red-900", label: "Overdue", icon: AlertTriangle },
-  immediate: { container: "border-orange-300 bg-orange-50", badge: "bg-orange-200 text-orange-900", label: "This week", icon: Clock },
-  upcoming: { container: "border-blue-200 bg-blue-50/60", badge: "bg-blue-200 text-blue-900", label: "Upcoming", icon: Calendar },
-  informational: { container: "border-muted bg-muted/30", badge: "bg-muted text-muted-foreground", label: "When ready", icon: Lightbulb },
+const URGENCY_STYLES: Record<ChecklistUrgency, { container: string; badge: string; iconColor: string; label: string; icon: React.ComponentType<{ className?: string }> }> = {
+  overdue: { container: "border-destructive/40 bg-destructive/10", badge: "bg-destructive text-destructive-foreground", iconColor: "text-destructive", label: "Overdue", icon: AlertTriangle },
+  immediate: { container: "border-warning/40 bg-warning/10", badge: "bg-warning text-warning-foreground", iconColor: "text-warning", label: "This week", icon: Clock },
+  upcoming: { container: "border-border bg-muted/40", badge: "bg-muted text-foreground", iconColor: "text-muted-foreground", label: "Upcoming", icon: Calendar },
+  informational: { container: "border-border bg-muted/30", badge: "bg-muted text-muted-foreground", iconColor: "text-muted-foreground", label: "When ready", icon: Lightbulb },
 };
 
 export function NewBabyChecklistTab({ childId, parentId, childName, childDob }: Props) {
@@ -127,16 +129,16 @@ export function NewBabyChecklistTab({ childId, parentId, childName, childDob }: 
   return (
     <div className="space-y-4">
       {insuranceItem && insuranceEffective !== "complete" && insuranceDays != null && insuranceDays >= 0 && insuranceDays <= 30 && (
-        <Card className="border-orange-300 bg-orange-50">
+        <Card className="border-warning/40 bg-warning/10">
           <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="w-6 h-6 text-orange-600 shrink-0" />
+            <Clock className="w-6 h-6 text-warning shrink-0" />
             <div className="flex-1">
-              <p className="text-sm font-bold text-orange-900">
+              <p className="text-sm font-bold text-foreground">
                 {insuranceDays === 0
                   ? `Last day to add ${childName} to your insurance`
                   : `${insuranceDays} day${insuranceDays === 1 ? "" : "s"} remaining to add ${childName} to your insurance`}
               </p>
-              <p className="text-xs text-orange-900/80 mt-0.5">Most plans close the special enrollment window 30 days after birth.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Most plans close the special enrollment window 30 days after birth.</p>
             </div>
           </CardContent>
         </Card>
@@ -151,15 +153,16 @@ export function NewBabyChecklistTab({ childId, parentId, childName, childDob }: 
         const isComplete = status === "complete";
         const styles = URGENCY_STYLES[item.urgency];
         const Icon = isComplete ? CheckCircle2 : styles.icon;
-        const badgeClass = isComplete ? "bg-green-200 text-green-900" : styles.badge;
-        const containerClass = isComplete ? "border-green-200 bg-green-50/40" : styles.container;
+        const badgeClass = isComplete ? "bg-success text-success-foreground" : styles.badge;
+        const containerClass = isComplete ? "border-success/30 bg-success/10" : styles.container;
+        const iconColorClass = isComplete ? "text-success" : styles.iconColor;
         const isBirthCert = item.key === "birth_cert";
 
         return (
           <Card key={item.key} className={`border ${containerClass}`}>
             <CardContent className="p-4 space-y-3">
               <div className="flex items-start gap-3">
-                <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${isComplete ? "text-green-700" : "text-muted-foreground"}`} />
+                <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${iconColorClass}`} />
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${badgeClass}`}>
@@ -175,7 +178,7 @@ export function NewBabyChecklistTab({ childId, parentId, childName, childDob }: 
                   {!isComplete && (
                     <>
                       <p className="text-xs text-foreground/80">{item.blurb}</p>
-                      <p className="text-xs text-muted-foreground italic">Why it matters: {item.whyItMatters}</p>
+                      <WhyThisMatters>{item.whyItMatters}</WhyThisMatters>
                     </>
                   )}
                 </div>
@@ -219,6 +222,9 @@ export function NewBabyChecklistTab({ childId, parentId, childName, childDob }: 
                       Not applicable
                     </Button>
                   )}
+                  <TalkThisThroughButton
+                    seedPrompt={`Help me think through "${item.title}" for my baby. ${isComplete ? "I've marked it done." : "I haven't started it yet."}`}
+                  />
                 </div>
               )}
               {isComplete && (

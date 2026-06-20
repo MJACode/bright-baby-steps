@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: May 8, 2026 · Last reviewed: May 8, 2026 ·{" "}
+          Effective: June 20, 2026 · Last reviewed: June 20, 2026 ·{" "}
           <Link to="/subprocessors" className="underline">Subprocessors</Link>
         </p>
       </div>
@@ -69,7 +69,12 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="font-semibold text-foreground mb-2">6. Children's data (COPPA)</h2>
+          <h2 className="font-semibold text-foreground mb-2">6. Advertising and sponsored content</h2>
+          <p>Parts of Grace Flare, including the Finance section, may display sponsored content — clearly labeled advertisements that a third party pays us to show. This is first-party advertising: we choose what to display, and we do not share your or your child's personal information with advertisers, do not use advertising cookies or cross-site tracking pixels, and do not engage in cross-context behavioural advertising or "sharing" as defined under the CCPA/CPRA. Sponsored content is advertising, not a recommendation or endorsement by Grace Flare. We are paid whether or not you interact with it; we may be paid when you click. Clicking a sponsored link takes you to the advertiser's own site, governed by their privacy policy, not ours. We do not transmit any identifier that ties your click to your account or your child.</p>
+        </section>
+
+        <section>
+          <h2 className="font-semibold text-foreground mb-2">7. Children's data (COPPA)</h2>
           <p>Grace Flare is a parent-facing service. Accounts are only for adults age 18 or older who are the parent or legal guardian of the child whose data is logged. <strong>Children may not create their own accounts and Grace Flare is not directed to children under 13.</strong></p>
           <p className="mt-2">Because Grace Flare collects personal information <strong>about children under 13</strong> (their name, date of birth, photo, and health observations) from their parents, we follow the U.S. Children's Online Privacy Protection Act (COPPA, 15 U.S.C. § 6501–6506; 16 CFR Part 312):</p>
           <ul className="list-disc pl-5 space-y-1 mt-2">
@@ -82,7 +87,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="font-semibold text-foreground mb-2">7. Your rights</h2>
+          <h2 className="font-semibold text-foreground mb-2">8. Your rights</h2>
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Access:</strong> view all your data within the app at any time, or request a copy.</li>
             <li><strong>Correction:</strong> edit your child's profile and any logged data at any time.</li>
@@ -97,24 +102,24 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="font-semibold text-foreground mb-2">8. Data retention</h2>
+          <h2 className="font-semibold text-foreground mb-2">9. Data retention</h2>
           <p>We retain your data while your account is active. When you delete your account or a child's record, primary database records are removed within <strong>7 days</strong>. Files in object storage are deleted within <strong>30 days</strong>. Encrypted database backups containing the data are overwritten on our standard backup-rotation cycle (no longer than 30 days) and are accessed during that window only for disaster-recovery purposes. AI-provider logs at Anthropic are deleted on the schedule described in § 4 (no more than 30 days). Aggregated, de-identified statistics that contain no personal information may be retained indefinitely.</p>
           <p className="mt-2"><strong>Inactive accounts:</strong> if you do not sign in for 24 consecutive months, we will email you a 30-day deletion warning. If you do not sign in within that window, your account and all child records will be deleted on the same schedule above.</p>
         </section>
 
         <section>
-          <h2 className="font-semibold text-foreground mb-2">9. Security</h2>
+          <h2 className="font-semibold text-foreground mb-2">10. Security</h2>
           <p>We use Postgres row-level security policies that ensure each user can only access their own data. Data is encrypted in transit (TLS 1.2+) and at rest (AES-256).</p>
           <p className="mt-2"><strong>Breach notification.</strong> If we discover a security breach affecting your or your child's personal information, we will: (a) notify the relevant supervisory authority within 72 hours where required (GDPR Art. 33); (b) notify affected users without undue delay and in any event within 60 days, as required by the FTC Health Breach Notification Rule (16 CFR Part 318); and (c) comply with any shorter notification window required by applicable U.S. state law. Notice will describe the nature of the breach, the categories of data affected, the likely consequences, and the steps we are taking in response.</p>
         </section>
 
         <section>
-          <h2 className="font-semibold text-foreground mb-2">10. Changes to this policy</h2>
+          <h2 className="font-semibold text-foreground mb-2">11. Changes to this policy</h2>
           <p>We will give at least <strong>30 days' advance notice</strong> of material changes by email and via in-app notice before they take effect. For non-material changes (typo fixes, formatting, contact-info updates), we update the "Last updated" date and the change takes effect immediately. Material changes that affect children's data require renewed verifiable parental consent.</p>
         </section>
 
         <section>
-          <h2 className="font-semibold text-foreground mb-2">11. Contact</h2>
+          <h2 className="font-semibold text-foreground mb-2">12. Contact</h2>
           <p><strong>General privacy questions:</strong> <a href="mailto:privacy@graceflare.com" className="text-primary underline">privacy@graceflare.com</a></p>
           <p><strong>Children's privacy / COPPA requests:</strong> <a href="mailto:coppa@graceflare.com" className="text-primary underline">coppa@graceflare.com</a></p>
           <p><strong>General support:</strong> <a href="mailto:support@graceflare.com" className="text-primary underline">support@graceflare.com</a></p>

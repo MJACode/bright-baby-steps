@@ -11,7 +11,7 @@ export default function TermsPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Terms of Service</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: May 8, 2026 · Last reviewed: May 8, 2026
+          Effective: June 20, 2026 · Last reviewed: June 20, 2026
         </p>
       </div>
 
@@ -35,6 +35,7 @@ export default function TermsPage() {
         <section>
           <h2 className="font-semibold text-foreground mb-2">4. Not financial advice</h2>
           <p>Financial information provided by Grace Flare is for general informational purposes only and does not constitute personalised financial, tax, or legal advice, including any tax advice within the meaning of IRS Circular 230, nor a recommendation that any particular 529 plan, FSA, HSA, insurance product, or financial product is suitable for your circumstances. Consult a licensed financial advisor before making financial decisions.</p>
+          <p className="mt-2">Grace Flare may display paid sponsored content from financial firms, clearly labeled as advertising. Sponsored content is not a recommendation, endorsement, or solicitation by Grace Flare, and Grace Flare is not an investment adviser, broker-dealer, or insurance producer. We do not evaluate, vet, or guarantee any advertised product, and we receive compensation for displaying advertisements. Any transaction you enter with an advertiser is solely between you and that advertiser. Investing involves risk, including loss of principal.</p>
         </section>
 
         <section>
@@ -44,7 +45,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">6. Your content and licence</h2>
-          <p>You retain all rights in the data you enter. You grant Grace Flare a worldwide, royalty-free, non-exclusive, non-transferable, sublicensable (only to our subprocessors) licence to host, store, process, transmit, and display that data <strong>solely to operate and improve the service for you and any partners you invite, and as described in our <Link to="/privacy" className="text-primary underline">Privacy Policy</Link></strong>. Subject to your compliance with these Terms, we grant you a limited, personal, non-exclusive, non-transferable, non-sublicensable, revocable licence to access and use Grace Flare for your own household's non-commercial use. You may not copy, modify, distribute, sell, lease, reverse-engineer, or create derivative works of the service or any part of it. The licences in this section terminate when you delete the data or your account, subject to the short-term retention in encrypted backups described in § 8 of the Privacy Policy.</p>
+          <p>You retain all rights in the data you enter. You grant Grace Flare a worldwide, royalty-free, non-exclusive, non-transferable, sublicensable (only to our subprocessors) licence to host, store, process, transmit, and display that data <strong>solely to operate and improve the service for you and any partners you invite, and as described in our <Link to="/privacy" className="text-primary underline">Privacy Policy</Link></strong>. Subject to your compliance with these Terms, we grant you a limited, personal, non-exclusive, non-transferable, non-sublicensable, revocable licence to access and use Grace Flare for your own household's non-commercial use. You may not copy, modify, distribute, sell, lease, reverse-engineer, or create derivative works of the service or any part of it. The licences in this section terminate when you delete the data or your account, subject to the short-term retention in encrypted backups described in § 9 of the Privacy Policy.</p>
         </section>
 
         <section>
