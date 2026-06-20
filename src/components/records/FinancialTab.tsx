@@ -15,8 +15,25 @@ import { useState } from "react";
 import { differenceInCalendarDays } from "date-fns";
 import { KidSavingsComparison } from "@/components/financial/KidSavingsComparison";
 import { SavingsGrowthCalculator } from "@/components/financial/SavingsGrowthCalculator";
+import { ProtectFirstCard } from "@/components/financial/ProtectFirstCard";
 import { getFinanceCalendarEvents } from "@/lib/financeCalendar";
 import { CalendarClock } from "lucide-react";
+import { WhyThisMatters } from "@/components/records/WhyThisMatters";
+import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
+
+// Sponsor fields exist on financial_checklist_items but aren't in the generated
+// Supabase types yet — narrow the row to read them without `any`.
+type SponsorFields = {
+  is_sponsored?: boolean | null;
+  sponsor_name?: string | null;
+  sponsor_cta_url?: string | null;
+  sponsor_cta_label?: string | null;
+  sponsor_disclosure?: string | null;
+};
+
+function getSponsor(item: unknown): SponsorFields {
+  return (item ?? {}) as SponsorFields;
+}
 
 function getFinancialPrompt(ageMonths: number, ageDays: number) {
   if (ageDays <= 30) return {
@@ -140,15 +157,17 @@ function UpcomingMoneyDates({
   );
 }
 
-// Category display order
+// Category display order — protect first, then invest. Must match the live
+// financial_checklist_items category strings exactly so nothing falls into the
+// unknown=99 bucket.
 const CATEGORY_ORDER = [
-  "Government Programs",
-  "Immediate Steps",
   "Insurance",
-  "Education Savings (529)",
-  "Investing for Your Child",
-  "Tax Benefits for Parents",
+  "Emergency Fund",
   "Estate Planning",
+  "College Savings",
+  "Investing for Kids",
+  "Government Programs",
+  "Childcare & Benefits",
 ];
 
 export function FinancialTab() {
@@ -197,7 +216,14 @@ export function FinancialTab() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["parent-financial-checklist"] });
-      toast({ title: "Progress saved! 💰" });
+      toast({ title: "Saved — one more thing set up for the future." });
+    },
+    onError: () => {
+      toast({
+        title: "Couldn't save that just now",
+        description: "Check your connection and tap again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -226,10 +252,10 @@ export function FinancialTab() {
   // First uncompleted item across all categories (used for Next Step card)
   const nextAction = items?.find((item) => !isCompleted(item.id)) ?? null;
 
-  // Open "Government Programs" and "Immediate Steps" by default
+  // Open the first protect-first categories by default
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    "Government Programs": true,
-    "Immediate Steps": true,
+    "Insurance": true,
+    "Emergency Fund": true,
   });
   const isSectionOpen = (key: string) => openSections[key] === true;
   const toggleSection = (key: string) => setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -250,7 +276,7 @@ export function FinancialTab() {
           <DollarSign className="w-7 h-7 text-finance" /> Finance
         </h1>
         <p className="text-sm text-foreground/80 leading-relaxed">
-          Financial steps new parents often miss — check off as you go.
+          Small moves now that give your baby a head start.
         </p>
         <p className="text-[11px] text-muted-foreground italic">
           General guidance only — not personalized financial advice.
@@ -290,10 +316,6 @@ export function FinancialTab() {
         </Card>
       )}
 
-      <KidSavingsComparison />
-
-      <SavingsGrowthCalculator defaultStartAge={Math.floor(ageMonths / 12)} />
-
       {/* Checklist */}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading checklist...</p>
@@ -331,7 +353,7 @@ export function FinancialTab() {
                               )}
                               <p className="text-xs text-muted-foreground">{item.description}</p>
                               {item.why_it_matters && (
-                                <p className="text-xs text-muted-foreground"><strong>Why:</strong> {item.why_it_matters}</p>
+                                <WhyThisMatters>{item.why_it_matters}</WhyThisMatters>
                               )}
                               {item.annual_limit_note && (
                                 <div className="flex items-start gap-1.5 rounded-md bg-background/60 px-2.5 py-1.5">
@@ -344,22 +366,41 @@ export function FinancialTab() {
                                   <ExternalLink className="w-3 h-3" /> Learn more
                                 </a>
                               )}
-                              {/* Sponsor CTA — renders when a finance firm is linked to this item */}
-                              {(item as any).is_sponsored && (item as any).sponsor_name && (
-                                <div className="mt-1 flex items-center justify-between rounded-lg bg-background/60 px-3 py-2 border border-border/50">
-                                  <p className="text-xs text-muted-foreground">Sponsored by {(item as any).sponsor_name}</p>
-                                  {(item as any).sponsor_cta_url && (
-                                    <a
-                                      href={(item as any).sponsor_cta_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer sponsored"
-                                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                                    >
-                                      {(item as any).sponsor_cta_label ?? "Learn more"} <ExternalLink className="w-3 h-3" />
-                                    </a>
-                                  )}
-                                </div>
-                              )}
+                              <div className="pt-1">
+                                <TalkThisThroughButton
+                                  seedPrompt={`Help me think through "${item.title}" for my baby. ${completed ? "I've marked it done." : "I haven't started it yet."}`}
+                                  forceSkill="financial"
+                                />
+                              </div>
+                              {(() => {
+                                const sponsor = getSponsor(item);
+                                if (!sponsor.is_sponsored || !sponsor.sponsor_name) return null;
+                                const disclosure =
+                                  sponsor.sponsor_disclosure ??
+                                  `Sponsored content. Grace Flare doesn't endorse or recommend ${sponsor.sponsor_name}, hasn't evaluated them, and may be paid if you click. This is advertising, not a recommendation. Investing involves risk, including possible loss of principal.`;
+                                return (
+                                  <div className="mt-2 rounded-lg border border-accent/40 bg-background/60 overflow-hidden">
+                                    <div className="bg-accent/20 px-3 py-1.5">
+                                      <p className="text-xs font-semibold text-foreground">
+                                        Ad · Paid placement by {sponsor.sponsor_name}
+                                      </p>
+                                    </div>
+                                    <div className="px-3 py-2.5 space-y-2">
+                                      {sponsor.sponsor_cta_url && (
+                                        <a
+                                          href={sponsor.sponsor_cta_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer sponsored"
+                                          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 touch-target"
+                                        >
+                                          {sponsor.sponsor_cta_label ?? "Learn more"} <ExternalLink className="w-3 h-3" />
+                                        </a>
+                                      )}
+                                      <p className="text-[11px] text-muted-foreground leading-snug">{disclosure}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </div>
                             {completed && <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" />}
                           </div>
@@ -373,6 +414,12 @@ export function FinancialTab() {
           })}
         </div>
       )}
+
+      <ProtectFirstCard />
+
+      <KidSavingsComparison />
+
+      <SavingsGrowthCalculator defaultStartAge={Math.floor(ageMonths / 12)} />
     </div>
   );
 }
