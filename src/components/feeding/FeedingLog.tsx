@@ -29,7 +29,6 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
-import BottleTimer from "@/components/feeding/BottleTimer";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
@@ -165,6 +164,19 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     setDialogOpen(true);
   }, [pageActiveFeed?.id, pageActiveFeed?.feeding_type, pageActiveFeed?.side]);
 
+  // Bottle no longer has an in-app timer (you just log the oz), but the Apple
+  // Watch can still start a bottle timer — an active row with source='timer'
+  // and duration_minutes NULL. When such a session is active and the bottle
+  // form is open, bind it as the activeRow so Save *finalizes* that row
+  // (recording the oz) instead of inserting a duplicate and leaving the watch
+  // session stuck as an unstoppable "in progress" ghost. NursingTimer owns
+  // this wiring for breast feeds via onActiveRowChange; this covers bottle.
+  useEffect(() => {
+    if (editingId || feedType !== "bottle") return;
+    setActiveRow(pageActiveFeed?.feeding_type === "bottle" ? pageActiveFeed : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedType, editingId, pageActiveFeed?.id, pageActiveFeed?.feeding_type]);
+
   const { data: logs } = useQuery({
     queryKey: ["feeding-logs", activeChild?.id],
     queryFn: async () => {
@@ -251,9 +263,13 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
         if (error) throw error;
         return;
       }
-      if (activeRow) {
+      if (activeRow && activeRow.feeding_type === feedType) {
         // Finalize the active (timer-started) row. We must clear the in-progress
         // markers so the row leaves the "active" set (duration_minutes IS NULL).
+        // The feeding_type guard prevents finalizing (and silently overwriting)
+        // an active row of a different type — e.g. a watch-started bottle row
+        // bound to activeRow while the user has switched the form to Solid; in
+        // that case we fall through to a fresh INSERT and leave the row intact.
         const payload = getPayload();
         const { error } = await supabase
           .from("feeding_logs")
@@ -382,18 +398,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               )}
 
               {feedType === "bottle" && (
-                <div className="space-y-3">
-                  <BottleTimer
-                    childId={activeChild.id}
-                    onDurationChange={handleTimerDuration}
-                    onActiveRowChange={handleActiveRowChange}
-                    initialMinutes={durationMin ? Number(durationMin) : undefined}
-                    editMode={!!editingId}
-                  />
-                  <div className="space-y-1">
-                    <Label>Amount (oz)</Label>
-                    <Input type="number" step="0.5" value={amountOz} onChange={(e) => setAmountOz(e.target.value)} placeholder="4" />
-                  </div>
+                <div className="space-y-1">
+                  <Label>Amount (oz)</Label>
+                  <Input type="number" step="0.5" value={amountOz} onChange={(e) => setAmountOz(e.target.value)} placeholder="4" />
                 </div>
               )}
 
