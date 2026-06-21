@@ -15,9 +15,6 @@ interface UseSleepAlertPopupArgs {
   // Kind of the current banner state, or null if there's nothing to surface.
   kind: SleepAlertKind | null;
   title: string | null;
-  // Id of the most recent sleep log that produced the state — a new log is
-  // "something new" and re-shows the popup after a dismiss.
-  triggerId: string | null;
 }
 
 interface SleepAlertPopupState {
@@ -61,40 +58,40 @@ function persistDismissed(childId: string, triggerKey: string, dayKey: string) {
   }
 }
 
-// Surfaces an alert popup once per trigger key — `${kind}:${childId}:${dayKey}:
-// ${triggerId}` — so a new sleep log, new day, new kind, or different child
-// re-shows it. "Dismiss" persists the key to localStorage (never shown again
-// for that trigger); "Remind me next time" closes for this mount only, so the
-// next visit to the page shows it again while the alert state is still active.
+// Surfaces an alert popup once per alert key — `${kind}:${childId}:${dayKey}` —
+// so a new day, new kind, or different child re-shows it. The key is
+// deliberately scoped to the day (not to a specific sleep log): the alerts are
+// driven by the latest logs, so keying on a log id meant every new nap minted a
+// fresh key and resurrected an already-dismissed alert. "Dismiss" persists the
+// key to localStorage (gone for the rest of the day, regardless of new logs);
+// "Remind me next time" closes for this mount only, so the next visit to the
+// page shows it again while the alert state is still active.
 export function useSleepAlertPopup({
   childId,
   kind,
   title,
-  triggerId,
 }: UseSleepAlertPopupArgs): SleepAlertPopupState {
   const closedRef = useRef<Set<string>>(new Set());
   const [, bumpRender] = useState(0);
 
   const dayKey = format(new Date(), "yyyy-MM-dd");
-  const triggerKey =
-    kind && title && childId
-      ? `${kind}:${childId}:${dayKey}:${triggerId ?? "none"}`
-      : null;
+  const alertKey =
+    kind && title && childId ? `${kind}:${childId}:${dayKey}` : null;
 
   const visible =
-    !!triggerKey &&
+    !!alertKey &&
     !!childId &&
-    !closedRef.current.has(triggerKey) &&
-    !readDismissed(childId).includes(triggerKey);
+    !closedRef.current.has(alertKey) &&
+    !readDismissed(childId).includes(alertKey);
 
   const closeForThisMount = () => {
-    if (!triggerKey) return;
-    closedRef.current.add(triggerKey);
+    if (!alertKey) return;
+    closedRef.current.add(alertKey);
     bumpRender((n) => n + 1);
   };
 
   const dismiss = () => {
-    if (triggerKey && childId) persistDismissed(childId, triggerKey, dayKey);
+    if (alertKey && childId) persistDismissed(childId, alertKey, dayKey);
     closeForThisMount();
   };
 
