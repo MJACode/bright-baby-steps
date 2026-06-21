@@ -194,6 +194,77 @@ describe("buildSleepTodo", () => {
     expect(items.some((i) => i.id === "bedtime")).toBe(true);
   });
 
+  it("(adaptive) renders MORE logged naps than the age-typical count, not just napTarget", () => {
+    // 6-9mo napTarget is 3, but four naps were logged. All four must show as
+    // done — the old fixed loop dropped the fourth.
+    const { items } = buildSleepTodo({
+      now: at("15:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [
+        napLog("08:00", "08:30"),
+        napLog("10:00", "10:30"),
+        napLog("12:00", "12:30"),
+        napLog("14:00", "14:30"),
+      ],
+      completedItems: [],
+    });
+    const naps = items.filter((i) => i.kind === "nap");
+    expect(naps.length).toBeGreaterThanOrEqual(4);
+    const nap4 = items.find((i) => i.id === "nap-4")!;
+    expect(nap4.status).toBe("done");
+    expect(nap4.actualStart?.getHours()).toBe(14);
+  });
+
+  it("(adaptive) reproduces the screenshot: many short naps don't pin bedtime in the past", () => {
+    // 0-3mo (no fixed bedtime window). Four short naps, the last ending early
+    // afternoon, viewed in the early evening. Old behavior: bedtime computed at
+    // the 4th nap's end + wake window → ~1:51 PM → "overdue ~278 min". New
+    // behavior: a "due now" catch-up nap and an evening bedtime.
+    const { items } = buildSleepTodo({
+      now: at("18:29"),
+      ageMonths: 1,
+      plan: null,
+      wakeAnchor: at("06:00"),
+      todayLogs: [
+        napLog("06:39", "08:42"),
+        napLog("10:21", "10:51"),
+        napLog("11:07", "11:45"),
+        napLog("12:54", "13:06"),
+      ],
+      completedItems: [],
+    });
+
+    // All four logged naps are kept and done.
+    expect(items.filter((i) => i.kind === "nap" && i.status === "done")).toHaveLength(4);
+
+    // The next nap is "due now", not stranded at ~1:51 PM.
+    const nextNap = items.find((i) => i.kind === "nap" && i.status === "now")!;
+    expect(nextNap).toBeDefined();
+    expect(nextNap.minutesUntil ?? 0).toBeGreaterThanOrEqual(-5);
+
+    // Bedtime lands in the evening, not in the early afternoon.
+    const bedtime = items.find((i) => i.id === "bedtime")!;
+    expect(bedtime.suggestedAt!.getHours()).toBeGreaterThanOrEqual(19);
+  });
+
+  it("(adaptive) fewer, longer naps than typical still resolve to a sensible bedtime", () => {
+    // 6-9mo napTarget 3, but only one long nap was taken. The plan must still
+    // reach bedtime in the [19:00, 20:00] window rather than stalling.
+    const { items } = buildSleepTodo({
+      now: at("16:00"),
+      ageMonths: AGE_6_9,
+      plan: PLAN_6_9,
+      wakeAnchor: at("07:00"),
+      todayLogs: [napLog("09:00", "12:00")],
+      completedItems: [],
+    });
+    const bedtime = items.find((i) => i.id === "bedtime")!;
+    expect(bedtime.suggestedAt!.getHours()).toBeGreaterThanOrEqual(19);
+    expect(bedtime.suggestedAt!.getHours()).toBeLessThanOrEqual(20);
+  });
+
   it("marks allDone once every non-skipped item is done", () => {
     const { allDone } = buildSleepTodo({
       now: at("21:00"),
