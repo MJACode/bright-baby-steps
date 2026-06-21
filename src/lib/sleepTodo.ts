@@ -187,60 +187,88 @@ export function buildSleepTodo(opts: {
     : addMinutes(dayStart, nightStartMin);
   const nowIsEvening = clockMinutes(now) >= nightStartMin;
 
-  let napsMatched = 0;
-  let activeNapConsumed = false;
+  // Daytime nap slots — adaptive to how the day actually went, not a fixed count.
+  // Every logged nap gets its own slot (a baby who naps more often than the
+  // age-typical count still sees each one accounted for), then we project the
+  // remaining naps forward until the next sleep lands in the bedtime/night
+  // window. napTarget is a floor (so a dropped nap still shows struck through)
+  // but not a ceiling — short, frequent naps legitimately push past it.
+  let slot = 0;
+  const hasNappedToday = completedNaps.length > 0 || !!activeNap;
 
-  for (let i = 1; i <= napTarget; i++) {
-    const id = `nap-${i}`;
-    const label = `Nap ${i}`;
+  for (const log of completedNaps) {
+    slot += 1;
+    const start = new Date(log.started_at);
+    const end = new Date(log.ended_at as string);
+    items.push({
+      id: `nap-${slot}`,
+      kind: "nap",
+      label: `Nap ${slot}`,
+      suggestedAt: start,
+      actualStart: start,
+      actualEnd: end,
+      status: "done",
+      checkable: false,
+      logId: log.id,
+    });
+    cursor = end;
+  }
 
-    if (napsMatched < completedNaps.length) {
-      const log = completedNaps[napsMatched];
-      napsMatched += 1;
-      const start = new Date(log.started_at);
-      const end = new Date(log.ended_at as string);
-      items.push({
-        id,
-        kind: "nap",
-        label,
-        suggestedAt: start,
-        actualStart: start,
-        actualEnd: end,
-        status: "done",
-        checkable: false,
-        logId: log.id,
-      });
-      cursor = end;
-      continue;
-    }
+  if (activeNap) {
+    slot += 1;
+    const start = new Date(activeNap.started_at);
+    items.push({
+      id: `nap-${slot}`,
+      kind: "nap",
+      label: `Nap ${slot}`,
+      suggestedAt: start,
+      actualStart: start,
+      status: "active",
+      checkable: false,
+      logId: activeNap.id,
+    });
+    cursor = addMinutes(start, napDur);
+  }
 
-    if (activeNap && !activeNapConsumed) {
-      activeNapConsumed = true;
-      const start = new Date(activeNap.started_at);
-      items.push({
-        id,
-        kind: "nap",
-        label,
-        suggestedAt: start,
-        actualStart: start,
-        status: "active",
-        checkable: false,
-        logId: activeNap.id,
-      });
-      cursor = addMinutes(start, napDur);
-      continue;
-    }
+  // Project the remaining naps. A 0-nap age (older child) projects none; in the
+  // evening we never add catch-up naps beyond the floor. The hard cap guards
+  // against a runaway cascade when newborn wake windows are short.
+  const MAX_NAP_SLOTS = 12;
+  const projectionCeiling =
+    napTarget === 0 ? 0 : nowIsEvening ? napTarget : MAX_NAP_SLOTS;
 
+  while (slot < projectionCeiling) {
+    const id = `nap-${slot + 1}`;
     const overrideIso = overrides[id];
-    const suggestedAt = overrideIso ? new Date(overrideIso) : addMinutes(cursor, wwLow);
-    cursor = addMinutes(suggestedAt, napDur);
+    let suggestedAt = overrideIso ? new Date(overrideIso) : addMinutes(cursor, wwLow);
 
-    let status: TodoStatus;
-    if (
+    const landsAtNight =
       suggestedAt.getTime() > dayEnd.getTime() ||
-      nowIsEvening ||
-      isNightClockMinutes(clockMinutes(suggestedAt), nightStartMin)
+      isNightClockMinutes(clockMinutes(suggestedAt), nightStartMin);
+
+    // Once the typical nap count is met and the next sleep belongs to the night
+    // window, stop projecting naps — the bedtime block below takes over. This is
+    // what lets bedtime adapt to extra naps instead of pinning it right after
+    // the last logged one.
+    if (slot >= napTarget && (landsAtNight || nowIsEvening)) break;
+
+    // A baby who has already napped today but is now past due for the next sleep
+    // gets a "due now" slot rather than one pinned at a stale earlier time —
+    // keeps the plan actionable instead of showing a wildly negative countdown.
+    // The day's first nap keeps its natural (anticipatory) time.
+    if (
+      hasNappedToday &&
+      !overrideIso &&
+      !landsAtNight &&
+      !nowIsEvening &&
+      suggestedAt.getTime() < now.getTime()
     ) {
+      suggestedAt = now;
+    }
+
+    slot += 1;
+    let status: TodoStatus;
+    if (landsAtNight || nowIsEvening) {
       status = "skipped";
     } else if (suggestedAt.getTime() <= now.getTime()) {
       status = "now";
@@ -251,12 +279,13 @@ export function buildSleepTodo(opts: {
     items.push({
       id,
       kind: "nap",
-      label,
+      label: `Nap ${slot}`,
       suggestedAt,
       status,
       checkable: false,
       isOverridden: !!overrideIso,
     });
+    cursor = addMinutes(suggestedAt, napDur);
   }
 
   // Bedtime routine — only meaningful when there's a bedtime window.
