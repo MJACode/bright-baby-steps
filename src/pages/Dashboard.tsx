@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAge } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Flame, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { computeForgivingStreak } from "@/lib/streak";
 import { format } from "date-fns";
 import { TodaysBriefing } from "@/components/TodaysBriefing";
@@ -18,6 +17,7 @@ import { NextStepFeed } from "@/components/NextStepFeed";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
+import { StreakPopup } from "@/components/StreakPopup";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 import { VoiceQuickLogButton } from "@/components/VoiceQuickLogButton";
 
@@ -25,8 +25,10 @@ import { VoiceQuickLogButton } from "@/components/VoiceQuickLogButton";
 export default function Dashboard() {
   const { user } = useAuth();
   const { activeChild, children, isLoading: childrenLoading } = useChildren();
-  const { prefs } = usePreferences();
+  const { prefs, setPrefs } = usePreferences();
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [streakPopupOpen, setStreakPopupOpen] = useState(false);
+  const streakPopupFiredRef = useRef(false);
 
   const isNewUser = !childrenLoading && (!children || children.length === 0);
 
@@ -58,6 +60,19 @@ export default function Dashboard() {
   });
 
   usePartnerLogToast(activeChild?.id);
+
+  // Once-per-day streak celebration. The ref keeps the dialog from re-opening
+  // after the user closes it within the same session; the stamped date keeps a
+  // fresh mount the same calendar day from popping it again.
+  useEffect(() => {
+    if (streakPopupFiredRef.current) return;
+    if ((streakData?.streak ?? 0) <= 0) return;
+    const today = format(new Date(), "yyyy-MM-dd");
+    if (prefs.lastStreakPopupDate === today) return;
+    streakPopupFiredRef.current = true;
+    setStreakPopupOpen(true);
+    setPrefs({ lastStreakPopupDate: today });
+  }, [streakData, prefs.lastStreakPopupDate, setPrefs]);
 
   const firstName = user?.user_metadata?.full_name?.split(" ")[0] || "";
 
@@ -105,33 +120,6 @@ export default function Dashboard() {
       {/* Developmental Leaps */}
       {isVisible("leaps") && <LeapCard activeChild={activeChild} />}
 
-      {/* Streak — celebrate active streaks only. The lapsed and never-logged
-          nudges now live in TodaysBriefing's "watch" field. */}
-      {(streakData?.streak ?? 0) > 0 && (
-        <Card className="border-0 bg-primary/10">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                <Flame className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                {streakData!.freezeUsed ? (
-                  <>
-                    <p className="font-bold text-sm">🔥 {streakData!.streak}-day streak — we saved it for you</p>
-                    <p className="text-xs text-muted-foreground">A missed day won't break it.</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-bold text-sm">🔥 {streakData!.streak}-day tracking streak!</p>
-                    <p className="text-xs text-muted-foreground">Keep it going — consistency matters.</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Share the week with family — weekly, dismissible nudge into the AI chat */}
       {isVisible("shareWeek") && <ShareWeekCard activeChild={activeChild} />}
 
@@ -145,6 +133,13 @@ export default function Dashboard() {
       </button>
 
       <CustomizeHomeSheet open={customizeOpen} onOpenChange={setCustomizeOpen} />
+
+      <StreakPopup
+        streak={streakData?.streak ?? 0}
+        freezeUsed={streakData?.freezeUsed ?? false}
+        open={streakPopupOpen}
+        onOpenChange={setStreakPopupOpen}
+      />
     </div>
   );
 }

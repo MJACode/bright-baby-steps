@@ -14,6 +14,7 @@ interface Preferences {
   calmMode: boolean;
   hiddenHomeSections: string[];
   homeSectionsMigrated: boolean;
+  lastStreakPopupDate: string;
 }
 
 const defaults: Preferences = {
@@ -28,6 +29,7 @@ const defaults: Preferences = {
   calmMode: false,
   hiddenHomeSections: [],
   homeSectionsMigrated: false,
+  lastStreakPopupDate: "",
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing
 // into hiddenHomeSections) throws instead of silently poisoning every caller.
