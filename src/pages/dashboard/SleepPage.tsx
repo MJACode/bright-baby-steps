@@ -15,7 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2, Trash2 } from "lucide-react";
+import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2, Trash2, CalendarCheck, History } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays, formatDistanceToNow } from "date-fns";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -366,6 +367,7 @@ export default function SleepPage() {
   const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
   const [savingTimer, setSavingTimer] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [tab, setTab] = useState("plan");
 
   const { data: logs } = useQuery({
     queryKey: ["sleep-logs", activeChild?.id],
@@ -675,89 +677,12 @@ export default function SleepPage() {
         </div>
       </div>
 
-      <Card className="border bg-sleep/5 border-sleep/20">
-        <CardContent className="p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-sleep/15 flex items-center justify-center shrink-0">
-            {isLoadingPlan ? (
-              <Sparkle className="w-5 h-5 text-sleep/40" />
-            ) : savedPlan ? (
-              <CheckCircle2 className="w-5 h-5 text-sleep" />
-            ) : (
-              <Sparkle className="w-5 h-5 text-sleep" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            {isLoadingPlan ? (
-              <>
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-3 w-48 mt-1.5" />
-              </>
-            ) : savedPlan ? (
-              <>
-                <p className="font-display font-bold text-sm leading-tight flex items-center gap-1.5">
-                  Your sleep plan
-                  <CheckCircle2 className="w-3.5 h-3.5 text-sleep" />
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Saved {formatDistanceToNow(new Date(savedPlan.updated_at), { addSuffix: true })} · tap to view or adjust
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-display font-bold text-sm leading-tight">{activeChild.name}'s sleep plan</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Our age-based recommendation — tap to view or customize.</p>
-              </>
-            )}
-          </div>
-          <Button
-            type="button"
-            onClick={() => setPlanOpen(true)}
-            disabled={isLoadingPlan}
-            className="bg-sleep hover:bg-sleep/90 text-white touch-target gap-1.5 shrink-0"
-          >
-            {isLoadingPlan ? (
-              <Skeleton className="h-4 w-12 bg-white/30" />
-            ) : savedPlan ? (
-              <>
-                <CheckCircle2 className="w-4 h-4" />
-                View
-              </>
-            ) : (
-              <>
-                <Sparkle className="w-4 h-4" />
-                View
-              </>
-            )}
-          </Button>
+      {/* Live Sleep Timer — Primary CTA */}
+      <Card className="border-0 bg-sleep-bg/60">
+        <CardContent className="p-4">
+          <SleepTimer childId={activeChild?.id} onManualSubmit={handleTimerComplete} isSavingManual={savingTimer} />
         </CardContent>
       </Card>
-
-      {savedPlan && !isLoadingPlan && (
-        <Card className="border bg-sleep/5 border-sleep/20">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-sleep" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                {getSleepMethodMeta(savedPlan.method as SleepMethod).name} tonight
-              </p>
-            </div>
-            <ol className="space-y-2 text-sm text-foreground/85">
-              {getSleepMethodMeta(savedPlan.method as SleepMethod).guide.tonightSteps.map((step, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="mt-0.5 w-5 h-5 rounded-full bg-sleep/15 text-sleep text-xs font-semibold flex items-center justify-center shrink-0">
-                    {i + 1}
-                  </span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          </CardContent>
-        </Card>
-      )}
-
-      {showChairCard && savedPlan && (
-        <ChairStageCard childId={activeChild.id} plan={savedPlan} />
-      )}
 
       {showFerberTimer && user && activeSleepLog && (
         <FerberCheckInTimer
@@ -776,36 +701,166 @@ export default function SleepPage() {
         />
       )}
 
-      <SleepTodoCard
-        childId={activeChild.id}
-        ageMonths={ageMonths}
-        childName={activeChild.name ?? "your baby"}
-      />
-
-      <SleepPlanReminderBanner
-        childId={activeChild.id}
-        childName={activeChild.name ?? "your baby"}
-      />
-
-      {/* Live Sleep Timer — Primary CTA */}
-      <Card className="border-0 bg-sleep-bg/60">
-        <CardContent className="p-4">
-          <SleepTimer childId={activeChild?.id} onManualSubmit={handleTimerComplete} isSavingManual={savingTimer} />
-        </CardContent>
-      </Card>
-
-      {/* Sleep Insights */}
-      {activeChild && (
-        <SleepInsights
-          logs={logs ?? []}
-          ageMonths={ageMonths}
-          calmMode={prefs.calmMode}
-          onToggleCalm={(next) => setPrefs({ calmMode: next })}
-          nightWakingReassurance={nightWakingReassurance}
-        />
+      {showChairCard && savedPlan && (
+        <ChairStageCard childId={activeChild.id} plan={savedPlan} />
       )}
 
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
+          <TabsTrigger
+            value="plan"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <CalendarCheck className="w-4 h-4" /> Plan
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <History className="w-4 h-4" /> History
+          </TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="plan" className="mt-4 space-y-5">
+          <Card className="border bg-sleep/5 border-sleep/20">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-sleep/15 flex items-center justify-center shrink-0">
+                {isLoadingPlan ? (
+                  <Sparkle className="w-5 h-5 text-sleep/40" />
+                ) : savedPlan ? (
+                  <CheckCircle2 className="w-5 h-5 text-sleep" />
+                ) : (
+                  <Sparkle className="w-5 h-5 text-sleep" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                {isLoadingPlan ? (
+                  <>
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48 mt-1.5" />
+                  </>
+                ) : savedPlan ? (
+                  <>
+                    <p className="font-display font-bold text-sm leading-tight flex items-center gap-1.5">
+                      Your sleep plan
+                      <CheckCircle2 className="w-3.5 h-3.5 text-sleep" />
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Saved {formatDistanceToNow(new Date(savedPlan.updated_at), { addSuffix: true })} · tap to view or adjust
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-display font-bold text-sm leading-tight">{activeChild.name}'s sleep plan</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Our age-based recommendation — tap to view or customize.</p>
+                  </>
+                )}
+              </div>
+              <Button
+                type="button"
+                onClick={() => setPlanOpen(true)}
+                disabled={isLoadingPlan}
+                className="bg-sleep hover:bg-sleep/90 text-white touch-target gap-1.5 shrink-0"
+              >
+                {isLoadingPlan ? (
+                  <Skeleton className="h-4 w-12 bg-white/30" />
+                ) : savedPlan ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    View
+                  </>
+                ) : (
+                  <>
+                    <Sparkle className="w-4 h-4" />
+                    View
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {savedPlan && !isLoadingPlan && (
+            <Card className="border bg-sleep/5 border-sleep/20">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-sleep" />
+                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
+                    {getSleepMethodMeta(savedPlan.method as SleepMethod).name} tonight
+                  </p>
+                </div>
+                <ol className="space-y-2 text-sm text-foreground/85">
+                  {getSleepMethodMeta(savedPlan.method as SleepMethod).guide.tonightSteps.map((step, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-0.5 w-5 h-5 rounded-full bg-sleep/15 text-sleep text-xs font-semibold flex items-center justify-center shrink-0">
+                        {i + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
+          )}
+
+          <SleepTodoCard
+            childId={activeChild.id}
+            ageMonths={ageMonths}
+            childName={activeChild.name ?? "your baby"}
+          />
+
+          <SleepPlanReminderBanner
+            childId={activeChild.id}
+            childName={activeChild.name ?? "your baby"}
+          />
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4 space-y-5">
+          {/* Recent logs */}
+          <div className="space-y-2">
+            <h2 className="font-display font-bold text-sm">Recent Logs</h2>
+            <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
+            {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
+              <Card key={log.id} className="border-0 bg-sleep-bg">
+                <CardContent className="p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="secondary" className="text-xs">
+                      {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
+                    </Badge>
+                    <div>
+                      <p className="text-sm font-semibold">{formatElapsed(log.duration_minutes || 0)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(log.started_at), "MMM d, h:mm a")}
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            )) : (
+              <p className="text-sm text-muted-foreground">No sleep logs yet.</p>
+            )}
+            </div>
+            {logs && logs.length > 5 && (
+              <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
+                {showAll ? "Show less" : `View all ${logs.length} logs`}
+              </Button>
+            )}
+          </div>
+
+          {/* Sleep Insights */}
+          {activeChild && (
+            <SleepInsights
+              logs={logs ?? []}
+              ageMonths={ageMonths}
+              calmMode={prefs.calmMode}
+              onToggleCalm={(next) => setPrefs({ calmMode: next })}
+              nightWakingReassurance={nightWakingReassurance}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
 
       <SleepPlanDialog
         open={planOpen}
@@ -878,40 +933,6 @@ export default function SleepPage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Recent logs */}
-      <div className="space-y-2">
-        <h2 className="font-display font-bold text-sm">Recent Logs</h2>
-        <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
-        {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
-          <Card key={log.id} className="border-0 bg-sleep-bg">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="text-xs">
-                  {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
-                </Badge>
-                <div>
-                  <p className="text-sm font-semibold">{formatElapsed(log.duration_minutes || 0)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(log.started_at), "MMM d, h:mm a")}
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
-                <Pencil className="w-4 h-4" />
-              </Button>
-            </CardContent>
-          </Card>
-        )) : (
-          <p className="text-sm text-muted-foreground">No sleep logs yet.</p>
-        )}
-        </div>
-        {logs && logs.length > 5 && (
-          <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
-            {showAll ? "Show less" : `View all ${logs.length} logs`}
-          </Button>
-        )}
-      </div>
     </div>
   );
 }
