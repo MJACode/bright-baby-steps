@@ -60,7 +60,7 @@ Before writing the drill, confirm or infer:
 
 ## How to log progress
 - Daily: voice-log "[child] did [milestone activity]" via the Quick Log button
-- When hit: log a milestone (category: <category>, source: drill) — optionally attach a photo
+- When hit: log a milestone (category: <category>, source: drill)
 ```
 
 # Rules

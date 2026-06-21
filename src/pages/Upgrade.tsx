@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Sparkles, Camera, Activity, Users, BarChart3, Check, X, Crown } from "lucide-react";
+import { Sparkles, Activity, Users, BarChart3, Check, X, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 const PERKS = [
   { i: Sparkles, t: "Predictive AI Coach", s: "Forecasts naps, fussiness, growth windows" },
   { i: Activity, t: "Cry & sound analysis", s: "Hungry vs tired vs uncomfortable" },
-  { i: Camera, t: "Photo milestone detection", s: "Snap, log, celebrate — automatically" },
   { i: Users, t: "Multi-caregiver sync", s: "Real-time for parents, sitters, grandparents" },
   { i: BarChart3, t: "Growth analytics + PDF reports", s: "WHO percentiles, trend flags, doctor-ready" },
 ];

@@ -60,7 +60,6 @@ export const PREMIUM_FEATURES = {
   "predictions": "Predictive next-event",
   "voice-log": "Voice quick-log",
   "cry-analysis": "Cry & sound analysis",
-  "photo-milestones": "Photo milestone detection",
   "growth-analytics": "Detailed growth analytics",
   "multi-caregiver": "Multi-caregiver sync",
   "expert-library": "Expert content library",
