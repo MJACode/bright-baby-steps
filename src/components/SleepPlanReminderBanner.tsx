@@ -374,7 +374,6 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
     childId,
     kind: alertKind,
     title: state?.title ?? null,
-    triggerId: recentLogs?.[0]?.id ?? "none",
   });
 
   if (!savedPlan || !state) return null;
