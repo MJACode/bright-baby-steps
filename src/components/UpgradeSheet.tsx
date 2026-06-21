@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Camera, Activity, Users, BarChart3 } from "lucide-react";
+import { Sparkles, Activity, Users, BarChart3 } from "lucide-react";
 import { type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
 
 interface UpgradeSheetProps {
@@ -27,10 +27,6 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
   "cry-analysis": {
     headline: "What is she trying to tell you?",
     sub: "Cry & sound analysis flags hunger vs tired vs discomfort with 87% accuracy.",
-  },
-  "photo-milestones": {
-    headline: "Snap. Celebrate. Logged.",
-    sub: "Flare+ detects milestones in photos automatically and saves them to her timeline.",
   },
   "growth-analytics": {
     headline: "Full WHO percentile charts.",
@@ -61,7 +57,6 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
 const PERKS = [
   { i: Sparkles, t: "Daily AI briefings & predictions" },
   { i: Activity, t: "Cry & sound analysis" },
-  { i: Camera, t: "Photo milestone detection" },
   { i: BarChart3, t: "Growth analytics + PDF exports" },
   { i: Users, t: "Multi-caregiver sync" },
 ];

@@ -1,16 +1,11 @@
 import { useState } from "react";
-import { Camera, GraduationCap, Sparkles } from "lucide-react";
+import { GraduationCap, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePremium } from "@/hooks/usePremium";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 
 const PERKS = [
-  {
-    icon: Camera,
-    title: "Detect milestones from a photo",
-    sub: "Snap a moment — Flare+ suggests the milestone and saves it to her timeline.",
-  },
   {
     icon: GraduationCap,
     title: "Speech Class: guided weekly practice",

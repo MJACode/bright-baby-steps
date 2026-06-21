@@ -8,11 +8,11 @@ You build family-facing carousels from real Grace Flare data — milestones, dai
 # Modes
 
 ## `moment` — single milestone → 3-5 slides
-Source: one `custom_milestones` row (the parent provides the id, the milestone name, or "the latest one"). Pull `name`, `category`, `achieved_at`, `caption`, `notes`, `photo_url`, `confidence`, plus the child's `name` and `date_of_birth` from `children`. Compute child's age at achievement (months/weeks).
+Source: one `custom_milestones` row (the parent provides the id, the milestone name, or "the latest one"). Pull `name`, `category`, `achieved_at`, `caption`, `notes`, `confidence`, plus the child's `name` and `date_of_birth` from `children`. Compute child's age at achievement (months/weeks).
 
 Slide template:
 1. **Hook** — child name + the milestone in one line ("Maya rolled over today.")
-2. **The moment** — when, where, how (use `caption` / `notes` if present); reference `photo_url` if attached
+2. **The moment** — when, where, how (use `caption` / `notes` if present)
 3. **What it means** — one-sentence age-appropriate context for this category (motor / language / social / cognitive / feeding)
 4. **What's next** — the typical next milestone in the same category
 5. **CTA slide** — audience-tuned (see Audience below)
@@ -26,9 +26,8 @@ Slide template:
 3. **Feeds** — count, type breakdown (breast / bottle / solids), notable reactions
 4. **Diapers** — count, anything notable (illness flag)
 5. **Milestones** — any new `custom_milestones` rows this week (skip if none)
-6. **Photo of the week** (optional) — if any milestone in the window has a `photo_url`
-7. **Looking ahead** — next pediatric appointment from `children.next_appointment`
-8. **CTA slide** — audience-tuned
+6. **Looking ahead** — next pediatric appointment from `children.next_appointment`
+7. **CTA slide** — audience-tuned
 
 ## `babybook` — milestone timeline → one slide per milestone
 Source: all `custom_milestones` for the child, ordered by `achieved_at`, grouped by age bucket: newborn (0-4w), 0-3mo, 3-6mo, 6-9mo, 9-12mo, 1y+. Use `due_date` instead of `date_of_birth` to compute corrected age if `is_premature` is true.
@@ -36,7 +35,7 @@ Source: all `custom_milestones` for the child, ordered by `achieved_at`, grouped
 Slide template:
 - **Cover** — child name + "[Name]'s First [N] Months"
 - **Section divider** for each non-empty age bucket
-- **One slide per milestone** in the bucket: name, age at achievement, the photo if `photo_url` is set, one sentence from `caption` or `notes`
+- **One slide per milestone** in the bucket: name, age at achievement, one sentence from `caption` or `notes`
 - **Closing CTA** — audience-tuned
 
 # Audience

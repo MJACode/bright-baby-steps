@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,10 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Camera, X, Sparkles } from "lucide-react";
+import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Sparkles } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
-import { ToastAction } from "@/components/ui/toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { SpeechClass } from "@/components/SpeechClass";
 import { MilestonesPremiumCard } from "@/components/MilestonesPremiumCard";
@@ -20,60 +19,24 @@ import { PremiumGate } from "@/components/PremiumGate";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { MilestoneFlags } from "@/components/milestones/MilestoneFlags";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Drawer, DrawerContent } from "@/components/ui/drawer";
-import { PhotoMilestoneDetector } from "@/components/PhotoMilestoneDetector";
-import { UpgradeSheet } from "@/components/UpgradeSheet";
-import { usePremium } from "@/hooks/usePremium";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { format } from "date-fns";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 
-function CustomMilestoneCard({ milestone, onDelete, onRemovePhoto, onAddPhoto }: {
+function CustomMilestoneCard({ milestone, onDelete }: {
   milestone: any;
   onDelete: () => void;
-  onRemovePhoto: () => void;
-  onAddPhoto: () => void;
 }) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!milestone.photo_url) { setSignedUrl(null); return; }
-    let cancelled = false;
-    supabase.storage.from("milestone-photos")
-      .createSignedUrl(milestone.photo_url, 3600)
-      .then(({ data }) => { if (!cancelled && data) setSignedUrl(data.signedUrl); });
-    return () => { cancelled = true; };
-  }, [milestone.photo_url]);
-
   return (
     <Card className="border-0 bg-milestones-bg/60">
       <CardContent className="p-3">
         <div className="flex items-center gap-3">
-          {signedUrl && (
-            <div className="relative shrink-0">
-              <img src={signedUrl} alt={milestone.name} className="w-12 h-12 rounded-lg object-cover ring-2 ring-milestones/20" />
-              <button
-                onClick={onRemovePhoto}
-                aria-label="Remove photo"
-                className="absolute -top-5 -right-5 w-12 h-12 flex items-center justify-center"
-              >
-                <span className="w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm">
-                  <X className="w-3 h-3" />
-                </span>
-              </button>
-            </div>
-          )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold">{milestone.name}</p>
             <p className="text-xs text-muted-foreground">{format(new Date(milestone.achieved_at), "MMM d, yyyy")}</p>
           </div>
           <div className="flex items-center gap-1">
-            {!milestone.photo_url && (
-              <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 text-milestones hover:text-milestones/80" onClick={onAddPhoto} aria-label="Add photo">
-                <Camera className="w-4 h-4" />
-              </Button>
-            )}
             <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-destructive" onClick={onDelete} aria-label="Delete milestone">
               <Trash2 className="w-4 h-4" />
             </Button>
@@ -88,17 +51,11 @@ export default function MilestonesPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
-  const { isPremium } = usePremium();
   const [showConfetti, setShowConfetti] = useState(false);
-  const [photoDetectorOpen, setPhotoDetectorOpen] = useState(false);
-  const [photoUpsellOpen, setPhotoUpsellOpen] = useState(false);
   const [catchUpOpen, setCatchUpOpen] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [customPhotoFile, setCustomPhotoFile] = useState<File | null>(null);
-  const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
-  const customFileRef = useRef<HTMLInputElement>(null);
 
   const ageMonths = activeChild
     ? getAgeInMonths(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)
@@ -168,28 +125,6 @@ export default function MilestonesPage() {
     },
   });
 
-  const updateMilestonePhoto = useMutation({
-    mutationFn: async ({ milestoneId, photoUrl }: { milestoneId: string; photoUrl: string | null }) => {
-      const existing = childMilestones?.find((cm) => cm.milestone_id === milestoneId);
-      if (existing) {
-        const { error } = await supabase.from("child_speech")
-          .update({ photo_url: photoUrl })
-          .eq("id", existing.id);
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["child-milestones"] });
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't save photo",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
   // Custom milestones
   const { data: customMilestones } = useQuery({
     queryKey: ["custom-milestones", activeChild?.id],
@@ -205,26 +140,13 @@ export default function MilestonesPage() {
     enabled: !!activeChild,
   });
 
-  const uploadPhoto = async (file: File): Promise<string> => {
-    const ext = file.name.split(".").pop();
-    const storagePath = `${user!.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("milestone-photos").upload(storagePath, file, { upsert: true });
-    if (error) throw error;
-    return storagePath;
-  };
-
   const addCustomMilestone = useMutation({
     mutationFn: async () => {
-      let photoUrl: string | null = null;
-      if (customPhotoFile) {
-        photoUrl = await uploadPhoto(customPhotoFile);
-      }
       const { error } = await supabase.from("custom_milestones").insert({
         child_id: activeChild!.id,
         parent_id: user!.id,
         name: customName.trim(),
         achieved_at: customDate,
-        photo_url: photoUrl,
       });
       if (error) throw error;
     },
@@ -233,8 +155,6 @@ export default function MilestonesPage() {
       setCustomModalOpen(false);
       setCustomName("");
       setCustomDate(format(new Date(), "yyyy-MM-dd"));
-      setCustomPhotoFile(null);
-      setCustomPhotoPreview(null);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2000);
       toast({ title: "🎉 Custom milestone saved!" });
@@ -248,113 +168,18 @@ export default function MilestonesPage() {
     },
   });
 
-  const updateCustomPhoto = useMutation({
-    mutationFn: async ({ id, photoUrl }: { id: string; photoUrl: string | null }) => {
-      const { error } = await supabase.from("custom_milestones")
-        .update({ photo_url: photoUrl })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't update photo",
-        description: err instanceof Error ? err.message : "Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Removing a photo only clears the reference — the Storage object stays —
-  // so undo just restores photo_url. Same undo-toast pattern as deletes.
-  const handleRemovePhoto = (cm: { id: string; photo_url: string | null }) => {
-    const previousUrl = cm.photo_url;
-    if (!previousUrl) return;
-    updateCustomPhoto.mutate(
-      { id: cm.id, photoUrl: null },
-      {
-        onSuccess: () => {
-          toast({
-            title: "Photo removed",
-            duration: 5000,
-            action: (
-              <ToastAction
-                altText="Undo removing this photo"
-                className="touch-target"
-                onClick={() => updateCustomPhoto.mutate({ id: cm.id, photoUrl: previousUrl })}
-              >
-                Undo
-              </ToastAction>
-            ),
-          });
-        },
-      }
-    );
-  };
-
-  // Deleting the row never touches the Storage object, so the undo re-insert
-  // keeps photo_url pointing at the still-existing photo.
   const deleteCustomMilestone = useDeleteWithUndo<NonNullable<typeof customMilestones>[0]>({
     table: "custom_milestones",
     invalidateKeys: [["custom-milestones"]],
     entityLabel: "Milestone",
   });
 
-  const handleCustomPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Please select an image file", variant: "destructive" });
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Image must be under 5MB", variant: "destructive" });
-      return;
-    }
-    setCustomPhotoFile(file);
-    setCustomPhotoPreview(URL.createObjectURL(file));
-  };
-
-  const handleCustomPhotoUpload = async (cmId: string) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
-        toast({ title: "Invalid image", variant: "destructive" });
-        return;
-      }
-      try {
-        const url = await uploadPhoto(file);
-        updateCustomPhoto.mutate({ id: cmId, photoUrl: url });
-        toast({ title: "📸 Photo saved!" });
-      } catch {
-        toast({ title: "Upload failed", variant: "destructive" });
-      }
-    };
-    input.click();
-  };
-
-  // Build status & photo lookup maps
+  // Build status lookup map
   const milestoneStatuses = useMemo(() => {
     const map: Record<string, string> = {};
     childMilestones?.forEach((cm) => { map[cm.milestone_id] = cm.status; });
     return map;
   }, [childMilestones]);
-
-  const milestonePhotos = useMemo(() => {
-    const map: Record<string, string | null> = {};
-    childMilestones?.forEach((cm) => { map[cm.milestone_id] = cm.photo_url ?? null; });
-    return map;
-  }, [childMilestones]);
-
-  const handlePhotoChange = (milestoneId: string, photoUrl: string | null) => {
-    updateMilestonePhoto.mutate({ milestoneId, photoUrl });
-  };
 
   // Split milestones into current / upcoming / earlier per category
   const { currentCats, upcomingCats, earlierCats } = useMemo(() => {
@@ -402,12 +227,9 @@ export default function MilestonesPage() {
 
   const categoryGroupProps = {
     milestoneStatuses,
-    milestonePhotos,
     onStatusChange: handleStatusChange,
-    onPhotoChange: handlePhotoChange,
     isPending: updateMilestone.isPending,
     ageMonths,
-    userId: user?.id,
     suppressConcernNotes: activeChild ? isInRetroactiveGracePeriod(activeChild) : false,
   };
 
@@ -481,28 +303,6 @@ export default function MilestonesPage() {
                 )}
 
               <MilestonesPremiumCard />
-
-              <button
-                onClick={() => isPremium ? setPhotoDetectorOpen(true) : setPhotoUpsellOpen(true)}
-                className="w-full flex items-center gap-3 p-4 rounded-2xl bg-milestones/5 border border-milestones/20 active:scale-[0.99] transition-transform text-left touch-target"
-              >
-                <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
-                  <Camera className="w-5 h-5 text-milestones" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm flex items-center gap-2">
-                    Detect from a photo
-                    {!isPremium && (
-                      <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded bg-milestones/15 text-milestones uppercase font-mono">
-                        Plus
-                      </span>
-                    )}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Snap a moment — we'll suggest what milestone it is.
-                  </p>
-                </div>
-              </button>
 
               {/* Progress ring */}
               <Card className="border-0 bg-milestones-bg">
@@ -579,8 +379,6 @@ export default function MilestonesPage() {
                         key={cm.id}
                         milestone={cm}
                         onDelete={() => deleteCustomMilestone.mutate(cm)}
-                        onRemovePhoto={() => handleRemovePhoto(cm)}
-                        onAddPhoto={() => handleCustomPhotoUpload(cm.id)}
                       />
                     ))}
                   </div>
@@ -592,8 +390,6 @@ export default function MilestonesPage() {
                   onClick={() => {
                     setCustomName("");
                     setCustomDate(format(new Date(), "yyyy-MM-dd"));
-                    setCustomPhotoFile(null);
-                    setCustomPhotoPreview(null);
                     setCustomModalOpen(true);
                   }}
                 >
@@ -626,47 +422,6 @@ export default function MilestonesPage() {
                         onChange={(e) => setCustomDate(e.target.value)}
                         max={format(new Date(), "yyyy-MM-dd")}
                       />
-                    </div>
-
-                    {/* Photo upload */}
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold">Photo (optional)</Label>
-                      <input
-                        ref={customFileRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleCustomPhotoSelect}
-                      />
-                      {customPhotoPreview ? (
-                        <div className="relative inline-block">
-                          <img
-                            src={customPhotoPreview}
-                            alt="Preview"
-                            className="w-20 h-20 rounded-lg object-cover ring-2 ring-milestones/20"
-                          />
-                          <button
-                            onClick={() => {
-                              setCustomPhotoFile(null);
-                              setCustomPhotoPreview(null);
-                              if (customFileRef.current) customFileRef.current.value = "";
-                            }}
-                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5 text-milestones border-milestones/30"
-                          onClick={() => customFileRef.current?.click()}
-                        >
-                          <Camera className="w-3.5 h-3.5" /> Add photo
-                        </Button>
-                      )}
                     </div>
 
                     <Button
@@ -703,14 +458,6 @@ export default function MilestonesPage() {
         </TabsContent>
       </Tabs>
 
-      <Drawer open={photoDetectorOpen} onOpenChange={setPhotoDetectorOpen}>
-        <DrawerContent>
-          <div className="px-4 pt-2 pb-8">
-            <PhotoMilestoneDetector onClose={() => setPhotoDetectorOpen(false)} />
-          </div>
-        </DrawerContent>
-      </Drawer>
-
       {activeChild && (
         <Dialog open={catchUpOpen} onOpenChange={setCatchUpOpen}>
           <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -726,11 +473,6 @@ export default function MilestonesPage() {
           </DialogContent>
         </Dialog>
       )}
-      <UpgradeSheet
-        open={photoUpsellOpen}
-        onOpenChange={setPhotoUpsellOpen}
-        feature="photo-milestones"
-      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 ## Context
 
-Grace Flare's milestone-development surface is the deepest feature in the app (5 categories, SLP-authored flags, photo-detection, custom_milestones with photo+caption+confidence, the speech_journal). Today only `photo-milestones` is paywalled (`src/hooks/usePremium.tsx:63`). The rest of the value parents get from this area is free, and Flare+ is positioned as a feature grab-bag ("The Coach that knows your baby", `src/pages/Upgrade.tsx:43-46`) — not as the answer to a specific parent job.
+Grace Flare's milestone-development surface is the deepest feature in the app (5 categories, SLP-authored flags, custom_milestones with caption+confidence, the speech_journal). The photo-milestone feature (AI photo-detection + manual photo attach) was retired from the frontend; on the milestone surface, `speech-class` is now the paywalled feature. The rest of the value parents get from this area is free, and Flare+ is positioned as a feature grab-bag ("The Coach that knows your baby", `src/pages/Upgrade.tsx:43-46`) — not as the answer to a specific parent job.
 
 Five inputs converge on the same thesis:
 

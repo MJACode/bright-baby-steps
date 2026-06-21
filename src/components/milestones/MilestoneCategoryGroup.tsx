@@ -6,12 +6,9 @@ import { MilestoneCard } from "./MilestoneCard";
 interface MilestoneCategoryGroupProps {
   categories: any[];
   milestoneStatuses: Record<string, string>;
-  milestonePhotos?: Record<string, string | null>;
   onStatusChange: (milestoneId: string, status: string) => void;
-  onPhotoChange?: (milestoneId: string, photoUrl: string | null) => void;
   isPending: boolean;
   ageMonths: number;
-  userId?: string;
   /** When true, hides the per-card "mention this at your next check-up" amber
    *  callout. Used during the retroactive grace window so a parent who just
    *  joined isn't blasted with concern notes for unlogged milestones. */
@@ -21,12 +18,9 @@ interface MilestoneCategoryGroupProps {
 export function MilestoneCategoryGroup({
   categories,
   milestoneStatuses,
-  milestonePhotos,
   onStatusChange,
-  onPhotoChange,
   isPending,
   ageMonths,
-  userId,
   suppressConcernNotes,
 }: MilestoneCategoryGroupProps) {
   const nonEmpty = categories.filter((cat) => cat.milestones.length > 0);
@@ -75,12 +69,9 @@ export function MilestoneCategoryGroup({
                       key={m.id}
                       milestone={m}
                       status={status}
-                      photoUrl={milestonePhotos?.[m.id]}
                       onStatusChange={onStatusChange}
-                      onPhotoChange={onPhotoChange}
                       isPending={isPending}
                       showConcernNote={showConcernNote}
-                      userId={userId}
                     />
                   );
                 })}

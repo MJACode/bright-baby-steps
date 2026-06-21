@@ -1320,3 +1320,52 @@ investment-adviser / broker-dealer or solicitor-referral registration;
 stays **gated** until that sign-off.
 
 ---
+
+## 2026-06-21 — Photo-milestone feature removed; Anthropic data-flow disclosures narrowed
+
+**Scope:** `src/pages/PrivacyPage.tsx` (§ 4 AI processing), `src/pages/FAQPage.tsx`
+("Is my child's data sent to third parties?"), `src/pages/SubprocessorsPage.tsx`
+(Anthropic `purpose` + `dataCategories`), plus the paywall copy in
+`src/pages/Upgrade.tsx` and `src/components/UpgradeSheet.tsx`. Code: the
+`supabase/functions/detect-milestone/` edge function was deleted and all
+milestone-photo UI (AI "Detect from a photo" + manual photo-attach) removed.
+
+**Trigger:** Product decision to retire all milestone-photo features (founder's
+view that parents won't use them). This is a **subtractive** change — it removes a
+data flow to our AI subprocessor rather than adding one.
+
+**Risk levels surfaced (pre-review by `legal` agent):**
+- **P0:** none.
+- **P1 — paywall advertised a removed paid feature.** `src/pages/Upgrade.tsx`
+  (full-route `/upgrade`) and `src/components/UpgradeSheet.tsx` still listed "Photo
+  milestone detection" as a Flare+ perk after the feature was deleted — an
+  affirmative FTC § 5 deceptive-claim exposure (selling a capability we no longer
+  deliver), the more dangerous direction than a stale privacy sentence. **Resolved:**
+  the perk was removed from both surfaces in this same change. Note: checkout is still
+  a `RevenueCat / Stripe` stub (no money changes hands today), which is why this was
+  P1 and not P0; it would have been P0 once billing went live.
+- **P2 — copy hygiene (resolved):** Privacy § 4, FAQ third-party answer, and the
+  Subprocessors Anthropic entry are all grammatically clean post-removal (no dangling
+  conjunctions, no orphaned clauses) and no surviving sentence claims we still perform
+  photo-milestone detection. The remaining Anthropic data-flow list (chat, briefings,
+  weekly insights, voice-note parsing, Speech Class) was verified against the live
+  edge-function set on disk — no clause for a still-shipping feature was removed.
+
+**Verified consistent (policy-vs-code):** for this subtractive change the favorable
+direction holds — the copy now claims *less* data goes to Anthropic and the code
+confirms it (`detect-milestone` deleted; five Anthropic functions remain). Child
+photos are still *collected/stored* (Privacy § 2, the MCP paragraph, and
+`children.photo_url` avatar are correctly unchanged) — we removed only the
+"sent to Anthropic for detection" claim, not a false "we never store photos" claim.
+
+**Intentionally unchanged:** the `milestone-photos` Storage bucket, its RLS, the
+`custom_milestones`/`child_speech` photo columns, and the three deletion-path
+references (`delete_user_account`, `inactive-account-purge`, `delete-account`).
+PrivacyPage § 8 deletion promises remain accurate. No schema migration in this change.
+
+**Code refs:** branch `claude/remove-detect-milestone-photo-bfola9` (commit hash to
+follow on merge). `CLAUDE.md` "edge functions" line updated six → five.
+
+**Outstanding:** confirm no out-of-repo surface (App Store / Play Store listing,
+marketing site, onboarding upsell) still advertises photo-milestone detection — those
+live outside this repo and were not reviewable here.
