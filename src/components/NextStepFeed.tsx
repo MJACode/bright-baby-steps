@@ -289,26 +289,43 @@ function NextStepRow({
   );
 }
 
-export function NextStepFeed({ activeChild }: { activeChild: ChildLite | null }) {
+export function NextStepFeed({
+  activeChild,
+  embedded = false,
+}: {
+  activeChild: ChildLite | null;
+  embedded?: boolean;
+}) {
   const { items, isLoading, isError, complete, snooze, dismiss } =
     useNextSteps(activeChild);
   const [expanded, setExpanded] = useState(false);
 
   if (!activeChild) return null;
 
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <Card className="border-0 bg-card rounded-2xl shadow-sm">
-      <CardContent className="p-4">
-        <div className="mb-1">
-          <h2 className="font-display font-bold text-base">Next steps</h2>
-          <p className="text-xs text-muted-foreground">
-            Sorted by what's most time-sensitive.
-          </p>
-        </div>
-        {children}
-      </CardContent>
-    </Card>
+  const Inner = ({ children }: { children: React.ReactNode }) => (
+    <>
+      <div className="mb-1">
+        <h2 className="font-display font-bold text-base">Next steps</h2>
+        <p className="text-xs text-muted-foreground">
+          Sorted by what's most time-sensitive.
+        </p>
+      </div>
+      {children}
+    </>
   );
+
+  const Shell = ({ children }: { children: React.ReactNode }) =>
+    embedded ? (
+      <div>
+        <Inner>{children}</Inner>
+      </div>
+    ) : (
+      <Card className="border-0 bg-card rounded-2xl shadow-sm">
+        <CardContent className="p-4">
+          <Inner>{children}</Inner>
+        </CardContent>
+      </Card>
+    );
 
   if (isLoading) {
     return (

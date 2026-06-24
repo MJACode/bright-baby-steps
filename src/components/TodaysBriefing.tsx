@@ -1,8 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useBriefing } from "@/hooks/useBriefing";
 import { Sparkles, AlertTriangle, Target, Activity, Loader2, ChevronDown } from "lucide-react";
 
 interface TodaysBriefingProps {
@@ -16,28 +15,9 @@ interface TodaysBriefingProps {
   todayFeeds: number;
 }
 
-interface BriefingData {
-  status: string;
-  watch: string;
-  focus: string;
-}
-
 export function TodaysBriefing({ activeChild }: TodaysBriefingProps) {
   const { prefs, setPrefs } = usePreferences();
-  const { data: briefing, isLoading } = useQuery<BriefingData | null>({
-    queryKey: ["ai-briefing", activeChild?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("briefing", {
-        body: { childId: activeChild!.id },
-      });
-      if (error) throw error;
-      return data as BriefingData;
-    },
-    enabled: !!activeChild,
-    staleTime: 60 * 60 * 1000, // 1 hour cache
-    gcTime: 2 * 60 * 60 * 1000,
-    retry: 1,
-  });
+  const { data: briefing, isLoading } = useBriefing(activeChild?.id);
 
   if (!activeChild) return null;
 
