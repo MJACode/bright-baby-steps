@@ -47,6 +47,7 @@ const baseData: ReportData = {
   allergens: [],
   illnesses: [],
   medications: [],
+  temperatures: [],
   pediatricianNotes: "",
 };
 

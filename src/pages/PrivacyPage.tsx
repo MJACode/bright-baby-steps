@@ -28,7 +28,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Account data:</strong> your name and email address, collected when you create an account.</li>
             <li><strong>Child profile data:</strong> your child's name, date of birth, gender (optional), prematurity status, and photo (optional).</li>
-            <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, and supplement records that you choose to log.</li>
+            <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, supplement, and body-temperature (fever) records that you choose to log.</li>
             <li><strong>Chat data:</strong> your messages to the AI assistant and the responses generated.</li>
             <li><strong>Technical data:</strong> IP address, device type and operating system, browser type and version, app version, session identifiers, crash logs, and approximate location derived from your IP address (city-level only). We use first-party cookies and equivalent local-storage tokens strictly to keep you signed in and to remember your preferences. We do not use third-party advertising cookies or cross-site tracking pixels.</li>
             <li><strong>Feedback attachments:</strong> any screenshot you choose to upload with a feedback report.</li>
