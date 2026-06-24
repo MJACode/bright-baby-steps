@@ -27,7 +27,7 @@ export type SkillId = "general" | "pediatrician" | "slp" | "financial" | "develo
 // (nutrition→feeding, sleep→sleep, financial→finance, developmental→milestones,
 // slp→milestones tint). Pediatrician uses the semantic destructive token to
 // signal "health concerns." General uses primary.
-const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description: string; color: string }[] = [
+export const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description: string; color: string }[] = [
   { id: "general", label: "General", icon: Bot, description: "Ask anything about parenting", color: "bg-primary/15 text-primary" },
   { id: "pediatrician", label: "Pediatrician", icon: Stethoscope, description: "Health, vaccines, illness", color: "bg-destructive/15 text-destructive" },
   { id: "slp", label: "Speech (SLP)", icon: Speech, description: "Language milestones & activities", color: "bg-milestones/15 text-milestones" },
@@ -36,6 +36,10 @@ const SKILLS: { id: SkillId; label: string; icon: React.ElementType; description
   { id: "sleep", label: "Sleep", icon: BedDouble, description: "Schedules, training & regressions", color: "bg-sleep/15 text-sleep" },
   { id: "financial", label: "Financial", icon: Wallet, description: "529s, tax credits & budgeting", color: "bg-finance/15 text-finance" },
 ];
+
+export function getSkill(id?: SkillId) {
+  return SKILLS.find((s) => s.id === id);
+}
 
 // Human-friendly labels for the child-data tools the chat function may call.
 // Keep terse and parent-tone — these render in a compact pill above the
@@ -165,10 +169,19 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
   useEffect(() => {
     return onChatOpen(({ seedPrompt, forceSkill }) => {
       setView("chat");
-      setInput(seedPrompt);
       // Empty seedPrompt = just open the dialog (used by the home-page entry
-      // card). A seedPrompt with content auto-sends after the dialog mounts.
-      if (!seedPrompt.trim()) return;
+      // card).
+      if (!seedPrompt.trim()) {
+        setInput(seedPrompt);
+        return;
+      }
+      // Health handoffs pre-fill the input but let the parent press Send, so a
+      // medical question is never auto-submitted on their behalf. Non-health
+      // prompts auto-send so the question lands as a user bubble immediately.
+      if (forceSkill && HEALTH_SKILLS.has(forceSkill)) {
+        setInput(seedPrompt);
+        return;
+      }
       setTimeout(() => {
         sendMessageRef.current?.(seedPrompt, { forceSkill });
         setInput("");

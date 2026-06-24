@@ -15,13 +15,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Check, MoreHorizontal, ChevronDown } from "lucide-react";
+import { Check, MoreHorizontal, ChevronDown, Sparkles, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { openChat } from "@/lib/chatOpener";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
 import { useNextSteps } from "@/hooks/useNextSteps";
 import type { NextStepItem, NextStepDomain } from "@/lib/nextSteps";
-import type { SkillId } from "@/components/AIChatWidget";
+import { getSkill, type SkillId } from "@/components/AIChatWidget";
 
 interface ChildLite {
   id: string;
@@ -76,6 +76,11 @@ function NextStepRow({
       <button
         type="button"
         onClick={handleOpen}
+        aria-label={
+          item.deeplink.kind === "chat"
+            ? `Ask Grace Flare AI: ${item.title}`
+            : undefined
+        }
         className="flex flex-1 items-center gap-3 py-3 pl-1 pr-2 text-left min-w-0 touch-target active:opacity-70 transition-opacity"
       >
         <span
@@ -109,6 +114,24 @@ function NextStepRow({
           >
             Soon
           </Badge>
+        )}
+        {item.deeplink.kind === "chat" ? (
+          (() => {
+            const skill = getSkill(item.deeplink.forceSkill as SkillId);
+            return (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
+                  skill?.color ?? "bg-primary/10 text-primary",
+                )}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Ask AI
+              </span>
+            );
+          })()
+        ) : (
+          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
       </button>
 
@@ -222,7 +245,10 @@ export function NextStepFeed({ activeChild }: { activeChild: ChildLite | null })
   };
 
   const showAdviceDisclaimer = items.some(
-    (item) => item.domain === "finance" || item.domain === "health",
+    (item) =>
+      item.domain === "finance" ||
+      item.domain === "health" ||
+      item.deeplink.kind === "chat",
   );
 
   return (
