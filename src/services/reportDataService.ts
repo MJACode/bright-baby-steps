@@ -5,9 +5,9 @@ import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 
-const ALL_SECTIONS = new Set(["speech", "allergens", "feeding", "diapers", "sleep", "illness"] as const);
+const ALL_SECTIONS = new Set(["speech", "allergens", "feeding", "diapers", "sleep", "illness", "temperature"] as const);
 
-type SectionKey = "speech" | "allergens" | "feeding" | "diapers" | "sleep" | "illness";
+type SectionKey = "speech" | "allergens" | "feeding" | "diapers" | "sleep" | "illness" | "temperature";
 
 export async function fetchReportData(
   childId: string,
@@ -20,7 +20,7 @@ export async function fetchReportData(
   const fromDate = format(dateFrom, "yyyy-MM-dd");
   const toDate = format(dateTo, "yyyy-MM-dd");
 
-  const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes] =
+  const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes, temperatureRes] =
     await Promise.all([
       sections.has("feeding")
         ? supabase.from("feeding_logs").select("*").eq("child_id", childId).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false })
@@ -50,6 +50,9 @@ export async function fetchReportData(
       sections.has("illness")
         ? supabase.from("medication_logs").select("*").eq("child_id", childId).gte("start_date", fromDate).lte("start_date", toDate).order("start_date", { ascending: false })
         : Promise.resolve({ data: [] }),
+      sections.has("temperature")
+        ? supabase.from("temperature_logs").select("*").eq("child_id", childId).gte("taken_at", from).lte("taken_at", to).order("taken_at", { ascending: false })
+        : Promise.resolve({ data: [] }),
     ]);
 
   return {
@@ -63,6 +66,7 @@ export async function fetchReportData(
     supplements: (supplementRes.data as any[]) ?? [],
     illnesses: (illnessRes.data as any[]) ?? [],
     medications: (medicationRes.data as any[]) ?? [],
+    temperatures: (temperatureRes.data as any[]) ?? [],
   };
 }
 

@@ -16,6 +16,7 @@ export interface ReportData {
   allergens: any[];
   illnesses: any[];
   medications: any[];
+  temperatures: any[];
   pediatricianNotes: string;
 }
 
@@ -403,6 +404,31 @@ function renderIllness(h: PdfHelpers, data: ReportData) {
   h.spacer();
 }
 
+// ── Temperature ──
+function renderTemperature(h: PdfHelpers, data: ReportData) {
+  const temperatures = data.temperatures ?? [];
+  if (!temperatures.length) return;
+
+  h.heading("Temperature");
+
+  const methodLabels: Record<string, string> = {
+    oral: "oral",
+    rectal: "rectal",
+    axillary: "axillary",
+    forehead: "forehead",
+    ear: "ear",
+  };
+
+  temperatures.forEach((t: any) => {
+    const date = format(new Date(t.taken_at), "MMM d, yyyy, h:mm a");
+    const method = t.method ? `, ${methodLabels[t.method] ?? t.method}` : "";
+    const fahrenheit = t.unit === "C" ? Number(t.temp_value) * 9 / 5 + 32 : Number(t.temp_value);
+    const flag = fahrenheit >= 100.4 ? " ⚠" : "";
+    h.bodyText(`${t.temp_value}°${t.unit} — ${date}${method}${flag}${t.notes ? ` (${t.notes})` : ""}`, 4);
+  });
+  h.spacer();
+}
+
 // ── Allergens ──
 function renderAllergens(h: PdfHelpers, data: ReportData) {
   const allergens = data.allergens ?? [];
@@ -467,6 +493,7 @@ export function generatePediatricianReport(data: ReportData, sections: Set<strin
   if (sections.has("diapers")) renderDiapers(h, data);
   if (sections.has("sleep")) renderSleep(h, data);
   if (sections.has("illness")) renderIllness(h, data);
+  if (sections.has("temperature")) renderTemperature(h, data);
   if (sections.has("allergens")) renderAllergens(h, data);
   renderParentNotes(h, data.pediatricianNotes);
   renderFooter(h);

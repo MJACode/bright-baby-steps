@@ -23,7 +23,7 @@ Output shape:
 {
   "entries": [
     {
-      "type": "feeding" | "sleep" | "diaper" | "milestone",
+      "type": "feeding" | "sleep" | "diaper" | "milestone" | "temperature",
       "occurred_at": "ISO 8601 timestamp",
       "fields": { ...type-specific fields... },
       "confidence": 0.0 - 1.0,
@@ -57,7 +57,13 @@ Type-specific fields (use these EXACT field names — they map directly to DB co
     achieved_at: YYYY-MM-DD            (date only, not timestamp)
     notes?: string
 
+- temperature:
+    temp_value: number                  (the numeric reading, exactly as stated)
+    unit: "F" | "C"                     (default "F" if the parent doesn't say; never convert)
+    method?: "oral" | "rectal" | "axillary" | "forehead" | "ear"
+
 Rules:
+- For temperature, never invent or round a reading the parent didn't state. If no number was given, omit the entry and add a note to "ambiguous".
 - Parse relative times ("an hour ago", "at 3am", "just now") against the provided "now" timestamp.
 - If a single sentence describes multiple events, return multiple entries.
 - "Slept from 8 to 11" → set both started_at AND ended_at AND duration_minutes.

@@ -22,7 +22,7 @@ export type VoiceLogState =
   | "error";
 
 export type ParsedEntry = {
-  type: "feeding" | "sleep" | "diaper" | "milestone";
+  type: "feeding" | "sleep" | "diaper" | "milestone" | "temperature";
   occurred_at: string;
   fields: Record<string, unknown>;
   confidence: number;
@@ -188,6 +188,20 @@ export function useVoiceLog({ childContext, onSaved }: UseVoiceLogOptions = {}) 
               name,
               achieved_at: achievedAt,
               notes: asString(f.notes) ?? null,
+              source: "voice",
+            });
+            if (insErr) throw insErr;
+          } else if (entry.type === "temperature") {
+            const tempValue = asNumber(f.temp_value);
+            if (tempValue === null) throw new Error("Couldn't read a temperature value.");
+            const { error: insErr } = await supabase.from("temperature_logs").insert({
+              child_id: childId,
+              parent_id: userId,
+              temp_value: tempValue,
+              unit: asString(f.unit) ?? "F",
+              method: asString(f.method),
+              taken_at: occurred,
+              notes: entry.summary,
               source: "voice",
             });
             if (insErr) throw insErr;

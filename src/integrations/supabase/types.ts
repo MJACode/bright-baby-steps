@@ -2843,6 +2843,63 @@ export type Database = {
           },
         ]
       }
+      temperature_logs: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          method: string | null
+          notes: string | null
+          parent_id: string
+          source: string | null
+          taken_at: string
+          temp_value: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          method?: string | null
+          notes?: string | null
+          parent_id: string
+          source?: string | null
+          taken_at?: string
+          temp_value: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          method?: string | null
+          notes?: string | null
+          parent_id?: string
+          source?: string | null
+          taken_at?: string
+          temp_value?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_logs_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temperature_logs_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vaccinations: {
         Row: {
           child_id: string

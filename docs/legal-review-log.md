@@ -1369,3 +1369,42 @@ follow on merge). `CLAUDE.md` "edge functions" line updated six → five.
 **Outstanding:** confirm no out-of-repo surface (App Store / Play Store listing,
 marketing site, onboarding upsell) still advertises photo-milestone detection — those
 live outside this repo and were not reviewable here.
+
+---
+
+## 2026-06-24 — Body-temperature (fever) tracking added
+
+**Scope:** New `temperature_logs` table (`supabase/migrations/20260624000000_temperature_logs.sql`)
+storing child body-temperature readings (value, °F/°C unit, method, timestamp, notes);
+new Temperature section in `src/components/records/MedicalTab.tsx`; voice-log support
+(`supabase/functions/parse-voice-log/index.ts`, `src/hooks/useVoiceLog.tsx`); pediatrician
+PDF export (`src/services/reportDataService.ts`, `pdfReportBuilder.ts`,
+`src/components/PediatricianExport.tsx`); Privacy § 2 copy.
+
+**Trigger:** New category of child health-vitals data being collected.
+
+**Risk levels surfaced:**
+- P0: Privacy § 2's itemized "Tracking data" list under-described collected categories
+  the moment temperature logging goes live (FTC § 5 / COPPA direct-notice precision).
+  **Resolved** — § 2 line 31 redlined to add "body-temperature (fever)" to the enumerated list.
+- P1: none.
+- P2: future-proofing § 2 with an open "such as…" formulation was considered and
+  declined; a closed enumerated list is more defensible for COPPA direct-notice precision.
+
+**Confirmed unchanged (no edit required):**
+- COPPA consent — temperature rows require a `child_id`, and child creation is already
+  gated by the email-plus VPC flow (DB `BEFORE INSERT` trigger on `public.children`).
+  Partner writes go through the existing `has_partner_access()` consent path. No new
+  consent moment.
+- Retention/deletion — `temperature_logs.child_id` is `ON DELETE CASCADE`, so the rows
+  are purged transitively by `_purge_user_data()` / `delete_user_account()` via
+  `DELETE FROM children` before the `profiles`/`auth.users` deletes. No purge-helper edit.
+- `/subprocessors` — no new third party. Data flows only to Supabase (already listed) and,
+  for AI features, to Anthropic under the existing § 4 "relevant logged activity" framing.
+
+**Code refs:** branch `claude/temperature-option-a947lq` (commit hash to follow on merge).
+
+**Outstanding:** dev verification that `temperature_logs` rows actually purge on
+child/account deletion (folds into the already-pending Storage-purge e2e test). The
+migration and edge-function deploy to the live project are deferred to the team's normal
+deploy step — this change ships the migration file, not a production DB mutation.

@@ -21,6 +21,7 @@ const SECTIONS = [
   { key: "diapers", label: "Diapers" },
   { key: "sleep", label: "Sleep" },
   { key: "illness", label: "Illness & Medications" },
+  { key: "temperature", label: "Temperature" },
 ] as const;
 
 type SectionKey = (typeof SECTIONS)[number]["key"];

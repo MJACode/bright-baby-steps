@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Stethoscope, Syringe, Smile, Plus, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
+import { Stethoscope, Syringe, Smile, Thermometer, Plus, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { safeFormatDate } from "@/lib/safeFormat";
@@ -514,6 +514,239 @@ function DentalSection({ childId, parentId, ageMonths }: { childId: string; pare
   );
 }
 
+const TEMP_METHODS = [
+  { value: "oral", label: "Oral" },
+  { value: "rectal", label: "Rectal" },
+  { value: "axillary", label: "Axillary (underarm)" },
+  { value: "forehead", label: "Forehead" },
+  { value: "ear", label: "Ear" },
+];
+
+const HIGH_TEMP_NOTE =
+  "This reading is above the typical range. You know your baby best — when in doubt, your pediatrician is the best call. This isn't medical advice.";
+
+function toFahrenheit(value: number, unit: string) {
+  return unit === "C" ? value * 9 / 5 + 32 : value;
+}
+
+function isoToLocalInput(iso: string) {
+  const d = new Date(iso);
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
+function localInputToIso(value: string) {
+  return new Date(value).toISOString();
+}
+
+function TemperatureSection({ childId, parentId }: { childId: string; parentId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    temp_value: "",
+    unit: "F",
+    method: "none",
+    taken_at: isoToLocalInput(new Date().toISOString()),
+    notes: "",
+  });
+
+  const { data: readings } = useQuery({
+    queryKey: ["temperature-logs", childId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("temperature_logs")
+        .select("*")
+        .eq("child_id", childId)
+        .order("taken_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const upsertReading = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        temp_value: Number(form.temp_value),
+        unit: form.unit,
+        method: form.method === "none" ? null : form.method,
+        taken_at: localInputToIso(form.taken_at),
+        notes: form.notes.trim() || null,
+      };
+      if (editingId) {
+        const { error } = await supabase.from("temperature_logs").update(payload).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("temperature_logs")
+          .insert({ ...payload, child_id: childId, parent_id: parentId, source: "manual" });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["temperature-logs", childId] });
+      setOpen(false);
+      setEditingId(null);
+      toast({ title: editingId ? "Reading updated" : "Temperature logged" });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't save reading", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const deleteReading = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("temperature_logs").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["temperature-logs", childId] });
+      toast({ title: "Reading removed" });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't remove reading", description: err instanceof Error ? err.message : "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const openAdd = () => {
+    setEditingId(null);
+    setForm({
+      temp_value: "",
+      unit: "F",
+      method: "none",
+      taken_at: isoToLocalInput(new Date().toISOString()),
+      notes: "",
+    });
+    setOpen(true);
+  };
+
+  const openEdit = (r: { id: string; temp_value: number; unit: string; method: string | null; taken_at: string; notes: string | null }) => {
+    setEditingId(r.id);
+    setForm({
+      temp_value: String(r.temp_value),
+      unit: r.unit,
+      method: r.method ?? "none",
+      taken_at: isoToLocalInput(r.taken_at),
+      notes: r.notes ?? "",
+    });
+    setOpen(true);
+  };
+
+  const enteredValue = Number(form.temp_value);
+  const valueValid = form.temp_value.trim() !== "" && Number.isFinite(enteredValue);
+  const formIsHigh = valueValid && toFahrenheit(enteredValue, form.unit) >= 100.4;
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+        <Thermometer className="w-5 h-5 text-primary" />
+        <h3 className="font-display font-bold text-lg flex-1 text-left">Temperature</h3>
+        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 space-y-3">
+        {readings && readings.length > 0 ? (
+          <div className="space-y-2">
+            {readings.map((r) => {
+              const high = toFahrenheit(r.temp_value, r.unit) >= 100.4;
+              return (
+                <Card key={r.id} className="border-0 bg-muted/40">
+                  <CardContent className="p-3 flex items-start gap-2">
+                    <button className="flex-1 min-w-0 space-y-0.5 text-left touch-target" onClick={() => openEdit(r)}>
+                      <p className="text-sm font-semibold flex items-center gap-2">
+                        {r.temp_value}°{r.unit}
+                        {high && (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-900">
+                            <AlertTriangle className="w-3 h-3" /> Above typical
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{safeFormatDate(r.taken_at, "MMM d, yyyy · h:mm a")}</p>
+                      {r.method && <p className="text-xs text-muted-foreground">{TEMP_METHODS.find((m) => m.value === r.method)?.label ?? r.method}</p>}
+                      {r.notes && <p className="text-xs text-foreground/80 mt-1">{r.notes}</p>}
+                    </button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => deleteReading.mutate(r.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">No temperature readings logged yet.</p>
+        )}
+
+        <Button variant="outline" className="w-full border-dashed gap-2 touch-target" onClick={openAdd}>
+          <Plus className="w-4 h-4" /> Add Reading
+        </Button>
+
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl max-h-[90vh] overflow-y-auto">
+            <SheetHeader className="text-left">
+              <SheetTitle className="font-display">{editingId ? "Edit Reading" : "Log Temperature"}</SheetTitle>
+              <SheetDescription>Record a temperature reading with the time it was taken.</SheetDescription>
+            </SheetHeader>
+            <div className="space-y-3 mt-4">
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs font-semibold">Temperature</Label>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    value={form.temp_value}
+                    onChange={(e) => setForm({ ...form, temp_value: e.target.value })}
+                    placeholder="98.6"
+                  />
+                </div>
+                <div className="w-24 space-y-1">
+                  <Label className="text-xs font-semibold">Unit</Label>
+                  <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="F">°F</SelectItem>
+                      <SelectItem value="C">°C</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {formIsHigh && (
+                <Alert className="border-orange-300 bg-orange-50">
+                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-sm text-orange-900">{HIGH_TEMP_NOTE}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Method</Label>
+                <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not specified</SelectItem>
+                    {TEMP_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Taken at</Label>
+                <Input type="datetime-local" value={form.taken_at} onChange={(e) => setForm({ ...form, taken_at: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Notes</Label>
+                <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="How your baby is doing, any symptoms..." />
+              </div>
+              <Button className="w-full h-12 touch-target" disabled={!valueValid || upsertReading.isPending} onClick={() => upsertReading.mutate()}>
+                {upsertReading.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function MedicalTab({ childId, parentId, ageMonths }: Props) {
   const { activeChild } = useChildren();
   // Match the suppression used by MilestoneFlags + MilestonesPage banner so a
@@ -559,6 +792,7 @@ export function MedicalTab({ childId, parentId, ageMonths }: Props) {
       <PediatricianSection childId={childId} parentId={parentId} hasActiveFlags={(activeFlagCount ?? 0) > 0} />
       <VaccinationsSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
       <DentalSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
+      <TemperatureSection childId={childId} parentId={parentId} />
     </div>
   );
 }
