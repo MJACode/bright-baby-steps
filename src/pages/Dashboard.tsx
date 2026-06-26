@@ -7,14 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { SlidersHorizontal } from "lucide-react";
 import { computeForgivingStreak } from "@/lib/streak";
 import { format } from "date-fns";
-import { TodaysBriefing } from "@/components/TodaysBriefing";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
-import { NextStepFeed } from "@/components/NextStepFeed";
-import { WhatToExpectCard } from "@/components/WhatToExpectCard";
+import { TodayCard } from "@/components/TodayCard";
 import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
 import { StreakPopup } from "@/components/StreakPopup";
@@ -33,17 +31,6 @@ export default function Dashboard() {
   const isNewUser = !childrenLoading && (!children || children.length === 0);
 
   const isVisible = (id: string) => !prefs.hiddenHomeSections.includes(id);
-
-  const { data: todayFeeds } = useQuery({
-    queryKey: ["today-feeds", activeChild?.id],
-    queryFn: async () => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const { data } = await supabase.from("feeding_logs").select("id")
-        .eq("child_id", activeChild!.id).gte("logged_at", `${today}T00:00:00`);
-      return data?.length ?? 0;
-    },
-    enabled: !!activeChild,
-  });
 
   // Streak calculation — forgiving: a single missed day won't break it.
   const { data: streakData } = useQuery({
@@ -97,19 +84,17 @@ export default function Dashboard() {
           "when did she last eat / how long has he been down". */}
       <QuickNavGrid childId={activeChild?.id} />
 
-      {/* The Next Step feed — one ranked, deadline-aware action list spanning
-          sleep, milestones, finance, and health. Routes into the detail cards
-          below; it does not replace them. */}
-      <NextStepFeed activeChild={activeChild} />
+      {/* One "Today" card: AI briefing headline → ranked Next steps → condensed
+          this-week line. The briefing and this-week regions gate on their
+          Customize-Home toggles; Next steps always shows. */}
+      <TodayCard
+        activeChild={activeChild}
+        showBriefing={isVisible("briefing")}
+        showWhatToExpect={isVisible("whatToExpect")}
+      />
 
       {/* Voice-first quick log — premium-gated mic entry into VoiceQuickLog */}
       <VoiceQuickLogButton />
-
-      {/* Today's Briefing */}
-      {isVisible("briefing") && <TodaysBriefing activeChild={activeChild} todayFeeds={todayFeeds ?? 0} />}
-
-      {/* What to expect this week — age-based developmental content */}
-      {isVisible("whatToExpect") && <WhatToExpectCard activeChild={activeChild} />}
 
       {/* Visit Prep */}
       {isVisible("visitPrep") && <VisitPrepCard activeChild={activeChild} />}
