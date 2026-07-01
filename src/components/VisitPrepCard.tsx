@@ -132,16 +132,24 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
 
   const deleteReminder = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("pediatrician_reminders").delete().eq("id", id);
+      const { error } = await supabase.from("pediatrician_reminders").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pediatrician-reminders", activeChild?.id] }),
+    onError: (err: Error) => {
+      toast({ title: "Couldn't delete — check your connection and try again.", description: err.message, variant: "destructive" });
+    },
   });
 
   const toggleInclude = useMutation({
     mutationFn: async ({ id, include }: { id: string; include: boolean }) => {
-      await supabase.from("pediatrician_reminders").update({ include_in_report: include }).eq("id", id);
+      const { error } = await supabase.from("pediatrician_reminders").update({ include_in_report: include }).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pediatrician-reminders", activeChild?.id] }),
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update the report checkbox — check your connection and try again.", description: err.message, variant: "destructive" });
+    },
   });
 
   const saveAppointment = useMutation({
