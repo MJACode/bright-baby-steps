@@ -2047,8 +2047,10 @@ export type Database = {
       }
       pediatrician_reminders: {
         Row: {
+          category: string | null
           child_id: string
           created_at: string
+          entry_type: string
           id: string
           include_in_report: boolean
           parent_id: string
@@ -2056,8 +2058,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           child_id: string
           created_at?: string
+          entry_type?: string
           id?: string
           include_in_report?: boolean
           parent_id: string
@@ -2065,8 +2069,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           child_id?: string
           created_at?: string
+          entry_type?: string
           id?: string
           include_in_report?: boolean
           parent_id?: string
