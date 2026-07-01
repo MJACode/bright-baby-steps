@@ -26,7 +26,18 @@ export interface PreVisitReminder {
   id: string;
   text: string;
   include_in_report: boolean;
+  entry_type: string;
+  category: string | null;
 }
+
+const TOPIC_CATEGORY_LABELS: Record<string, string> = {
+  behavior: "Behavior",
+  feeding: "Feeding",
+  sleep: "Sleep",
+  health: "Health",
+  development: "Development",
+  other: "Other",
+};
 
 interface RecentActivity {
   feedingCount: number;
@@ -189,7 +200,7 @@ async function fetchChild(childId: string): Promise<PreVisitChild> {
 async function fetchReminders(childId: string): Promise<PreVisitReminder[]> {
   const { data, error } = await supabase
     .from("pediatrician_reminders")
-    .select("id, text, include_in_report")
+    .select("id, text, include_in_report, entry_type, category")
     .eq("child_id", childId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -239,14 +250,26 @@ export async function buildPreVisitPdf(args: BuildPreVisitPdfArgs) {
   if (visit.notes) h.bodyText(`Notes: ${visit.notes}`);
   h.spacer();
 
-  const includedReminders = reminders.filter((r) => r.include_in_report);
+  const includedQuestions = reminders.filter((r) => r.include_in_report && r.entry_type === "question");
+  const includedTopics = reminders.filter((r) => r.include_in_report && r.entry_type === "topic");
   h.heading("Questions for the Doctor");
-  if (includedReminders.length > 0) {
-    includedReminders.forEach((r) => {
+  if (includedQuestions.length > 0) {
+    includedQuestions.forEach((r) => {
       h.bodyText(`• ${r.text}`, 4);
     });
   } else {
     h.bodyText("No questions added yet. You can add them from the Visit Prep card on your dashboard.", 4);
+  }
+  h.spacer();
+
+  h.heading("Topics & Observations");
+  if (includedTopics.length > 0) {
+    includedTopics.forEach((r) => {
+      const prefix = r.category ? `${TOPIC_CATEGORY_LABELS[r.category] ?? r.category}: ` : "";
+      h.bodyText(`• ${prefix}${r.text}`, 4);
+    });
+  } else {
+    h.bodyText("No topics added yet. Add them from the Visit Prep card on your dashboard.", 4);
   }
   h.spacer();
 
