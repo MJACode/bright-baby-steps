@@ -432,6 +432,7 @@ export type Database = {
           child_id: string | null
           created_at: string
           id: string
+          source: string | null
           title: string
           updated_at: string
           user_id: string
@@ -440,6 +441,7 @@ export type Database = {
           child_id?: string | null
           created_at?: string
           id?: string
+          source?: string | null
           title?: string
           updated_at?: string
           user_id: string
@@ -448,6 +450,7 @@ export type Database = {
           child_id?: string | null
           created_at?: string
           id?: string
+          source?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -2956,6 +2959,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      voice_parse_events: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       weight_logs: {
         Row: {

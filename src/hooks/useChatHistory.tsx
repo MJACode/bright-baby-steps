@@ -71,12 +71,12 @@ export function useChatHistory(activeChildId?: string) {
     enabled: !!activeConversationId,
   });
 
-  const createConversation = useCallback(async (firstMessage: string): Promise<string | null> => {
+  const createConversation = useCallback(async (firstMessage: string, source?: string): Promise<string | null> => {
     if (!user) return null;
     const title = firstMessage.slice(0, 60) || "New Chat";
     const { data, error } = await supabase
       .from("chat_conversations")
-      .insert({ user_id: user.id, child_id: activeChildId ?? null, title })
+      .insert({ user_id: user.id, child_id: activeChildId ?? null, title, source: source ?? null })
       .select("id")
       .single();
     if (error || !data) return null;

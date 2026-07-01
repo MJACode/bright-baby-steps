@@ -9,6 +9,7 @@
 // function's SYSTEM_PROMPT is configured to return matching field names.
 
 import { useCallback, useState } from "react";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
@@ -87,7 +88,18 @@ export function useVoiceLog({ childContext, onSaved }: UseVoiceLogOptions = {}) 
         setParsed(data as ParseResult);
         setState("review");
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Something went wrong");
+        if (e instanceof FunctionsHttpError) {
+          const status = e.context?.status;
+          if (status === 401) {
+            setError("Your session ended, so we couldn't process that. Sign in again and give it another try.");
+          } else if (status === 429) {
+            setError("You've hit today's voice-log limit. You can still log by tapping, and voice comes back tomorrow.");
+          } else {
+            setError("We couldn't process that recording. Give it another try in a moment.");
+          }
+        } else {
+          setError(e instanceof Error ? e.message : "Something went wrong");
+        }
         setState("error");
       }
     },

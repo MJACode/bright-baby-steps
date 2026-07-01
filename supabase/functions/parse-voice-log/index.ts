@@ -6,10 +6,20 @@
 // `weekly-insights` — ANTHROPIC_API_KEY env var, claude-haiku-4-5 model,
 // non-streaming JSON-only response.
 //
-// Premium-gated on the client side via <PremiumGate feature="voice-log">.
-// We do not check entitlement here — keep auth/RLS at the table layer.
+// Voice logging is FREE for all users — no premium/subscription check here.
+// Auth is required (mirrors generate-speech-class), and a generous per-user
+// abuse cap (50 parses per UTC day, counted via public.voice_parse_events)
+// protects the Anthropic spend. The counter table is written with the
+// caller's session client, so RLS (auth.uid() = user_id) applies —
+// no service-role key in this function.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Generous abuse cap, not a monetization gate: 50 voice parses per user per
+// UTC day. A real household logging every feed/nap/diaper by voice sits well
+// under this; a scripted abuser does not.
+const DAILY_PARSE_LIMIT = 50;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +88,31 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // Auth — mirrors generate-speech-class/index.ts (auth portion only; voice
+    // logging is free, so there is no subscription check).
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { transcript, now, childContext } = await req.json();
 
     if (!transcript || typeof transcript !== "string") {
@@ -85,6 +120,44 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Cheap input bound before any DB or Anthropic spend. 4000 chars is far
+    // above any real dictated log entry (a long one is a few hundred chars).
+    if (transcript.length > 4000) {
+      return new Response(
+        JSON.stringify({ error: "transcript_too_long" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Abuse cap: count today's (UTC) parses before spending Anthropic tokens.
+    // Same UTC-day window convention as chat/index.ts's free-tier limit.
+    const startOfDayUtc = new Date();
+    startOfDayUtc.setUTCHours(0, 0, 0, 0);
+
+    // Fail-open on count errors (usedToday stays null → treated as 0), but
+    // log them so a permanently-failing count is visible in function logs.
+    const { count: usedToday, error: countError } = await supabase
+      .from("voice_parse_events")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("created_at", startOfDayUtc.toISOString());
+    if (countError) {
+      console.error("parse-voice-log: failed to count voice_parse_events:", countError);
+    }
+
+    const used = usedToday ?? 0;
+    if (used >= DAILY_PARSE_LIMIT) {
+      return new Response(
+        JSON.stringify({
+          error: "daily_limit_reached",
+          limit: DAILY_PARSE_LIMIT,
+          used,
+          message: `You've hit today's limit of ${DAILY_PARSE_LIMIT} voice logs. It resets at midnight UTC — you can still log everything manually.`,
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -143,6 +216,17 @@ serve(async (req) => {
         JSON.stringify({ error: "Could not understand that. Try again?" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Record one counter row per successful parse. Awaited (not
+    // fire-and-forget) so the insert can't be dropped when the function
+    // returns — see lessons-backend 2026-05-16. A failed insert only loses
+    // one tick of the abuse counter, so it must not fail the parse response.
+    const { error: eventError } = await supabase
+      .from("voice_parse_events")
+      .insert({ user_id: userId });
+    if (eventError) {
+      console.error("parse-voice-log: failed to record voice_parse_event:", eventError);
     }
 
     return new Response(JSON.stringify(parsed), {

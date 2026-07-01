@@ -46,6 +46,7 @@ export function LeapCard({ activeChild }: { activeChild: ChildLite | null }) {
                 openChat({
                   seedPrompt: "Tell me about my baby's current developmental leap",
                   forceSkill: "developmental",
+                  source: "leap_card",
                 })
               }
               className="flex-1 min-h-[48px] bg-milestones text-white hover:bg-milestones/90"

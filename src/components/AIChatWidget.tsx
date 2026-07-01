@@ -166,8 +166,14 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
   // explicit skill override. We hold the latest `sendMessage` in a ref so the
   // single subscription always dispatches against the current closure.
   const sendMessageRef = useRef<((text: string, opts?: SendOptions) => void) | null>(null);
+  // Entry-point attribution for the conversation row. Set on every bus event,
+  // consumed once at conversation creation, and cleared on every path that
+  // breaks the sourced-open → send chain (dialog close, New chat, voice mode)
+  // so a health-skill prefill the user abandons can't stamp a later convo.
+  const openSourceRef = useRef<string | null>(null);
   useEffect(() => {
-    return onChatOpen(({ seedPrompt, forceSkill }) => {
+    return onChatOpen(({ seedPrompt, forceSkill, source }) => {
+      openSourceRef.current = source ?? null;
       setView("chat");
       // Empty seedPrompt = just open the dialog (used by the home-page entry
       // card).
@@ -264,7 +270,8 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
 
     let convoId = currentConvoId;
     if (!convoId) {
-      convoId = await chatHistory.createConversation(text.trim());
+      convoId = await chatHistory.createConversation(text.trim(), openSourceRef.current ?? undefined);
+      openSourceRef.current = null;
       setCurrentConvoId(convoId);
     }
 
@@ -555,6 +562,7 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
   });
 
   const openVoiceMode = () => {
+    openSourceRef.current = null;
     setMessages([]);
     setCurrentConvoId(null);
     chatHistory.startNewChat();
@@ -571,6 +579,7 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
   };
 
   const sendVoiceTranscript = () => {
+    openSourceRef.current = null;
     const text = voiceTranscript.trim();
     if (isListening) stopVoice();
     setVoiceTranscript("");
@@ -739,7 +748,10 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
       <Dialog
         open={view === "chat"}
         onOpenChange={(open) => {
-          if (!open) setView("closed");
+          if (!open) {
+            openSourceRef.current = null;
+            setView("closed");
+          }
         }}
       >
         <DialogContent
@@ -757,7 +769,7 @@ export function AIChatWidget({ activeChildId, quickLogMode, headless }: AIChatWi
                 variant="ghost"
                 size="sm"
                 className="h-9 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => { chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); setPendingAction(null); setStreamErrorIndex(null); }}
+                onClick={() => { openSourceRef.current = null; chatHistory.startNewChat(); setCurrentConvoId(null); setMessages([]); setPendingAction(null); setStreamErrorIndex(null); }}
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 New chat
