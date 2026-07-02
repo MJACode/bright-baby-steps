@@ -10,12 +10,29 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Stethoscope, CalendarIcon, Plus, Trash2, FileDown, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Stethoscope, CalendarIcon, Plus, Trash2, FileDown, ChevronRight, Sparkles, Loader2, RefreshCw, Check } from "lucide-react";
 import { format, differenceInDays, subMonths } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { generateAndDownloadReport } from "@/services/reportDataService";
 import { onVisitPrepOpen } from "@/lib/visitPrepOpener";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { usePremium } from "@/hooks/usePremium";
+import {
+  useVisitPrepQuestions,
+  VisitPrepPremiumRequiredError,
+  type VisitPrepCategory,
+} from "@/hooks/useVisitPrepQuestions";
+
+const CATEGORY_META: Record<VisitPrepCategory, { label: string; className: string }> = {
+  sleep: { label: "Sleep", className: "border-sleep/40 text-sleep" },
+  feeding: { label: "Feeding", className: "border-feeding/40 text-feeding" },
+  growth: { label: "Growth", className: "border-primary/40 text-primary" },
+  development: { label: "Development", className: "border-milestones/40 text-milestones" },
+  illness: { label: "Illness", className: "border-border text-muted-foreground" },
+  general: { label: "General", className: "border-border text-muted-foreground" },
+};
 
 interface VisitPrepCardProps {
   activeChild: {
@@ -31,14 +48,25 @@ interface VisitPrepCardProps {
 export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { isPremium } = usePremium();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [addedQuestions, setAddedQuestions] = useState<Set<number>>(new Set());
   const [appointmentDate, setAppointmentDate] = useState<Date | undefined>(
     activeChild?.next_appointment ? new Date(activeChild.next_appointment + "T00:00:00") : undefined
   );
 
   useEffect(() => onVisitPrepOpen(() => setSheetOpen(true)), []);
+
+  const generateQuestions = useVisitPrepQuestions();
+  const { reset: resetQuestions } = generateQuestions;
+
+  useEffect(() => {
+    resetQuestions();
+    setAddedQuestions(new Set());
+  }, [activeChild?.id, resetQuestions]);
 
   const { data: reminders = [] } = useQuery({
     queryKey: ["pediatrician-reminders", activeChild?.id],
@@ -71,18 +99,27 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
   });
 
   const addReminder = useMutation({
-    mutationFn: async (text: string) => {
-      await supabase.from("pediatrician_reminders").insert({
+    mutationFn: async ({ text, source = "manual" }: { text: string; source?: "manual" | "ai_suggested" }) => {
+      const { error } = await supabase.from("pediatrician_reminders").insert({
         child_id: activeChild!.id,
         parent_id: user!.id,
         text,
         include_in_report: true,
+        source,
       });
+      if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["pediatrician-reminders", activeChild?.id] });
-      setDraft("");
-      toast({ title: "Reminder added ✓" });
+      if (variables.source !== "ai_suggested") setDraft("");
+      toast({ title: variables.source === "ai_suggested" ? "Added to your list ✓" : "Reminder added ✓" });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "Couldn't save that",
+        description: err.message || "Check your connection and try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -111,6 +148,49 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
       toast({ title: "Appointment date saved ✓" });
     },
   });
+
+  const handleDraftQuestions = () => {
+    if (!activeChild) return;
+    // Visit date preference: next scheduled visit → the appointment date shown
+    // in this sheet (reflects a just-picked date before the children query
+    // refetches) → today. Past dates fall through to today so a stale legacy
+    // appointment can't pin the draft to an old visit.
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    const scheduled = nextScheduledVisit?.scheduled_at ? new Date(nextScheduledVisit.scheduled_at) : null;
+    const candidate = scheduled ?? appointmentDate ?? null;
+    const candidateKey = candidate ? format(candidate, "yyyy-MM-dd") : null;
+    const visitDate = candidateKey && candidateKey >= todayKey ? candidateKey : todayKey;
+
+    generateQuestions.mutate(
+      {
+        childId: activeChild.id,
+        visitDate,
+        appointmentId: scheduled && visitDate === candidateKey ? nextScheduledVisit!.id : undefined,
+      },
+      {
+        onSuccess: () => setAddedQuestions(new Set()),
+        onError: (err) => {
+          if (err instanceof VisitPrepPremiumRequiredError) {
+            setSheetOpen(false);
+            setUpgradeOpen(true);
+          } else {
+            toast({
+              title: "Couldn't draft questions",
+              description: err.message,
+              variant: "destructive",
+            });
+          }
+        },
+      }
+    );
+  };
+
+  const handleAddSuggestion = (index: number, text: string) => {
+    addReminder.mutate(
+      { text, source: "ai_suggested" },
+      { onSuccess: () => setAddedQuestions((prev) => new Set(prev).add(index)) }
+    );
+  };
 
   const handleExport = async () => {
     if (!activeChild || !user) return;
@@ -220,7 +300,7 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
               />
               <Button
                 size="sm"
-                onClick={() => addReminder.mutate(draft.trim())}
+                onClick={() => addReminder.mutate({ text: draft.trim() })}
                 disabled={!draft.trim() || addReminder.isPending}
                 className="self-end gap-1"
               >
@@ -260,6 +340,108 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
             )}
           </div>
 
+          {/* AI question drafting */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold">Not sure what to ask?</label>
+              <Badge variant="secondary" className="text-[10px] uppercase tracking-wider font-mono">
+                <Sparkles className="w-3 h-3 mr-1" />
+                Flare+
+              </Badge>
+            </div>
+
+            {!generateQuestions.data ? (
+              <>
+                <Button
+                  variant="outline"
+                  className="w-full touch-target gap-2"
+                  onClick={handleDraftQuestions}
+                  disabled={generateQuestions.isPending}
+                >
+                  {generateQuestions.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" /> Reading the last few weeks…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-primary" /> Draft questions from {activeChild.name}'s data
+                    </>
+                  )}
+                </Button>
+                {!isPremium && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Your first draft for each visit is on us — unlimited drafting comes with Flare+.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {generateQuestions.data.questions.map((q, i) => {
+                    const meta = CATEGORY_META[q.category] ?? CATEGORY_META.general;
+                    const added = addedQuestions.has(i);
+                    return (
+                      <div key={i} className="rounded-xl bg-muted/50 p-3 flex items-start gap-2">
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <Badge
+                            variant="outline"
+                            className={cn("text-[10px] uppercase tracking-wider font-mono", meta.className)}
+                          >
+                            {meta.label}
+                          </Badge>
+                          <p className="text-sm leading-snug">{q.text}</p>
+                          {q.why && <p className="text-xs text-muted-foreground leading-snug">{q.why}</p>}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={added ? "ghost" : "secondary"}
+                          className="touch-target shrink-0 gap-1"
+                          disabled={added || addReminder.isPending}
+                          onClick={() => handleAddSuggestion(i, q.text)}
+                          aria-label={added ? "Added to your list" : `Add "${q.text}" to your list`}
+                        >
+                          {added ? (
+                            <>
+                              <Check className="w-4 h-4 text-primary" /> Added
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="w-4 h-4" /> Add
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[10px] text-muted-foreground leading-snug">
+                  {generateQuestions.data.disclaimer}
+                </p>
+
+                {isPremium && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="touch-target text-muted-foreground gap-1.5"
+                    onClick={handleDraftQuestions}
+                    disabled={generateQuestions.isPending}
+                  >
+                    {generateQuestions.isPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Reading the last few weeks…
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" /> Regenerate
+                      </>
+                    )}
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Generate Report */}
           <Button onClick={handleExport} disabled={exporting} className="w-full gap-2">
             <FileDown className="w-4 h-4" />
@@ -267,6 +449,8 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
           </Button>
         </div>
       </SheetContent>
+
+      <UpgradeSheet open={upgradeOpen} onOpenChange={setUpgradeOpen} feature="visit-prep-ai" />
     </Sheet>
   );
 }

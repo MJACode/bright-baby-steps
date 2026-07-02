@@ -22,7 +22,7 @@ const FAQS = [
   },
   {
     q: "Is my child's data sent to third parties?",
-    a: "Some of your child's data is processed by Anthropic, our AI service provider, to power chat responses, daily briefings, weekly insights, and voice-note transcription parsing. We have a written Data Processing Addendum in place with Anthropic, accepted May 8, 2026: your data is not used to train AI models (per Anthropic's Commercial Terms and Usage Policy), inputs and outputs are retained only for a limited period of safety and abuse review per Anthropic's Usage Policy and then deleted, and any security breach must be reported to us within 48 hours. We do not sell your data and we do not share it for cross-context behavioural advertising. We also use a small number of operational service providers (hosting, transactional email, anonymous IP-country lookup at signup) listed at /subprocessors. See our Privacy Policy for full details.",
+    a: "Some of your child's data is processed by Anthropic, our AI service provider, to power chat responses, daily briefings, weekly insights, voice-note transcription parsing, pediatrician visit-prep question suggestions, and (for Flare+ subscribers) Speech Class practice plans. We have a written Data Processing Addendum in place with Anthropic, accepted May 8, 2026: your data is not used to train AI models (per Anthropic's Commercial Terms and Usage Policy), inputs and outputs are retained only for a limited period of safety and abuse review per Anthropic's Usage Policy and then deleted, and any security breach must be reported to us within 48 hours. We do not sell your data and we do not share it for cross-context behavioural advertising. We also use a small number of operational service providers (hosting, transactional email, anonymous IP-country lookup at signup) listed at /subprocessors. See our Privacy Policy for full details.",
   },
   {
     q: "Can I share access with my partner or caregiver?",
@@ -30,7 +30,7 @@ const FAQS = [
   },
   {
     q: "How do I delete my account and data?",
-    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our backup-rotation cycle (no longer than 30 days). Anthropic deletes its copy of your AI inputs and outputs within 30 days. This action cannot be undone. See § 8 of our Privacy Policy for full detail.",
+    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our backup-rotation cycle (no longer than 30 days). Anthropic retains its copy of your AI inputs and outputs only for a limited period of safety and abuse review per its Usage Policy, then deletes them. This action cannot be undone. See § 8 of our Privacy Policy for full detail.",
   },
   {
     q: "Is Grace Flare suitable if my child has a diagnosed medical condition?",

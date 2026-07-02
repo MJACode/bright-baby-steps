@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Activity, Users, BarChart3 } from "lucide-react";
+import { Sparkles, Activity, Users, BarChart3, Stethoscope } from "lucide-react";
 import { type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
 
 interface UpgradeSheetProps {
@@ -48,10 +48,15 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     headline: "A weekly speech practice plan, built for your baby.",
     sub: "Flare+ turns your Word & Sound Journal into a guided 7-day plan — one small activity a day, tuned to her age.",
   },
+  "visit-prep-ai": {
+    headline: "Walk into every checkup with your questions ready.",
+    sub: "Flare+ drafts pediatrician questions from your baby's actual sleep, feeding, and growth data — for every visit, as many times as you need.",
+  },
 };
 
 const PERKS = [
   { i: Sparkles, t: "Daily AI briefings & predictions" },
+  { i: Stethoscope, t: "AI visit prep for every checkup" },
   { i: Activity, t: "Cry & sound analysis" },
   { i: BarChart3, t: "Growth analytics + PDF exports" },
   { i: Users, t: "Multi-caregiver sync" },

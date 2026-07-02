@@ -65,6 +65,7 @@ export const PREMIUM_FEATURES = {
   "unlimited-history": "Unlimited log history",
   "exports": "PDF reports & exports",
   "speech-class": "Speech Class — guided weekly practice",
+  "visit-prep-ai": "Unlimited AI visit prep",
 } as const;
 
 export type PremiumFeature = keyof typeof PREMIUM_FEATURES;
