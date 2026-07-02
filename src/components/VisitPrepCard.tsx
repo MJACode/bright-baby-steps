@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
 import { Stethoscope, CalendarIcon, Plus, Trash2, FileDown, ChevronRight, Sparkles, Loader2, RefreshCw, Check } from "lucide-react";
 import { format, differenceInDays, subMonths } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -34,6 +35,15 @@ const CATEGORY_META: Record<VisitPrepCategory, { label: string; className: strin
   general: { label: "General", className: "border-border text-muted-foreground" },
 };
 
+const TOPIC_CATEGORY_LABELS: Record<string, string> = {
+  behavior: "Behavior",
+  feeding: "Feeding",
+  sleep: "Sleep",
+  health: "Health",
+  development: "Development",
+  other: "Other",
+};
+
 interface VisitPrepCardProps {
   activeChild: {
     id: string;
@@ -52,6 +62,8 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [draft, setDraft] = useState("");
+  const [topicDraft, setTopicDraft] = useState("");
+  const [topicCategory, setTopicCategory] = useState<string>("none");
   const [exporting, setExporting] = useState(false);
   const [addedQuestions, setAddedQuestions] = useState<Set<number>>(new Set());
   const [appointmentDate, setAppointmentDate] = useState<Date | undefined>(
@@ -81,6 +93,9 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
     enabled: !!activeChild,
   });
 
+  const questions = reminders.filter((r) => r.entry_type === "question");
+  const topics = reminders.filter((r) => r.entry_type === "topic");
+
   const { data: nextScheduledVisit } = useQuery({
     queryKey: ["scheduled-visits", activeChild?.id, "next"],
     queryFn: async () => {
@@ -104,6 +119,7 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
         child_id: activeChild!.id,
         parent_id: user!.id,
         text,
+        entry_type: "question",
         include_in_report: true,
         source,
       });
@@ -116,25 +132,56 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
     },
     onError: (err: Error) => {
       toast({
-        title: "Couldn't save that",
+        title: "Couldn't add that",
         description: err.message || "Check your connection and try again.",
         variant: "destructive",
       });
     },
   });
 
+  const addTopic = useMutation({
+    mutationFn: async ({ text, category }: { text: string; category: string | null }) => {
+      const { error } = await supabase.from("pediatrician_reminders").insert({
+        child_id: activeChild!.id,
+        parent_id: user!.id,
+        text,
+        entry_type: "topic",
+        category,
+        include_in_report: true,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pediatrician-reminders", activeChild?.id] });
+      setTopicDraft("");
+      setTopicCategory("none");
+      toast({ title: "Topic added ✓" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't add topic", description: err.message, variant: "destructive" });
+    },
+  });
+
   const deleteReminder = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from("pediatrician_reminders").delete().eq("id", id);
+      const { error } = await supabase.from("pediatrician_reminders").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pediatrician-reminders", activeChild?.id] }),
+    onError: (err: Error) => {
+      toast({ title: "Couldn't delete — check your connection and try again.", description: err.message, variant: "destructive" });
+    },
   });
 
   const toggleInclude = useMutation({
     mutationFn: async ({ id, include }: { id: string; include: boolean }) => {
-      await supabase.from("pediatrician_reminders").update({ include_in_report: include }).eq("id", id);
+      const { error } = await supabase.from("pediatrician_reminders").update({ include_in_report: include }).eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pediatrician-reminders", activeChild?.id] }),
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update the report checkbox — check your connection and try again.", description: err.message, variant: "destructive" });
+    },
   });
 
   const saveAppointment = useMutation({
@@ -196,11 +243,15 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
     if (!activeChild || !user) return;
     setExporting(true);
     try {
-      const notes = reminders
-        .filter((r: any) => r.include_in_report)
-        .map((r: any) => r.text)
-        .join("\n• ");
-      const pediatricianNotes = notes ? `• ${notes}` : "";
+      const bullets = [
+        ...questions.filter((r) => r.include_in_report).map((r) => r.text),
+        ...topics
+          .filter((r) => r.include_in_report)
+          .map((r) =>
+            r.category ? `${TOPIC_CATEGORY_LABELS[r.category] ?? r.category}: ${r.text}` : r.text
+          ),
+      ];
+      const pediatricianNotes = bullets.length ? `• ${bullets.join("\n• ")}` : "";
 
       await generateAndDownloadReport(
         { ...activeChild, is_premature: activeChild.is_premature ?? null, due_date: activeChild.due_date ?? null },
@@ -228,7 +279,8 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
     : null;
   const nextAppt = scheduledAppt ?? legacyAppt;
   const daysUntil = nextAppt ? differenceInDays(nextAppt, new Date()) : null;
-  const reminderCount = reminders.length;
+  const reminderCount = questions.length;
+  const topicCount = topics.length;
 
   return (
     <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
@@ -248,6 +300,7 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
                     ? "Past appointment — update date"
                     : "Set your next appointment"}
                   {reminderCount > 0 && ` · ${reminderCount} reminder${reminderCount !== 1 ? "s" : ""}`}
+                  {topicCount > 0 && ` · ${topicCount} topic${topicCount !== 1 ? "s" : ""}`}
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -308,10 +361,10 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
               </Button>
             </div>
 
-            {reminders.length > 0 && (
+            {questions.length > 0 && (
               <div className="space-y-2 pt-2 border-t border-border">
                 <p className="text-[10px] text-muted-foreground">Check to include in PDF report</p>
-                {reminders.map((r: any) => (
+                {questions.map((r) => (
                   <div key={r.id} className="flex items-start gap-2 group">
                     <Checkbox
                       checked={r.include_in_report}
@@ -439,6 +492,85 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
                   </Button>
                 )}
               </>
+            )}
+          </div>
+
+          {/* Misc Topics */}
+          <div className="space-y-3">
+            <label className="text-xs font-semibold">Misc Topics</label>
+            <p className="text-xs text-muted-foreground">
+              Anything else worth mentioning — new routines, behaviors, little changes.
+            </p>
+            <Textarea
+              placeholder="e.g. Started daycare last week, fussier at bedtime..."
+              value={topicDraft}
+              onChange={(e) => setTopicDraft(e.target.value)}
+              className="min-h-[60px]"
+            />
+            <div className="flex gap-2">
+              <Select value={topicCategory} onValueChange={setTopicCategory}>
+                <SelectTrigger className="flex-1 min-h-[48px]">
+                  <SelectValue placeholder="Category (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No category</SelectItem>
+                  {Object.entries(TOPIC_CATEGORY_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={() =>
+                  addTopic.mutate({
+                    text: topicDraft.trim(),
+                    category: topicCategory === "none" ? null : topicCategory,
+                  })
+                }
+                disabled={!topicDraft.trim() || addTopic.isPending}
+                className="min-h-[48px] gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add
+              </Button>
+            </div>
+
+            {topics.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-border">
+                <p className="text-[10px] text-muted-foreground">Check to include in PDF report</p>
+                {topics.map((r) => (
+                  <div key={r.id} className="flex items-start gap-2 group">
+                    <Checkbox
+                      checked={r.include_in_report}
+                      onCheckedChange={(checked) =>
+                        toggleInclude.mutate({ id: r.id, include: !!checked })
+                      }
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">{r.text}</p>
+                      <div className="flex items-center gap-1.5">
+                        {r.category && (
+                          <Badge variant="secondary" className="px-1.5 py-0">
+                            {TOPIC_CATEGORY_LABELS[r.category] ?? r.category}
+                          </Badge>
+                        )}
+                        <p className="text-[10px] text-muted-foreground">
+                          {format(new Date(r.created_at), "MMM d, yyyy")}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                      onClick={() => deleteReminder.mutate(r.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
