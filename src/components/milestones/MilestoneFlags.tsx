@@ -224,6 +224,7 @@ export function MilestoneFlags({
                       openChat({
                         seedPrompt: `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${m.name}".`,
                         forceSkill: "developmental",
+                        source: "milestone_flags",
                       })
                     }
                   >

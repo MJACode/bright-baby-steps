@@ -93,7 +93,7 @@ export default function Dashboard() {
         showWhatToExpect={isVisible("whatToExpect")}
       />
 
-      {/* Voice-first quick log — premium-gated mic entry into VoiceQuickLog */}
+      {/* Voice-first quick log — free mic entry into VoiceQuickLog */}
       <VoiceQuickLogButton />
 
       {/* Visit Prep */}

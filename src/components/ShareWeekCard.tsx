@@ -69,6 +69,7 @@ export function ShareWeekCard({ activeChild }: { activeChild: ChildLite | null }
           onClick={() =>
             openChat({
               seedPrompt: `Create a short, shareable weekly update about ${name} for grandparents using this week's logged moments.`,
+              source: "share_week",
             })
           }
           className="w-full min-h-[48px] mt-3 bg-accent text-white hover:bg-accent/90"

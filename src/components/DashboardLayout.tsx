@@ -128,12 +128,12 @@ export default function DashboardLayout() {
         <Outlet />
       </main>
 
-      {/* AI chat dialog — mounted headless at the layout level so the
-          chatOpener subscription is live on every dashboard sub-route. The
-          visible entry lives on the home Dashboard; in-page surfaces like
-          SleepTriageCard hand off via the chatOpener bus. */}
+      {/* AI chat dialog — mounted at the layout level so the chatOpener
+          subscription is live on every dashboard sub-route. The widget has no
+          visible entry of its own; in-page surfaces like SleepTriageCard hand
+          off via the chatOpener bus. */}
       {!isOnboarding && (
-        <AIChatWidget activeChildId={activeChild?.id} quickLogMode headless />
+        <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
       )}
 
       {/* Bottom tabs */}

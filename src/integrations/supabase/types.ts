@@ -432,6 +432,7 @@ export type Database = {
           child_id: string | null
           created_at: string
           id: string
+          source: string | null
           title: string
           updated_at: string
           user_id: string
@@ -440,6 +441,7 @@ export type Database = {
           child_id?: string | null
           created_at?: string
           id?: string
+          source?: string | null
           title?: string
           updated_at?: string
           user_id: string
@@ -448,6 +450,7 @@ export type Database = {
           child_id?: string | null
           created_at?: string
           id?: string
+          source?: string | null
           title?: string
           updated_at?: string
           user_id?: string
@@ -2054,6 +2057,7 @@ export type Database = {
           id: string
           include_in_report: boolean
           parent_id: string
+          source: string
           text: string
           updated_at: string
         }
@@ -2065,6 +2069,7 @@ export type Database = {
           id?: string
           include_in_report?: boolean
           parent_id: string
+          source?: string
           text: string
           updated_at?: string
         }
@@ -2076,6 +2081,7 @@ export type Database = {
           id?: string
           include_in_report?: boolean
           parent_id?: string
+          source?: string
           text?: string
           updated_at?: string
         }
@@ -2163,6 +2169,7 @@ export type Database = {
           full_name: string | null
           id: string
           inactive_purge_warned_at: string | null
+          notification_prefs: Json | null
           onboarding_completed_at: string | null
           updated_at: string
           vpc_completed_at: string | null
@@ -2185,6 +2192,7 @@ export type Database = {
           full_name?: string | null
           id: string
           inactive_purge_warned_at?: string | null
+          notification_prefs?: Json | null
           onboarding_completed_at?: string | null
           updated_at?: string
           vpc_completed_at?: string | null
@@ -2207,6 +2215,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           inactive_purge_warned_at?: string | null
+          notification_prefs?: Json | null
           onboarding_completed_at?: string | null
           updated_at?: string
           vpc_completed_at?: string | null
@@ -2962,6 +2971,56 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      visit_prep_drafts: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          user_id: string
+          visit_date: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+          visit_date: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          visit_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_prep_drafts_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      voice_parse_events: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       weight_logs: {
         Row: {

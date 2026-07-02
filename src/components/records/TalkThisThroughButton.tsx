@@ -15,7 +15,7 @@ export function TalkThisThroughButton({
       size="sm"
       variant="outline"
       className="touch-target gap-1.5"
-      onClick={() => openChat({ seedPrompt, forceSkill })}
+      onClick={() => openChat({ seedPrompt, forceSkill, source: "talk_this_through" })}
     >
       <MessageCircle className="w-3.5 h-3.5" />
       Talk this through

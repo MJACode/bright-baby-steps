@@ -237,6 +237,7 @@ export function SleepPlanDialog({
     openChat({
       seedPrompt: `Help me work through this sleep plan for ${childName}.`,
       forceSkill: "sleep",
+      source: "sleep_plan",
     });
     onOpenChange(false);
   };

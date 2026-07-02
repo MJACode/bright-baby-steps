@@ -1,5 +1,5 @@
 import { Plus, Moon, UtensilsCrossed, Droplets, Brain, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { VoiceQuickLog } from "@/components/VoiceQuickLog";
 
 type SheetCategory = "sleep" | "feeding" | "diaper";
 
@@ -20,19 +22,6 @@ const quickActions = [
   { label: "Sleep", icon: Moon, category: "sleep" as const, color: "bg-sleep text-white" },
   { label: "Food", icon: UtensilsCrossed, category: "feeding" as const, color: "bg-feeding text-white" },
   { label: "Diaper", icon: Droplets, category: "diaper" as const, color: "bg-diapers text-white" },
-];
-
-const INVALIDATE_KEYS = [
-  "sleep-logs",
-  "today-sleep",
-  "today-feeds",
-  "today-diapers",
-  "streak",
-  "activity-feed",
-  "feeding-logs",
-  "diaper-logs",
-  "analytics-month",
-  "last-nursing-side",
 ];
 
 const TIME_AGO_OPTIONS = [
@@ -84,10 +73,54 @@ function TimeAgoChips({
   );
 }
 
+const LONG_PRESS_MS = 400;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+
 export function QuickLogFAB() {
   const [open, setOpen] = useState(false);
   const [sheetCategory, setSheetCategory] = useState<SheetCategory | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const navigate = useNavigate();
+
+  const pressTimer = useRef<number | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  const longPressFired = useRef(false);
+
+  const clearPressTimer = () => {
+    if (pressTimer.current !== null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    longPressFired.current = false;
+    pressOrigin.current = { x: e.clientX, y: e.clientY };
+    clearPressTimer();
+    pressTimer.current = window.setTimeout(() => {
+      pressTimer.current = null;
+      longPressFired.current = true;
+      setOpen(false);
+      setVoiceOpen(true);
+    }, LONG_PRESS_MS);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (pressTimer.current === null || !pressOrigin.current) return;
+    const dx = e.clientX - pressOrigin.current.x;
+    const dy = e.clientY - pressOrigin.current.y;
+    if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_TOLERANCE_PX) clearPressTimer();
+  };
+
+  const handleFabClick = () => {
+    // A click always follows pointerup, including after a completed long
+    // press — swallow that one so the hold doesn't also toggle the menu.
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    setOpen(!open);
+  };
 
   const handleAction = (category: SheetCategory) => {
     setOpen(false);
@@ -136,13 +169,19 @@ export function QuickLogFAB() {
           </div>
         )}
 
-        {/* Main FAB */}
+        {/* Main FAB — tap opens the menu, hold to log by voice */}
         <button
-          onClick={() => setOpen(!open)}
-          aria-label={open ? "Close quick log menu" : "Open quick log menu"}
+          onClick={handleFabClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={clearPressTimer}
+          onPointerLeave={clearPressTimer}
+          onPointerCancel={clearPressTimer}
+          onContextMenu={(e) => e.preventDefault()}
+          aria-label={open ? "Close quick log menu" : "Open quick log menu — hold to log by voice"}
           aria-expanded={open}
           className={cn(
-            "w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-xl flex items-center justify-center transition-all active:scale-95",
+            "w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-xl flex items-center justify-center transition-all active:scale-95 touch-none select-none",
             open ? "rotate-45" : "animate-fab-pulse"
           )}
         >
@@ -151,6 +190,7 @@ export function QuickLogFAB() {
       </div>
 
       <QuickLogSheet category={sheetCategory} onClose={() => setSheetCategory(null)} />
+      <VoiceQuickLog open={voiceOpen} onOpenChange={setVoiceOpen} />
     </>
   );
 }
@@ -169,7 +209,7 @@ function QuickLogSheet({ category, onClose }: { category: SheetCategory | null; 
 
 function useQuickLogInvalidate() {
   const queryClient = useQueryClient();
-  return () => INVALIDATE_KEYS.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+  return () => invalidateAfterLogWrite(queryClient);
 }
 
 function FormShell({

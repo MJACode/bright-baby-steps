@@ -1408,3 +1408,103 @@ PDF export (`src/services/reportDataService.ts`, `pdfReportBuilder.ts`,
 child/account deletion (folds into the already-pending Storage-purge e2e test). The
 migration and edge-function deploy to the live project are deferred to the team's normal
 deploy step — this change ships the migration file, not a production DB mutation.
+
+## 2026-07-02 — "Visit Prep" AI pediatrician-visit questions (sixth Anthropic edge function)
+
+**Scope:** New edge function `supabase/functions/visit-prep-questions/index.ts`
+(non-streaming, invoked via `supabase.functions.invoke`, mirrors
+`generate-speech-class`); migration `supabase/migrations/20260801000000_visit_prep_ai.sql`
+(`pediatrician_reminders.source` column + `visit_prep_drafts` usage-trail table);
+`src/pages/PrivacyPage.tsx` § 4 (+ § 9), `src/pages/FAQPage.tsx`,
+`src/pages/SubprocessorsPage.tsx` (Anthropic entry), `CLAUDE.md` edge-function count.
+In-house pass (US-only consumer-wellness v1 posture unchanged).
+
+**Trigger:** New Anthropic data-egress path — a Flare+ anchor feature (one free
+draft per visit for free users) that drafts up to 6 questions a parent can ask
+their pediatrician, grounded in the child's real logged data.
+
+**Data egress (new):** Per generation, sent to Anthropic under the existing DPA
+(accepted 2026-05-08 — no DPA change, no new subprocessor): child first name,
+age + prematurity status, visit date/type, 30-day sleep/feeding/diaper
+aggregates, up to 20 recent temperature readings (fever-range readings flagged),
+active/recent illness names and dates, last 5 growth measurements, undismissed
+milestone-flag names, up to 50 existing `pediatrician_reminders` texts (dedupe),
+and the per-child `child_memories` context block. All pulls via the caller's RLS
+session client — no service-role key. Premium enforced server-side; accepted
+questions persist only as ordinary `pediatrician_reminders` rows
+(`source='ai_suggested'`) riding the existing include_in_report → PDF path.
+
+**Findings / resolutions:**
+- **[HIGH → fixed] PrivacyPage § 4 disclosure gap.** § 4's enumerated per-feature
+  list did not name Visit Prep or its data categories (30-day health aggregates,
+  temperature/illness, growth, milestone topics, reminder text, saved notes) —
+  the same deceptive-by-omission pattern (FTC § 5) the 2026-06-06 Speech Class
+  entry classified HIGH. **Resolved:** Visit Prep added to the § 4 feature list
+  with a per-feature data sentence; ships in the same release as the feature
+  (lockstep). "Last reviewed" timestamp bumped.
+- **[HIGH → fixed] Pre-existing lockstep drift discovered.** FAQ "Is my child's
+  data sent to third parties?" and the SubprocessorsPage Anthropic
+  `purpose`/`dataCategories` had silently dropped Speech Class (live since
+  2026-06-06) and needed Visit Prep. **Resolved:** both surfaces re-synced to
+  § 4's feature list and per-feature data buckets.
+- **[HIGH → fixed] Unbackable "30 days" Anthropic-retention claims.** The
+  2026-05-08 DPA audit softened § 4 and SubprocessorsPage but missed
+  PrivacyPage § 9 ("no more than 30 days") and the FAQ deletion answer
+  ("Anthropic deletes … within 30 days") — contractual claims the DPA does not
+  back. **Resolved:** both softened to the "limited period … per Anthropic's
+  then-current Usage Policy" framing. Pre-existing; magnified by this feature's
+  larger health-data payload.
+- **[MED → fixed] Deferred-care risk on fever/illness data.** The feature frames
+  live fever-range readings and ongoing illnesses as material "to bring to" a
+  possibly weeks-away visit, with no urgent-care off-ramp. **Resolved:**
+  server-stamped urgent-care sentence appended to the pinned disclaimer
+  ("If your child seems unwell right now — especially any fever in a baby under
+  3 months — call your pediatrician or seek care promptly rather than waiting
+  for this visit."), plus a system-prompt rule never to suggest waiting for the
+  visit to address an active concern or characterize severity.
+- **[LOW] Non-diagnosis posture otherwise verified.** Fixed disclaimer pinned in
+  code and stamped server-side (model copy never trusted); prompt rules ban
+  advice/diagnosis/dosing/treatment, ban delay/at-risk framing, and cast
+  milestone flags as neutral check-in topics — consistent with the 2026-06-06
+  anti-delay hardening. Defensive JSON validation caps at 6 questions and clamps
+  categories.
+- **[LOW] Data minimization.** `doctor_name` stripped from the Anthropic payload
+  (kept `visit_type`) — third-party personal data with near-zero model value.
+- **[LOW] Paywall bright line #4 clears.** Visit Prep is additive question
+  drafting; free red-flag / EI surfaces untouched; one free draft per visit
+  preserved on the free tier.
+
+**COPPA posture:** No new consent moment. All inputs are already-collected data
+gated by the email-plus VPC + direct-notice flow; Anthropic is an existing § 5
+processor operating under documented DPA instructions, so this is processor use,
+not a third-party "disclosure" requiring separate opt-in under the 2025
+amendments. Each transmission is parent-initiated (the parent taps generate),
+supporting the non-material-change classification under Privacy § 11 (no 30-day
+notice, no renewed VPC) — same reasoning as Speech Class. § 4 accuracy is
+treated as a condition of direct-notice validity (16 CFR § 312.4(d)), hence the
+lockstep ship.
+
+**Retention/deletion:** `visit_prep_drafts.user_id → auth.users ON DELETE
+CASCADE` and `child_id → children ON DELETE CASCADE`, so account deletion, the
+24-month inactive purge (both end in `DELETE FROM auth.users` inside
+`_purge_user_data()`), and single-child deletion all cover it transitively —
+`voice_parse_events` pattern; no purge-RPC edit (correct). Rows hold only
+(user, child, visit_date, timestamp). RLS: self-scoped INSERT/SELECT only, no
+UPDATE/DELETE, no partner path (entitlement record, not shared child data).
+
+**Code refs:** branch `claude/ai-strategy-claude-api-xlijae`; `CLAUDE.md`
+edge-function line updated five → six.
+
+**Outstanding:**
+- Fold `visit_prep_drafts` (and `pediatrician_reminders` presence in
+  `_purge_user_data()`'s table list) into the still-pending deletion e2e test
+  (P1, 2026-05-09).
+- Frontend must render the returned `disclaimer` string on the suggestion list
+  before acceptance (the PDF path already carries its own disclaimer).
+- Counsel questions for the standing outside-counsel pass: (a) whether a new AI
+  flow of already-collected child health data to an already-disclosed processor
+  is a "material change" needing renewed VPC under § 312.5(a)(1), or whether
+  parent-elective per-generation invocation suffices; (b) whether the enumerated
+  § 4 list should be restructured with a bounded catch-all to reduce recurring
+  lockstep-drift risk (re-raises 2026-06-06 outstanding (b) — this pass caught
+  the second drift incident).

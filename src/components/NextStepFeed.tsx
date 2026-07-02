@@ -70,6 +70,7 @@ function PeekPanel({
     openChat({
       seedPrompt: item.deeplink.seedPrompt ?? "",
       forceSkill: item.deeplink.forceSkill as SkillId,
+      source: "next_step_feed",
     });
   };
 

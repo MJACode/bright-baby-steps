@@ -11,6 +11,9 @@ import type { SkillId } from "@/components/AIChatWidget";
 export interface ChatOpenDetail {
   seedPrompt: string;
   forceSkill?: SkillId;
+  // Stable literal identifying the surface that opened the chat, persisted on
+  // chat_conversations.source for entry-point attribution.
+  source?: string;
 }
 
 const bus = new EventTarget();

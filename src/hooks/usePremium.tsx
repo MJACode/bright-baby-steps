@@ -58,7 +58,6 @@ export function usePremium() {
 export const PREMIUM_FEATURES = {
   "ai-insights": "AI Coach insights",
   "predictions": "Predictive next-event",
-  "voice-log": "Voice quick-log",
   "cry-analysis": "Cry & sound analysis",
   "growth-analytics": "Detailed growth analytics",
   "multi-caregiver": "Multi-caregiver sync",
@@ -66,6 +65,7 @@ export const PREMIUM_FEATURES = {
   "unlimited-history": "Unlimited log history",
   "exports": "PDF reports & exports",
   "speech-class": "Speech Class — guided weekly practice",
+  "visit-prep-ai": "Unlimited AI visit prep",
 } as const;
 
 export type PremiumFeature = keyof typeof PREMIUM_FEATURES;
