@@ -2055,6 +2055,7 @@ export type Database = {
           id: string
           include_in_report: boolean
           parent_id: string
+          source: string
           text: string
           updated_at: string
         }
@@ -2064,6 +2065,7 @@ export type Database = {
           id?: string
           include_in_report?: boolean
           parent_id: string
+          source?: string
           text: string
           updated_at?: string
         }
@@ -2073,6 +2075,7 @@ export type Database = {
           id?: string
           include_in_report?: boolean
           parent_id?: string
+          source?: string
           text?: string
           updated_at?: string
         }
@@ -2160,6 +2163,7 @@ export type Database = {
           full_name: string | null
           id: string
           inactive_purge_warned_at: string | null
+          notification_prefs: Json | null
           onboarding_completed_at: string | null
           updated_at: string
           vpc_completed_at: string | null
@@ -2182,6 +2186,7 @@ export type Database = {
           full_name?: string | null
           id: string
           inactive_purge_warned_at?: string | null
+          notification_prefs?: Json | null
           onboarding_completed_at?: string | null
           updated_at?: string
           vpc_completed_at?: string | null
@@ -2204,6 +2209,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           inactive_purge_warned_at?: string | null
+          notification_prefs?: Json | null
           onboarding_completed_at?: string | null
           updated_at?: string
           vpc_completed_at?: string | null
@@ -2956,6 +2962,38 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      visit_prep_drafts: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          user_id: string
+          visit_date: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          user_id: string
+          visit_date: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+          visit_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "visit_prep_drafts_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
             referencedColumns: ["id"]
           },
         ]

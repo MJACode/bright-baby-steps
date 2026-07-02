@@ -3,10 +3,16 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useNotificationPrefs } from "@/hooks/useNotificationPrefs";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -20,10 +26,38 @@ import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
 
+const MUTABLE_CATEGORIES = [
+  {
+    category: "milestones",
+    label: "Milestones",
+    description: "Month birthdays and what's coming next",
+  },
+  {
+    category: "reminders",
+    label: "Routine reminders",
+    description: "Nudges for naps, feeds, and diaper checks",
+  },
+  {
+    category: "insights",
+    label: "Insights",
+    description: "Summaries of your baby's patterns",
+  },
+  {
+    category: "reactivation",
+    label: "Welcome-back notes",
+    description: "A friendly hello when you've been away",
+  },
+] as const;
+
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const { children } = useChildren();
   const { prefs, setPrefs } = usePreferences();
+  const {
+    prefs: notifPrefs,
+    isReady: notifPrefsReady,
+    save: saveNotifPrefs,
+  } = useNotificationPrefs();
   const [exportingData, setExportingData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
 
@@ -101,6 +135,11 @@ export default function ProfilePage() {
     } finally {
       setDeletingAccount(false);
     }
+  };
+
+  const toggleCategory = (category: string, enabled: boolean) => {
+    const others = notifPrefs.muted_categories.filter((c) => c !== category);
+    saveNotifPrefs({ muted_categories: enabled ? others : [...others, category] });
   };
 
   return (
@@ -185,6 +224,107 @@ export default function ProfilePage() {
               onCheckedChange={(checked) => setPrefs({ calmMode: checked })}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Notification settings — synced to your account */}
+      <Card className="border-0 bg-muted/50">
+        <CardContent className="p-4 space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notifications</p>
+
+          <div className="space-y-2">
+            <div>
+              <p className="text-sm font-semibold">Quiet hours</p>
+              <p className="text-xs text-muted-foreground">We hold notifications overnight so you can rest</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="quiet-start" className="text-xs font-semibold text-muted-foreground">From</Label>
+                <Input
+                  id="quiet-start"
+                  type="time"
+                  className="min-h-[48px]"
+                  value={notifPrefs.quiet_start}
+                  disabled={!notifPrefsReady}
+                  onChange={(e) => {
+                    if (e.target.value) saveNotifPrefs({ quiet_start: e.target.value });
+                  }}
+                />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="quiet-end" className="text-xs font-semibold text-muted-foreground">Until</Label>
+                <Input
+                  id="quiet-end"
+                  type="time"
+                  className="min-h-[48px]"
+                  value={notifPrefs.quiet_end}
+                  disabled={!notifPrefsReady}
+                  onChange={(e) => {
+                    if (e.target.value) saveNotifPrefs({ quiet_end: e.target.value });
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 min-h-[48px]">
+            <div>
+              <p className="text-sm font-semibold">Daily limit</p>
+              <p className="text-xs text-muted-foreground">Keep notifications to a comfortable amount</p>
+            </div>
+            <Select
+              value={String(notifPrefs.daily_cap)}
+              disabled={!notifPrefsReady}
+              onValueChange={(v) => saveNotifPrefs({ daily_cap: Number(v) })}
+            >
+              <SelectTrigger className="w-40 min-h-[48px] text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[1, 2, 3, 5, 10].map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    At most {n} a day
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <label className="flex items-center justify-between gap-3 min-h-[48px] cursor-pointer">
+            <div>
+              <p className="text-sm font-semibold">Morning briefing</p>
+              <p className="text-xs text-muted-foreground">A short good-morning summary of yesterday</p>
+            </div>
+            <Switch
+              checked={notifPrefs.daily_briefing}
+              disabled={!notifPrefsReady}
+              onCheckedChange={(checked) => saveNotifPrefs({ daily_briefing: checked })}
+            />
+          </label>
+
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">What you'll hear about</p>
+
+          <div className="flex items-center justify-between gap-3 min-h-[48px]">
+            <div>
+              <p className="text-sm font-semibold">Appointments</p>
+              <p className="text-xs text-muted-foreground">Appointment reminders always come through</p>
+            </div>
+            <Switch checked disabled />
+          </div>
+
+          {MUTABLE_CATEGORIES.map(({ category, label, description }) => (
+            <label key={category} className="flex items-center justify-between gap-3 min-h-[48px] cursor-pointer">
+              <div>
+                <p className="text-sm font-semibold">{label}</p>
+                <p className="text-xs text-muted-foreground">{description}</p>
+              </div>
+              <Switch
+                checked={!notifPrefs.muted_categories.includes(category)}
+                disabled={!notifPrefsReady}
+                onCheckedChange={(checked) => toggleCategory(category, checked)}
+              />
+            </label>
+          ))}
         </CardContent>
       </Card>
 

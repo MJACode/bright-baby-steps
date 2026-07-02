@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface Notification {
   id: string;
@@ -20,6 +21,7 @@ interface Notification {
 export function NotificationBell() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
   const { data: notifications = [] } = useQuery({
@@ -70,6 +72,11 @@ export function NotificationBell() {
     sleep_window_exceeded: "🚨",
     sleep_off_plan: "🧭",
     weekly_development: "📚",
+    daily_briefing: "🌅",
+  };
+
+  const typeRoute: Record<string, string> = {
+    daily_briefing: "/dashboard",
   };
 
   return (
@@ -95,22 +102,45 @@ export function NotificationBell() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {notifications.map((n) => (
-                <div
-                  key={n.id}
-                  className={cn(
-                    "p-4 text-sm transition-colors",
-                    !n.read && "bg-primary/5"
-                  )}
-                >
-                  <p className="leading-snug">
-                    {typeIcon[n.type] || "🔔"} {n.message}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
-                  </p>
-                </div>
-              ))}
+              {notifications.map((n) => {
+                const route = typeRoute[n.type];
+                const body = (
+                  <>
+                    <p className="leading-snug">
+                      {typeIcon[n.type] || "🔔"} {n.message}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
+                    </p>
+                  </>
+                );
+                return route ? (
+                  <button
+                    key={n.id}
+                    type="button"
+                    className={cn(
+                      "block w-full text-left p-4 text-sm transition-colors min-h-[48px] hover:bg-muted/50",
+                      !n.read && "bg-primary/5"
+                    )}
+                    onClick={() => {
+                      setOpen(false);
+                      navigate(route);
+                    }}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div
+                    key={n.id}
+                    className={cn(
+                      "p-4 text-sm transition-colors",
+                      !n.read && "bg-primary/5"
+                    )}
+                  >
+                    {body}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
