@@ -20,10 +20,6 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     headline: "Know when she'll need her next nap.",
     sub: "Predictive scheduling from your real data — accurate to within ~15 min after a week of logs.",
   },
-  "voice-log": {
-    headline: "Hands-free logging.",
-    sub: "Talk through your day — Flare+ turns it into structured logs you can confirm in one tap.",
-  },
   "cry-analysis": {
     headline: "What is she trying to tell you?",
     sub: "Cry & sound analysis flags hunger vs tired vs discomfort with 87% accuracy.",

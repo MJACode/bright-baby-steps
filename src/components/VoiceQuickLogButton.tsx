@@ -1,27 +1,15 @@
 import { useState } from "react";
 import { Mic } from "lucide-react";
-import { usePremium } from "@/hooks/usePremium";
 import { VoiceQuickLog } from "@/components/VoiceQuickLog";
-import { UpgradeSheet } from "@/components/UpgradeSheet";
 
 export function VoiceQuickLogButton() {
-  const { isPremium } = usePremium();
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
-
-  const handleTap = () => {
-    if (isPremium) {
-      setVoiceOpen(true);
-    } else {
-      setUpgradeOpen(true);
-    }
-  };
 
   return (
     <>
       <button
         type="button"
-        onClick={handleTap}
+        onClick={() => setVoiceOpen(true)}
         aria-label="Log by voice"
         className="w-full flex items-center gap-3 p-4 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors active:scale-[0.99] touch-target text-left"
       >
@@ -35,7 +23,6 @@ export function VoiceQuickLogButton() {
       </button>
 
       <VoiceQuickLog open={voiceOpen} onOpenChange={setVoiceOpen} />
-      <UpgradeSheet open={upgradeOpen} onOpenChange={setUpgradeOpen} feature="voice-log" />
     </>
   );
 }

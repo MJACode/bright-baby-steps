@@ -3,9 +3,11 @@
 //   2. Review      — parsed entry cards, editable, confirm-to-save
 //   3. Done        — auto-dismiss
 //
-// Premium-gated at the call site (QuickLogFAB checks usePremium before opening
-// this sheet). Use it from QuickLogFAB or anywhere a "say anything" button
-// makes sense.
+// A single high-confidence, unambiguous parse skips review entirely: the
+// drawer closes and an undo toast confirms what was logged.
+//
+// Free for all users. Use it from QuickLogFAB, the Dashboard mic card, or
+// anywhere a "say anything" button makes sense.
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,9 +15,15 @@ import { format } from "date-fns";
 import { Mic, MicOff, X, Check, Loader2, AlertCircle, Sparkles } from "lucide-react";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
+import { ToastAction } from "@/components/ui/toast";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useVoiceLog, type ParsedEntry } from "@/hooks/useVoiceLog";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { supabase } from "@/integrations/supabase/client";
+import { useVoiceLog, type ParsedEntry, type SavedRow } from "@/hooks/useVoiceLog";
 import { useChildren, getAge } from "@/hooks/useChildren";
+
+const UNDO_WINDOW_MS = 5000;
 
 interface Props {
   open: boolean;
@@ -29,6 +37,23 @@ export function VoiceQuickLog({ open, onOpenChange }: Props) {
   const childContext = activeChild
     ? `${activeChild.name}, ${getAge(activeChild.date_of_birth, activeChild.is_premature ?? false, activeChild.due_date)}`
     : undefined;
+
+  const undoRows = async (rows: SavedRow[]) => {
+    try {
+      for (const row of rows) {
+        const { error: delErr } = await supabase.from(row.table).delete().eq("id", row.id);
+        if (delErr) throw delErr;
+      }
+      invalidateAfterLogWrite(queryClient);
+      toast({ title: "Log removed" });
+    } catch (err) {
+      toast({
+        title: "Couldn't undo",
+        description: `${err instanceof Error ? `${err.message} ` : ""}The log is still saved — you can delete it from its page.`,
+        variant: "destructive",
+      });
+    }
+  };
 
   const {
     state,
@@ -44,12 +69,27 @@ export function VoiceQuickLog({ open, onOpenChange }: Props) {
     reset,
   } = useVoiceLog({
     childContext,
-    onSaved: () => {
-      queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["custom-milestones"] });
-      queryClient.invalidateQueries({ queryKey: ["last-nursing-side"] });
+    childId: activeChild?.id,
+    onSaved: (entries, { fastPath, savedRows }) => {
+      invalidateAfterLogWrite(queryClient);
+      if (fastPath) {
+        onOpenChange(false);
+        reset();
+        toast({
+          title: `Logged: ${entries[0].summary}`,
+          duration: UNDO_WINDOW_MS,
+          action: (
+            <ToastAction
+              altText="Undo this log"
+              className="touch-target"
+              onClick={() => void undoRows(savedRows)}
+            >
+              Undo
+            </ToastAction>
+          ),
+        });
+        return;
+      }
       setTimeout(() => {
         onOpenChange(false);
         reset();

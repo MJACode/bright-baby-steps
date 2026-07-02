@@ -58,7 +58,6 @@ export function usePremium() {
 export const PREMIUM_FEATURES = {
   "ai-insights": "AI Coach insights",
   "predictions": "Predictive next-event",
-  "voice-log": "Voice quick-log",
   "cry-analysis": "Cry & sound analysis",
   "growth-analytics": "Detailed growth analytics",
   "multi-caregiver": "Multi-caregiver sync",
