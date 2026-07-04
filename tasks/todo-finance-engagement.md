@@ -8,12 +8,12 @@ money dates, NO streaks), celebration payoff, surfacing the calculator hook.
 
 ## Plan
 
-- [ ] 1. New pure lib `src/lib/financeStages.ts` + tests: item → stage mapping
+- [x] 1. New pure lib `src/lib/financeStages.ts` + tests: item → stage mapping
       (UUID map for the 16 pinned seed IDs, `recommended_timing`-string fallback,
       default anytime), grouping into Right now / Coming up / Done for a given
       age, and next-step selection (hard deadline first → CATEGORY_ORDER →
       sort_order, sponsored items excluded).
-- [ ] 2. FinancialTab rework:
+- [x] 2. FinancialTab rework:
       - Merge AgePromptBanner + UpcomingMoneyDates into one "This month for
         {baby}" card (single insurance-window source). Gate on `is_expected`
         (fixes pre-birth negative-age countdown bug).
@@ -31,7 +31,7 @@ money dates, NO streaks), celebration payoff, surfacing the calculator hook.
         eyebrow label. Item cards progressively disclosed (collapsed = checkbox
         + title + timing badge; sponsor "Ad" label stays visible even collapsed).
       - Item-keyed completion copy instead of generic toast.
-- [ ] 3. Copy/correctness fixes: insurance window "typically 30–60 days — act
+- [x] 3. Copy/correctness fixes: insurance window "typically 30–60 days — act
       within 30 to be safe"; tax season "file by ~Apr 15" not "open now"; state
       marketplace hedge on open enrollment; calculator gets consult-a-licensed-
       advisor disclaimer + "before inflation" framing fix.
@@ -53,4 +53,26 @@ money dates, NO streaks), celebration payoff, surfacing the calculator hook.
 
 ## Review
 
-(filled in after implementation)
+Implemented 2026-07-04 (frontend agent). Not committed — awaiting QA + orchestrator.
+
+- New: `src/lib/financeStages.ts` (stage map over pinned UUIDs + timing-string
+  fallback, protect-first grouping, next-step picker, FINANCIAL_FIRSTS) with 27
+  tests in `src/lib/__tests__/financeStages.test.ts`.
+- New: `src/lib/savingsProjection.ts` — `project()` + `formatUSD` extracted from
+  SavingsGrowthCalculator, shared with the new growth-teaser strip.
+- Reworked `src/components/records/FinancialTab.tsx`: This-month card (merged
+  AgePromptBanner + UpcomingMoneyDates, `is_expected` gate fixes the pre-birth
+  countdown), Next Step card (never sponsored, scroll+expand), firsts chip strip
+  replacing the % Progress bar, growth teaser, staged checklist (Right now /
+  Coming up / Done) with progressive per-item disclosure, item-keyed completion
+  toasts, PartyPopper overlay on celebrate-true firsts (Protected stays quiet).
+- SavingsGrowthCalculator: "~7%/yr before inflation" framing, licensed-advisor
+  disclaimer merged into footer, `id="savings-growth-calculator"` anchor.
+- Verified: `tsc --noEmit` clean, eslint clean on touched files, `npm run build`
+  green, `vitest run src/lib/__tests__/` 66/66 passing.
+- Deviations from spec (with reasons): comingUp returns a discriminated
+  `unlock` union instead of a preformatted `unlockLabel` string (needed for
+  {baby}-name interpolation in the component — spec asked for machine-friendly
+  atDays anyway); CATEGORY_ORDER moved to the lib but the component no longer
+  needs to import it (ordering happens inside `groupItemsByRelevance`);
+  unchecking an item toasts a plain "Saved." instead of the celebratory default.
