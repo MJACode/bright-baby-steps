@@ -1508,3 +1508,66 @@ edge-function line updated five → six.
   § 4 list should be restructured with a bounded catch-all to reduce recurring
   lockstep-drift risk (re-raises 2026-06-06 outstanding (b) — this pass caught
   the second drift incident).
+
+---
+
+## 2026-07-04 — Finance tab engagement rework — staged checklist, firsts, growth teaser
+
+**Scope:** `src/components/records/FinancialTab.tsx` (rework), `src/lib/financeStages.ts`
+(new, pure staging/grouping logic), `src/lib/savingsProjection.ts` (extraction),
+`src/components/financial/SavingsGrowthCalculator.tsx` (disclaimer + reference-return
+copy). In-house pass (UX + financial agents pre-build; QA agent post-build).
+**Trigger:** Net-new user-facing finance copy and a computed dollar projection on the
+FinancialTab — the FTC § 5 / financial-advice surface this log tracks (precedent:
+both 2026-06-19 entries, 2026-06-20 sponsored-content entry). `financeCalendar.ts`
+header contract requires new finance copy to route through legal/financial review.
+**Decisions / risk levels:**
+- **Growth teaser (computed projection)** [MED → resolved]: a "$X put in → ≈ $Y by 18"
+  pairing computed client-side from the existing calculator's `project()` ($100/mo,
+  7%/yr default). Conditions met: contributed and total ALWAYS shown together (never
+  the total alone); "hypothetical illustration … not a guarantee" rendered in the same
+  visual unit as the numbers; no product, provider, or rate-of-return promise; no
+  contribution solicitation ("add $X to hit your goal" patterns expressly prohibited
+  in the spec). This is an illustration of arithmetic, not the NO-GO estimator
+  (Feature 2, 2026-06-19) — no income input, no benefit-eligibility output.
+- **Calculator reference-return copy** [MED → resolved]: interim draft "~7%/yr before
+  inflation" was factually inverted (≈10% is the historical nominal figure; ≈7% is
+  real). QA caught it; final copy drops the historical claim ("a common planning
+  assumption"). Calculator footer now carries the "hypothetical illustration, not a
+  guarantee or investment advice; consult a licensed financial advisor" disclaimer it
+  previously lacked (the most number-heavy surface on the page had the weakest
+  disclaimer — closed).
+- **Insurance-window copy harmonized** [LOW]: banner previously said "30-day window,"
+  checklist said "30–60 days." Unified: "plans typically allow 30–60 days — act
+  within 30 to be safe, and check your plan." Countdown shows only days 0–30 from
+  actual DOB; after day 30 it degrades to neutral "enrollment windows vary — check
+  your plan" (no missed/guilt framing). Pre-birth (`is_expected`) bug fixed: no
+  countdown before the window legally opens at birth.
+- **Seasonal copy hedges** [LOW]: tax season now "file by ~Apr 15" (was "open now"
+  from Jan 15, premature vs. IRS e-file opening); Marketplace open enrollment adds
+  "some state marketplaces run longer; employer plans vary."
+- **Sponsored-content posture strengthened** [LOW]: sponsored items are now
+  (a) categorically excluded from the editorial "Next Step" slot — closes an
+  unlabeled-ad exposure where a sponsored row could have been promoted as the app's
+  recommendation with no disclosure; (b) never trigger celebration moments; (c) keep
+  the "Ad · Paid placement by {name}" label visible even in the new collapsed card
+  state (an ad may be collapsed, never unlabeled). Disclosure wording unchanged from
+  the 2026-06-20 entry.
+- **"Financial firsts" celebrations** [LOW]: completion copy is neutral on product
+  choice (no "great choice" endorsement framing), celebrates the checkbox never a
+  dollar amount or balance (income-sensitivity + no account aggregation), and
+  estate-planning completions (will/guardian/beneficiaries) get calm acknowledgement,
+  no confetti. No streaks — rejected as manufactured urgency on a money surface.
+- **Age-staged checklist** [LOW]: relevance grouping only reorders/collapses; no item
+  is hidden or deleted, missed-deadline items remain visible with neutral copy.
+**Code refs:** branch `claude/finance-tab-engagement-x84xns`, PR #171. No DB
+migration, no edge function, no new subprocessor, no new data collection — staging is
+computed client-side from existing checklist rows + child DOB; nudge dismiss is
+localStorage only. Live `financial_checklist_items` verified (17 post-ladder rows)
+against the client stage map before ship.
+**Outstanding:**
+- Stale `(2024)` DCFSA figure in the legacy seed row (sort 82) re-flagged — needs the
+  separate deliberate figures-refresh migration promised in the 2026-06-19 reconcile
+  header; not shipped here (no dollar figures from memory).
+- "Trump-era"-titled seed rows: cut/rewrite decision deferred to founder (content,
+  not legal, blocker).
