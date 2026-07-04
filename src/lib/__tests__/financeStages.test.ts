@@ -125,12 +125,8 @@ describe("getItemStage — recommended_timing fallback", () => {
     });
   });
 
-  it("maps any string containing 'open enrollment' to the open-enrollment season", () => {
+  it("maps 'During (next) open enrollment' strings to the open-enrollment season", () => {
     expect(getItemStage(mk(unknownId, "X", "During next open enrollment period", 0))).toEqual({
-      kind: "date-driven",
-      season: "open-enrollment",
-    });
-    expect(getItemStage(mk(unknownId, "X", "Plan before open enrollment", 0))).toEqual({
       kind: "date-driven",
       season: "open-enrollment",
     });
@@ -138,6 +134,10 @@ describe("getItemStage — recommended_timing fallback", () => {
       kind: "date-driven",
       season: "open-enrollment",
     });
+  });
+
+  it("keeps 'Plan before open enrollment' (DCFSA-vs-credit comparison) always visible, not season-gated", () => {
+    expect(getItemStage(mk(unknownId, "X", "Plan before open enrollment", 0))).toEqual({ kind: "anytime" });
   });
 
   it("defaults unknown ids/timings (and null timing) to anytime", () => {
@@ -279,6 +279,27 @@ describe("groupItemsByRelevance — date-driven openness", () => {
       isCompleted: notCompleted,
     });
     expect(grouped.comingUp.map((c) => c.item.id)).toContain(IDS.childTaxCredit);
+  });
+
+  it("keeps the plan-ahead DCFSA comparison in rightNow even outside open enrollment", () => {
+    const planAhead = mk(
+      "c2a1b4d3-2e5f-4b7c-8d9e-1f2a3b4c5d6e",
+      "Childcare & Benefits",
+      "Plan before open enrollment",
+      83,
+      "Compare a Dependent Care FSA with the Child & Dependent Care Credit",
+    );
+    const grouped = groupItemsByRelevance({
+      items: [...ITEMS, planAhead],
+      ageDays: 200,
+      isExpected: false,
+      now: JULY,
+      dateOfBirth: "2025-12-13",
+      isCompleted: notCompleted,
+    });
+    expect(ids(grouped.rightNow)).toContain(planAhead.id);
+    // The season-gated DCFSA setup row stays locked until the window opens.
+    expect(grouped.comingUp.map((c) => c.item.id)).toContain(IDS.dcfsa);
   });
 });
 

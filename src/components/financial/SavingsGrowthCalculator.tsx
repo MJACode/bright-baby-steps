@@ -98,7 +98,7 @@ export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartA
             aria-label="Annual return percent"
           />
           <p className="text-[10px] text-muted-foreground">
-            For reference, the U.S. stock market has averaged ~7%/yr before inflation long-term. Cash savings: 0–5%.
+            For stock-market investments, a common planning assumption is ~7%/yr. Cash savings: 0–5%.
           </p>
         </div>
 

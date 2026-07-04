@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -257,6 +257,9 @@ function GrowthTeaser({ startAge }: { startAge: number }) {
       aria-label="Open the growth calculator"
       onClick={scrollToCalculator}
       onKeyDown={(e) => {
+        // Keydown from nested interactive elements bubbles up here;
+        // preventDefault would cancel their native Enter/Space activation.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           scrollToCalculator();
@@ -350,7 +353,7 @@ function ChecklistItemCard({
             aria-expanded={expanded}
             className="flex-1 text-left min-h-[48px] -my-2 py-2 space-y-1.5"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               {item.category}
             </p>
             <p className={cn("text-sm font-semibold", completed && "line-through text-muted-foreground")}>
@@ -434,7 +437,7 @@ function ComingUpRow({
           aria-label={`${item.title} — unlocks later: ${unlockLabel}`}
         />
         <div className="flex-1 space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {item.category}
           </p>
           <p className="text-sm font-semibold">{item.title}</p>
@@ -459,6 +462,13 @@ export function FinancialTab() {
   const [comingUpOpen, setComingUpOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [celebration, setCelebration] = useState<string | null>(null);
+  const celebrationTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current != null) window.clearTimeout(celebrationTimerRef.current);
+    };
+  }, []);
 
   const { data: items, isLoading } = useQuery({
     queryKey: ["financial-checklist-items"],
@@ -577,7 +587,8 @@ export function FinancialTab() {
       if (!first.celebrate) continue;
       if (!isFirstAchieved(first, items, isCompleted) && isFirstAchieved(first, items, after)) {
         setCelebration(FIRST_CELEBRATION_COPY[first.key](babyRef));
-        window.setTimeout(() => setCelebration(null), 2000);
+        if (celebrationTimerRef.current != null) window.clearTimeout(celebrationTimerRef.current);
+        celebrationTimerRef.current = window.setTimeout(() => setCelebration(null), 2000);
         break;
       }
     }
@@ -656,6 +667,9 @@ export function FinancialTab() {
           aria-label={`Next step: ${nextStep.title}. Opens the checklist item.`}
           onClick={() => focusItem(nextStep.id)}
           onKeyDown={(e) => {
+            // Keydown from the nested "Mark done" button bubbles up here;
+            // preventDefault would cancel its native Enter/Space activation.
+            if (e.target !== e.currentTarget) return;
             if (e.key === "Enter" || e.key === " ") {
               e.preventDefault();
               focusItem(nextStep.id);

@@ -71,6 +71,9 @@ const STAGE_BY_TIMING: Record<string, ItemStage> = {
   "At tax time (first year with child)": { kind: "date-driven", season: "tax" },
   "When child has earned income": { kind: "conditional", condition: EARNED_INCOME_CONDITION },
   "When your child has earned income": { kind: "conditional", condition: EARNED_INCOME_CONDITION },
+  // Plan-AHEAD task (compare DCFSA vs. the tax credit): always visible, unlike
+  // "During (next) open enrollment" rows which are season-gated below.
+  "Plan before open enrollment": { kind: "anytime" },
 };
 
 export function getItemStage(item: {

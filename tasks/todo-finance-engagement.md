@@ -35,8 +35,10 @@ money dates, NO streaks), celebration payoff, surfacing the calculator hook.
       within 30 to be safe"; tax season "file by ~Apr 15" not "open now"; state
       marketplace hedge on open enrollment; calculator gets consult-a-licensed-
       advisor disclaimer + "before inflation" framing fix.
-- [ ] 4. QA agent pass.
-- [ ] 5. Commit, push, draft PR.
+- [x] 4. QA agent pass — Fix-required → all 5 findings fixed (keyboard-handler
+      bubbling bug, inverted return-figure copy, 11px eyebrows, celebration
+      timer cleanup, "Plan before open enrollment" season-gating) → verified.
+- [x] 5. Commit, push, draft PR (#171). Legal-review-log entry added 2026-07-04.
 
 ## Deliberately out of scope (follow-ups)
 
