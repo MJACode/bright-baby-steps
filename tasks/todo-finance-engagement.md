@@ -1,0 +1,80 @@
+# Finance tab engagement rework — 2026-07-03
+
+Branch: `claude/finance-tab-engagement-x84xns`
+
+Design inputs: UX audit + financial-domain brief (specialist agents, this session).
+Both converged on: age-relevance filtering, honest momentum (age unlocks + real
+money dates, NO streaks), celebration payoff, surfacing the calculator hook.
+
+## Plan
+
+- [x] 1. New pure lib `src/lib/financeStages.ts` + tests: item → stage mapping
+      (UUID map for the 16 pinned seed IDs, `recommended_timing`-string fallback,
+      default anytime), grouping into Right now / Coming up / Done for a given
+      age, and next-step selection (hard deadline first → CATEGORY_ORDER →
+      sort_order, sponsored items excluded).
+- [x] 2. FinancialTab rework:
+      - Merge AgePromptBanner + UpcomingMoneyDates into one "This month for
+        {baby}" card (single insurance-window source). Gate on `is_expected`
+        (fixes pre-birth negative-age countdown bug).
+      - Next Step card: age-relevant + deadline-aware, tappable (scroll+expand
+        target item), inline mark-done, never sponsored.
+      - "Financial firsts" chip strip (Covered / Safety net / Protected /
+        Growing) replaces flat % bar.
+      - Celebration on chip completion (reuse MilestonesPage PartyPopper
+        pattern, finance color) — EXCEPT Protected (estate planning) which
+        fills quietly with calm copy. Never on sponsored items.
+      - Growth teaser strip (contributed vs. total pair from `project()`,
+        "hypothetical illustration" inline, anchors to calculator).
+      - Checklist re-grouped by stage: Right now (open) / Coming up (collapsed,
+        unlock ages / conditions) / Done (collapsed). Category demoted to
+        eyebrow label. Item cards progressively disclosed (collapsed = checkbox
+        + title + timing badge; sponsor "Ad" label stays visible even collapsed).
+      - Item-keyed completion copy instead of generic toast.
+- [x] 3. Copy/correctness fixes: insurance window "typically 30–60 days — act
+      within 30 to be safe"; tax season "file by ~Apr 15" not "open now"; state
+      marketplace hedge on open enrollment; calculator gets consult-a-licensed-
+      advisor disclaimer + "before inflation" framing fix.
+- [x] 4. QA agent pass — Fix-required → all 5 findings fixed (keyboard-handler
+      bubbling bug, inverted return-figure copy, 11px eyebrows, celebration
+      timer cleanup, "Plan before open enrollment" season-gating) → verified.
+- [x] 5. Commit, push, draft PR (#171). Legal-review-log entry added 2026-07-04.
+
+## Deliberately out of scope (follow-ups)
+
+- Migration adding `relevant_from_months`/`relevant_to_months` columns (client
+  map over pinned UUIDs is the one-PR fallback; revisit if items churn).
+- Refresh stale 2024 DCFSA dollar figure in seed data (needs verified 2026
+  numbers — "never quote dollar figures from memory"; separate deliberate
+  migration per the reconcile migration's own header).
+- Cut/rewrite "Trump-era Roth" + "Opportunity Zones" seed rows (content
+  decision for the user; they inflate the homework feeling).
+- New financeCalendar event types (529 Day, new-year limits reset, FSA
+  use-it-or-lose-it, birthday money check-up).
+- Instrument calculator/wizard interaction rate before shipping (baseline KPI).
+
+## Review
+
+Implemented 2026-07-04 (frontend agent). Not committed — awaiting QA + orchestrator.
+
+- New: `src/lib/financeStages.ts` (stage map over pinned UUIDs + timing-string
+  fallback, protect-first grouping, next-step picker, FINANCIAL_FIRSTS) with 27
+  tests in `src/lib/__tests__/financeStages.test.ts`.
+- New: `src/lib/savingsProjection.ts` — `project()` + `formatUSD` extracted from
+  SavingsGrowthCalculator, shared with the new growth-teaser strip.
+- Reworked `src/components/records/FinancialTab.tsx`: This-month card (merged
+  AgePromptBanner + UpcomingMoneyDates, `is_expected` gate fixes the pre-birth
+  countdown), Next Step card (never sponsored, scroll+expand), firsts chip strip
+  replacing the % Progress bar, growth teaser, staged checklist (Right now /
+  Coming up / Done) with progressive per-item disclosure, item-keyed completion
+  toasts, PartyPopper overlay on celebrate-true firsts (Protected stays quiet).
+- SavingsGrowthCalculator: "~7%/yr before inflation" framing, licensed-advisor
+  disclaimer merged into footer, `id="savings-growth-calculator"` anchor.
+- Verified: `tsc --noEmit` clean, eslint clean on touched files, `npm run build`
+  green, `vitest run src/lib/__tests__/` 66/66 passing.
+- Deviations from spec (with reasons): comingUp returns a discriminated
+  `unlock` union instead of a preformatted `unlockLabel` string (needed for
+  {baby}-name interpolation in the component — spec asked for machine-friendly
+  atDays anyway); CATEGORY_ORDER moved to the lib but the component no longer
+  needs to import it (ordering happens inside `groupItemsByRelevance`);
+  unchecking an item toasts a plain "Saved." instead of the celebratory default.

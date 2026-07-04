@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Calculator, TrendingUp } from "lucide-react";
+import { formatUSD, project } from "@/lib/savingsProjection";
 import {
   AreaChart,
   Area,
@@ -14,76 +15,10 @@ import {
   Legend,
 } from "recharts";
 
-function formatUSD(value: number, options?: { compact?: boolean }) {
-  if (options?.compact) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(value);
-  }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 function clampNumber(raw: string, min: number, max: number, fallback: number) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
-}
-
-interface YearRow {
-  year: number;
-  age: number;
-  contributions: number;
-  balance: number;
-  growth: number;
-}
-
-// Simple monthly-compound future-value projection. Not investment advice — just
-// shows parents what "small contributions + time" looks like as a chart.
-function project({
-  starting,
-  monthly,
-  annualRatePct,
-  years,
-  startAge,
-}: {
-  starting: number;
-  monthly: number;
-  annualRatePct: number;
-  years: number;
-  startAge: number;
-}): YearRow[] {
-  const r = annualRatePct / 100 / 12;
-  const rows: YearRow[] = [];
-  let balance = starting;
-  let contributions = starting;
-  rows.push({
-    year: 0,
-    age: startAge,
-    contributions: Math.round(contributions),
-    balance: Math.round(balance),
-    growth: Math.round(balance - contributions),
-  });
-  for (let y = 1; y <= years; y++) {
-    for (let m = 0; m < 12; m++) {
-      balance = balance * (1 + r) + monthly;
-      contributions += monthly;
-    }
-    rows.push({
-      year: y,
-      age: startAge + y,
-      contributions: Math.round(contributions),
-      balance: Math.round(balance),
-      growth: Math.round(balance - contributions),
-    });
-  }
-  return rows;
 }
 
 export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartAge?: number }) {
@@ -99,7 +34,7 @@ export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartA
   const final = rows[rows.length - 1];
 
   return (
-    <Card className="border-0 bg-finance-bg">
+    <Card id="savings-growth-calculator" className="border-0 bg-finance-bg">
       <CardContent className="p-4 space-y-4">
         <div className="space-y-1">
           <h2 className="font-display font-bold text-base flex items-center gap-2">
@@ -163,7 +98,7 @@ export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartA
             aria-label="Annual return percent"
           />
           <p className="text-[10px] text-muted-foreground">
-            For reference, U.S. stock market averages ~7% real return long-term. Cash savings: 0–5%.
+            For stock-market investments, a common planning assumption is ~7%/yr. Cash savings: 0–5%.
           </p>
         </div>
 
@@ -258,7 +193,7 @@ export function SavingsGrowthCalculator({ defaultStartAge = 0 }: { defaultStartA
         </div>
 
         <p className="text-[10px] text-muted-foreground italic">
-          Projections compound monthly and assume a constant return. Actual investment returns vary year to year — this is a planning tool, not a guarantee.
+          Projections compound monthly and assume a constant return; actual investment returns vary year to year. This is a hypothetical illustration, not a guarantee or investment advice. Consult a licensed financial advisor for personalized advice.
         </p>
       </CardContent>
     </Card>
