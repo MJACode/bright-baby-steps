@@ -1620,3 +1620,51 @@ the app tolerates; affected users can be re-asked in-app if desired.
 
 **Also touched:** `VpcGateMessage.tsx` — dark-mode styling only (`dark:`
 variants); copy and behavior unchanged.
+
+## 2026-07-05 — Child Context v1, Phase 1 (backend) — new child-data categories + Anthropic egress
+
+**Reviewer:** in-house (Claude pass, branch `claude/child-context-milestones-c6ynw2`,
+PR #173). **Risk: LOW today / MEDIUM if Phase 2 ships without the notice updates below.**
+
+**What changed (backend only — no UI writes these fields yet):**
+- Migration `20260805000000_child_interests_temperament` (applied to live
+  2026-07-05): `children.interests text[] NOT NULL DEFAULT '{}'` and
+  `children.temperament text`, both parent-selected, both optional.
+- **Data-minimization by design:** `interests` is constrained by a DB CHECK to a
+  fixed 10-item activity allowlist (music, books, movement, water_play, animals,
+  vehicles, outdoors, food_exploring, building, pretend_play; max 6) —
+  deliberately NOT free text, so no arbitrary child prose enters this column.
+  `temperament` is one of four fixed values (easygoing / sensitive / spirited /
+  slow_to_warm) or NULL. Widening either list requires a new migration.
+- `get_child_profile` RPC returns both keys; RLS posture unchanged
+  (SECURITY INVOKER, `children` policies filter).
+
+**New Anthropic egress (16 CFR § 312 / Privacy § 4 analysis):** when set, the
+two fields flow to Anthropic, PBC on: chat (`[CHILD PROFILE]` system block +
+`get_child_profile` tool results), briefing, next-step-peek, and extract-memory
+(dedupe context). Covered by the executed Anthropic DPA (2026-05-08 entry) — same
+purpose limitation, no-training posture, and SCCs; no new subprocessor.
+
+**Disclosure gap (accepted for this phase, remediation committed):**
+PrivacyPage § 4 currently enumerates "your child's first name, age, and the
+relevant logged activity" — parent-selected interests/temperament are none of
+those, so § 4 is under-inclusive once the fields carry data. **Mitigating fact:
+no collection UI exists yet.** Every live row has `interests = '{}'` and
+`temperament = NULL`, and every egress site is guarded to omit empty values, so
+NOTHING actually egresses as of this entry.
+**Commitment:** PrivacyPage § 2 (collection) + § 4 (AI egress) and
+`CoppaDirectNotice.tsx` ("what we collect") will be updated in the SAME PR,
+before any collection UI (Phase 2 of the plan) is user-reachable; the PR also
+adds retroactive disclosure of the live `child_memories` AI-memory store (a
+pre-existing gap found in this review — § 4 only obliquely references it via
+Visit Prep "saved notes"). Materiality: additive optional fields, same
+processing purposes, prospective notice — treated as a non-material change not
+triggering renewed VPC under the email-plus program; reasoning mirrors the
+2026-05-08 zero-dwell analysis.
+
+**Outstanding (blocks Phase 2 merge, tracked in PR #173 checklist):**
+- PrivacyPage § 2 + § 4 rewrite (interests/temperament + `child_memories`).
+- CoppaDirectNotice "what we collect" addition.
+- "Last reviewed" timestamp bump on PrivacyPage.
+- Parent-facing review/delete surface for `child_memories` (the "About {child}"
+  hub, Phase 3) — closes the § 312.6 review-rights gap for AI-extracted notes.
