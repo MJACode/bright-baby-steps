@@ -151,10 +151,10 @@ function ConnectedState({ babyName, partnerLabel, onContinue }: {
 
       <div className="relative h-32 mb-2 flex items-center justify-center">
         <div className="absolute" style={{ left: "calc(50% - 96px)" }}>
-          <AvatarBubble label="You" name="" tone="bg-orange-100" />
+          <AvatarBubble label="You" name="" tone="bg-orange-100 text-orange-900" />
         </div>
         <div className="absolute" style={{ left: "calc(50% + 8px)" }}>
-          <AvatarBubble label={partnerLabel} name={initials(partnerLabel)} tone="bg-amber-100" />
+          <AvatarBubble label={partnerLabel} name={initials(partnerLabel)} tone="bg-amber-100 text-amber-900" />
         </div>
         <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
           <path d="M 38 50 Q 50 25, 62 50" stroke="hsl(var(--primary))" strokeWidth="0.5" strokeDasharray="2 2" fill="none" opacity="0.7" />
@@ -172,7 +172,7 @@ function ConnectedState({ babyName, partnerLabel, onContinue }: {
         "mt-8 rounded-2xl border bg-card p-4 animate-in fade-in slide-in-from-bottom-2 duration-700"
       )}>
         <div className="flex items-center gap-2 mb-3">
-          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[11px] font-semibold">
+          <div className="w-6 h-6 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center text-[11px] font-semibold">
             {initials(partnerLabel)}
           </div>
           <p className="text-[10px] font-mono uppercase text-muted-foreground tracking-wider">

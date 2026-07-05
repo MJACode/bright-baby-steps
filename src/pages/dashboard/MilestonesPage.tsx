@@ -220,7 +220,7 @@ export default function MilestonesPage() {
 
   const ageAppropriateIds = new Set<string>();
   [...currentCats, ...earlierCats].forEach((cat) =>
-    cat.milestones.forEach((m: any) => ageAppropriateIds.add(m.id))
+    cat.milestones.forEach((m: { id: string }) => ageAppropriateIds.add(m.id))
   );
   const totalForAge = ageAppropriateIds.size;
   const achievedCount = childMilestones?.filter(
