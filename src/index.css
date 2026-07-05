@@ -61,6 +61,8 @@
     --warning-foreground: 0 0% 100%;
 
     --tab-bar-height: 5rem;
+
+    color-scheme: light;
   }
 
   .dark {
@@ -116,6 +118,8 @@
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
+
+    color-scheme: dark;
   }
 }
 
@@ -127,12 +131,11 @@
   /* html bg matters on iOS: when the visual viewport extends past the body
      (URL-bar collapse, rubber-band overscroll, safe-area below the fixed tab
      bar), the html background is what's visible. Without this, the system
-     default shows through — black on dark-mode iPhones — even though body
-     is cream. color-scheme: light also keeps Safari's form/scrollbar chrome
-     in light mode regardless of the OS setting. */
+     default shows through even though body is themed. bg-background tracks
+     the active theme; color-scheme is set on :root / .dark so Safari's
+     form/scrollbar chrome follows the app theme, not the OS setting. */
   html {
     @apply bg-background;
-    color-scheme: light;
   }
 
   /* iOS rubber-band fix: lock html/body to the viewport so the document

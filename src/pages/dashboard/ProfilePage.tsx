@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import { usePreferences } from "@/hooks/usePreferences";
+import { usePreferences, type ThemePreference } from "@/hooks/usePreferences";
+import { useTheme } from "@/hooks/useTheme";
 import { useNotificationPrefs } from "@/hooks/useNotificationPrefs";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,11 +15,12 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon } from "lucide-react";
+import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon, Sun, SunMoon, Monitor } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
