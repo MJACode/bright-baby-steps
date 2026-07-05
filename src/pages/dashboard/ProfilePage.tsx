@@ -55,6 +55,7 @@ export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const { children } = useChildren();
   const { prefs, setPrefs } = usePreferences();
+  const { theme, setTheme } = useTheme();
   const {
     prefs: notifPrefs,
     isReady: notifPrefsReady,
@@ -200,6 +201,34 @@ export default function ProfilePage() {
       <Card className="border-0 bg-muted/50">
         <CardContent className="p-4 space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preferences</p>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <SunMoon className="w-4 h-4 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Appearance</p>
+                <p className="text-xs text-muted-foreground">Dark mode is easier on your eyes during night feeds</p>
+              </div>
+            </div>
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              value={theme}
+              onValueChange={(value) => {
+                if (value) setTheme(value as ThemePreference);
+              }}
+              className="grid grid-cols-3 gap-2"
+            >
+              <ToggleGroupItem value="light" aria-label="Light theme" className="min-h-[48px] gap-1.5 text-sm">
+                <Sun className="w-4 h-4" /> Light
+              </ToggleGroupItem>
+              <ToggleGroupItem value="dark" aria-label="Dark theme" className="min-h-[48px] gap-1.5 text-sm">
+                <Moon className="w-4 h-4" /> Dark
+              </ToggleGroupItem>
+              <ToggleGroupItem value="system" aria-label="Match device theme" className="min-h-[48px] gap-1.5 text-sm">
+                <Monitor className="w-4 h-4" /> System
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bell className="w-4 h-4 text-primary" />

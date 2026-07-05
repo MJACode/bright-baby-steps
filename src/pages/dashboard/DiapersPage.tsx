@@ -433,7 +433,7 @@ export default function DiapersPage() {
             <CardTitle className="text-sm">This Week</CardTitle>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-sm bg-amber-300" />
+                <div className="w-2.5 h-2.5 rounded-sm bg-diapers/40" />
                 <span className="text-[10px] text-muted-foreground">Wet</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -457,7 +457,7 @@ export default function DiapersPage() {
                     {/* Dirty (bottom) */}
                     <div className="w-full bg-diapers transition-all" style={{ height: dirtyH, borderRadius: d.wet > 0 ? '0' : '6px 6px 0 0' }} />
                     {/* Wet (top) */}
-                    <div className="w-full bg-amber-300 transition-all order-first" style={{ height: wetH, borderRadius: '6px 6px 0 0' }} />
+                    <div className="w-full bg-diapers/40 transition-all order-first" style={{ height: wetH, borderRadius: '6px 6px 0 0' }} />
                   </div>
                   <span className="text-[10px] text-muted-foreground">{d.day}</span>
                 </div>
