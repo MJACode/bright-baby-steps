@@ -1,5 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "./useAuth";
+
+export type ThemePreference = "light" | "dark" | "system";
 
 interface Preferences {
   /** @deprecated superseded by hiddenHomeSections; kept to preserve stored shape. */
@@ -15,6 +17,7 @@ interface Preferences {
   hiddenHomeSections: string[];
   homeSectionsMigrated: boolean;
   lastStreakPopupDate: string;
+  theme: ThemePreference;
 }
 
 const defaults: Preferences = {
@@ -30,6 +33,7 @@ const defaults: Preferences = {
   hiddenHomeSections: [],
   homeSectionsMigrated: false,
   lastStreakPopupDate: "",
+  theme: "system",
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing
 // into hiddenHomeSections) throws instead of silently poisoning every caller.
@@ -66,6 +70,15 @@ export function usePreferences() {
   const key = user ? `prefs_${user.id}` : "prefs_guest";
 
   const [prefs, setPrefsState] = useState<Preferences>(() => loadPrefs(key));
+
+  // Long-lived consumers (e.g. ThemeProvider) mount before auth resolves and
+  // would otherwise stay pinned to prefs_guest after login flips the key.
+  const prevKey = useRef(key);
+  useEffect(() => {
+    if (prevKey.current === key) return;
+    prevKey.current = key;
+    setPrefsState(loadPrefs(key));
+  }, [key]);
 
   const setPrefs = useCallback(
     (updates: Partial<Preferences>) => {

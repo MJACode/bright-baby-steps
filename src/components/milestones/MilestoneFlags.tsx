@@ -39,18 +39,18 @@ const DISMISS_REASONS = [
 
 const severityStyles: Record<Severity, { container: string; badge: string; label: string }> = {
   watch: {
-    container: "border-amber-300 bg-amber-50",
-    badge: "bg-amber-200 text-amber-900",
+    container: "border-warning/30 bg-warning/5",
+    badge: "bg-warning/15 text-foreground",
     label: "Watch",
   },
   concern: {
-    container: "border-orange-300 bg-orange-50",
-    badge: "bg-orange-200 text-orange-900",
+    container: "border-warning/60 bg-warning/10",
+    badge: "bg-warning text-warning-foreground",
     label: "Concern",
   },
   act: {
-    container: "border-red-300 bg-red-50",
-    badge: "bg-red-200 text-red-900",
+    container: "border-destructive/50 bg-destructive/10",
+    badge: "bg-destructive text-destructive-foreground",
     label: "Act",
   },
 };
@@ -178,7 +178,7 @@ export function MilestoneFlags({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <AlertTriangle className="w-5 h-5 text-orange-600" />
+        <AlertTriangle className="w-5 h-5 text-warning" />
         <h2 className="font-display font-bold text-lg">A few skills to keep an eye on</h2>
       </div>
       <p className="text-xs text-muted-foreground italic">

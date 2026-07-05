@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Brain, PartyPopper, ChevronDown, Plus, Star, Trash2, Sparkles } from "lucide-react";
+import { PartyPopper, ChevronDown, Plus, Star, Trash2, Sparkles } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
@@ -19,6 +19,7 @@ import { PremiumGate } from "@/components/PremiumGate";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { MilestoneFlags } from "@/components/milestones/MilestoneFlags";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { format } from "date-fns";
@@ -208,7 +209,7 @@ export default function MilestonesPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Brain className="w-7 h-7 text-milestones" /> Milestones
+            <Star className="w-7 h-7 text-milestones" /> Milestones
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Add a child to track milestones.</p>
         </div>
@@ -217,9 +218,15 @@ export default function MilestonesPage() {
     );
   }
 
-  const totalMilestones = categories?.reduce((s, c) => s + c.milestones.length, 0) ?? 0;
-  const achievedCount = childMilestones?.filter((cm) => cm.status === "achieved").length ?? 0;
-  const progressPct = totalMilestones > 0 ? Math.round((achievedCount / totalMilestones) * 100) : 0;
+  const ageAppropriateIds = new Set<string>();
+  [...currentCats, ...earlierCats].forEach((cat) =>
+    cat.milestones.forEach((m: any) => ageAppropriateIds.add(m.id))
+  );
+  const totalForAge = ageAppropriateIds.size;
+  const achievedCount = childMilestones?.filter(
+    (cm) => cm.status === "achieved" && ageAppropriateIds.has(cm.milestone_id)
+  ).length ?? 0;
+  const progressPct = totalForAge > 0 ? Math.round((achievedCount / totalForAge) * 100) : 0;
 
   const hasCurrentMilestones = currentCats.some((c) => c.milestones.length > 0);
   const hasUpcomingMilestones = upcomingCats.some((c) => c.milestones.length > 0);
@@ -243,7 +250,7 @@ export default function MilestonesPage() {
 
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Brain className="w-7 h-7 text-milestones" /> Milestones
+          <Star className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {activeChild ? `${activeChild.name} • ${ageMonths}mo ${activeChild.is_premature ? "(adjusted)" : ""}` : "Add a child to track milestones."}
@@ -260,7 +267,7 @@ export default function MilestonesPage() {
               <WhatToExpectCard activeChild={activeChild} />
 
               <p className="text-xs text-muted-foreground italic">
-                ⚠️ Every child develops at their own pace. Consult your pediatrician with concerns.
+                Every child develops at their own pace. Consult your pediatrician with concerns.
               </p>
 
               {user && activeChild && (
@@ -304,31 +311,35 @@ export default function MilestonesPage() {
 
               <MilestonesPremiumCard />
 
-              {/* Progress ring */}
-              <Card className="border-0 bg-milestones-bg">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="relative w-16 h-16">
-                      <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
-                        <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones) / 0.2)" strokeWidth="3" />
-                        <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones))" strokeWidth="3" strokeDasharray={`${progressPct}, 100`} strokeLinecap="round" />
-                      </svg>
-                      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-milestones">{progressPct}%</span>
-                    </div>
-                    <div>
-                      <p className="font-bold text-sm">{achievedCount} of {totalMilestones} observed</p>
-                      <p className="text-xs text-muted-foreground">
-                        {progressPct >= 80 ? "🌟 On Track" : progressPct >= 50 ? "Almost There" : "Let's Check In"}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
               {isLoading ? (
-                <p className="text-sm text-muted-foreground">Loading milestones...</p>
+                <div className="space-y-4">
+                  <Skeleton className="h-24 w-full rounded-2xl" />
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-16 w-full rounded-2xl" />
+                  <Skeleton className="h-16 w-full rounded-2xl" />
+                  <Skeleton className="h-16 w-full rounded-2xl" />
+                </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Progress ring */}
+                  <Card className="border-0 bg-milestones-bg">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="relative w-16 h-16">
+                          <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
+                            <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones) / 0.2)" strokeWidth="3" />
+                            <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="hsl(var(--milestones))" strokeWidth="3" strokeDasharray={`${progressPct}, 100`} strokeLinecap="round" />
+                          </svg>
+                          <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-milestones">{progressPct}%</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm">{achievedCount} of {totalForAge} for this age observed</p>
+                          <p className="text-xs text-muted-foreground">Tap any milestone below to log it</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
                   {hasCurrentMilestones && (
                     <div className="space-y-2">
                       <h2 className="font-display font-bold text-lg text-foreground">

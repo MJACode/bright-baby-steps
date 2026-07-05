@@ -468,6 +468,14 @@ export default function SleepPage() {
     });
   };
 
+  const openAdd = () => {
+    setEditingId(null);
+    setEditSleepType("nap");
+    setEditStartedAt(new Date(Date.now() - 30 * 60 * 1000));
+    setEditEndedAt(new Date());
+    setEditDialogOpen(true);
+  };
+
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
     setEditingId(log.id);
     setEditSleepType(log.sleep_type as "nap" | "night");
@@ -839,7 +847,22 @@ export default function SleepPage() {
                 </CardContent>
               </Card>
             )) : (
-              <p className="text-sm text-muted-foreground">No sleep logs yet.</p>
+              <Card className="border-0 bg-sleep-bg">
+                <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
+                  <CloudMoon className="w-10 h-10 text-sleep/40" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Every nap and night sleep you log will show up here.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openAdd}
+                    className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
+                  >
+                    <Plus className="w-4 h-4" /> Log a first sleep
+                  </Button>
+                </CardContent>
+              </Card>
             )}
             </div>
             {logs && logs.length > 5 && (
