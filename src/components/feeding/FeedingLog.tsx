@@ -550,7 +550,20 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
             </CardContent>
           </Card>
         )) : (
-          <p className="text-sm text-muted-foreground">No feeding logs yet. Tap + to log a feed.</p>
+          <Card className="border-0 bg-card/60">
+            <CardContent className="p-6 flex flex-col items-center justify-center gap-3">
+              <UtensilsCrossed className="w-10 h-10 text-feeding/40" />
+              <p className="text-sm text-muted-foreground text-center">
+                Log {activeChild.name}'s first feed to start spotting patterns
+              </p>
+              <Button
+                onClick={() => setDialogOpen(true)}
+                className="gap-1.5 touch-target bg-feeding hover:bg-feeding/90 text-white"
+              >
+                <Plus className="w-4 h-4" /> Log a feed
+              </Button>
+            </CardContent>
+          </Card>
         )}
         </div>
         {logs && logs.length > 5 && (

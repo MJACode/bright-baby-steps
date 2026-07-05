@@ -1,4 +1,4 @@
-import { Plus, Moon, UtensilsCrossed, Droplets, Brain, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Moon, UtensilsCrossed, Droplets, Star, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
@@ -129,7 +129,7 @@ export function QuickLogFAB() {
 
   return (
     <>
-      <div className="fixed bottom-[calc(var(--tab-bar-height)+1rem)] right-4 z-50 flex flex-col items-end gap-3">
+      <div className="fixed bottom-[calc(var(--tab-bar-height)+env(safe-area-inset-bottom)+1rem)] right-4 z-50 flex flex-col items-end gap-3">
         {/* Expanded actions */}
         {open && (
           <div className="flex flex-col gap-2 items-end animate-in slide-in-from-bottom-2 fade-in duration-200">
@@ -154,7 +154,7 @@ export function QuickLogFAB() {
               className="flex items-center gap-2 pl-4 pr-3 py-2.5 rounded-full shadow-lg touch-target font-semibold text-sm transition-transform active:scale-95 bg-milestones text-white"
             >
               Milestones
-              <Brain className="w-5 h-5" />
+              <Star className="w-5 h-5" />
             </button>
             <button
               onClick={() => {

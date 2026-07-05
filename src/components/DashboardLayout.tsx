@@ -11,6 +11,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { AIChatWidget } from "@/components/AIChatWidget";
+import { QuickLogFAB } from "@/components/QuickLogFAB";
 
 // Secondary pages (no bottom-tab presence) get a back affordance to their
 // parent surface. Navigates to the parent route — not history back — so deep
@@ -135,6 +136,10 @@ export default function DashboardLayout() {
       {!isOnboarding && (
         <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
       )}
+
+      {/* Quick-log FAB — one-tap logging on every dashboard route. Caregivers
+          never reach this return (CaregiverHome above mounts its own FAB). */}
+      {!isOnboarding && <QuickLogFAB />}
 
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}
