@@ -1612,6 +1612,11 @@ onboardings may lack `onboarding_completed_at`/`primary_interest` backfill.
 **Outstanding (P2):** decide whether to backfill `onboarding_completed_at`
 for affected accounts (cosmetic; wizard re-render guard keys off children
 existing, so no user-facing loop was reported).
+**RESOLVED 2026-07-05:** backfilled on live for the 3 affected accounts —
+`onboarding_completed_at` set from the account's earliest child `created_at`,
+`has_partner` derived from active `partner_access` rows (all false).
+`primary_interest` is unrecoverable (never persisted) and remains NULL, which
+the app tolerates; affected users can be re-asked in-app if desired.
 
 **Also touched:** `VpcGateMessage.tsx` — dark-mode styling only (`dark:`
 variants); copy and behavior unchanged.

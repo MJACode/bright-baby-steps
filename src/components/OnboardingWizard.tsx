@@ -211,12 +211,20 @@ export function OnboardingWizard() {
         .single();
       if (childError) throw childError;
 
+      // A user re-entering onboarding (e.g. after deleting their only child)
+      // may already have a live partner — don't clobber has_partner back to false.
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("has_partner")
+        .eq("id", user.id)
+        .maybeSingle();
+
       const { error: profileError } = await supabase
         .from("profiles")
         .update({
           primary_interest: state.interest,
           // Flips to true if they send a partner invite from the welcome card.
-          has_partner: false,
+          ...(profileRow?.has_partner ? {} : { has_partner: false }),
           onboarding_completed_at: new Date().toISOString(),
         })
         .eq("id", user.id);
