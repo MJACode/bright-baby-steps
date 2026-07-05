@@ -1367,6 +1367,7 @@ export type Database = {
           id: string
           recommended_timing: string | null
           sort_order: number | null
+          sponsor_disclosure: string | null
           title: string
           updated_at: string
           why_it_matters: string | null
@@ -1381,6 +1382,7 @@ export type Database = {
           id?: string
           recommended_timing?: string | null
           sort_order?: number | null
+          sponsor_disclosure?: string | null
           title: string
           updated_at?: string
           why_it_matters?: string | null
@@ -1395,6 +1397,7 @@ export type Database = {
           id?: string
           recommended_timing?: string | null
           sort_order?: number | null
+          sponsor_disclosure?: string | null
           title?: string
           updated_at?: string
           why_it_matters?: string | null
@@ -2167,10 +2170,12 @@ export type Database = {
           data_consent_version: string | null
           email: string
           full_name: string | null
+          has_partner: boolean | null
           id: string
           inactive_purge_warned_at: string | null
           notification_prefs: Json | null
           onboarding_completed_at: string | null
+          primary_interest: string | null
           updated_at: string
           vpc_completed_at: string | null
           vpc_first_confirmation_at: string | null
@@ -2190,10 +2195,12 @@ export type Database = {
           data_consent_version?: string | null
           email: string
           full_name?: string | null
+          has_partner?: boolean | null
           id: string
           inactive_purge_warned_at?: string | null
           notification_prefs?: Json | null
           onboarding_completed_at?: string | null
+          primary_interest?: string | null
           updated_at?: string
           vpc_completed_at?: string | null
           vpc_first_confirmation_at?: string | null
@@ -2213,10 +2220,12 @@ export type Database = {
           data_consent_version?: string | null
           email?: string
           full_name?: string | null
+          has_partner?: boolean | null
           id?: string
           inactive_purge_warned_at?: string | null
           notification_prefs?: Json | null
           onboarding_completed_at?: string | null
+          primary_interest?: string | null
           updated_at?: string
           vpc_completed_at?: string | null
           vpc_first_confirmation_at?: string | null
