@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { UtensilsCrossed, Moon, Droplets, Star, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QUICK_TILES, type QuickTile } from "@/lib/homeSections";
+import type { Preferences } from "@/hooks/usePreferences";
 import { useActiveSleep, useElapsedSeconds } from "@/hooks/useActiveSleep";
 import {
   useActiveFeed,
@@ -18,13 +20,6 @@ import type {
   LastMilestone,
 } from "@/hooks/useLastLogged";
 import { formatElapsed, formatAgo } from "@/lib/formatDuration";
-
-const QUICK_NAV = [
-  { label: "Food", icon: UtensilsCrossed, path: "/dashboard/feeding", tile: "bg-feeding-bg", chip: "bg-feeding/15 text-feeding", label_color: "text-feeding", dot: "bg-feeding" },
-  { label: "Sleep", icon: Moon, path: "/dashboard/sleep", tile: "bg-sleep-bg", chip: "bg-sleep/15 text-sleep", label_color: "text-sleep", dot: "bg-sleep" },
-  { label: "Diaper", icon: Droplets, path: "/dashboard/diapers", tile: "bg-diapers-bg", chip: "bg-diapers/15 text-diapers", label_color: "text-diapers", dot: "bg-diapers" },
-  { label: "Milestone", icon: Star, path: "/dashboard/milestones", tile: "bg-milestones-bg", chip: "bg-milestones/15 text-milestones", label_color: "text-milestones", dot: "bg-milestones" },
-] as const;
 
 // Total in-progress seconds for a running feed, mirroring ActiveSessionBanner.
 function feedElapsedSeconds(feed: NonNullable<ReturnType<typeof useActiveFeed>["active"]>): number {
@@ -116,34 +111,45 @@ function milestoneContent(last: LastMilestone | null): CardContent {
   return { primary: "Log a first milestone", live: false };
 }
 
-export function QuickNavGrid({ childId }: { childId: string | undefined }) {
+// prefs is Dashboard's usePreferences instance — hook instances don't sync
+// state with each other, so a local instance here would go stale when the
+// Customize sheet writes through Dashboard's.
+export function QuickNavGrid({ childId, prefs }: { childId: string | undefined; prefs: Preferences }) {
   const { active: activeSleep } = useActiveSleep(childId);
   const { active: activeFeed } = useActiveFeed(childId);
   const sleepElapsed = useElapsedSeconds(activeSleep);
   useSecondTicker(!!activeFeed && !!activeFeed.active_side);
   const last = useLastLogged(childId);
 
-  const contentFor = (label: string): CardContent => {
-    switch (label) {
-      case "Sleep":
+  const tiles = prefs.homeQuickTiles
+    .map((id) => QUICK_TILES.find((t) => t.id === id))
+    .filter((t): t is QuickTile => !!t);
+
+  const contentFor = (tile: QuickTile): CardContent => {
+    switch (tile.id) {
+      case "sleep":
         return sleepContent(activeSleep, sleepElapsed, last.sleep);
-      case "Food":
+      case "food":
         return foodContent(activeFeed, last.feeding);
-      case "Diaper":
+      case "diaper":
         return diaperContent(last.diaper);
-      default:
+      case "milestone":
         return milestoneContent(last.milestone);
+      default:
+        return { primary: tile.hint, live: false };
     }
   };
 
+  if (tiles.length === 0) return null;
+
   return (
     <div className="grid grid-cols-2 gap-3 p-3.5">
-      {QUICK_NAV.map((item) => {
-        const content = contentFor(item.label);
+      {tiles.map((item) => {
+        const content = contentFor(item);
         const HeadIcon = content.icon ?? item.icon;
         return (
           <Link
-            key={item.label}
+            key={item.id}
             to={item.path}
             className={cn(
               "flex flex-col items-start justify-start gap-2 p-4 rounded-2xl border-0 active:scale-[0.97] transition-transform touch-target",
@@ -154,7 +160,7 @@ export function QuickNavGrid({ childId }: { childId: string | undefined }) {
               <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", item.chip)}>
                 <HeadIcon className="w-5 h-5" strokeWidth={2} />
               </div>
-              <span className={cn("text-sm font-semibold", item.label_color)}>{item.label}</span>
+              <span className={cn("text-sm font-semibold", item.labelColor)}>{item.label}</span>
               {content.live && (
                 <span className={cn("w-2 h-2 rounded-full animate-pulse ml-auto", item.dot)} aria-hidden />
               )}

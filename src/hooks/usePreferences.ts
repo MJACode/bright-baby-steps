@@ -3,7 +3,7 @@ import { useAuth } from "./useAuth";
 
 export type ThemePreference = "light" | "dark" | "system";
 
-interface Preferences {
+export interface Preferences {
   /** @deprecated superseded by hiddenHomeSections; kept to preserve stored shape. */
   showBriefing: boolean;
   briefingCollapsed: boolean;
@@ -15,10 +15,13 @@ interface Preferences {
   lastBottleOz: string;
   calmMode: boolean;
   hiddenHomeSections: string[];
+  homeQuickTiles: string[];
   homeSectionsMigrated: boolean;
   lastStreakPopupDate: string;
   theme: ThemePreference;
 }
+
+export type SetPreferences = (updates: Partial<Preferences>) => void;
 
 const defaults: Preferences = {
   showBriefing: true,
@@ -31,6 +34,7 @@ const defaults: Preferences = {
   lastBottleOz: "",
   calmMode: false,
   hiddenHomeSections: [],
+  homeQuickTiles: ["food", "sleep", "diaper", "milestone"],
   homeSectionsMigrated: false,
   lastStreakPopupDate: "",
   theme: "system",
@@ -39,6 +43,7 @@ const defaults: Preferences = {
 // into hiddenHomeSections) throws instead of silently poisoning every caller.
 Object.freeze(defaults);
 Object.freeze(defaults.hiddenHomeSections);
+Object.freeze(defaults.homeQuickTiles);
 
 function loadPrefs(key: string): Preferences {
   try {

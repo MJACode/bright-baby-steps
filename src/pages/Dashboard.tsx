@@ -83,7 +83,7 @@ export default function Dashboard() {
       {/* Quick nav grid — primary log entry points, each with a live timer or
           "last logged" hint. First thing under the greeting: at 3am this answers
           "when did she last eat / how long has he been down". */}
-      <QuickNavGrid childId={activeChild?.id} />
+      <QuickNavGrid childId={activeChild?.id} prefs={prefs} />
 
       {/* "What's next" glance strip — predicted nap/feed from recent patterns.
           Renders nothing until there's enough log history to predict from. */}
@@ -122,7 +122,7 @@ export default function Dashboard() {
         Customize home
       </button>
 
-      <CustomizeHomeSheet open={customizeOpen} onOpenChange={setCustomizeOpen} />
+      <CustomizeHomeSheet open={customizeOpen} onOpenChange={setCustomizeOpen} prefs={prefs} setPrefs={setPrefs} />
 
       <StreakPopup
         streak={streakData?.streak ?? 0}
