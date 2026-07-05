@@ -7,8 +7,8 @@ Branch: claude/child-context-milestones-c6ynw2
 - [x] P1 Backend: migration 20260805000000 (children.interests + temperament + get_child_profile), _shared/childContext.ts, adopt in briefing / next-step-peek / weekly-insights / chat (add-only) / visit-prep-questions, extract-memory dedupe block, childDataTools description
 - [x] P1 Apply migration to live via Supabase MCP + verify columns with list_tables + regen types.ts
 - [x] QA gate on P1 (Fix-required → fixes applied + legal log entry)
-- [ ] P2 Frontend capture: AddChildDialog chips (interests + temperament), OnboardingWizard new step 4 (TOTAL_STEPS=5, renumber post-steps 5→6, 6→7), welcome-screen line
-- [ ] QA gate on P2 (VPC gate ordering + draft resume)
+- [x] P2 Frontend capture: AddChildDialog chips (interests + temperament), OnboardingWizard new step 4 (TOTAL_STEPS=5, renumber post-steps 5→6, 6→7), welcome-screen line
+- [x] QA gate on P2 (Pass; edit-mode wipe fix applied)
 - [ ] P3 Hub: /dashboard/child-context ChildContextPage, useChildMemories hook, milestoneProgress.ts extraction, MorePage + ProfilePage entry points
 - [ ] P4 Feed: affinity tie-break in rankNextSteps, milestone-gap drill, interest→category map (verify live seed names), interest-flavored seedPrompts, memory-aware nudge
 - [ ] P5 Messaging + legal: MilestonesPage sub-line, NextStepFeed affinity meta, PrivacyPage §2 + §4, CoppaDirectNotice, docs/legal-review-log.md entry, bump Last reviewed
