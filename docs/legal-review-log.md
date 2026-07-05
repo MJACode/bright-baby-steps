@@ -1508,3 +1508,48 @@ edge-function line updated five → six.
   § 4 list should be restructured with a bounded catch-all to reduce recurring
   lockstep-drift risk (re-raises 2026-06-06 outstanding (b) — this pass caught
   the second drift incident).
+
+## 2026-07-05 — Onboarding restructure (5→4 steps) — consent-path review
+
+**Reviewer:** in-house (Claude pass, UX-research implementation branch
+`claude/baby-app-tracking-ux-xtvr4l`). **Risk: LOW.**
+
+**What changed:** `OnboardingWizard.tsx` required path shrinks from 5 steps to
+4 (name → DOB → born-early → primary interest). The partner-invite step was
+removed from the required path and reappears as an optional card on the
+post-completion welcome screen, reusing the existing `PartnerRolePicker` +
+`InviteShareSheet` flow (`partner_invitations` pattern unchanged). A
+plain-language expectation line was added above the final "Finish setup"
+button: "Next: we'll send a quick confirmation email to verify it's you —
+takes about a minute."
+
+**COPPA analysis — no consent moment altered:**
+- The CoppaDirectNotice modal (16 CFR § 312.4(c)) still renders before the
+  child INSERT, now on step 4 instead of step 5 — sequencing relative to the
+  data-collection event is unchanged: direct notice → typed-name attestation →
+  `send-vpc-email` (email #2) → `vpc_completed_at` → child INSERT. The
+  `BEFORE INSERT` DB trigger remains the enforcement backstop.
+- The new expectation copy is disclosure-enhancing (reduces surprise at the
+  VPC wall); it makes no representation beyond what the flow does.
+- Partner-invitee consent moment (AcceptInvite checkbox +
+  `consent_acknowledged_at` stamp) is untouched; moving the *inviter's* entry
+  point to the welcome screen does not change the invitee flow.
+- `has_partner` semantics: now stamped `false` at completion and flipped
+  `true` only when an invite is actually generated — more accurate than the
+  prior intent-based answer. Not a consent field; no notice impact.
+
+**Production-bug remediation (same pass):** live `profiles` table was missing
+`primary_interest` and `has_partner` even though migration
+`20260425000000_onboarding_profile_fields` was recorded in
+`schema_migrations` — the onboarding completion UPDATE had been silently
+failing. Re-applied idempotently as `20260705000000_restore_onboarding_profile_fields`
+(live version `20260705014227`) and regenerated `types.ts`. No consent or
+notice fields were affected; `onboarding_completed_at` writes were unaffected
+because PostgREST rejected the whole UPDATE — meaning some completed
+onboardings may lack `onboarding_completed_at`/`primary_interest` backfill.
+**Outstanding (P2):** decide whether to backfill `onboarding_completed_at`
+for affected accounts (cosmetic; wizard re-render guard keys off children
+existing, so no user-facing loop was reported).
+
+**Also touched:** `VpcGateMessage.tsx` — dark-mode styling only (`dark:`
+variants); copy and behavior unchanged.
