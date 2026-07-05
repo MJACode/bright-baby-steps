@@ -211,7 +211,7 @@ export function OnboardingWizard() {
         .single();
       if (childError) throw childError;
 
-      await supabase
+      const { error: profileError } = await supabase
         .from("profiles")
         .update({
           primary_interest: state.interest,
@@ -220,6 +220,16 @@ export function OnboardingWizard() {
           onboarding_completed_at: new Date().toISOString(),
         })
         .eq("id", user.id);
+      if (profileError) {
+        // Non-fatal: the child INSERT already succeeded, so throwing here
+        // would send the user back through saveAndAdvance and create a
+        // duplicate child. Surface it and keep going.
+        console.error("Onboarding profile update failed", profileError);
+        toast({
+          title: "We couldn't save your preferences",
+          description: "You can set them later in Profile — everything else is ready to go.",
+        });
+      }
 
       clearDraft(user.id);
       setCreatedChildId(childRow.id);
@@ -240,12 +250,9 @@ export function OnboardingWizard() {
     setPartnerInviteSent(true);
     if (!user || hasPartnerStampedRef.current) return;
     hasPartnerStampedRef.current = true;
-    // updated_at rides along because the generated types haven't been
-    // regenerated since has_partner was added — a lone unknown column fails
-    // tsc's excess-property check, but a literal with a known column passes.
     const { error } = await supabase
       .from("profiles")
-      .update({ has_partner: true, updated_at: new Date().toISOString() })
+      .update({ has_partner: true })
       .eq("id", user.id);
     if (error) {
       hasPartnerStampedRef.current = false;

@@ -18,6 +18,7 @@ import { QuickLogFAB } from "@/components/QuickLogFAB";
 // links land somewhere sensible. Tab routes are intentionally absent.
 const backTargets: Record<string, { to: string; label: string }> = {
   "/dashboard/records": { to: "/dashboard/more", label: "More" },
+  "/dashboard/milestones": { to: "/dashboard/more", label: "More" },
   "/dashboard/growth": { to: "/dashboard/more", label: "More" },
   "/dashboard/leaps": { to: "/dashboard/more", label: "More" },
   "/dashboard/find-slp": { to: "/dashboard/more", label: "More" },

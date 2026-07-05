@@ -3,8 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#fbf8f3" />
+    <meta name="theme-color" content="hsl(30 40% 98%)" />
     <meta name="color-scheme" content="light dark" />
+    <script>
+      // Apply the persisted theme before first paint so dark-mode users don't
+      // get a light-background flash while the JS bundle loads. Mirrors
+      // useTheme/usePreferences: a user-scoped prefs_<uid> theme wins over
+      // prefs_guest; "system"/absent falls back to the OS preference. The two
+      // hsl strings mirror --background (light/dark) in src/index.css — this
+      // runs before the bundled CSS exists, so the tokens can't be read yet.
+      (function () {
+        try {
+          var userTheme = null;
+          var guestTheme = null;
+          for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i);
+            if (!key || key.indexOf("prefs_") !== 0) continue;
+            var theme;
+            try {
+              theme = JSON.parse(localStorage.getItem(key) || "{}").theme;
+            } catch (e) {
+              continue;
+            }
+            if (key === "prefs_guest") guestTheme = theme;
+            else if (theme) userTheme = theme;
+          }
+          var resolved = userTheme || guestTheme;
+          var dark =
+            resolved === "dark" ||
+            (resolved !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) {
+            document.documentElement.classList.add("dark");
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute("content", "hsl(240 12% 8%)");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <title>Grace Flare — Smart Baby Tracking for Tired Parents</title>
     <meta name="description" content="Track sleep, feeding, diapers, milestones & finances for your baby. Designed for one-handed, nighttime use by sleep-deprived parents." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
