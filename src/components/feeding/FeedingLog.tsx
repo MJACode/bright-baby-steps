@@ -32,6 +32,8 @@ import NursingTimer from "@/components/feeding/NursingTimer";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
+import { useLoggedByNames } from "@/hooks/useLoggedByNames";
+import { LoggedByChip } from "@/components/LoggedByChip";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -191,6 +193,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     },
     enabled: !!activeChild,
   });
+
+  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
 
   const resetForm = () => {
     setEditingId(null);
@@ -539,6 +543,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                       <AlertTriangle className="w-3 h-3" /> Reaction noted{log.reaction_description ? `: ${log.reaction_description}` : ""}
                     </p>
                   )}
+                  <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
                 </div>
               </div>
               <div className="flex items-center gap-2">

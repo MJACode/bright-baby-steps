@@ -39,6 +39,8 @@ import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import type { FerberSchedule } from "@/hooks/useSleepPlan";
+import { useLoggedByNames } from "@/hooks/useLoggedByNames";
+import { LoggedByChip } from "@/components/LoggedByChip";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -383,6 +385,8 @@ export default function SleepPage() {
     },
     enabled: !!activeChild,
   });
+
+  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
 
   const addLog = useMutation({
     mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string }) => {
@@ -839,6 +843,7 @@ export default function SleepPage() {
                       <p className="text-xs text-muted-foreground">
                         {format(new Date(log.started_at), "MMM d, h:mm a")}
                       </p>
+                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
                     </div>
                   </div>
                   <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
