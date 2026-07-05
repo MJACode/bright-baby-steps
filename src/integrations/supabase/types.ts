@@ -722,6 +722,7 @@ export type Database = {
           due_date: string | null
           gender: string | null
           id: string
+          interests: string[]
           is_expected: boolean
           is_premature: boolean | null
           name: string
@@ -729,6 +730,7 @@ export type Database = {
           parent_id: string
           photo_url: string | null
           retroactive_setup_completed_at: string | null
+          temperament: string | null
           updated_at: string
         }
         Insert: {
@@ -740,6 +742,7 @@ export type Database = {
           due_date?: string | null
           gender?: string | null
           id?: string
+          interests?: string[]
           is_expected?: boolean
           is_premature?: boolean | null
           name: string
@@ -747,6 +750,7 @@ export type Database = {
           parent_id: string
           photo_url?: string | null
           retroactive_setup_completed_at?: string | null
+          temperament?: string | null
           updated_at?: string
         }
         Update: {
@@ -758,6 +762,7 @@ export type Database = {
           due_date?: string | null
           gender?: string | null
           id?: string
+          interests?: string[]
           is_expected?: boolean
           is_premature?: boolean | null
           name?: string
@@ -765,6 +770,7 @@ export type Database = {
           parent_id?: string
           photo_url?: string | null
           retroactive_setup_completed_at?: string | null
+          temperament?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -3255,6 +3261,7 @@ export type Database = {
           due_date: string | null
           gender: string | null
           id: string
+          interests: string[]
           is_expected: boolean
           is_premature: boolean | null
           name: string
@@ -3262,6 +3269,7 @@ export type Database = {
           parent_id: string
           photo_url: string | null
           retroactive_setup_completed_at: string | null
+          temperament: string | null
           updated_at: string
         }[]
         SetofOptions: {

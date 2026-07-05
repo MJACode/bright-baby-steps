@@ -61,7 +61,7 @@ export const CHILD_DATA_TOOLS: AnthropicTool[] = [
   {
     name: "get_child_profile",
     description:
-      "Returns a single child's profile: name, gender, date_of_birth, age_in_days (computed), is_premature, birth_weight_oz, discharge_weight_oz, next_appointment, photo_url. Use this when you need the child's exact age in days, premature status, or birth weight — common for sleep, feeding-volume, and growth questions.",
+      "Returns a single child's profile: name, gender, date_of_birth, age_in_days (computed), is_premature, birth_weight_oz, discharge_weight_oz, next_appointment, photo_url, interests (parent-selected activity interests like music or water_play), and temperament (easygoing/sensitive/spirited/slow_to_warm, may be null). Use this when you need the child's exact age in days, premature status, birth weight, or their interests/temperament for tailoring activity suggestions.",
     input_schema: {
       type: "object",
       properties: { child_id: CHILD_ID_PROP },

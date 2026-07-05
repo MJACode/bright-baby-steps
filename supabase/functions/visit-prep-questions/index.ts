@@ -26,6 +26,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadMemoryContext } from "../_shared/memory.ts";
+import { loadChildCore } from "../_shared/childContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -180,13 +181,10 @@ serve(async (req) => {
     }
 
     // ── Child (RLS-scoped — also proves the caller can access this child).
-    const { data: child } = await supabase
-      .from("children")
-      .select("name, date_of_birth, is_premature, due_date")
-      .eq("id", child_id)
-      .maybeSingle();
+    // Shared loader handles the fetch + canonical age string.
+    const core = await loadChildCore(supabase, child_id);
 
-    if (!child) {
+    if (!core) {
       return new Response(
         JSON.stringify({ error: "Child not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -194,14 +192,6 @@ serve(async (req) => {
     }
 
     const now = new Date();
-    const dob = new Date(child.date_of_birth);
-    const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
-    const ageMonths = Math.floor(ageDays / 30.44);
-    const ageStr = ageMonths < 1
-      ? `${Math.floor(ageDays / 7)} weeks old`
-      : ageMonths < 24
-      ? `${ageMonths} months old`
-      : `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months old`;
 
     // ── Last-30-day data pulls, all through the caller's RLS client
     // (mirrors briefing's approach).
@@ -308,7 +298,7 @@ serve(async (req) => {
     );
 
     const lines: string[] = [
-      `Child: ${child.name}, ${ageStr}${child.is_premature ? " (premature — consider corrected age)" : ""}.`,
+      `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature — consider corrected age)" : ""}.`,
       // Legal review 2026-07-02 (LOW, data minimization): doctor_name is
       // deliberately excluded from the Anthropic payload — third-party
       // personal data with near-zero model value, and PrivacyPage § 4 will

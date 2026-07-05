@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
+import { humanizeSlug, loadChildCore } from "../_shared/childContext.ts";
 
 // EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
 // Deno's lib types.
@@ -52,31 +53,17 @@ serve(async (req) => {
       });
     }
 
-    // Fetch child info
-    const { data: child } = await supabase
-      .from("children")
-      .select("name, date_of_birth, is_premature, due_date, next_appointment")
-      .eq("id", childId)
-      .single();
+    // Child profile + canonical age via the shared loader (RLS-scoped).
+    const core = await loadChildCore(supabase, childId);
 
-    if (!child) {
+    if (!core) {
       return new Response(JSON.stringify({ error: "Child not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Calculate age
-    const dob = new Date(child.date_of_birth);
     const now = new Date();
-    const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
-    const ageWeeks = Math.floor(ageDays / 7);
-    const ageMonths = Math.floor(ageDays / 30.44);
-    const ageStr = ageMonths < 1
-      ? `${ageWeeks} weeks old`
-      : ageMonths < 24
-      ? `${ageMonths} months old`
-      : `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months old`;
 
     // Fetch last 48h of logs
     const since = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
@@ -139,7 +126,7 @@ serve(async (req) => {
       ? (now.getTime() - mostRecentMs) / (1000 * 60 * 60)
       : null;
 
-    let contextBlock = `Child: ${child.name}, ${ageStr}${child.is_premature ? " (premature)" : ""}.
+    let contextBlock = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
 Last 48 hours summary:
 - Sleep: ${totalSleepHrs}h total (${napCount} naps, ${nightCount} night sleeps)
 - Feeds: ${feedCount} feeds (types: ${feedTypes.join(", ") || "none"})
@@ -153,23 +140,30 @@ Last 48 hours summary:
       contextBlock += `\n- Active illnesses: ${illnesses.map((i) => i.illness_name).join(", ")}`;
     }
 
-    if (child.next_appointment) {
-      const apptDate = new Date(child.next_appointment + "T00:00:00");
+    if (core.nextAppointment) {
+      const apptDate = new Date(core.nextAppointment + "T00:00:00");
       const daysUntil = Math.floor((apptDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       if (daysUntil >= 0 && daysUntil <= 7) {
         contextBlock += `\n- Pediatrician appointment in ${daysUntil} days`;
       }
     }
 
+    if (core.interests.length > 0) {
+      contextBlock += `\n- Interests: ${core.interests.map(humanizeSlug).join(", ")}`;
+    }
+    if (core.temperament) {
+      contextBlock += `\n- Temperament: ${humanizeSlug(core.temperament)}`;
+    }
+
     // No data → return fallback without LLM call
     if (feedCount === 0 && sleepLogs.length === 0 && diaperCount === 0) {
       return new Response(
         JSON.stringify({
-          status: `Welcome! Start logging ${child.name}'s activities to get personalized insights here.`,
+          status: `Welcome! Start logging ${core.name}'s activities to get personalized insights here.`,
           watch: "Log feeds, sleep, and diapers to unlock pattern detection.",
-          focus: ageMonths < 3
+          focus: core.ageMonths < 3
             ? "At this age, skin-to-skin and tummy time are great activities to try."
-            : ageMonths < 6
+            : core.ageMonths < 6
             ? "This is a great age for interactive play and sensory exploration."
             : "Keep encouraging new foods and active play!",
         }),
@@ -199,7 +193,8 @@ Rules:
 - Use emojis sparingly (1 per field max)
 - Return ONLY valid JSON, no markdown, no code fences
 - If an illness is active, mention it in the watch field
-- If "Hours since last log" is greater than 6, gently nudge in the watch field (e.g., "It's been about 8 hours since your last entry — a quick log keeps the patterns accurate."). Do NOT mention it when 6 or under.`;
+- If "Hours since last log" is greater than 6, gently nudge in the watch field (e.g., "It's been about 8 hours since your last entry — a quick log keeps the patterns accurate."). Do NOT mention it when 6 or under.
+- If the child's interests are listed, you may weave ONE of them into the focus tip when it fits naturally.`;
 
     // Per-child memory loaded separately so it can be appended to the
     // system-content array as a non-cached block. The leading system prompt
@@ -249,7 +244,7 @@ Rules:
     } catch {
       console.error("Failed to parse LLM JSON:", content);
       briefing = {
-        status: `${child.name} had ${feedCount} feeds and ${totalSleepHrs}h of sleep in the last 48 hours.`,
+        status: `${core.name} had ${feedCount} feeds and ${totalSleepHrs}h of sleep in the last 48 hours.`,
         watch: "Everything looks on track — keep up the great work! 💛",
         focus: "Try to maintain consistent routines today.",
       };
