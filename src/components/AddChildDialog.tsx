@@ -13,6 +13,7 @@ import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
 import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
+import { CHILD_INTERESTS, MAX_INTERESTS, TEMPERAMENTS } from "@/lib/childInterests";
 
 interface ChildData {
   id: string;
@@ -22,6 +23,8 @@ interface ChildData {
   is_premature?: boolean | null;
   due_date?: string | null;
   is_expected?: boolean | null;
+  interests?: string[] | null;
+  temperament?: string | null;
 }
 
 interface AddChildDialogProps {
@@ -47,6 +50,8 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
   const [isPremature, setIsPremature] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [isExpected, setIsExpected] = useState(false);
+  const [interests, setInterests] = useState<string[]>([]);
+  const [temperament, setTemperament] = useState("");
   const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [checkingVpc, setCheckingVpc] = useState(false);
   const [directNoticeAck, setDirectNoticeAck] = useState<boolean | null>(null);
@@ -86,6 +91,8 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       setIsPremature(child.is_premature ?? false);
       setDueDate(child.due_date ?? "");
       setIsExpected(child.is_expected ?? false);
+      setInterests([...new Set(child.interests ?? [])]);
+      setTemperament(child.temperament ?? "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child?.id, open]);
@@ -130,6 +137,12 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       is_premature: expectedFlag ? false : isPremature,
       due_date: !expectedFlag && isPremature && dueDate ? dueDate : null,
       is_expected: expectedFlag,
+      // An expected baby has no observable interests yet. On create, start
+      // empty. On edit, a future DOB is almost always a typo — send undefined
+      // (supabase-js drops the keys) so the child's saved interests and
+      // temperament survive the round-trip instead of being silently wiped.
+      interests: expectedFlag ? (isEditMode ? undefined : []) : [...new Set(interests)],
+      temperament: expectedFlag ? (isEditMode ? undefined : null) : temperament || null,
     };
 
     try {
@@ -176,6 +189,7 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       setOpen(false);
       if (!isEditMode) {
         setName(""); setDob(""); setGender(""); setIsPremature(false); setDueDate(""); setIsExpected(false);
+        setInterests([]); setTemperament("");
       }
     } catch (err) {
       console.error("Could not save child", err);
@@ -188,6 +202,16 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
   };
 
   const isFutureDob = dob ? new Date(dob) > new Date() : false;
+  const hideContextFields = isFutureDob || isExpected;
+  const atInterestCap = interests.length >= MAX_INTERESTS;
+
+  const toggleInterest = (value: string) => {
+    setInterests((prev) => {
+      if (prev.includes(value)) return prev.filter((v) => v !== value);
+      if (prev.length >= MAX_INTERESTS) return prev;
+      return [...prev, value];
+    });
+  };
 
   const showDirectNotice = !isEditMode && user && directNoticeAck === false;
 
@@ -248,6 +272,53 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
             <Label htmlFor="dueDate">Original Due Date</Label>
             <Input id="dueDate" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             <p className="text-xs text-muted-foreground">Used to calculate adjusted age for milestones.</p>
+          </div>
+        )}
+        {!hideContextFields && (
+          <div className="space-y-2">
+            <Label>What does {name.trim() || "your baby"} love? (optional)</Label>
+            <div className="flex flex-wrap gap-2">
+              {CHILD_INTERESTS.map((i) => {
+                const selected = interests.includes(i.value);
+                return (
+                  <Button
+                    key={i.value}
+                    type="button"
+                    variant={selected ? "default" : "outline"}
+                    size="sm"
+                    disabled={!selected && atInterestCap}
+                    onClick={() => toggleInterest(i.value)}
+                    className="touch-target"
+                  >
+                    {i.label}
+                  </Button>
+                );
+              })}
+            </div>
+            {atInterestCap && (
+              <p className="text-xs text-muted-foreground">
+                That's the top {MAX_INTERESTS} — tap a selected one to swap in another.
+              </p>
+            )}
+          </div>
+        )}
+        {!hideContextFields && (
+          <div className="space-y-2">
+            <Label>Temperament (optional)</Label>
+            <div className="flex flex-wrap gap-2">
+              {TEMPERAMENTS.map((t) => (
+                <Button
+                  key={t.value}
+                  type="button"
+                  variant={temperament === t.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTemperament(temperament === t.value ? "" : t.value)}
+                  className="touch-target"
+                >
+                  {t.label}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
         <div className="flex gap-2 pt-1">
