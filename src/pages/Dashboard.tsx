@@ -12,6 +12,7 @@ import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
+import { NextEventBand } from "@/components/NextEventBand";
 import { TodayCard } from "@/components/TodayCard";
 import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
@@ -83,6 +84,10 @@ export default function Dashboard() {
           "last logged" hint. First thing under the greeting: at 3am this answers
           "when did she last eat / how long has he been down". */}
       <QuickNavGrid childId={activeChild?.id} />
+
+      {/* "What's next" glance strip — predicted nap/feed from recent patterns.
+          Renders nothing until there's enough log history to predict from. */}
+      <NextEventBand childId={activeChild?.id} />
 
       {/* One "Today" card: AI briefing headline → ranked Next steps → condensed
           this-week line. The briefing and this-week regions gate on their

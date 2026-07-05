@@ -3,6 +3,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { UtensilsCrossed, Moon, Droplets, Mic, Camera, Edit3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { DayEvent } from "@/hooks/useDayEvents";
+import { useLoggedByNames } from "@/hooks/useLoggedByNames";
+import { LoggedByChip } from "@/components/LoggedByChip";
 
 const SOURCE_LABEL: Record<string, { icon: typeof Mic; label: string }> = {
   voice: { icon: Mic, label: "Voice" },
@@ -35,6 +37,7 @@ interface Props {
 }
 
 export function EventDetailsPopover({ event, onClose }: Props) {
+  const loggedByNames = useLoggedByNames(event ? [event.parentId] : []);
   const open = !!event;
   const meta = event ? eventLabel(event) : null;
   const Icon = meta?.icon;
@@ -85,6 +88,8 @@ export function EventDetailsPopover({ event, onClose }: Props) {
 
             <div className="mt-4 space-y-3 text-sm">
               <p className="font-semibold">{timeLabel}{durationLabel ? ` · ${durationLabel}` : ""}</p>
+
+              <LoggedByChip name={event.parentId ? loggedByNames[event.parentId] : undefined} />
 
               {detailLines.length > 0 && (
                 <ul className="text-muted-foreground space-y-1">

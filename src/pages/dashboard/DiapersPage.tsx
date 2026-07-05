@@ -18,6 +18,8 @@ import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { toast } from "@/hooks/use-toast";
 import { PageInstructions } from "@/components/PageInstructions";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
+import { useLoggedByNames } from "@/hooks/useLoggedByNames";
+import { LoggedByChip } from "@/components/LoggedByChip";
 
 const colors = ["yellow", "green", "brown", "dark-brown", "black", "red"];
 const consistencies = ["watery", "loose", "soft", "formed", "hard/pellets"];
@@ -53,6 +55,8 @@ export default function DiapersPage() {
     },
     enabled: !!activeChild,
   });
+
+  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
 
   const resetForm = () => {
     setEditingId(null);
@@ -433,7 +437,7 @@ export default function DiapersPage() {
             <CardTitle className="text-sm">This Week</CardTitle>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-sm bg-amber-300" />
+                <div className="w-2.5 h-2.5 rounded-sm bg-diapers/40" />
                 <span className="text-[10px] text-muted-foreground">Wet</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -457,7 +461,7 @@ export default function DiapersPage() {
                     {/* Dirty (bottom) */}
                     <div className="w-full bg-diapers transition-all" style={{ height: dirtyH, borderRadius: d.wet > 0 ? '0' : '6px 6px 0 0' }} />
                     {/* Wet (top) */}
-                    <div className="w-full bg-amber-300 transition-all order-first" style={{ height: wetH, borderRadius: '6px 6px 0 0' }} />
+                    <div className="w-full bg-diapers/40 transition-all order-first" style={{ height: wetH, borderRadius: '6px 6px 0 0' }} />
                   </div>
                   <span className="text-[10px] text-muted-foreground">{d.day}</span>
                 </div>
@@ -485,6 +489,7 @@ export default function DiapersPage() {
                       : [log.color, log.consistency].filter(Boolean).join(" · ") || (log.diaper_type === "both" ? "Wet + dirty diaper" : "Dirty diaper")}
                   </p>
                   <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
+                  <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
                 </div>
               </div>
               <div className="flex items-center gap-2">

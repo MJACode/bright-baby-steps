@@ -1,11 +1,20 @@
-import { Moon, UtensilsCrossed, Droplets, MoreHorizontal, Star } from "lucide-react";
+import { Home, Moon, UtensilsCrossed, Droplets, MoreHorizontal } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-const tabs = [
+interface Tab {
+  label: string;
+  path: string;
+  icon: typeof Home;
+  colorClass: string;
+  /** Match only the exact path; without it, sub-routes also light the tab. */
+  exact?: boolean;
+}
+
+const tabs: Tab[] = [
+  { label: "Home", path: "/dashboard", icon: Home, colorClass: "text-primary", exact: true },
   { label: "Sleep", path: "/dashboard/sleep", icon: Moon, colorClass: "text-sleep" },
   { label: "Food", path: "/dashboard/feeding", icon: UtensilsCrossed, colorClass: "text-feeding" },
-  { label: "Milestones", path: "/dashboard/milestones", icon: Star, colorClass: "text-primary" },
   { label: "Diapers", path: "/dashboard/diapers", icon: Droplets, colorClass: "text-diapers" },
   { label: "More", path: "/dashboard/more", icon: MoreHorizontal, colorClass: "text-primary" },
 ];
@@ -17,7 +26,9 @@ export function BottomTabBar() {
     <nav className="shrink-0 z-50 bg-card/80 backdrop-blur-xl backdrop-saturate-150 shadow-[0_-1px_0_0_hsl(var(--border))] safe-area-bottom">
       <div className="flex items-stretch justify-around h-[var(--tab-bar-height)] max-w-lg mx-auto">
         {tabs.map((tab) => {
-          const isActive = location.pathname === tab.path;
+          const isActive = tab.exact
+            ? location.pathname === tab.path
+            : location.pathname === tab.path || location.pathname.startsWith(`${tab.path}/`);
           return (
             <RouterNavLink
               key={tab.path}

@@ -55,16 +55,12 @@ export default function FeedingPage() {
 
   const completedCount = introductions?.filter(i => (i.allergen_exposure_logs?.length ?? 0) >= 3).length ?? 0;
   const totalAllergens = allergens?.length ?? 0;
-  const inProgressCount = introductions?.filter(i => {
-    const count = i.allergen_exposure_logs?.length ?? 0;
-    return count > 0 && count < 3;
-  }).length ?? 0;
 
   return (
     <div className="space-y-4">
       <PageInstructions tint="feeding">
         <p><strong>Feeding</strong> logs nursing, bottle, and solids. Nursing and bottle have live timers that keep running if you close the app.</p>
-        <p><strong>Supps</strong> tracks vitamin D and other supplements.</p>
+        <p><strong>Vitamins</strong> tracks vitamin D and other supplements.</p>
         <p><strong>Pump</strong> sets reminders and logs pumping sessions.</p>
         <p><strong>Allergens</strong> walks through the 9 common allergen introductions safely.</p>
       </PageInstructions>
@@ -80,7 +76,7 @@ export default function FeedingPage() {
             value="supplements"
             className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
-            <Pill className="w-4 h-4" /> Supps
+            <Pill className="w-4 h-4" /> Vitamins
           </TabsTrigger>
           <TabsTrigger
             value="pumping"
@@ -90,7 +86,7 @@ export default function FeedingPage() {
           </TabsTrigger>
           <TabsTrigger
             value="allergens"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive data-[state=active]:shadow-sm rounded-lg h-full relative"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <ShieldAlert className="w-4 h-4" /> Allergens
             {activeChild && totalAllergens > 0 && (
@@ -100,9 +96,6 @@ export default function FeedingPage() {
               >
                 {completedCount}/{totalAllergens}
               </Badge>
-            )}
-            {inProgressCount > 0 && (
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-warning animate-pulse" />
             )}
           </TabsTrigger>
         </TabsList>

@@ -11,12 +11,14 @@ import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { AIChatWidget } from "@/components/AIChatWidget";
+import { QuickLogFAB } from "@/components/QuickLogFAB";
 
 // Secondary pages (no bottom-tab presence) get a back affordance to their
 // parent surface. Navigates to the parent route — not history back — so deep
 // links land somewhere sensible. Tab routes are intentionally absent.
 const backTargets: Record<string, { to: string; label: string }> = {
   "/dashboard/records": { to: "/dashboard/more", label: "More" },
+  "/dashboard/milestones": { to: "/dashboard/more", label: "More" },
   "/dashboard/growth": { to: "/dashboard/more", label: "More" },
   "/dashboard/leaps": { to: "/dashboard/more", label: "More" },
   "/dashboard/find-slp": { to: "/dashboard/more", label: "More" },
@@ -135,6 +137,10 @@ export default function DashboardLayout() {
       {!isOnboarding && (
         <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
       )}
+
+      {/* Quick-log FAB — one-tap logging on every dashboard route. Caregivers
+          never reach this return (CaregiverHome above mounts its own FAB). */}
+      {!isOnboarding && <QuickLogFAB />}
 
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}

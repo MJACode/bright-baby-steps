@@ -39,6 +39,8 @@ import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import type { FerberSchedule } from "@/hooks/useSleepPlan";
+import { useLoggedByNames } from "@/hooks/useLoggedByNames";
+import { LoggedByChip } from "@/components/LoggedByChip";
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -384,6 +386,8 @@ export default function SleepPage() {
     enabled: !!activeChild,
   });
 
+  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
+
   const addLog = useMutation({
     mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string }) => {
       const { error } = await supabase.from("sleep_logs").insert({
@@ -466,6 +470,14 @@ export default function SleepPage() {
         if (!row.ended_at && row.source === "timer") void cancelSessionNotification(row.id);
       },
     });
+  };
+
+  const openAdd = () => {
+    setEditingId(null);
+    setEditSleepType("nap");
+    setEditStartedAt(new Date(Date.now() - 30 * 60 * 1000));
+    setEditEndedAt(new Date());
+    setEditDialogOpen(true);
   };
 
   const openEdit = (log: NonNullable<typeof logs>[0]) => {
@@ -831,6 +843,7 @@ export default function SleepPage() {
                       <p className="text-xs text-muted-foreground">
                         {format(new Date(log.started_at), "MMM d, h:mm a")}
                       </p>
+                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
                     </div>
                   </div>
                   <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
@@ -839,7 +852,22 @@ export default function SleepPage() {
                 </CardContent>
               </Card>
             )) : (
-              <p className="text-sm text-muted-foreground">No sleep logs yet.</p>
+              <Card className="border-0 bg-sleep-bg">
+                <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
+                  <CloudMoon className="w-10 h-10 text-sleep/40" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Every nap and night sleep you log will show up here.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openAdd}
+                    className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
+                  >
+                    <Plus className="w-4 h-4" /> Log a first sleep
+                  </Button>
+                </CardContent>
+              </Card>
             )}
             </div>
             {logs && logs.length > 5 && (

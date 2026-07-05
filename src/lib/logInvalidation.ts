@@ -4,10 +4,8 @@ import type { QueryClient } from "@tanstack/react-query";
 // sleep_logs, diaper_logs, custom_milestones, temperature_logs) — quick-log
 // FAB, voice log, and voice-log undo all go through this one list. Keys are
 // roots: react-query prefix-matches, so ["week-events"] covers
-// ["week-events", "feeding", childId, weekKey] etc. The rhythm ring uses
-// three distinct roots (matching is per-element, no wildcards), so all three
-// are listed. If a new surface derives from these tables, add its root HERE,
-// not at a call site.
+// ["week-events", "feeding", childId, weekKey] etc. If a new surface derives
+// from these tables, add its root HERE, not at a call site.
 export const LOG_WRITE_QUERY_KEYS = [
   "feeding-logs",
   "sleep-logs",
@@ -26,9 +24,6 @@ export const LOG_WRITE_QUERY_KEYS = [
   "next-event",
   "day-events",
   "week-events",
-  "rhythm-sleep",
-  "rhythm-feed",
-  "rhythm-diaper",
 ] as const;
 
 export function invalidateAfterLogWrite(queryClient: QueryClient) {

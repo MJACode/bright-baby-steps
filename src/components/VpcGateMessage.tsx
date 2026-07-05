@@ -20,12 +20,12 @@ export function VpcGateMessage({ status, onDismiss }: Props) {
 
   if (status.kind === "first_pending") {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+      <div className="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-medium text-sm text-amber-900">Confirm your email first</p>
-            <p className="text-xs text-amber-800 leading-relaxed">
+            <p className="font-medium text-sm text-amber-900 dark:text-amber-200">Confirm your email first</p>
+            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
               Before you can add a child profile, please click the confirmation link in the email
               we sent when you signed up. This is the first step of parental consent under U.S.
               children's-privacy law (COPPA).
@@ -41,12 +41,12 @@ export function VpcGateMessage({ status, onDismiss }: Props) {
 
   if (status.kind === "second_email_sent") {
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+      <div className="rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30 p-4 space-y-3">
         <div className="flex items-start gap-3">
-          <MailCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <MailCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <p className="font-medium text-sm text-emerald-900">Check your email</p>
-            <p className="text-xs text-emerald-800 leading-relaxed">
+            <p className="font-medium text-sm text-emerald-900 dark:text-emerald-200">Check your email</p>
+            <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed">
               We just sent the second parental-consent email to your inbox. Click the link to
               finish verifying your account; once that's done, return here and add your child.
               The link expires {formatExpiresIn(status.expiresAt)}.

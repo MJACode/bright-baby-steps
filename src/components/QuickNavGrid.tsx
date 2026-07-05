@@ -113,7 +113,7 @@ function milestoneContent(last: LastMilestone | null): CardContent {
   if (last && last.name) {
     return { primary: last.name, primaryClamp: true, secondary: formatAgo(last.at), live: false };
   }
-  return { primary: "No milestones yet", live: false };
+  return { primary: "Log a first milestone", live: false };
 }
 
 export function QuickNavGrid({ childId }: { childId: string | undefined }) {

@@ -22,7 +22,10 @@ export function NextEventBand({ childId }: NextEventBandProps) {
   const { data } = useQuery({
     queryKey: ["next-event", childId],
     queryFn: async () => {
-      const [{ data: sleeps }, { data: feeds }] = await Promise.all([
+      const [
+        { data: sleeps, error: sleepError },
+        { data: feeds, error: feedError },
+      ] = await Promise.all([
         supabase
           .from("sleep_logs")
           .select("started_at, ended_at")
@@ -38,6 +41,8 @@ export function NextEventBand({ childId }: NextEventBandProps) {
           .order("logged_at", { ascending: false })
           .limit(40),
       ]);
+      if (sleepError) throw sleepError;
+      if (feedError) throw feedError;
 
       const now = Date.now();
 
@@ -106,7 +111,7 @@ export function NextEventBand({ childId }: NextEventBandProps) {
 
   return (
     <PremiumGate feature="predictions" variant="blur">
-      <Card className="border-0 bg-gradient-to-br from-primary/8 to-accent/8 border border-primary/15">
+      <Card className="border border-primary/15 bg-gradient-to-br from-primary/8 to-accent/8">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Sparkles className="w-4 h-4 text-primary" />
