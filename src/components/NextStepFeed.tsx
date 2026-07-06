@@ -179,7 +179,9 @@ function NextStepRow({
                 : "text-muted-foreground",
           )}
         >
-          {item.meta}
+          {item.affinityLabel
+            ? `${item.meta} · picked for a ${item.affinityLabel} fan`
+            : item.meta}
         </span>
       </span>
       {item.tier === "soon" && (
