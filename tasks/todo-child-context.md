@@ -9,11 +9,12 @@ Branch: claude/child-context-milestones-c6ynw2
 - [x] QA gate on P1 (Fix-required → fixes applied + legal log entry)
 - [x] P2 Frontend capture: AddChildDialog chips (interests + temperament), OnboardingWizard new step 4 (TOTAL_STEPS=5, renumber post-steps 5→6, 6→7), welcome-screen line
 - [x] QA gate on P2 (Pass; edit-mode wipe fix applied)
-- [ ] P3 Hub: /dashboard/child-context ChildContextPage, useChildMemories hook, milestoneProgress.ts extraction, MorePage + ProfilePage entry points
-- [ ] P4 Feed: affinity tie-break in rankNextSteps, milestone-gap drill, interest→category map (verify live seed names), interest-flavored seedPrompts, memory-aware nudge
-- [ ] P5 Messaging + legal: MilestonesPage sub-line, NextStepFeed affinity meta, PrivacyPage §2 + §4, CoppaDirectNotice, docs/legal-review-log.md entry, bump Last reviewed
-- [ ] QA gate on P3–P5
-- [ ] Build + verify, commit, push, draft PR
+- [x] P4 Feed: affinity tie-break in rankNextSteps, milestone-gap drill, interest→category map (verified live seed slugs), interest-flavored seedPrompts, memory-aware nudge (committed f6f977f)
+- [x] P3 Hub: /dashboard/child-context ChildContextPage, useChildMemories hook, milestoneProgress.ts extraction, MorePage + ProfilePage entry points (committed c1499dc)
+- [x] P5 Messaging + legal: MilestonesPage sub-line, NextStepFeed affinity meta, PrivacyPage §2 + §4, CoppaDirectNotice, docs/legal-review-log.md entries, Last reviewed → 2026-07-05
+- [x] Consolidated QA gate on P3+P4+P5 (Pass; feed-key invalidation fix applied)
+- [x] Build + verify (181/181 tests, build clean), commit, push all phases
+- [x] PR #173 open (draft); body updated with phase summary + pending deploy steps
 
 ## Review
 (fill at end)
