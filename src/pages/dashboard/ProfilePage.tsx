@@ -20,7 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon, Sun, SunMoon, Monitor } from "lucide-react";
+import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon, Sun, SunMoon, Monitor, Sparkles, ChevronRight } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
@@ -53,7 +53,8 @@ const MUTABLE_CATEGORIES = [
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
-  const { children } = useChildren();
+  const { children, activeChild } = useChildren();
+  const contextFirstName = activeChild?.name.split(" ")[0];
   const { prefs, setPrefs } = usePreferences();
   const { theme, setTheme } = useTheme();
   const {
@@ -358,6 +359,31 @@ export default function ProfilePage() {
           ))}
         </CardContent>
       </Card>
+
+      {/* About your baby — child context hub */}
+      {activeChild && (
+        <Card className="border-0 bg-card">
+          <CardContent className="p-0">
+            <Link
+              to="/dashboard/child-context"
+              className="flex items-center gap-3 p-4 active:scale-[0.99] transition-transform touch-target"
+            >
+              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">
+                  About {contextFirstName}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  What Grace Flare knows, and how it's used
+                </p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* AI & Data */}
       <Card className="border-0 bg-muted/50">

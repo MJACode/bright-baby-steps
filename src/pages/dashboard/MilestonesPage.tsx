@@ -24,6 +24,7 @@ import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/Retroactive
 import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { format } from "date-fns";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
+import { computeProgress } from "@/lib/milestoneProgress";
 
 function CustomMilestoneCard({ milestone, onDelete }: {
   milestone: any;
@@ -218,15 +219,10 @@ export default function MilestonesPage() {
     );
   }
 
-  const ageAppropriateIds = new Set<string>();
-  [...currentCats, ...earlierCats].forEach((cat) =>
-    cat.milestones.forEach((m: { id: string }) => ageAppropriateIds.add(m.id))
-  );
-  const totalForAge = ageAppropriateIds.size;
-  const achievedCount = childMilestones?.filter(
-    (cm) => cm.status === "achieved" && ageAppropriateIds.has(cm.milestone_id)
-  ).length ?? 0;
-  const progressPct = totalForAge > 0 ? Math.round((achievedCount / totalForAge) * 100) : 0;
+  const allMilestones = categories?.flatMap((cat) => cat.milestones) ?? [];
+  const { achieved: achievedCount, total: totalForAge, pct: progressPct } =
+    computeProgress(allMilestones, childMilestones ?? [], ageMonths);
+  const firstName = activeChild.name.split(" ")[0];
 
   const hasCurrentMilestones = currentCats.some((c) => c.milestones.length > 0);
   const hasUpcomingMilestones = upcomingCats.some((c) => c.milestones.length > 0);
@@ -335,6 +331,9 @@ export default function MilestonesPage() {
                         <div>
                           <p className="font-bold text-sm">{achievedCount} of {totalForAge} for this age observed</p>
                           <p className="text-xs text-muted-foreground">Tap any milestone below to log it</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            This feeds {firstName}'s Next Steps — Grace Flare suggests what to try based on what you've observed.
+                          </p>
                         </div>
                       </div>
                     </CardContent>

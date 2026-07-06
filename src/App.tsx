@@ -18,6 +18,7 @@ import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
 
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
+import ChildContextPage from "./pages/dashboard/ChildContextPage";
 import LeapsPage from "./pages/dashboard/LeapsPage";
 import GrowthPage from "./pages/dashboard/GrowthPage";
 import ProfilePage from "./pages/dashboard/ProfilePage";
@@ -64,6 +65,7 @@ const App = () => (
                 <Route path="feeding" element={<FeedingPage />} />
                 <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
                 <Route path="milestones" element={<MilestonesPage />} />
+                <Route path="child-context" element={<ChildContextPage />} />
                 <Route path="leaps" element={<LeapsPage />} />
                 <Route path="growth" element={<GrowthPage />} />
                 <Route path="financial" element={<Navigate to="/dashboard/records?tab=financial" replace />} />

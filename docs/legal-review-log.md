@@ -1668,3 +1668,42 @@ triggering renewed VPC under the email-plus program; reasoning mirrors the
 - "Last reviewed" timestamp bump on PrivacyPage.
 - Parent-facing review/delete surface for `child_memories` (the "About {child}"
   hub, Phase 3) — closes the § 312.6 review-rights gap for AI-extracted notes.
+
+## 2026-07-05 — Child Context v1, Phases 2–5 — notice updates shipped
+
+**Reviewer:** in-house (Claude pass, same PR as the Phase 1 entry above).
+**Risk: LOW.**
+
+**What changed (frontend notice layer):**
+- PrivacyPage § 2: child-profile bullet now enumerates "optional interests and
+  temperament you select from a fixed list"; new **AI memory** bullet discloses
+  the `child_memories` store in plain language — short factual notes our AI
+  assistants save from chats, briefings, and weekly insights (or parent-added),
+  viewable/editable/deletable at any time in Profile → About your child.
+- PrivacyPage § 4: the chat/briefings/insights egress clause now also names
+  "any interests and temperament you selected, and the saved AI-memory notes
+  described in § 2" as data transmitted to Anthropic. The DPA, no-training,
+  abuse-monitoring, SCC, and 48-hour-breach sentences are untouched (locked
+  language).
+- `CoppaDirectNotice.tsx` "What we collect": appended "optional interests and
+  temperament you choose from a fixed list" and "short AI-generated notes about
+  your child that you can review, edit, and delete." Attestation mechanics
+  (typed-name signature, checkboxes, acknowledgement stamping) unchanged.
+- PrivacyPage "Last reviewed" bumped to July 5, 2026 (Effective date unchanged).
+
+**Analysis:**
+- Closes every notice commitment recorded in the Phase 1 entry above: § 2 + § 4
+  rewrite, direct-notice addition, and timestamp bump all land in the same PR
+  as the collection UI (Phase 2), so no interests/temperament data is collected
+  before the notices describe it — the disclosure gap accepted in Phase 1 never
+  becomes live under-disclosure.
+- `child_memories` retroactive-disclosure remediation is now **COMPLETE**:
+  the store is disclosed in § 2 and § 4 and in the direct notice, and the
+  "About {child}" hub (`/dashboard/child-context`, this PR) gives parents
+  view/edit/pin/delete-one/delete-all over individual memories plus editing of
+  interests/temperament — satisfying the 16 CFR § 312.6 review/deletion rights
+  for AI-extracted notes.
+- Materiality: additive optional fields and disclosure of an existing store
+  under the same processing purposes and the executed Anthropic DPA; prospective
+  notice, no new subprocessor — non-material change, no renewed VPC required
+  (reasoning per the Phase 1 entry and the 2026-05-08 zero-dwell analysis).

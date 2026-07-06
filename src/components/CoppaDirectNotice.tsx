@@ -61,9 +61,11 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
         <div>
           <p className="font-medium text-foreground">What we collect</p>
           <p className="text-foreground/80">
-            Your child's name, date of birth, optional gender and photo, and any
-            tracking data you log (sleep, feeding, diaper, allergens, milestones,
-            illnesses, medications, supplements).
+            Your child's name, date of birth, optional gender and photo, optional
+            interests and temperament you choose from a fixed list, any tracking
+            data you log (sleep, feeding, diaper, allergens, milestones,
+            illnesses, medications, supplements), and short AI-generated notes
+            about your child that you can review, edit, and delete.
           </p>
         </div>
         <div>
