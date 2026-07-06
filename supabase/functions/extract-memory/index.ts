@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { formatInterestsTemperament, loadChildCore } from "../_shared/childContext.ts";
 
 // Per-child memory extractor.
 //
@@ -114,14 +115,11 @@ serve(async (req) => {
 
     // Confirm the caller really can access this child. RLS only filters
     // child_memories; a non-existent / inaccessible child would also yield
-    // []. Probe `children` directly via the user session client.
-    const { data: childRow, error: childErr } = await userClient
-      .from("children")
-      .select("id")
-      .eq("id", childId)
-      .maybeSingle();
-
-    if (childErr || !childRow) {
+    // []. loadChildCore reads `children` via the user session client, so a
+    // null here means not-found / no-access / select-error. One round-trip
+    // doubles as the access probe AND the structured-profile source below.
+    const core = await loadChildCore(userClient, childId);
+    if (!core) {
       return jsonResponse({ error: "forbidden" }, 403);
     }
 
@@ -134,6 +132,14 @@ serve(async (req) => {
           .map((m) => `- ${m.category}: ${m.content}`)
           .join("\n");
 
+    // Structured profile fields (interests/temperament live as columns on
+    // public.children, not as memories) — tell the extractor not to
+    // re-extract them. Skip the block entirely when both fields are empty.
+    const profileLine = formatInterestsTemperament(core);
+    const structuredProfile = profileLine
+      ? `\n\nSTRUCTURED PROFILE (already known — do not duplicate): ${profileLine}`
+      : "";
+
     const transcriptStr = transcript
       .map((t) => `${t.role.toUpperCase()}: ${typeof t.content === "string" ? t.content : ""}`)
       .join("\n\n")
@@ -143,7 +149,7 @@ serve(async (req) => {
       `You extract durable facts about a specific child or the parent's persistent preferences from a parenting-app conversation. Return up to 5 facts as a JSON array of {category, content, confidence} where category is one of: preference, trait, routine, concern, goal, context. Skip ephemeral details (today's nap time, what they ate at one feeding, a single tantrum). Skip anything that semantically duplicates the existing memory list provided. Content must be 3-500 chars. Confidence is 0.0-1.0. If nothing durable is worth remembering, return [].`;
 
     const userMessage =
-      `EXISTING MEMORIES:\n${existingList}\n\nCONVERSATION:\n\`\`\`\n${transcriptStr}\n\`\`\`\n\nReturn ONLY the JSON array — no markdown, no commentary.`;
+      `EXISTING MEMORIES:\n${existingList}${structuredProfile}\n\nCONVERSATION:\n\`\`\`\n${transcriptStr}\n\`\`\`\n\nReturn ONLY the JSON array — no markdown, no commentary.`;
 
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {

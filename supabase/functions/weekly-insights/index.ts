@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
+import { loadChildCore } from "../_shared/childContext.ts";
 
 // EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
 // Deno's lib types.
@@ -50,14 +51,10 @@ serve(async (req) => {
       });
     }
 
-    // Fetch child
-    const { data: child } = await supabase
-      .from("children")
-      .select("name, date_of_birth, is_premature, due_date")
-      .eq("id", childId)
-      .single();
+    // Child profile + canonical age via the shared loader (RLS-scoped).
+    const core = await loadChildCore(supabase, childId);
 
-    if (!child) {
+    if (!core) {
       return new Response(JSON.stringify({ error: "Child not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -65,14 +62,6 @@ serve(async (req) => {
     }
 
     const now = new Date();
-    const dob = new Date(child.date_of_birth);
-    const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
-    const ageMonths = Math.floor(ageDays / 30.44);
-    const ageStr = ageMonths < 1
-      ? `${Math.floor(ageDays / 7)} weeks old`
-      : ageMonths < 24
-      ? `${ageMonths} months old`
-      : `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months old`;
 
     // Last 7 days
     const since = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -149,10 +138,10 @@ serve(async (req) => {
     // No data fallback
     if (feedCount === 0 && sleeps.length === 0 && diaperCount === 0) {
       return new Response(JSON.stringify({
-        sleep: `Start logging ${child.name}'s sleep to see weekly patterns here.`,
+        sleep: `Start logging ${core.name}'s sleep to see weekly patterns here.`,
         feeding: "Log feeds throughout the week for a personalized summary.",
         development: "Track words and milestones to see development highlights.",
-        tip: ageMonths < 3
+        tip: core.ageMonths < 3
           ? "Tip: At this age, aim for lots of skin-to-skin contact and tummy time."
           : "Tip: Keep exploring new activities and routines with your little one!",
         generatedAt: now.toISOString(),
@@ -160,7 +149,7 @@ serve(async (req) => {
     }
 
     // Build context for LLM
-    let context = `Child: ${child.name}, ${ageStr}${child.is_premature ? " (premature)" : ""}.
+    let context = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
 Weekly summary (last 7 days):
 - Sleep: ${avgSleepHrs}h/day average, ${totalSleepMin} total minutes, ${napCount} naps, ${nightCount} night sleeps
 - Feeding: ${avgFeedsPerDay} feeds/day (${feedCount} total), types: ${feedTypes.join(", ") || "none"}${avgOz ? `, avg bottle: ${avgOz} oz` : ""}
@@ -241,7 +230,7 @@ Rules:
     } catch {
       console.error("Failed to parse weekly JSON:", content2);
       digest = {
-        sleep: `${child.name} logged ${sleeps.length} sleep sessions this week, averaging about ${avgSleepHrs} hours per day.`,
+        sleep: `${core.name} logged ${sleeps.length} sleep sessions this week, averaging about ${avgSleepHrs} hours per day.`,
         feeding: `${feedCount} feeds were logged this week across ${feedTypes.join(" and ") || "various"} types.`,
         development: newWords.length
           ? `New words this week: ${newWords.join(", ")}! ${milestonesAchieved} milestones achieved.`

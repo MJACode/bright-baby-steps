@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { PERSONA_PROMPTS, type PersonaKey } from "../_shared/personas.ts";
+import { humanizeSlug, loadChildCore } from "../_shared/childContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,31 +100,16 @@ serve(async (req) => {
     }
 
     // ---- Child fetch (proper 404, never degraded to fallback) ----
-    const { data: child } = await supabase
-      .from("children")
-      .select("name, date_of_birth, is_premature, due_date")
-      .eq("id", childId)
-      .single();
+    // Shared loader handles the fetch + canonical age string (RLS-scoped).
+    const core = await loadChildCore(supabase, childId);
 
-    if (!child) {
+    if (!core) {
       return new Response(JSON.stringify({ error: "Child not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    childName = child.name;
-
-    // Calculate age (same block as briefing)
-    const dob = new Date(child.date_of_birth);
-    const now = new Date();
-    const ageDays = Math.floor((now.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24));
-    const ageWeeks = Math.floor(ageDays / 7);
-    const ageMonths = Math.floor(ageDays / 30.44);
-    const ageStr = ageMonths < 1
-      ? `${ageWeeks} weeks old`
-      : ageMonths < 24
-      ? `${ageMonths} months old`
-      : `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months old`;
+    childName = core.name;
 
     // ---- LLM section. Any failure from here on degrades to a 200 fallback. ----
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -144,8 +130,11 @@ serve(async (req) => {
       { type: "text", text: previewInstruction },
     ];
 
+    const interestsLine = core.interests.length > 0
+      ? `\nInterests: ${core.interests.map(humanizeSlug).join(", ")}`
+      : "";
     const userMessage =
-      `Child: ${child.name}, ${ageStr}${child.is_premature ? " (premature)" : ""}.\n\nParent's request: ${seedPrompt}`;
+      `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.${interestsLine}\n\nParent's request: ${seedPrompt}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

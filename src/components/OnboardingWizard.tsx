@@ -15,6 +15,7 @@ import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 import { getAgeInMonths } from "@/hooks/useChildren";
+import { CHILD_INTERESTS, MAX_INTERESTS, TEMPERAMENTS } from "@/lib/childInterests";
 import { UserPlus } from "lucide-react";
 
 type PrimaryInterest = "sleep_feeding" | "developmental" | "speech" | "financial";
@@ -26,6 +27,8 @@ interface WizardState {
   dob: string;
   isPremature: boolean | null;
   dueDate: string;
+  childInterests: string[];
+  temperament: string | null;
   interest: PrimaryInterest | null;
   retroactiveMilestones: Record<string, RetroactiveStatus>;
 }
@@ -35,6 +38,8 @@ const EMPTY_STATE: WizardState = {
   dob: "",
   isPremature: null,
   dueDate: "",
+  childInterests: [],
+  temperament: null,
   interest: null,
   retroactiveMilestones: {},
 };
@@ -48,14 +53,21 @@ const draftKey = (uid: string) => `onboarding_draft_${uid}`;
 interface Draft { step: number; state: WizardState }
 
 // The furthest step the saved answers actually support. Guards against stale
-// drafts written by the old 5-step layout (partner step removed 2026-07):
-// an old `step: 5` clamps to the interest step, and an old `step: 3` with no
-// DOB yet lands back on the DOB step instead of skipping past it.
+// drafts written by older layouts: an old `step: 3` with no DOB yet lands back
+// on the DOB step instead of skipping past it. Step 4 (child interests) is
+// fully optional, so any draft with steps 1–3 answered may resume as far as
+// step 5 — a pre-change draft saved on the old interest step (4) simply
+// resumes on the new optional step, one tap from where it left off.
 function maxResumableStep(state: WizardState): number {
   if (!state.name.trim()) return 1;
   if (!state.dob || !computeAge(state.dob)) return 2;
   if (state.isPremature === null || (state.isPremature && !state.dueDate)) return 3;
-  return 4;
+  return 5;
+}
+
+function isFutureDob(dob: string): boolean {
+  const parsed = dob.length === 10 ? parseISO(dob) : null;
+  return !!parsed && isValid(parsed) && parsed > new Date();
 }
 
 function loadDraft(uid: string): Draft | null {
@@ -65,7 +77,10 @@ function loadDraft(uid: string): Draft | null {
     const parsed = JSON.parse(raw) as Partial<Draft> | null;
     if (!parsed || typeof parsed.step !== "number" || !Number.isFinite(parsed.step) || !parsed.state) return null;
     const state = { ...EMPTY_STATE, ...parsed.state };
-    const step = Math.min(Math.max(1, Math.floor(parsed.step)), maxResumableStep(state));
+    let step = Math.min(Math.max(1, Math.floor(parsed.step)), maxResumableStep(state));
+    // Expected babies skip the child-interests step — bump a step-4 draft
+    // forward so they never land on a step the forward flow bypasses.
+    if (step === 4 && isFutureDob(state.dob)) step = 5;
     return { step, state };
   } catch {
     return null;
@@ -137,7 +152,7 @@ export function OnboardingWizard() {
   const [vpcStatus, setVpcStatus] = useState<VpcGateStatus | null>(null);
   const [needsDirectNotice, setNeedsDirectNotice] = useState(false);
   const [state, setState] = useState<WizardState>(() => (user ? loadDraft(user.id)?.state ?? EMPTY_STATE : EMPTY_STATE));
-  // Captured after the child INSERT succeeds so the step-5 catch-up can write
+  // Captured after the child INSERT succeeds so the step-6 catch-up can write
   // child_speech rows + stamp retroactive_setup_completed_at against the right row.
   const [createdChildId, setCreatedChildId] = useState<string | null>(null);
 
@@ -148,19 +163,34 @@ export function OnboardingWizard() {
   const [partnerInviteSent, setPartnerInviteSent] = useState(false);
   const hasPartnerStampedRef = useRef(false);
 
-  // Steps 1–4 are the required inputs; step 4 finishes setup. Step 5 is an
-  // optional milestone catch-up shown only for children >= 1 month old
-  // (newborns skip straight to the step-6 welcome).
-  const TOTAL_STEPS = 4;
+  // Steps 1–5 are the pre-completion inputs (step 4 is optional child
+  // interests; step 5 finishes setup). Step 6 is an optional milestone
+  // catch-up shown only for children >= 1 month old (newborns skip straight
+  // to the step-7 welcome).
+  const TOTAL_STEPS = 5;
 
   useEffect(() => {
     if (!user) return;
-    // Once the child has been created (step 5+), the wizard is no longer
+    // Once the child has been created (step 6+), the wizard is no longer
     // restartable from a draft — the dashboard banner handles re-entry to the
     // catch-up, so stop persisting draft state here.
-    if (step >= 5) return;
+    if (step >= 6) return;
     saveDraft(user.id, { step, state });
   }, [user, step, state]);
+
+  // Expected baby (future DOB): no observable interests yet, so step 4 is
+  // skipped entirely and the INSERT writes an empty context.
+  const isExpectedDob = isFutureDob(state.dob);
+
+  function toggleChildInterest(value: string) {
+    setState((s) => {
+      if (s.childInterests.includes(value)) {
+        return { ...s, childInterests: s.childInterests.filter((v) => v !== value) };
+      }
+      if (s.childInterests.length >= MAX_INTERESTS) return s;
+      return { ...s, childInterests: [...s.childInterests, value] };
+    });
+  }
 
   async function saveAndAdvance() {
     if (!user) return;
@@ -203,6 +233,8 @@ export function OnboardingWizard() {
           date_of_birth: state.dob,
           is_premature: state.isPremature ?? false,
           due_date: state.isPremature && state.dueDate ? state.dueDate : null,
+          interests: isExpectedDob ? [] : [...new Set(state.childInterests)],
+          temperament: isExpectedDob ? null : state.temperament,
           // Newborns skip the catch-up entirely — stamp at INSERT so the
           // MilestonesPage banner never fires for them.
           retroactive_setup_completed_at: skipCatchUp ? new Date().toISOString() : null,
@@ -241,7 +273,7 @@ export function OnboardingWizard() {
 
       clearDraft(user.id);
       setCreatedChildId(childRow.id);
-      setStep(skipCatchUp ? 6 : 5);
+      setStep(skipCatchUp ? 7 : 6);
     } catch (err) {
       console.error("Onboarding save failed", err);
       toast({
@@ -282,9 +314,9 @@ export function OnboardingWizard() {
   const firstName = state.name.trim() || "your little one";
   const computedAge = computeAge(state.dob);
 
-  // Step 5: retroactive milestone catch-up — only for children >= 1 month old.
-  // For newborns we skip straight to step 6 from saveAndAdvance().
-  if (step === 5 && createdChildId) {
+  // Step 6: retroactive milestone catch-up — only for children >= 1 month old.
+  // For newborns we skip straight to step 7 from saveAndAdvance().
+  if (step === 6 && createdChildId) {
     const ageMonths = getAgeInMonths(
       state.dob,
       state.isPremature ?? false,
@@ -300,14 +332,14 @@ export function OnboardingWizard() {
           onMarksChange={(marks) =>
             setState((s) => ({ ...s, retroactiveMilestones: marks }))
           }
-          onDone={() => setStep(6)}
+          onDone={() => setStep(7)}
         />
       </div>
     );
   }
 
-  // Step 6: personalized welcome + optional partner invite
-  if (step === 6 && state.interest) {
+  // Step 7: personalized welcome + optional partner invite
+  if (step === 7 && state.interest) {
     const features = INTEREST_FEATURES[state.interest];
     const cta = INTEREST_CTA[state.interest];
     return (
@@ -319,13 +351,16 @@ export function OnboardingWizard() {
         <p className="text-muted-foreground text-sm mb-8 max-w-xs">
           Here's what Grace Flare will help you with most:
         </p>
-        <ul className="w-full max-w-xs text-left space-y-3 mb-8">
+        <ul className="w-full max-w-xs text-left space-y-3 mb-4">
           {features.map((f) => (
             <li key={f} className="flex items-start gap-2 text-sm">
               <span className="text-primary mt-0.5">✓</span><span>{f}</span>
             </li>
           ))}
         </ul>
+        <p className="w-full max-w-xs text-left text-xs text-muted-foreground mb-8">
+          Grace Flare gets smarter about {firstName} as you log. See everything it knows — and edit it — in Profile → About {firstName}.
+        </p>
 
         {partnerInviteSent ? (
           <div className="w-full max-w-xs rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3.5 text-left mb-8">
@@ -469,13 +504,69 @@ export function OnboardingWizard() {
             <Button variant="outline" onClick={() => setStep(2)} className="flex-1">Back</Button>
             <Button className="flex-1"
               disabled={state.isPremature === null || (state.isPremature === true && !state.dueDate)}
-              onClick={() => setStep(4)}>Continue</Button>
+              onClick={() => setStep(isExpectedDob ? 5 : 4)}>Continue</Button>
           </div>
         </div>
       )}
 
-      {/* Step 4: What matters most — also finishes setup */}
+      {/* Step 4: child interests + temperament (optional, skipped for expected babies) */}
       {step === 4 && (
+        <div className="flex flex-col flex-1">
+          <h2 className="font-display text-2xl font-bold mb-2">What does {firstName} love?</h2>
+          <p className="text-muted-foreground text-sm mb-6">
+            Pick anything that fits — Grace Flare uses this to tailor activities, tips, and what to try next. You can change these anytime.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {CHILD_INTERESTS.map((i) => {
+              const selected = state.childInterests.includes(i.value);
+              const atCap = state.childInterests.length >= MAX_INTERESTS;
+              return (
+                <button
+                  key={i.value}
+                  type="button"
+                  disabled={!selected && atCap}
+                  onClick={() => toggleChildInterest(i.value)}
+                  className={cn(
+                    "touch-target rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50",
+                    selected ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-foreground"
+                  )}
+                >
+                  {i.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className={cn("text-xs text-muted-foreground mb-6 min-h-[1rem]",
+            state.childInterests.length < MAX_INTERESTS && "invisible")}>
+            That's the top {MAX_INTERESTS} — tap a selected one to swap in another.
+          </p>
+          <p className="text-sm font-semibold mb-2">Temperament (optional)</p>
+          <div className="flex flex-wrap gap-2">
+            {TEMPERAMENTS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() =>
+                  setState((s) => ({ ...s, temperament: s.temperament === t.value ? null : t.value }))
+                }
+                className={cn(
+                  "touch-target rounded-xl border-2 px-4 py-2.5 text-sm font-medium transition-colors",
+                  state.temperament === t.value ? "border-primary bg-primary/10 text-primary" : "border-border bg-card text-foreground"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-auto pt-8 flex gap-3">
+            <Button variant="outline" onClick={() => setStep(3)} className="flex-1">Back</Button>
+            <Button className="flex-1" onClick={() => setStep(5)}>Continue</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5: What matters most — also finishes setup */}
+      {step === 5 && (
         <div className="flex flex-col flex-1">
           <h2 className="font-display text-2xl font-bold mb-2">What matters most to you right now?</h2>
           <p className="text-muted-foreground text-sm mb-6">Pick one — you can explore everything once you're in.</p>
@@ -518,7 +609,7 @@ export function OnboardingWizard() {
               </p>
             )}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(3)} className="flex-1">Back</Button>
+              <Button variant="outline" onClick={() => setStep(isExpectedDob ? 3 : 4)} className="flex-1">Back</Button>
               <Button className="flex-1" disabled={!state.interest || saving} onClick={saveAndAdvance}>
                 {saving ? "Setting up..." : "Finish setup"}
               </Button>

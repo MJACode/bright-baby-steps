@@ -1,3 +1,5 @@
+import { CHILD_INTERESTS } from "@/lib/childInterests";
+
 export type NextStepDomain = "sleep" | "milestone" | "finance" | "health";
 
 export type NextStepTier = "default" | "soon" | "redflag";
@@ -19,6 +21,10 @@ export interface NextStepSortHints {
   minutesUntil?: number;
   // Stable secondary sort so equal-urgency items don't reorder between renders.
   order?: number;
+  // 0–2 personalization boost (interest match = 2, memory nudge = 1). Compared
+  // strictly WITHIN a band — urgency bands always dominate; affinity only
+  // reorders peers.
+  affinity?: number;
 }
 
 export interface NextStepItem {
@@ -29,6 +35,81 @@ export interface NextStepItem {
   tier: NextStepTier;
   deeplink: NextStepDeeplink;
   sortHints?: NextStepSortHints;
+  // Lowercase interest label when the item was picked for an interest match —
+  // drives the "picked for a … fan" meta suffix in the feed.
+  affinityLabel?: string;
+}
+
+// Interest slug → speech_categories.slug. Verified against the live
+// speech_categories seed — keep both sides in sync with the DB, not guesses.
+export const INTEREST_MILESTONE_CATEGORY: Record<string, string> = {
+  music: "speech-language",
+  books: "speech-language",
+  movement: "gross-motor",
+  water_play: "gross-motor",
+  outdoors: "gross-motor",
+  building: "fine-motor",
+  food_exploring: "fine-motor",
+  animals: "social-emotional",
+  pretend_play: "social-emotional",
+  vehicles: "cognitive",
+};
+
+export function matchingInterestForCategory(
+  interests: string[] | null | undefined,
+  categorySlug: string | null | undefined,
+): string | null {
+  if (!interests?.length || !categorySlug) return null;
+  return (
+    interests.find(
+      (slug) => INTEREST_MILESTONE_CATEGORY[slug] === categorySlug,
+    ) ?? null
+  );
+}
+
+export function interestAffinityForCategory(
+  interests: string[] | null | undefined,
+  categorySlug: string | null | undefined,
+): number {
+  return matchingInterestForCategory(interests, categorySlug) ? 2 : 0;
+}
+
+export function interestLabelLower(slug: string): string {
+  const label =
+    CHILD_INTERESTS.find((i) => i.value === slug)?.label ??
+    slug.replace(/_/g, " ");
+  return label.toLowerCase();
+}
+
+// Memory-aware nudge: keyword → feed-domain map for child_memories rows with
+// category 'concern' or 'goal'. Matching is intentionally dumb
+// content.toLowerCase().includes() — no stemming, no NLP. Memories only bias
+// ordering (affinity 1), never create items, so a loose match is harmless.
+// "feeding" has no feed items yet; the bucket exists so future feeding items
+// pick it up for free.
+export const MEMORY_NUDGE_KEYWORDS = {
+  sleep: ["sleep", "nap", "night", "bedtime"],
+  feeding: ["feed", "bottle", "nurs", "solid", "eat"],
+  milestone: ["talk", "word", "speech", "babbl", "walk", "crawl", "milestone"],
+} as const;
+
+export type MemoryNudgeDomain = keyof typeof MEMORY_NUDGE_KEYWORDS;
+
+export function memoryNudgeDomains(
+  memories: Array<{ content: string }>,
+): Set<MemoryNudgeDomain> {
+  const matched = new Set<MemoryNudgeDomain>();
+  for (const memory of memories) {
+    const text = memory.content.toLowerCase();
+    for (const domain of Object.keys(
+      MEMORY_NUDGE_KEYWORDS,
+    ) as MemoryNudgeDomain[]) {
+      if (MEMORY_NUDGE_KEYWORDS[domain].some((k) => text.includes(k))) {
+        matched.add(domain);
+      }
+    }
+  }
+  return matched;
 }
 
 // Coarse priority band, lowest sorts first:
@@ -68,7 +149,9 @@ function withinBandKey(item: NextStepItem): number {
 
 /**
  * Rank the feed: redflag → closing-today → dated-deadline (soonest first) →
- * focus drills → evergreen. Then apply the domain-dominance cap: never more
+ * focus drills → evergreen. Within a band, higher affinity leads its peers —
+ * affinity never lifts an item across bands. Then apply the domain-dominance
+ * cap: never more
  * than 2 items of the same domain in the top 3 — the third top-3 slot can't be
  * a third sleep/finance/etc. item; that item is pushed below the cut so the
  * feed reads cross-domain rather than salesy. Overflow lands in "See more".
@@ -77,6 +160,9 @@ export function rankNextSteps(items: NextStepItem[]): NextStepItem[] {
   const sorted = [...items].sort((a, b) => {
     const bandDiff = band(a) - band(b);
     if (bandDiff !== 0) return bandDiff;
+    const affinityDiff =
+      (b.sortHints?.affinity ?? 0) - (a.sortHints?.affinity ?? 0);
+    if (affinityDiff !== 0) return affinityDiff;
     const keyDiff = withinBandKey(a) - withinBandKey(b);
     if (keyDiff !== 0) return keyDiff;
     return (a.sortHints?.order ?? 0) - (b.sortHints?.order ?? 0);

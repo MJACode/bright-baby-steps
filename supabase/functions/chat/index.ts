@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS, type PersonaKey } from "../_shared/personas.ts";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
+import { formatInterestsTemperament, loadChildCore } from "../_shared/childContext.ts";
 import { CHILD_DATA_TOOLS, dispatchChildDataTool } from "../_shared/childDataTools.ts";
 
 // Valid persona keys — keep in sync with PersonaKey in _shared/personas.ts.
@@ -283,16 +284,36 @@ serve(async (req) => {
     // remains a hit across turns (memory mutates each turn, but the prompt
     // before it does not).
     let memoryBlock = "";
+    let profileLine: string | null = null;
     if (childId && typeof childId === "string") {
-      memoryBlock = await loadMemoryContext(supabase, childId);
+      // Structured profile (interests/temperament) — add-only, best-effort,
+      // loaded in parallel with memory so it costs no extra pre-first-token
+      // latency. Does not touch the client-supplied `context` block, and a
+      // failure here must never fail the chat turn.
+      const [loadedMemory, core] = await Promise.all([
+        loadMemoryContext(supabase, childId),
+        loadChildCore(supabase, childId).catch((err: unknown) => {
+          console.error("chat loadChildCore error (skipped):", err);
+          return null;
+        }),
+      ]);
+      memoryBlock = loadedMemory;
+      if (core) profileLine = formatInterestsTemperament(core);
     }
 
-    // Static skill prompt is cached; dynamic child context + memory are not.
+    // Static skill prompt is cached; dynamic child context + profile + memory
+    // are not.
     const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
       { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
     ];
     if (context && context.childName) {
       systemContent.push({ type: "text", text: buildContextMessage(context) });
+    }
+    // [CHILD PROFILE] goes BEFORE the memory block, as a non-cached trailing
+    // system entry (same pattern as memory — the static persona prompt's
+    // cache_control prefix stays a hit across turns).
+    if (profileLine) {
+      systemContent.push({ type: "text", text: `[CHILD PROFILE] ${profileLine}` });
     }
     if (memoryBlock) {
       systemContent.push({ type: "text", text: memoryBlock });

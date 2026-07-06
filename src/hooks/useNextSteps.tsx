@@ -7,7 +7,13 @@ import { getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren"
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { toast } from "@/hooks/use-toast";
-import { rankNextSteps, type NextStepItem } from "@/lib/nextSteps";
+import {
+  rankNextSteps,
+  matchingInterestForCategory,
+  interestLabelLower,
+  memoryNudgeDomains,
+  type NextStepItem,
+} from "@/lib/nextSteps";
 import {
   getFinanceCalendarEvents,
   type FinanceCalendarType,
@@ -23,6 +29,7 @@ interface ChildLite {
   next_appointment?: string | null;
   created_at?: string | null;
   retroactive_setup_completed_at?: string | null;
+  interests?: string[] | null;
 }
 
 // Coach-state phrasing reused from SleepCoachCard:30-76 — only `coming-up` and
@@ -102,6 +109,13 @@ interface MilestoneRow {
   id: string;
   name: string;
   age_months_typical_start: number;
+  categorySlug: string | null;
+  // Current-age gap: typical window spans the child's age today and the skill
+  // is 'not_yet' or unmarked — the "sweet spot" drill candidate.
+  isCurrentGap: boolean;
+  // Original lookahead semantics: typical-start from now through the lookahead,
+  // not yet achieved.
+  isComingUp: boolean;
 }
 
 // Transient dismiss for the milestone focus drill (no DB home) — mirrors
@@ -217,8 +231,10 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
   const sleep = useSleepCoach(activeChild);
   useSleepPlan(activeChild?.id ?? null);
 
-  // Milestones — "coming up" = typical-start within the next ~2 months and not
-  // yet achieved. Celebratory, never diagnostic.
+  // Milestones — two drill pools in one fetch. "Current-age gap" = the typical
+  // window spans the child's age today and the skill is 'not_yet'/unmarked.
+  // "Coming up" = typical-start within the next ~2 months and not yet achieved.
+  // Celebratory, never diagnostic.
   const milestones = useQuery({
     queryKey: ["next-steps-milestones", activeChild?.id],
     queryFn: async () => {
@@ -227,11 +243,15 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         activeChild!.is_premature ?? false,
         activeChild!.due_date,
       );
+      // start ≤ age+lookahead AND end ≥ age is the union of both pools:
+      // upcoming rows always satisfy end ≥ start ≥ age.
       const { data: speech, error: speechErr } = await supabase
         .from("speech")
-        .select("id, name, age_months_typical_start")
-        .gte("age_months_typical_start", ageMonths)
+        .select(
+          "id, name, age_months_typical_start, age_months_typical_end, speech_categories(slug)",
+        )
         .lte("age_months_typical_start", ageMonths + MILESTONE_LOOKAHEAD_MONTHS)
+        .gte("age_months_typical_end", ageMonths)
         .order("age_months_typical_start", { ascending: true });
       if (speechErr) throw speechErr;
       const { data: child, error: childErr } = await supabase
@@ -239,14 +259,51 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         .select("milestone_id, status")
         .eq("child_id", activeChild!.id);
       if (childErr) throw childErr;
-      const achieved = new Set(
-        (child ?? [])
-          .filter((c) => c.status === "achieved")
-          .map((c) => c.milestone_id),
+      const statusOf = new Map(
+        (child ?? []).map((c) => [c.milestone_id, c.status]),
       );
-      return (speech ?? []).filter(
-        (m) => !achieved.has(m.id),
-      ) as MilestoneRow[];
+      return (speech ?? []).flatMap<MilestoneRow>((m) => {
+        const status = statusOf.get(m.id);
+        const isCurrent =
+          m.age_months_typical_start <= ageMonths &&
+          m.age_months_typical_end >= ageMonths;
+        const isCurrentGap =
+          isCurrent && (status == null || status === "not_yet");
+        const isComingUp =
+          m.age_months_typical_start >= ageMonths && status !== "achieved";
+        if (!isCurrentGap && !isComingUp) return [];
+        const category = m.speech_categories as { slug: string } | null;
+        return [
+          {
+            id: m.id,
+            name: m.name,
+            age_months_typical_start: m.age_months_typical_start,
+            categorySlug: category?.slug ?? null,
+            isCurrentGap,
+            isComingUp,
+          },
+        ];
+      });
+    },
+    enabled: !!activeChild && !activeChild.is_expected,
+  });
+
+  // Memory-aware nudge — recent concern/goal memories bias ordering only
+  // (affinity 1 via keyword match); they never create feed items. Pinned first,
+  // then newest.
+  const memories = useQuery({
+    queryKey: ["next-steps-memories", activeChild?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("child_memories")
+        .select("content")
+        .eq("child_id", activeChild!.id)
+        .in("category", ["concern", "goal"])
+        .order("pinned", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data ?? [];
     },
     enabled: !!activeChild && !activeChild.is_expected,
   });
@@ -307,7 +364,9 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     queryFn: async () => {
       const { data, error } = await supabase
         .from("milestone_flags")
-        .select("milestone_id, severity, first_flagged_at, dismissed_at, speech:milestone_id(name)")
+        .select(
+          "milestone_id, severity, first_flagged_at, dismissed_at, speech:milestone_id(name, speech_categories(slug))",
+        )
         .eq("child_id", activeChild!.id)
         .eq("severity", "act")
         .is("dismissed_at", null)
@@ -316,9 +375,17 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
-      const name = (data.speech as { name: string } | null)?.name ?? null;
+      const speechRow = data.speech as {
+        name: string;
+        speech_categories: { slug: string } | null;
+      } | null;
+      const name = speechRow?.name ?? null;
       if (!name) return null;
-      return { milestoneId: data.milestone_id, name };
+      return {
+        milestoneId: data.milestone_id,
+        name,
+        categorySlug: speechRow?.speech_categories?.slug ?? null,
+      };
     },
     enabled: !!activeChild && !activeChild.is_expected,
   });
@@ -330,6 +397,9 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     if (!activeChild) return [];
     const out: NextStepItem[] = [];
     let order = 0;
+    const firstName = activeChild.name.trim().split(/\s+/)[0];
+    const interests = activeChild.interests ?? [];
+    const nudges = memoryNudgeDomains(memories.data ?? []);
 
     // Sleep
     // `now` is captured at mount and intentionally not live — the spec calls for
@@ -346,7 +416,11 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
           meta: s.meta,
           tier: "default",
           deeplink: { kind: "route", target: "/dashboard/sleep" },
-          sortHints: { minutesUntil: s.minutesUntil, order: order++ },
+          sortHints: {
+            minutesUntil: s.minutesUntil,
+            order: order++,
+            ...(nudges.has("sleep") ? { affinity: 1 } : {}),
+          },
         });
       }
     }
@@ -462,25 +536,52 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       }
     }
 
-    // Milestone focus drill — celebratory encouragement for an upcoming skill.
+    // Milestone focus drill — celebratory encouragement, one item. Selection
+    // order: current-age gap in an interest-matched category → any current-age
+    // gap → "coming up" in an interest-matched category → any "coming up".
     const dismissedMilestones = readMilestoneDismissed(activeChild.id, dayKey);
-    const nextMilestone = (milestones.data ?? []).find(
+    const candidates = (milestones.data ?? []).filter(
       (m) => !dismissedMilestones.includes(m.id),
     );
-    if (nextMilestone) {
+    const currentGaps = candidates.filter((m) => m.isCurrentGap);
+    const comingUp = candidates.filter((m) => m.isComingUp);
+    const byInterest = (m: MilestoneRow) =>
+      !!matchingInterestForCategory(interests, m.categorySlug);
+    const drill =
+      currentGaps.find(byInterest) ??
+      currentGaps[0] ??
+      comingUp.find(byInterest) ??
+      comingUp[0];
+    if (drill) {
+      const interest = matchingInterestForCategory(interests, drill.categorySlug);
+      const interestLabel = interest ? interestLabelLower(interest) : null;
+      const affinity = Math.max(
+        interest ? 2 : 0,
+        nudges.has("milestone") ? 1 : 0,
+      );
       out.push({
-        id: `milestone-${nextMilestone.id}`,
+        id: `milestone-${drill.id}`,
         domain: "milestone",
-        title: `Coming up: ${nextMilestone.name}`,
-        meta: "a skill that may be coming up",
+        title: drill.isCurrentGap
+          ? `Right now: ${drill.name}`
+          : `Coming up: ${drill.name}`,
+        meta: drill.isCurrentGap
+          ? `a skill in the sweet spot for ${firstName}'s age`
+          : "a skill that may be coming up",
         tier: "default",
+        affinityLabel: interestLabel ?? undefined,
         deeplink: {
           kind: "chat",
           target: "developmental",
-          seedPrompt: `Give me a simple activity to encourage my baby toward "${nextMilestone.name}".`,
+          seedPrompt:
+            `Give me a simple activity to encourage my baby toward "${drill.name}".` +
+            (interestLabel
+              ? ` ${firstName} loves ${interestLabel} — work that in if you can.`
+              : ""),
           forceSkill: "developmental",
         },
-        sortHints: { order: order++ },
+        sortHints:
+          affinity > 0 ? { order: order++, affinity } : { order: order++ },
       });
     }
 
@@ -494,6 +595,10 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
           activeChild.retroactive_setup_completed_at ?? null,
       });
     if (!inGracePeriod && actFlag.data) {
+      const flagInterest = matchingInterestForCategory(
+        interests,
+        actFlag.data.categorySlug,
+      );
       out.push({
         id: `actflag-${actFlag.data.milestoneId}`,
         domain: "milestone",
@@ -504,7 +609,11 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
           kind: "chat",
           target: "developmental",
           forceSkill: "developmental",
-          seedPrompt: `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${actFlag.data.name}".`,
+          seedPrompt:
+            `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${actFlag.data.name}".` +
+            (flagInterest
+              ? ` ${firstName} loves ${interestLabelLower(flagInterest)} — work that in if you can.`
+              : ""),
         },
         sortHints: { order: order++ },
       });
@@ -520,6 +629,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     finance.data,
     financeItems.data,
     milestones.data,
+    memories.data,
     actFlag.data,
     user,
     dayKey,
@@ -744,6 +854,9 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     [dismissActFlag, dismissFinanceLocal, dismissFinanceCalendarLocal, dismissMilestoneLocal],
   );
 
+  // memories is in isLoading (so ordering doesn't visibly reshuffle after first
+  // paint) but NOT in isError — it's an ordering bias only; if it fails the
+  // feed still renders unbiased.
   const isLoading =
     !!activeChild &&
     (sleep.isLoading ||
@@ -751,6 +864,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       finance.isLoading ||
       financeItems.isLoading ||
       actFlag.isLoading ||
+      memories.isLoading ||
       visit.isLoading);
 
   const isError =

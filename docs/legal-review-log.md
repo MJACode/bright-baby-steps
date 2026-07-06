@@ -1620,3 +1620,90 @@ the app tolerates; affected users can be re-asked in-app if desired.
 
 **Also touched:** `VpcGateMessage.tsx` — dark-mode styling only (`dark:`
 variants); copy and behavior unchanged.
+
+## 2026-07-05 — Child Context v1, Phase 1 (backend) — new child-data categories + Anthropic egress
+
+**Reviewer:** in-house (Claude pass, branch `claude/child-context-milestones-c6ynw2`,
+PR #173). **Risk: LOW today / MEDIUM if Phase 2 ships without the notice updates below.**
+
+**What changed (backend only — no UI writes these fields yet):**
+- Migration `20260805000000_child_interests_temperament` (applied to live
+  2026-07-05): `children.interests text[] NOT NULL DEFAULT '{}'` and
+  `children.temperament text`, both parent-selected, both optional.
+- **Data-minimization by design:** `interests` is constrained by a DB CHECK to a
+  fixed 10-item activity allowlist (music, books, movement, water_play, animals,
+  vehicles, outdoors, food_exploring, building, pretend_play; max 6) —
+  deliberately NOT free text, so no arbitrary child prose enters this column.
+  `temperament` is one of four fixed values (easygoing / sensitive / spirited /
+  slow_to_warm) or NULL. Widening either list requires a new migration.
+- `get_child_profile` RPC returns both keys; RLS posture unchanged
+  (SECURITY INVOKER, `children` policies filter).
+
+**New Anthropic egress (16 CFR § 312 / Privacy § 4 analysis):** when set, the
+two fields flow to Anthropic, PBC on: chat (`[CHILD PROFILE]` system block +
+`get_child_profile` tool results), briefing, next-step-peek, and extract-memory
+(dedupe context). Covered by the executed Anthropic DPA (2026-05-08 entry) — same
+purpose limitation, no-training posture, and SCCs; no new subprocessor.
+
+**Disclosure gap (accepted for this phase, remediation committed):**
+PrivacyPage § 4 currently enumerates "your child's first name, age, and the
+relevant logged activity" — parent-selected interests/temperament are none of
+those, so § 4 is under-inclusive once the fields carry data. **Mitigating fact:
+no collection UI exists yet.** Every live row has `interests = '{}'` and
+`temperament = NULL`, and every egress site is guarded to omit empty values, so
+NOTHING actually egresses as of this entry.
+**Commitment:** PrivacyPage § 2 (collection) + § 4 (AI egress) and
+`CoppaDirectNotice.tsx` ("what we collect") will be updated in the SAME PR,
+before any collection UI (Phase 2 of the plan) is user-reachable; the PR also
+adds retroactive disclosure of the live `child_memories` AI-memory store (a
+pre-existing gap found in this review — § 4 only obliquely references it via
+Visit Prep "saved notes"). Materiality: additive optional fields, same
+processing purposes, prospective notice — treated as a non-material change not
+triggering renewed VPC under the email-plus program; reasoning mirrors the
+2026-05-08 zero-dwell analysis.
+
+**Outstanding (blocks Phase 2 merge, tracked in PR #173 checklist):**
+- PrivacyPage § 2 + § 4 rewrite (interests/temperament + `child_memories`).
+- CoppaDirectNotice "what we collect" addition.
+- "Last reviewed" timestamp bump on PrivacyPage.
+- Parent-facing review/delete surface for `child_memories` (the "About {child}"
+  hub, Phase 3) — closes the § 312.6 review-rights gap for AI-extracted notes.
+
+## 2026-07-05 — Child Context v1, Phases 2–5 — notice updates shipped
+
+**Reviewer:** in-house (Claude pass, same PR as the Phase 1 entry above).
+**Risk: LOW.**
+
+**What changed (frontend notice layer):**
+- PrivacyPage § 2: child-profile bullet now enumerates "optional interests and
+  temperament you select from a fixed list"; new **AI memory** bullet discloses
+  the `child_memories` store in plain language — short factual notes our AI
+  assistants save from chats, briefings, and weekly insights (or parent-added),
+  viewable/editable/deletable at any time in Profile → About your child.
+- PrivacyPage § 4: the chat/briefings/insights egress clause now also names
+  "any interests and temperament you selected, and the saved AI-memory notes
+  described in § 2" as data transmitted to Anthropic. The DPA, no-training,
+  abuse-monitoring, SCC, and 48-hour-breach sentences are untouched (locked
+  language).
+- `CoppaDirectNotice.tsx` "What we collect": appended "optional interests and
+  temperament you choose from a fixed list" and "short AI-generated notes about
+  your child that you can review, edit, and delete." Attestation mechanics
+  (typed-name signature, checkboxes, acknowledgement stamping) unchanged.
+- PrivacyPage "Last reviewed" bumped to July 5, 2026 (Effective date unchanged).
+
+**Analysis:**
+- Closes every notice commitment recorded in the Phase 1 entry above: § 2 + § 4
+  rewrite, direct-notice addition, and timestamp bump all land in the same PR
+  as the collection UI (Phase 2), so no interests/temperament data is collected
+  before the notices describe it — the disclosure gap accepted in Phase 1 never
+  becomes live under-disclosure.
+- `child_memories` retroactive-disclosure remediation is now **COMPLETE**:
+  the store is disclosed in § 2 and § 4 and in the direct notice, and the
+  "About {child}" hub (`/dashboard/child-context`, this PR) gives parents
+  view/edit/pin/delete-one/delete-all over individual memories plus editing of
+  interests/temperament — satisfying the 16 CFR § 312.6 review/deletion rights
+  for AI-extracted notes.
+- Materiality: additive optional fields and disclosure of an existing store
+  under the same processing purposes and the executed Anthropic DPA; prospective
+  notice, no new subprocessor — non-material change, no renewed VPC required
+  (reasoning per the Phase 1 entry and the 2026-05-08 zero-dwell analysis).
