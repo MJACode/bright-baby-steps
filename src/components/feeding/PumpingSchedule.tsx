@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { usePreferences } from "@/hooks/usePreferences";
+import { formatApproxClock } from "@/lib/gentleTime";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +77,7 @@ function buildTodaySlots(schedule: PumpingSchedule): Date[] {
 export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?: () => void }) {
   const { user } = useAuth();
   const { activeChild } = useChildren();
+  const { prefs } = usePreferences();
   const queryClient = useQueryClient();
 
   const [editingSchedule, setEditingSchedule] = useState(false);
@@ -254,9 +257,11 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
                     <>
                       <p className={cn("font-bold text-sm", nextSessionInfo.minsUntil < 0 ? "text-feeding" : "text-foreground")}>
                         {nextSessionInfo.minsUntil < 0
-                          ? `Pump when you can — planned for ${format(nextSessionInfo.nextAt, "h:mm a")}`
+                          ? "Pump when you can"
                           : nextSessionInfo.minsUntil <= 5
                           ? "Time to pump!"
+                          : prefs.calmMode
+                          ? `Next pump around ${formatApproxClock(nextSessionInfo.nextAt)}`
                           : `Next pump in ${formatCountdown(nextSessionInfo.minsUntil)}`}
                       </p>
                       <p className="text-xs text-muted-foreground">

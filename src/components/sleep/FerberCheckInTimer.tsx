@@ -302,7 +302,7 @@ export function FerberCheckInTimer({
           <div className="space-y-2">
             <p className="text-sm font-semibold text-foreground">
               {overdueMin > 0
-                ? "Check in when you can — the interval's done."
+                ? "Check in when you can — the interval's done"
                 : "Check in now"}
             </p>
             <Button

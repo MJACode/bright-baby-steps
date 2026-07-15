@@ -818,11 +818,13 @@ export default function SleepPage() {
             childId={activeChild.id}
             ageMonths={ageMonths}
             childName={activeChild.name ?? "your baby"}
+            calmMode={prefs.calmMode}
           />
 
           <SleepPlanReminderBanner
             childId={activeChild.id}
             childName={activeChild.name ?? "your baby"}
+            calmMode={prefs.calmMode}
           />
         </TabsContent>
 
