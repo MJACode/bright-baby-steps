@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
@@ -146,6 +146,12 @@ export default function ProfilePage() {
     const others = notifPrefs.muted_categories.filter((c) => c !== category);
     saveNotifPrefs({ muted_categories: enabled ? others : [...others, category] });
   };
+  // Toasts outlive the render that spawned them — an action that captured
+  // toggleCategory directly would merge a stale muted_categories snapshot and
+  // clobber any category the user changed while the toast was open. The ref
+  // always points at the latest closure.
+  const toggleCategoryRef = useRef(toggleCategory);
+  toggleCategoryRef.current = toggleCategory;
 
   const handleCalmModeChange = (checked: boolean) => {
     setPrefs({ calmMode: checked });
@@ -161,7 +167,7 @@ export default function ProfilePage() {
           <ToastAction
             altText="Mute routine reminders"
             className="touch-target"
-            onClick={() => toggleCategory("reminders", false)}
+            onClick={() => toggleCategoryRef.current("reminders", false)}
           >
             Mute routine reminders
           </ToastAction>

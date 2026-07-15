@@ -33,6 +33,7 @@ import { SavingsGrowthCalculator } from "@/components/financial/SavingsGrowthCal
 import { ProtectFirstCard } from "@/components/financial/ProtectFirstCard";
 import { getFinanceCalendarEvents } from "@/lib/financeCalendar";
 import { formatUSD, project } from "@/lib/savingsProjection";
+import { SAVINGS_OPTIONS } from "@/lib/savingsOptions";
 import {
   FINANCE_ITEM_IDS,
   FINANCIAL_FIRSTS,
@@ -843,14 +844,14 @@ export function FinancialTab() {
 
       <CollapsedSection
         title="Compare savings accounts"
-        badge={<Badge variant="secondary" className="text-xs">5</Badge>}
+        badge={<Badge variant="secondary" className="text-xs">{SAVINGS_OPTIONS.length}</Badge>}
         open={compareOpen}
         onOpenChange={setCompareOpen}
       >
         <KidSavingsComparison />
       </CollapsedSection>
 
-      <CollapsedSection title="Growth calculator" open={calcOpen} onOpenChange={setCalcOpen}>
+      <CollapsedSection title="See how savings grow" open={calcOpen} onOpenChange={setCalcOpen}>
         <SavingsGrowthCalculator defaultStartAge={Math.floor(ageMonths / 12)} />
       </CollapsedSection>
     </div>

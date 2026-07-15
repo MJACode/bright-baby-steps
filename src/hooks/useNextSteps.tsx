@@ -6,6 +6,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
+import { usePreferences } from "@/hooks/usePreferences";
+import { formatApproxClock } from "@/lib/gentleTime";
 import { toast } from "@/hooks/use-toast";
 import {
   rankNextSteps,
@@ -33,11 +35,14 @@ interface ChildLite {
 }
 
 // Coach-state phrasing reused from SleepCoachCard:30-76 — only `coming-up` and
-// `open` emit a feed item, with meta phrased as time-remaining.
+// `open` emit a feed item, with meta phrased as time-remaining. Calm mode
+// swaps the minute countdown for SleepCoachCard's `around {h:mm}` phrasing so
+// the two surfaces never diverge on the same screen.
 function deriveSleepFeed(
   now: Date,
   windowStart: Date,
   windowEnd: Date,
+  calmMode: boolean,
 ): { title: string; meta: string; minutesUntil: number } | null {
   const nowMs = now.getTime();
   const startMs = windowStart.getTime();
@@ -49,7 +54,11 @@ function deriveSleepFeed(
     const minutes = Math.max(0, Math.floor(msToStart / 60_000));
     return {
       title: `Nap window around ${format(windowStart, "h:mm a")}`,
-      meta: minutes < 1 ? "starting now" : `in ~${minutes} min`,
+      meta: calmMode
+        ? `around ${formatApproxClock(windowStart)}`
+        : minutes < 1
+          ? "starting now"
+          : `in ~${minutes} min`,
       minutesUntil: minutes,
     };
   }
@@ -224,6 +233,8 @@ export interface UseNextStepsResult {
 export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { prefs } = usePreferences();
+  const calmMode = prefs.calmMode;
   const now = new Date();
   const dayKey = format(now, "yyyy-MM-dd");
 
@@ -407,7 +418,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     // render the surrounding queries trigger, which is the intended granularity.
     const pred = sleep.data?.prediction ?? null;
     if (pred) {
-      const s = deriveSleepFeed(now, pred.windowStart, pred.windowEnd);
+      const s = deriveSleepFeed(now, pred.windowStart, pred.windowEnd, calmMode);
       if (s) {
         out.push({
           id: "sleep-nap-window",
@@ -633,6 +644,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     actFlag.data,
     user,
     dayKey,
+    calmMode,
     dismissTick,
   ]);
 
