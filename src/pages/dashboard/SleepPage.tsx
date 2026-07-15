@@ -191,7 +191,7 @@ function SleepInsights({
       if (!calmMode) {
         result.push({
           icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
-          text: "Your baby has been sleeping a bit less than average this week. A consistent bedtime routine can help.",
+          text: "A consistent bedtime routine can help stretch sleep — something gentle to try this week.",
         });
       } else if (avgDailyHours < minHours * 0.7) {
         result.push({
@@ -207,7 +207,7 @@ function SleepInsights({
     if (recentNaps.length === 0 && recentLogs.length > 0) {
       result.push({
         icon: <Sparkles className="w-5 h-5 text-sleep shrink-0" />,
-        text: "No naps logged recently — even short naps matter for development at this age!",
+        text: "Tap to log a nap when one happens — even short ones count.",
       });
     }
 
@@ -818,11 +818,13 @@ export default function SleepPage() {
             childId={activeChild.id}
             ageMonths={ageMonths}
             childName={activeChild.name ?? "your baby"}
+            calmMode={prefs.calmMode}
           />
 
           <SleepPlanReminderBanner
             childId={activeChild.id}
             childName={activeChild.name ?? "your baby"}
+            calmMode={prefs.calmMode}
           />
         </TabsContent>
 

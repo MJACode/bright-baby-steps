@@ -31,6 +31,10 @@ interface SleepTodoCardProps {
   childId: string;
   ageMonths: number;
   childName: string;
+  // Passed from SleepPage's usePreferences instance so the inline calm toggle
+  // on the same page updates this card live — separate hook instances don't
+  // cross-sync.
+  calmMode: boolean;
 }
 
 function clockLabel(d: Date): string {
@@ -42,8 +46,8 @@ function rangeLabel(start: Date, end?: Date): string {
 }
 
 function countdownCopy(minutesUntil: number): string {
-  if (minutesUntil <= 0 && minutesUntil > -5) return "due now";
-  if (minutesUntil <= -5) return `overdue ~${Math.abs(minutesUntil)} min`;
+  if (minutesUntil <= 0 && minutesUntil > -5) return "around now";
+  if (minutesUntil <= -5) return "anytime now";
   if (minutesUntil < 60) return `in ~${minutesUntil} min`;
   const h = Math.floor(minutesUntil / 60);
   const m = minutesUntil % 60;
@@ -113,6 +117,7 @@ function TodoRow({
   onResetTime,
   isStarting,
   isStopping,
+  calmMode,
 }: {
   item: SleepTodoItem;
   onToggle: (id: string) => void;
@@ -123,6 +128,7 @@ function TodoRow({
   onResetTime: (item: SleepTodoItem) => void;
   isStarting: boolean;
   isStopping: boolean;
+  calmMode: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const canEditTime = item.kind === "nap" || item.kind === "bedtime";
@@ -226,8 +232,8 @@ function TodoRow({
               ) : item.suggestedAt ? (
                 <span>
                   {clockLabel(item.suggestedAt)}
-                  {item.minutesUntil !== undefined && (
-                    <span className="ml-1 text-sleep font-semibold">
+                  {!calmMode && item.minutesUntil !== undefined && (
+                    <span className="ml-1 text-sleep">
                       {countdownCopy(item.minutesUntil)}
                     </span>
                   )}
@@ -330,7 +336,7 @@ function collapsedSummary(items: SleepTodoItem[], allDone: boolean): string {
   return "";
 }
 
-export function SleepTodoCard({ childId, ageMonths, childName }: SleepTodoCardProps) {
+export function SleepTodoCard({ childId, ageMonths, childName, calmMode }: SleepTodoCardProps) {
   const {
     items,
     allDone,
@@ -463,6 +469,7 @@ export function SleepTodoCard({ childId, ageMonths, childName }: SleepTodoCardPr
                     onResetTime={handleResetTime}
                     isStarting={isStarting}
                     isStopping={isStopping}
+                    calmMode={calmMode}
                   />
                 ))}
               </div>

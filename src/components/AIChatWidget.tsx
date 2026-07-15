@@ -233,7 +233,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         const { error } = await supabase.from("diaper_logs").insert({ child_id: activeChildId, parent_id: user.id, diaper_type: action.data.diaper_type });
         if (error) throw error;
       }
-      ["sleep-logs", "today-sleep", "today-feeds", "today-diapers", "streak", "activity-feed"].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+      ["sleep-logs", "today-sleep", "today-feeds", "today-diapers", "activity-feed"].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
       setPendingAction(null);
       const confirmMsg: Message = { role: "assistant", content: `✅ Logged! ${action.label}` };
       setMessages((prev) => [...prev, confirmMsg]);

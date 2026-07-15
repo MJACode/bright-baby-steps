@@ -16,7 +16,6 @@ export const LOG_WRITE_QUERY_KEYS = [
   "today-feeds",
   "today-diapers",
   "sleep-today-logs",
-  "streak",
   "activity-feed",
   "analytics-month",
   "last-nursing-side",

@@ -45,7 +45,7 @@ export function predictNextNap(opts: {
       windowStart: start,
       windowEnd: addMinutes(start, 30),
       confidence: "low",
-      reason: "Using age-typical wake window — log a few naps to personalize.",
+      reason: "Age-typical timing — logging a few naps makes this personal.",
     };
   }
 
@@ -85,6 +85,6 @@ export function predictNextNap(opts: {
       ? `Based on ${sameBucket.length} ${b} naps over the last 2 weeks.`
       : confidence === "medium"
       ? `Based on a few ${b} naps — improving with more data.`
-      : `Default for age — log naps for a personalized prediction.`,
+      : `Age-typical timing — this sharpens as naps get logged.`,
   };
 }

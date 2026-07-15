@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -33,6 +33,7 @@ import { SavingsGrowthCalculator } from "@/components/financial/SavingsGrowthCal
 import { ProtectFirstCard } from "@/components/financial/ProtectFirstCard";
 import { getFinanceCalendarEvents } from "@/lib/financeCalendar";
 import { formatUSD, project } from "@/lib/savingsProjection";
+import { SAVINGS_OPTIONS } from "@/lib/savingsOptions";
 import {
   FINANCE_ITEM_IDS,
   FINANCIAL_FIRSTS,
@@ -157,7 +158,7 @@ function ThisMonthCard({
       rows.push({
         key: "insurance-window",
         label: `Add ${babyRef} to your health insurance`,
-        meta: `Plans typically allow 30–60 days; act within 30 to be safe. ~${Math.max(0, 30 - ageDays)} days.`,
+        meta: `Most plans allow 30–60 days — about ${Math.max(0, 30 - ageDays)} days left in the safest window.`,
       });
     }
     for (const event of getFinanceCalendarEvents(new Date(), dateOfBirth).slice(0, 3)) {
@@ -238,31 +239,25 @@ function ThisMonthCard({
   );
 }
 
-function GrowthTeaser({ startAge }: { startAge: number }) {
+function GrowthTeaser({ startAge, onOpen }: { startAge: number; onOpen: () => void }) {
   if (startAge >= 17) return null;
   const years = 18 - startAge;
   const rows = project({ starting: 0, monthly: 100, annualRatePct: 7, years, startAge });
   const final = rows[rows.length - 1];
-
-  const scrollToCalculator = () => {
-    document
-      .getElementById("savings-growth-calculator")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <Card
       role="button"
       tabIndex={0}
       aria-label="Open the growth calculator"
-      onClick={scrollToCalculator}
+      onClick={onOpen}
       onKeyDown={(e) => {
         // Keydown from nested interactive elements bubbles up here;
         // preventDefault would cancel their native Enter/Space activation.
         if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          scrollToCalculator();
+          onOpen();
         }
       }}
       className="border-0 bg-finance-bg cursor-pointer min-h-[48px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -282,6 +277,38 @@ function GrowthTeaser({ startAge }: { startAge: number }) {
         <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />
       </CardContent>
     </Card>
+  );
+}
+
+function CollapsedSection({
+  title,
+  badge,
+  open,
+  onOpenChange,
+  children,
+}: {
+  title: string;
+  badge?: ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <CollapsibleTrigger className="flex items-center justify-between w-full touch-target py-1">
+        <h2 className="font-display font-bold text-base">{title}</h2>
+        <div className="flex items-center gap-2">
+          {badge}
+          <ChevronDown
+            className={cn(
+              "w-4 h-4 text-muted-foreground transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 space-y-2">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -461,6 +488,9 @@ export function FinancialTab() {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [comingUpOpen, setComingUpOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [protectOpen, setProtectOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [celebration, setCelebration] = useState<string | null>(null);
   const celebrationTimerRef = useRef<number | null>(null);
 
@@ -621,6 +651,15 @@ export function FinancialTab() {
     />
   );
 
+  const openCalculator = () => {
+    setCalcOpen(true);
+    requestAnimationFrame(() => {
+      document
+        .getElementById("savings-growth-calculator")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const nextStepInsuranceDaysLeft =
     nextStep?.id === FINANCE_ITEM_IDS.healthInsurance && !isExpected && ageDays >= 0 && ageDays <= 30
       ? Math.max(0, 30 - ageDays)
@@ -689,7 +728,7 @@ export function FinancialTab() {
               )}
               {nextStepInsuranceDaysLeft != null && (
                 <span className="text-xs font-semibold text-finance tabular-nums">
-                  ~{nextStepInsuranceDaysLeft} days
+                  ~{nextStepInsuranceDaysLeft} days left
                 </span>
               )}
             </div>
@@ -752,14 +791,12 @@ export function FinancialTab() {
         </div>
       )}
 
-      <GrowthTeaser startAge={Math.floor(ageMonths / 12)} />
+      <GrowthTeaser startAge={Math.floor(ageMonths / 12)} onOpen={openCalculator} />
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading checklist...</p>
       ) : (
         <div className="space-y-4">
-          {ageMonths < 6 && <ProtectFirstCard />}
-
           <div className="space-y-2">
             <h2 className="font-display font-bold text-base">Right now</h2>
             {grouped.rightNow.length > 0 ? (
@@ -772,58 +809,51 @@ export function FinancialTab() {
           </div>
 
           {grouped.comingUp.length > 0 && (
-            <Collapsible open={comingUpOpen} onOpenChange={setComingUpOpen}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full touch-target py-1">
-                <h2 className="font-display font-bold text-base">Coming up</h2>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{grouped.comingUp.length}</Badge>
-                  <ChevronDown
-                    className={cn(
-                      "w-4 h-4 text-muted-foreground transition-transform duration-200",
-                      comingUpOpen && "rotate-180",
-                    )}
-                  />
-                </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-2">
-                {grouped.comingUp.map(({ item, unlock }) => (
-                  <ComingUpRow
-                    key={item.id}
-                    item={item}
-                    unlockLabel={formatUnlockLabel(unlock, babyRef)}
-                  />
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
+            <CollapsedSection
+              title="Coming up"
+              badge={<Badge variant="secondary" className="text-xs">{grouped.comingUp.length}</Badge>}
+              open={comingUpOpen}
+              onOpenChange={setComingUpOpen}
+            >
+              {grouped.comingUp.map(({ item, unlock }) => (
+                <ComingUpRow
+                  key={item.id}
+                  item={item}
+                  unlockLabel={formatUnlockLabel(unlock, babyRef)}
+                />
+              ))}
+            </CollapsedSection>
           )}
 
           {grouped.done.length > 0 && (
-            <Collapsible open={doneOpen} onOpenChange={setDoneOpen}>
-              <CollapsibleTrigger className="flex items-center justify-between w-full touch-target py-1">
-                <h2 className="font-display font-bold text-base">Done</h2>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-xs">{grouped.done.length}</Badge>
-                  <ChevronDown
-                    className={cn(
-                      "w-4 h-4 text-muted-foreground transition-transform duration-200",
-                      doneOpen && "rotate-180",
-                    )}
-                  />
-                </div>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2 space-y-2">
-                {grouped.done.map(renderItemCard)}
-              </CollapsibleContent>
-            </Collapsible>
+            <CollapsedSection
+              title="Done"
+              badge={<Badge variant="secondary" className="text-xs">{grouped.done.length}</Badge>}
+              open={doneOpen}
+              onOpenChange={setDoneOpen}
+            >
+              {grouped.done.map(renderItemCard)}
+            </CollapsedSection>
           )}
         </div>
       )}
 
-      {ageMonths >= 6 && <ProtectFirstCard />}
+      <CollapsedSection title="Protect your family" open={protectOpen} onOpenChange={setProtectOpen}>
+        <ProtectFirstCard />
+      </CollapsedSection>
 
-      <KidSavingsComparison />
+      <CollapsedSection
+        title="Compare savings accounts"
+        badge={<Badge variant="secondary" className="text-xs">{SAVINGS_OPTIONS.length}</Badge>}
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+      >
+        <KidSavingsComparison />
+      </CollapsedSection>
 
-      <SavingsGrowthCalculator defaultStartAge={Math.floor(ageMonths / 12)} />
+      <CollapsedSection title="See how savings grow" open={calcOpen} onOpenChange={setCalcOpen}>
+        <SavingsGrowthCalculator defaultStartAge={Math.floor(ageMonths / 12)} />
+      </CollapsedSection>
     </div>
   );
 }

@@ -59,6 +59,7 @@ function bedtimeStartMinutes(log: OffPlanLog): number {
 // `logs` should be most-recent-first (matches the existing `last-sleep` query
 // ordering). Pure — no React, no Date.now() reads — the `now` parameter is the
 // only clock input.
+// KEEP IN SYNC with supabase/functions/check-notifications/index.ts detectOffPlan (server copy of these titles)
 export function detectOffPlan(
   logs: OffPlanLog[] | null | undefined,
   plan: OffPlanPlan | null | undefined,
@@ -89,7 +90,7 @@ export function detectOffPlan(
     if (minutesSinceEnd > threshold) {
       return {
         kind: "window_blown",
-        title: "Wake window's stretched",
+        title: "Ready for sleep soon",
         body: copy.windowExceeded,
       };
     }
@@ -115,7 +116,7 @@ export function detectOffPlan(
     if (followed) {
       return {
         kind: "false_start",
-        title: "Looks like a false start",
+        title: "A quick restart at bedtime",
         body: copy.falseStart,
       };
     }
@@ -145,7 +146,7 @@ export function detectOffPlan(
     ) {
       return {
         kind: "short_nap_streak",
-        title: "Two short naps in a row",
+        title: "Short naps today",
         body: copy.shortNapStreak,
       };
     }
@@ -170,7 +171,7 @@ export function detectOffPlan(
       if (avg - latest > BEDTIME_DRIFT_THRESHOLD_MIN) {
         return {
           kind: "bedtime_drift",
-          title: "Bedtime's drifting later",
+          title: "Bedtime's been trending later",
           body: copy.bedtimeDrift,
         };
       }

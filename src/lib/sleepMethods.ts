@@ -57,13 +57,13 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
       windDownBed:
         "Slow the pace, dim everything, and start the bedtime steps in the same order you always use.",
       windowExceeded:
-        "Wake window stretched a bit — try a contact nap or a calm wind-down to bridge the gap.",
+        "A long stretch awake — try a contact nap or a calm wind-down to bridge the gap.",
       falseStart:
         "A short first stretch is normal. Resettle gently and try the same routine again.",
       shortNapStreak:
-        "Two short naps in a row. Try a slightly longer wake window before the next sleep, or lean into a contact nap to recharge.",
+        "Short naps happen. Try a slightly longer wake window before the next sleep, or lean into a contact nap to recharge.",
       bedtimeDrift:
-        "Bedtime has been creeping later. Aim to start the wind-down 15 min earlier tomorrow.",
+        "Bedtime's been trending later — starting the wind-down 15 min earlier tomorrow usually brings it back.",
       onTrack:
         "Your steady routines are doing the work — your baby is settling well.",
     },
@@ -93,13 +93,13 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
       windDownBed:
         "Begin the bedtime steps. Be ready for a few pick-up / put-down cycles tonight if needed.",
       windowExceeded:
-        "Wake window's stretched. Pick up, calm them, and try a fresh attempt at sleep.",
+        "A long stretch awake — pick up, calm them, and try a fresh attempt at sleep.",
       falseStart:
         "False start is common with this method. Calm, brief pick-up, then put-down — same as bedtime.",
       shortNapStreak:
-        "Short naps add up. Try one or two pick-up / put-down cycles instead of ending the nap.",
+        "Short naps happen. Try one or two pick-up / put-down cycles instead of ending the nap.",
       bedtimeDrift:
-        "Bedtime drift can mean wake windows are off. Start the routine 15 min earlier tomorrow.",
+        "Bedtime's been trending later — starting the routine 15 min earlier tomorrow usually brings it back.",
       onTrack:
         "Your calm pick-up / put-down rhythm is paying off — fewer cycles each night.",
     },
@@ -129,13 +129,13 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
       windDownBed:
         "Begin the bedtime steps. Sit at your current stage, soothe with voice only, no eye contact if you're past stage 1.",
       windowExceeded:
-        "Window's stretched — take a short break from the chair plan tonight and let the body sleep.",
+        "A long stretch awake — take a short break from the chair plan tonight and let the body sleep.",
       falseStart:
         "Return to your chair stage and stay quiet. Resist re-engaging — the presence is the cue.",
       shortNapStreak:
         "Short naps don't undo chair progress. Hold at your current stage tonight.",
       bedtimeDrift:
-        "If bedtime keeps drifting, hold at the current chair stage another few nights before advancing.",
+        "Bedtime's been trending later — hold at the current chair stage another few nights before advancing.",
       onTrack:
         "Your baby is settling with you nearby — you're ready to ease the chair back a stage soon.",
     },
@@ -166,13 +166,13 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
       windDownBed:
         "Begin the bedtime steps. Your check-in timer will run once they're in the crib.",
       windowExceeded:
-        "Window's stretched — skip Ferber check-ins tonight and let them sleep whenever they fall asleep.",
+        "A long stretch awake — skip Ferber check-ins tonight and let them sleep whenever they fall asleep.",
       falseStart:
         "Restart the interval timer for this wake. Keep check-ins brief and the room calm.",
       shortNapStreak:
-        "Use the same interval schedule for naps. Two short naps doesn't mean the method isn't working.",
+        "Short naps happen. Use the same interval schedule for naps — the method is still working.",
       bedtimeDrift:
-        "If bedtime's drifting, the schedule may need a 15-min shift before the next adjustment.",
+        "Bedtime's been trending later — the schedule may need a 15-min shift before the next adjustment.",
       onTrack:
         "Your check-ins are getting shorter and calmer — your baby is learning to settle.",
     },
@@ -202,7 +202,7 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
       windDownBed:
         "Run the bedtime routine, say your goodnight phrase, and leave the room. Hold steady tonight.",
       windowExceeded:
-        "Step out of the method tonight if the window's been blown — extinction works best with a baseline routine.",
+        "A long stretch awake — step out of the method tonight; extinction works best with a baseline routine.",
       falseStart:
         "Brief comfort if needed for safety, otherwise the method holds. Most false starts resolve quickly.",
       shortNapStreak:
@@ -238,7 +238,7 @@ export const SLEEP_METHODS: SleepMethodMeta[] = [
       windDownBed:
         "Start at your faded bedtime. If lights-out runs long, move bedtime later again and re-fade.",
       windowExceeded:
-        "Window's stretched. Skip tonight's fade target and aim for natural sleep onset.",
+        "A long stretch awake — skip tonight's fade target and aim for natural sleep onset.",
       falseStart:
         "A false start usually means bedtime needs to be later for a few nights. Reset the fade.",
       shortNapStreak:

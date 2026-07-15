@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Compass, Moon, Sparkles, Clock } from "lucide-react";
+import { Compass, Moon, Sparkles, Clock } from "lucide-react";
 import { startOfDay, differenceInMinutes } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { parseHHmm, formatHHmm } from "@/lib/sleepPlan";
+import { formatApproxClock } from "@/lib/gentleTime";
 import { cn } from "@/lib/utils";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
 import { detectOffPlan, type OffPlanState } from "@/lib/sleepOffPlan";
@@ -19,6 +20,10 @@ import { SleepAlertPopup } from "@/components/SleepAlertPopup";
 interface SleepPlanReminderBannerProps {
   childId: string;
   childName: string;
+  // Passed from SleepPage's usePreferences instance so the inline calm toggle
+  // on the same page updates this banner live — separate hook instances don't
+  // cross-sync.
+  calmMode: boolean;
 }
 
 type RecentLog = {
@@ -57,6 +62,7 @@ function deriveState(args: {
   method: SleepMethod;
   recentLogs: RecentLog[];
   hasNightTonight: boolean;
+  calmMode: boolean;
 }): BannerState | null {
   const {
     now,
@@ -70,6 +76,7 @@ function deriveState(args: {
     method,
     recentLogs,
     hasNightTonight,
+    calmMode,
   } = args;
 
   const lastSleep = recentLogs[0] ?? null;
@@ -134,7 +141,7 @@ function deriveState(args: {
     if (minutesSinceEnd > wakeWindowHighMin + 30) {
       return {
         kind: "window-exceeded",
-        title: "Wake window's stretched",
+        title: "Ready for sleep soon",
         body: methodCopy.windowExceeded,
       };
     }
@@ -155,7 +162,9 @@ function deriveState(args: {
     if (minutesUntilNap > 0 && minutesUntilNap <= 15) {
       return {
         kind: "window-15min",
-        title: `Nap in ~${minutesUntilNap} min`,
+        title: calmMode
+          ? `Nap around ${formatApproxClock(new Date(predictedNapMs))}`
+          : `Nap in ~${minutesUntilNap} min`,
         body: methodCopy.windDownNap,
       };
     }
@@ -175,7 +184,9 @@ function deriveState(args: {
     if (minutesUntilNap > 15 && minutesUntilNap <= 60) {
       return {
         kind: "wind-down-nap",
-        title: `Wind-down for nap in ~${minutesUntilNap} min`,
+        title: calmMode
+          ? `Wind-down for nap around ${formatApproxClock(new Date(predictedNapMs))}`
+          : `Wind-down for nap in ~${minutesUntilNap} min`,
         body: methodCopy.windDownNap,
       };
     }
@@ -186,9 +197,13 @@ function deriveState(args: {
     const bedEarliestMin = parseHHmm(bedtimeEarliest);
     const minutesUntilBed = bedEarliestMin - nowMin;
     if (minutesUntilBed > 0 && minutesUntilBed <= 60) {
+      const bedAt = new Date(now);
+      bedAt.setHours(Math.floor(bedEarliestMin / 60), bedEarliestMin % 60, 0, 0);
       return {
         kind: "wind-down-bed",
-        title: `Bedtime in ~${minutesUntilBed} min`,
+        title: calmMode
+          ? `Bedtime around ${formatApproxClock(bedAt)}`
+          : `Bedtime in ~${minutesUntilBed} min`,
         body: methodCopy.windDownBed,
       };
     }
@@ -303,7 +318,11 @@ function bannerToAlertKind(state: BannerState): SleepAlertKind | null {
   }
 }
 
-export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminderBannerProps) {
+export function SleepPlanReminderBanner({
+  childId,
+  childName,
+  calmMode,
+}: SleepPlanReminderBannerProps) {
   const { data: savedPlan } = useSleepPlan(childId);
 
   const { data: recentLogs } = useQuery<RecentLog[]>({
@@ -365,10 +384,12 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
         method: planMethod,
         recentLogs: recentLogs ?? [],
         hasNightTonight: !!nightTonight,
+        calmMode,
       })
     : null;
 
-  const alertKind = state ? bannerToAlertKind(state) : null;
+  // Calm mode keeps the inline banner but never interrupts with the popup.
+  const alertKind = state && !calmMode ? bannerToAlertKind(state) : null;
   const alertBody = state && "body" in state ? (state.body ?? null) : null;
   const popup = useSleepAlertPopup({
     childId,
@@ -381,22 +402,16 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
   const Icon =
     state.kind === "empathy" || state.kind === "on-track"
       ? Sparkles
-      : state.kind === "window-exceeded"
-        ? AlertTriangle
-        : state.kind === "off-plan"
-          ? Compass
-          : state.kind === "wind-down-nap" ||
-              state.kind === "wind-down-bed" ||
-              state.kind === "window-15min"
-            ? Clock
-            : Moon;
+      : state.kind === "off-plan"
+        ? Compass
+        : state.kind === "wind-down-nap" ||
+            state.kind === "wind-down-bed" ||
+            state.kind === "window-15min"
+          ? Clock
+          : Moon;
 
   const isPreview = state.kind === "preview";
   const isEmpathy = state.kind === "empathy" || state.kind === "on-track";
-  const isAlert =
-    state.kind === "window-exceeded" ||
-    state.kind === "off-plan" ||
-    state.kind === "window-15min";
 
   return (
     <>
@@ -407,9 +422,7 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
           ? "bg-sleep/5 border-sleep/15"
           : isEmpathy
             ? "bg-sleep/10 border-sleep/20"
-            : isAlert
-              ? "bg-sleep/15 border-sleep/30"
-              : "bg-sleep/10 border-sleep/25",
+            : "bg-sleep/10 border-sleep/25",
       )}
     >
       <CardContent className={cn("p-4 flex items-start gap-3", isPreview && "py-3")}>

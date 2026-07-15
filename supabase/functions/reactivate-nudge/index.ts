@@ -26,7 +26,7 @@ serve(async () => {
     const rows = (stale as StaleRow[]).map((row) => ({
       user_id: row.user_id,
       child_id: row.child_id,
-      message: `Quick check-in? It's been a while since the last log for ${row.child_name}.`,
+      message: `Hi again 👋 ${row.child_name}'s log is one tap away whenever you're ready.`,
       type: "reactivation",
     }));
     const { error: insertError } = await sb.from("notifications").insert(rows);

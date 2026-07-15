@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
@@ -27,6 +27,7 @@ import PartnerManagement from "@/components/PartnerManagement";
 import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 const MUTABLE_CATEGORIES = [
   {
@@ -145,6 +146,35 @@ export default function ProfilePage() {
     const others = notifPrefs.muted_categories.filter((c) => c !== category);
     saveNotifPrefs({ muted_categories: enabled ? others : [...others, category] });
   };
+  // Toasts outlive the render that spawned them — an action that captured
+  // toggleCategory directly would merge a stale muted_categories snapshot and
+  // clobber any category the user changed while the toast was open. The ref
+  // always points at the latest closure.
+  const toggleCategoryRef = useRef(toggleCategory);
+  toggleCategoryRef.current = toggleCategory;
+
+  const handleCalmModeChange = (checked: boolean) => {
+    setPrefs({ calmMode: checked });
+    if (
+      checked &&
+      notifPrefsReady &&
+      !notifPrefs.muted_categories.includes("reminders")
+    ) {
+      toast({
+        title: "Calm mode is on",
+        description: "Want fewer pings too?",
+        action: (
+          <ToastAction
+            altText="Mute routine reminders"
+            className="touch-target"
+            onClick={() => toggleCategoryRef.current("reminders", false)}
+          >
+            Mute routine reminders
+          </ToastAction>
+        ),
+      });
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -248,12 +278,12 @@ export default function ProfilePage() {
               <Moon className="w-4 h-4 text-primary" />
               <div>
                 <p className="text-sm font-medium">Calm mode</p>
-                <p className="text-xs text-muted-foreground">Hide sleep averages and comparisons</p>
+                <p className="text-xs text-muted-foreground">Softer sleep guidance — approximate times instead of countdowns, numbers tucked away</p>
               </div>
             </div>
             <Switch
               checked={prefs.calmMode}
-              onCheckedChange={(checked) => setPrefs({ calmMode: checked })}
+              onCheckedChange={handleCalmModeChange}
             />
           </div>
         </CardContent>

@@ -7,7 +7,9 @@ import { Sparkles } from "lucide-react";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
+import { usePreferences } from "@/hooks/usePreferences";
 import { useToast } from "@/hooks/use-toast";
+import { formatApproxClock } from "@/lib/gentleTime";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
 import { PremiumGate } from "@/components/PremiumGate";
@@ -27,7 +29,12 @@ type CoachState =
   | { kind: "just-passed"; title: string; cue: string; showCta: false }
   | null;
 
-function deriveCoachState(now: Date, windowStart: Date, windowEnd: Date): CoachState {
+function deriveCoachState(
+  now: Date,
+  windowStart: Date,
+  windowEnd: Date,
+  calmMode: boolean,
+): CoachState {
   const nowMs = now.getTime();
   const startMs = windowStart.getTime();
   const endMs = windowEnd.getTime();
@@ -45,7 +52,11 @@ function deriveCoachState(now: Date, windowStart: Date, windowEnd: Date): CoachS
       };
     }
     const minutes = Math.floor(msToStart / 60_000);
-    const title = msToStart < 60_000 ? "Nap in <1 min" : `Nap in ~${minutes} min`;
+    const title = calmMode
+      ? `Nap around ${formatApproxClock(windowStart)}`
+      : msToStart < 60_000
+        ? "Nap in <1 min"
+        : `Nap in ~${minutes} min`;
     return {
       kind: "coming-up",
       title,
@@ -64,10 +75,11 @@ function deriveCoachState(now: Date, windowStart: Date, windowEnd: Date): CoachS
   }
 
   if (msSinceEnd <= 60 * 60_000) {
+    if (calmMode) return null;
     return {
       kind: "just-passed",
-      title: `Window passed at ${format(windowEnd, "h:mm a")}`,
-      cue: "Watch for a second wind — log when nap starts.",
+      title: "Watching for sleepy cues",
+      cue: "Windows are estimates — log the nap whenever it starts and we'll adjust.",
       showCta: false,
     };
   }
@@ -81,6 +93,8 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
   const pred = data?.prediction ?? null;
   const [now, setNow] = useState<Date>(() => new Date());
   const { active: activeSleep, start } = useActiveSleep(activeChild?.id);
+  const { prefs } = usePreferences();
+  const calmMode = prefs.calmMode;
   const { toast } = useToast();
 
   useEffect(() => {
@@ -90,16 +104,23 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
 
   if (!pred) return null;
 
-  const state = deriveCoachState(now, pred.windowStart, pred.windowEnd);
+  const state = deriveCoachState(now, pred.windowStart, pred.windowEnd, calmMode);
   if (!state) return null;
 
   const confidenceTone = {
     high: "bg-primary",
-    medium: "bg-amber-500",
+    medium: "bg-accent",
     low: "bg-muted-foreground",
   }[pred.confidence];
 
   const pill = (() => {
+    if (calmMode) {
+      return (
+        <Badge variant="outline" className="text-muted-foreground">
+          Heads up
+        </Badge>
+      );
+    }
     switch (state.kind) {
       case "heads-up":
         return (
@@ -121,8 +142,8 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
         );
       case "just-passed":
         return (
-          <Badge variant="outline" className="text-warning border-warning/40">
-            Just passed
+          <Badge variant="outline" className="text-muted-foreground">
+            Flexible
           </Badge>
         );
     }
