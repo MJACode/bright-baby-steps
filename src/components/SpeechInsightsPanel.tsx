@@ -58,26 +58,10 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
     const totalWeeks = Math.max(1, differenceInWeeks(now, firstDate));
     const weeklyRate = totalCount / totalWeeks;
 
-    // Streak: consecutive days with entries from today backward
-    let streak = 0;
-    const daySet = new Set(entries.map((e) => e.entry_date));
-    const check = new Date(now);
-    for (let i = 0; i < 60; i++) {
-      const key = format(check, "yyyy-MM-dd");
-      if (daySet.has(key)) {
-        streak++;
-        check.setDate(check.getDate() - 1);
-      } else if (i === 0) {
-        // today might not have entry yet, check yesterday
-        check.setDate(check.getDate() - 1);
-      } else break;
-    }
-
     return {
       firstDate,
       recentCount,
       weeklyRate: Math.round(weeklyRate * 10) / 10,
-      streak,
     };
   }, [entries, totalCount]);
 
@@ -181,7 +165,6 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Calendar className="w-3 h-3" />
             First word logged {format(stats.firstDate, "MMM d, yyyy")}
-            {stats.streak > 1 && <> · 🔥 {stats.streak}-day streak</>}
           </p>
         )}
 
