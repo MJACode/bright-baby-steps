@@ -26,6 +26,7 @@ type SleepPlanRow = {
  *   window_blown > false_start > short_nap_streak > bedtime_drift
  * Mirrors the thresholds in plan Section 3. Returns null when nothing fires.
  */
+// KEEP IN SYNC with src/lib/sleepOffPlan.ts detectOffPlan (client copy of these titles)
 function detectOffPlan(
   logs: SleepLogRow[],
   plan: SleepPlanRow,
@@ -48,7 +49,7 @@ function detectOffPlan(
       (l) => new Date(l.started_at).getTime() > lastEnd,
     );
     if (now.getTime() > thresholdMs && !newer) {
-      return { kind: "window_blown", title: "Wake window exceeded" };
+      return { kind: "window_blown", title: "Ready for sleep soon" };
     }
   }
 
@@ -66,7 +67,7 @@ function detectOffPlan(
           return s > end && s - end < 30 * 60_000;
         });
         if (followup) {
-          return { kind: "false_start", title: "False start at bedtime" };
+          return { kind: "false_start", title: "A quick restart at bedtime" };
         }
       }
     }
@@ -83,7 +84,7 @@ function detectOffPlan(
       return (e - s) / 60_000;
     });
     if (durations[0] < 45 && durations[1] < 45) {
-      return { kind: "short_nap_streak", title: "Two short naps in a row" };
+      return { kind: "short_nap_streak", title: "Short naps today" };
     }
   }
 
@@ -107,7 +108,7 @@ function detectOffPlan(
       }
       const avg = driftsMin.reduce((a, b) => a + b, 0) / driftsMin.length;
       if (avg > 30) {
-        return { kind: "bedtime_drift", title: "Bedtime drifting later" };
+        return { kind: "bedtime_drift", title: "Bedtime's been trending later" };
       }
     }
   }
@@ -371,7 +372,7 @@ Deno.serve(async (req) => {
           notifications.push({
             user_id: userId,
             child_id: child.id,
-            message: `No diaper logged for ${child.name} in the last 8 hours — time for a check? 🧷`,
+            message: `Time for a diaper check? Tap to log ${child.name}'s latest 🧷`,
             type: "diaper_reminder",
           });
         }
@@ -398,7 +399,7 @@ Deno.serve(async (req) => {
           notifications.push({
             user_id: userId,
             child_id: child.id,
-            message: `${child.name}'s sleep hasn't been logged in 12+ hours — don't forget to track! 🌙`,
+            message: `How's ${child.name} sleeping today? Tap to log a nap or bedtime 🌙`,
             type: "sleep_reminder",
           });
         }
@@ -569,7 +570,7 @@ Deno.serve(async (req) => {
           notifications.push({
             user_id: userId,
             child_id: child.id,
-            message: `${child.name}'s wake window has been exceeded — try a contact nap`,
+            message: `${child.name} may be ready for sleep — a contact nap or calm wind-down works well now`,
             type: "sleep_window_exceeded",
           });
         }
@@ -588,7 +589,7 @@ Deno.serve(async (req) => {
           notifications.push({
             user_id: userId,
             child_id: child.id,
-            message: `${off.title} for ${child.name} — open Sleep for guidance`,
+            message: `${off.title} for ${child.name} — there's a tip in Sleep when you're ready`,
             type: "sleep_off_plan",
           });
         }
