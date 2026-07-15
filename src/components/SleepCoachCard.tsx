@@ -66,8 +66,8 @@ function deriveCoachState(now: Date, windowStart: Date, windowEnd: Date): CoachS
   if (msSinceEnd <= 60 * 60_000) {
     return {
       kind: "just-passed",
-      title: `Window passed at ${format(windowEnd, "h:mm a")}`,
-      cue: "Watch for a second wind — log when nap starts.",
+      title: "Watching for sleepy cues",
+      cue: "Windows are estimates — log the nap whenever it starts and we'll adjust.",
       showCta: false,
     };
   }
@@ -95,7 +95,7 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
 
   const confidenceTone = {
     high: "bg-primary",
-    medium: "bg-amber-500",
+    medium: "bg-accent",
     low: "bg-muted-foreground",
   }[pred.confidence];
 
@@ -121,8 +121,8 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
         );
       case "just-passed":
         return (
-          <Badge variant="outline" className="text-warning border-warning/40">
-            Just passed
+          <Badge variant="outline" className="text-muted-foreground">
+            Flexible
           </Badge>
         );
     }

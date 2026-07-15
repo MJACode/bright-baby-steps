@@ -155,7 +155,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
           <span className="text-xs text-muted-foreground">Timer paused</span>
         )}
         {isStale && (
-          <span className="text-xs text-destructive font-medium">
+          <span className="text-xs text-muted-foreground font-medium">
             Still sleeping? Confirm or discard.
           </span>
         )}

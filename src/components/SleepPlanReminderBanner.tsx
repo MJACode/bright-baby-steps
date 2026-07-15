@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Compass, Moon, Sparkles, Clock } from "lucide-react";
+import { Compass, Moon, Sparkles, Clock } from "lucide-react";
 import { startOfDay, differenceInMinutes } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -134,7 +134,7 @@ function deriveState(args: {
     if (minutesSinceEnd > wakeWindowHighMin + 30) {
       return {
         kind: "window-exceeded",
-        title: "Wake window's stretched",
+        title: "Ready for sleep soon",
         body: methodCopy.windowExceeded,
       };
     }
@@ -381,22 +381,16 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
   const Icon =
     state.kind === "empathy" || state.kind === "on-track"
       ? Sparkles
-      : state.kind === "window-exceeded"
-        ? AlertTriangle
-        : state.kind === "off-plan"
-          ? Compass
-          : state.kind === "wind-down-nap" ||
-              state.kind === "wind-down-bed" ||
-              state.kind === "window-15min"
-            ? Clock
-            : Moon;
+      : state.kind === "off-plan"
+        ? Compass
+        : state.kind === "wind-down-nap" ||
+            state.kind === "wind-down-bed" ||
+            state.kind === "window-15min"
+          ? Clock
+          : Moon;
 
   const isPreview = state.kind === "preview";
   const isEmpathy = state.kind === "empathy" || state.kind === "on-track";
-  const isAlert =
-    state.kind === "window-exceeded" ||
-    state.kind === "off-plan" ||
-    state.kind === "window-15min";
 
   return (
     <>
@@ -407,9 +401,7 @@ export function SleepPlanReminderBanner({ childId, childName }: SleepPlanReminde
           ? "bg-sleep/5 border-sleep/15"
           : isEmpathy
             ? "bg-sleep/10 border-sleep/20"
-            : isAlert
-              ? "bg-sleep/15 border-sleep/30"
-              : "bg-sleep/10 border-sleep/25",
+            : "bg-sleep/10 border-sleep/25",
       )}
     >
       <CardContent className={cn("p-4 flex items-start gap-3", isPreview && "py-3")}>

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { CheckCircle2, Clock, AlertCircle, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { CheckCircle2, Clock, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, addHours, parseISO, differenceInMinutes, isToday, parse } from "date-fns";
 import { toast } from "@/hooks/use-toast";
@@ -210,8 +210,8 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
         return diff <= 30;
       });
       const minsUntil = differenceInMinutes(slotTime, new Date());
-      const status: "completed" | "overdue" | "upcoming" =
-        completed ? "completed" : minsUntil < -30 ? "overdue" : "upcoming";
+      const status: "completed" | "open" | "upcoming" =
+        completed ? "completed" : minsUntil < -30 ? "open" : "upcoming";
       return { slotTime, status, completed };
     });
   }, [schedule, pumpLogs]);
@@ -237,30 +237,24 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
       {hasSchedule && schedule.is_active && (
         <Card className={cn(
           "border-0",
-          nextSessionInfo && nextSessionInfo.minsUntil < 0
-            ? "bg-destructive/10"
-            : nextSessionInfo && nextSessionInfo.minsUntil <= 30
-            ? "bg-amber-500/10"
+          nextSessionInfo && nextSessionInfo.minsUntil >= 0 && nextSessionInfo.minsUntil <= 30
+            ? "bg-accent/10"
             : "bg-feeding/10"
         )}>
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {nextSessionInfo ? (
-                  nextSessionInfo.minsUntil < 0 ? (
-                    <AlertCircle className="w-5 h-5 text-destructive shrink-0" />
-                  ) : (
-                    <Clock className="w-5 h-5 text-feeding shrink-0" />
-                  )
+                  <Clock className="w-5 h-5 text-feeding shrink-0" />
                 ) : (
                   <Clock className="w-5 h-5 text-muted-foreground shrink-0" />
                 )}
                 <div>
                   {nextSessionInfo ? (
                     <>
-                      <p className={cn("font-bold text-sm", nextSessionInfo.minsUntil < 0 ? "text-destructive" : "text-foreground")}>
+                      <p className={cn("font-bold text-sm", nextSessionInfo.minsUntil < 0 ? "text-feeding" : "text-foreground")}>
                         {nextSessionInfo.minsUntil < 0
-                          ? `Overdue by ${formatCountdown(nextSessionInfo.minsUntil)}`
+                          ? `Pump when you can — planned for ${format(nextSessionInfo.nextAt, "h:mm a")}`
                           : nextSessionInfo.minsUntil <= 5
                           ? "Time to pump!"
                           : `Next pump in ${formatCountdown(nextSessionInfo.minsUntil)}`}
@@ -428,24 +422,18 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
                   key={i}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5",
-                    status === "completed" ? "bg-feeding/10" :
-                    status === "overdue" ? "bg-destructive/8" :
-                    "bg-secondary/50"
+                    status === "completed" ? "bg-feeding/10" : "bg-secondary/50"
                   )}
                 >
                   {status === "completed" ? (
                     <CheckCircle2 className="w-4 h-4 text-feeding shrink-0" />
-                  ) : status === "overdue" ? (
-                    <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
                   ) : (
                     <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
                   )}
                   <div className="flex-1">
                     <p className={cn(
                       "text-sm font-semibold",
-                      status === "completed" ? "text-feeding" :
-                      status === "overdue" ? "text-destructive" :
-                      "text-foreground"
+                      status === "completed" ? "text-feeding" : "text-foreground"
                     )}>
                       {format(slotTime, "h:mm a")}
                     </p>
@@ -460,11 +448,9 @@ export default function PumpingSchedule({ onNavigateToLog }: { onNavigateToLog?:
                   </div>
                   <span className={cn(
                     "text-xs font-medium",
-                    status === "completed" ? "text-feeding" :
-                    status === "overdue" ? "text-destructive" :
-                    "text-muted-foreground"
+                    status === "completed" ? "text-feeding" : "text-muted-foreground"
                   )}>
-                    {status === "completed" ? "Done" : status === "overdue" ? "Missed" : "Upcoming"}
+                    {status === "completed" ? "Done" : status === "open" ? "Open" : "Upcoming"}
                   </span>
                 </div>
               );

@@ -42,8 +42,8 @@ function rangeLabel(start: Date, end?: Date): string {
 }
 
 function countdownCopy(minutesUntil: number): string {
-  if (minutesUntil <= 0 && minutesUntil > -5) return "due now";
-  if (minutesUntil <= -5) return `overdue ~${Math.abs(minutesUntil)} min`;
+  if (minutesUntil <= 0 && minutesUntil > -5) return "around now";
+  if (minutesUntil <= -5) return "anytime now";
   if (minutesUntil < 60) return `in ~${minutesUntil} min`;
   const h = Math.floor(minutesUntil / 60);
   const m = minutesUntil % 60;
@@ -227,7 +227,7 @@ function TodoRow({
                 <span>
                   {clockLabel(item.suggestedAt)}
                   {item.minutesUntil !== undefined && (
-                    <span className="ml-1 text-sleep font-semibold">
+                    <span className="ml-1 text-sleep">
                       {countdownCopy(item.minutesUntil)}
                     </span>
                   )}
