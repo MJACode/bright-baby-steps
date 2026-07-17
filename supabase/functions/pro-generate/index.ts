@@ -64,7 +64,7 @@ export const PRO_AUDIENCE_PREAMBLE = `You are assisting a licensed speech-langua
 const PRO_DISCLAIMER =
   "AI-generated draft for review by a licensed speech-language pathologist. Not a diagnosis, a treatment plan of record, or a substitute for clinical judgment. Verify all content before clinical use.";
 const PARENT_DISCLAIMER =
-  "These activities are educational suggestions prepared with your child's speech-language pathologist — not medical advice. Every child develops at their own pace. Contact your SLP with any questions or concerns.";
+  "This home program was drafted with AI assistance and shared with you by your child's speech-language pathologist. It contains educational suggestions, not medical advice. Every child develops at their own pace. Contact your SLP with any questions or concerns.";
 
 const SESSION_PLAN_INSTRUCTION = `You are drafting one therapy session plan for the clinician to review and adapt. Shape the plan to the stated session length and setting.
 
