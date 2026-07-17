@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { SpeechClassPlan } from "@/hooks/useSpeechClass";
 
-export const VERDICT_COPY: Record<SpeechClassPlan["ageCheck"]["verdict"], string> = {
+const VERDICT_COPY: Record<SpeechClassPlan["ageCheck"]["verdict"], string> = {
   too_early: "A little early — gentle warm-up",
   in_window: "Right on time",
   past_window: "Worth a check-in",

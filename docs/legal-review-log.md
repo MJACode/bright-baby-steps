@@ -1707,3 +1707,31 @@ triggering renewed VPC under the email-plus program; reasoning mirrors the
   under the same processing purposes and the executed Anthropic DPA; prospective
   notice, no new subprocessor — non-material change, no renewed VPC required
   (reasoning per the Phase 1 entry and the 2026-05-08 zero-dwell analysis).
+
+## 2026-07-17 — Grace Flare Pro (SLP surface) Phases B–D — new DRAFT Pro Terms + Pro consent checkbox
+
+**Reviewer:** none yet — implementation-only entry; in-house legal pass scheduled for the next phase.
+**Risk: MEDIUM (open) until the Pro Terms pass review.**
+
+**What shipped (frontend legal layer):**
+- New `src/pages/pro/ProTermsPage.tsx` at `/pro/terms`, explicitly marked
+  "Effective: July 17, 2026 · DRAFT — pending in-house legal review". Sections:
+  what Pro is / licensure representation, not-a-medical-record + no-BAA + no-PHI
+  data-minimization rule, AI-outputs-are-drafts, client data & bearer share
+  links (90-day expiry, revocation, clinician responsibility), clinician owns
+  the family relationship, Anthropic AI-processing disclosure (cites Privacy
+  § 4), deletion (cites Privacy § 8), fees & 14-day trial, relationship to
+  consumer Terms/Privacy (consumer arbitration + liability provisions apply).
+- `ProAuth.tsx` signup requires an affirmative checkbox agreeing to the Pro
+  Terms + Privacy Policy and confirming licensed/supervised-clinician status;
+  submit is blocked until checked. `slp_profiles.accepted_pro_terms_at` /
+  `pro_terms_version` stamp acceptance server-side on profile creation
+  (migration 20260806000000).
+- Public share page `/hp/:token` renders the server-stamped parent disclaimer
+  from the pro-generate edge function; anonymous access is only via the
+  SECURITY DEFINER RPCs (no new data egress beyond the migration design).
+
+**Open items for the legal pass:** review/redline all nine ProTermsPage
+sections; decide whether Pro launch requires PrivacyPage § 2/§ 4 additions for
+SLP-entered client data (display name + age sent to Anthropic on generation);
+confirm the geo-block position covers Pro signup (it reuses `useGeoBlock`).

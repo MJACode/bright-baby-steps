@@ -3,6 +3,7 @@ import { Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeoBlock } from "@/hooks/useGeoBlock";
+import { useSlpProfile } from "@/hooks/pro/useSlpProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ type View = "login" | "signup" | "forgot" | "pending";
 export default function Auth() {
   const { session, loading } = useAuth();
   const geo = useGeoBlock();
+  const { data: slpProfile, isLoading: slpProfileLoading } = useSlpProfile();
   const [view, setView] = useState<View>("login");
   const [verifying, setVerifying] = useState(
     () => !!new URLSearchParams(window.location.search).get("code")
@@ -106,6 +108,17 @@ export default function Auth() {
     if (postLoginRedirect) {
       localStorage.removeItem("post_login_redirect");
       return <Navigate to={postLoginRedirect} replace />;
+    }
+    // SLP accounts (slp_profiles row) live on the Pro surface, not /dashboard.
+    if (slpProfileLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="animate-pulse text-muted-foreground">Loading...</div>
+        </div>
+      );
+    }
+    if (slpProfile) {
+      return <Navigate to="/pro/dashboard" replace />;
     }
     return <Navigate to="/dashboard" replace />;
   }
