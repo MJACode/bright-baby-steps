@@ -3,21 +3,20 @@ import { Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeoBlock } from "@/hooks/useGeoBlock";
-import { useSlpProfile } from "@/hooks/pro/useSlpProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Baby, Globe } from "lucide-react";
+import { Globe, Stethoscope } from "lucide-react";
+import { PRO_TERMS_VERSION } from "@/lib/proTerms";
 
 type View = "login" | "signup" | "forgot" | "pending";
 
-export default function Auth() {
+export default function ProAuth() {
   const { session, loading } = useAuth();
   const geo = useGeoBlock();
-  const { data: slpProfile, isLoading: slpProfileLoading } = useSlpProfile();
   const [view, setView] = useState<View>("login");
   const [verifying, setVerifying] = useState(
     () => !!new URLSearchParams(window.location.search).get("code")
@@ -28,13 +27,9 @@ export default function Auth() {
     if (!code) return;
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       if (error) {
-        // Supabase's /verify endpoint already flipped email_confirmed_at before
-        // redirecting here, so the email is confirmed even when this exchange
-        // fails. The common cause is the link being opened on a different
-        // browser than the one that initiated signup (e.g. Gmail's in-app
-        // browser): PKCE's code_verifier lives in localStorage on the original
-        // device, so the exchange can't complete on the opener. Telling the
-        // user the link "expired" is wrong and scary — point them at sign-in.
+        // Same PKCE cross-browser caveat as the consumer Auth page: the email
+        // is already confirmed even when this exchange fails on a different
+        // browser — point the user at sign-in, not at a scary "expired" error.
         toast.success("Email confirmed! Please sign in below to continue.");
       }
       setVerifying(false);
@@ -45,7 +40,9 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [credentials, setCredentials] = useState("");
+  const [practiceName, setPracticeName] = useState("");
+  const [agreedToProTerms, setAgreedToProTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resending, setResending] = useState(false);
@@ -67,7 +64,7 @@ export default function Auth() {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email,
-        options: { emailRedirectTo: `${window.location.origin}/auth` },
+        options: { emailRedirectTo: `${window.location.origin}/pro/auth` },
       });
       if (error) {
         if (error.message.toLowerCase().includes("rate limit")) {
@@ -97,30 +94,7 @@ export default function Auth() {
   }
 
   if (session) {
-    const pendingInvite = sessionStorage.getItem("pending_invite");
-    if (pendingInvite) {
-      sessionStorage.removeItem("pending_invite");
-      return <Navigate to={`/invite/${pendingInvite}`} replace />;
-    }
-    // localStorage (not sessionStorage) so the deep link survives a Capacitor
-    // WebView cold-start, same as the pending_invite deep-link pattern.
-    const postLoginRedirect = localStorage.getItem("post_login_redirect");
-    if (postLoginRedirect) {
-      localStorage.removeItem("post_login_redirect");
-      return <Navigate to={postLoginRedirect} replace />;
-    }
-    // SLP accounts (slp_profiles row) live on the Pro surface, not /dashboard.
-    if (slpProfileLoading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
-        </div>
-      );
-    }
-    if (slpProfile) {
-      return <Navigate to="/pro/dashboard" replace />;
-    }
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/pro/dashboard" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,22 +111,20 @@ export default function Auth() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth`,
-            data: { full_name: fullName },
+            emailRedirectTo: `${window.location.origin}/pro/auth`,
+            data: {
+              full_name: fullName,
+              slp_credentials: credentials,
+              slp_practice_name: practiceName,
+              // Acceptance evidence: the checkbox gates submit, so reaching
+              // here means the Pro Terms were affirmatively agreed to.
+              pro_terms_agreed: true,
+              pro_terms_version: PRO_TERMS_VERSION,
+              pro_terms_agreed_at: new Date().toISOString(),
+            },
           },
         });
         if (error) throw error;
-        if (signUpData.user) {
-          await supabase.from("profiles").update({
-            data_consent_given_at: new Date().toISOString(),
-            data_consent_version: "1.0",
-          }).eq("id", signUpData.user.id);
-        }
-        // First half of COPPA email-plus VPC. Requires Supabase Auth's "Confirm
-        // email" setting to be ON; when it is, signUpData.session is null and we
-        // flip to the "pending" view. The auth.users trigger
-        // sync_email_confirmation_to_vpc mirrors email_confirmed_at into
-        // profiles.vpc_first_confirmation_at when the parent clicks the link.
         if (!signUpData.session) {
           setView("pending");
         }
@@ -176,16 +148,16 @@ export default function Auth() {
 
   const titles: Record<View, string> = {
     login: "Welcome back",
-    signup: isGeoBlocked ? "Not yet in your region" : "Create your account",
+    signup: isGeoBlocked ? "Not yet in your region" : "Create your professional account",
     forgot: "Reset your password",
     pending: "Check your inbox",
   };
 
   const descriptions: Record<View, string> = {
-    login: "Sign in to your Grace Flare dashboard",
+    login: "Sign in to your Grace Flare Pro workspace",
     signup: isGeoBlocked
-      ? "Grace Flare is not currently available in the EEA or UK."
-      : "Start tracking your baby's growth and speech development",
+      ? "Grace Flare Pro is not currently available in the EEA or UK."
+      : "AI drafting tools for licensed speech-language pathologists",
     forgot: "Enter your email and we'll send you a reset link.",
     pending: `We sent a confirmation link to ${email}. Click it to activate your account.`,
   };
@@ -195,7 +167,13 @@ export default function Auth() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-2">
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
-            <Baby className="w-6 h-6 text-primary" />
+            <Stethoscope className="w-6 h-6 text-primary" />
+          </div>
+          <div className="flex items-center justify-center gap-2">
+            <span className="font-display text-lg font-bold">Grace Flare</span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-warning text-foreground text-[10px] font-bold uppercase tracking-wider font-mono">
+              Pro
+            </span>
           </div>
           <CardTitle className="font-display text-2xl">{titles[view]}</CardTitle>
           <CardDescription>{descriptions[view]}</CardDescription>
@@ -247,7 +225,7 @@ export default function Auth() {
               <div className="space-y-1">
                 <p className="text-sm font-medium text-foreground">Not yet available in your region</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Grace Flare is not currently offered in the European Economic Area or the
+                  Grace Flare Pro is not currently offered in the European Economic Area or the
                   United Kingdom. We're working on it. In the meantime,{" "}
                   <a href="mailto:support@graceflare.com" className="text-primary underline">
                     let us know
@@ -270,21 +248,42 @@ export default function Auth() {
           <>
           <form onSubmit={handleSubmit} className="space-y-4">
             {view === "signup" && (
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Your name"
-                  required
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="pro-fullName">Full name</Label>
+                  <Input
+                    id="pro-fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Your name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pro-credentials">Credentials</Label>
+                  <Input
+                    id="pro-credentials"
+                    value={credentials}
+                    onChange={(e) => setCredentials(e.target.value)}
+                    placeholder="MS, CCC-SLP"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pro-practice">Practice name (optional)</Label>
+                  <Input
+                    id="pro-practice"
+                    value={practiceName}
+                    onChange={(e) => setPracticeName(e.target.value)}
+                    placeholder="Your clinic or practice"
+                  />
+                </div>
+              </>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="pro-email">Email</Label>
               <Input
-                id="email"
+                id="pro-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -295,7 +294,7 @@ export default function Auth() {
             {view !== "forgot" && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="pro-password">Password</Label>
                   {view === "login" && (
                     <button
                       type="button"
@@ -307,7 +306,7 @@ export default function Auth() {
                   )}
                 </div>
                 <Input
-                  id="password"
+                  id="pro-password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -321,37 +320,30 @@ export default function Auth() {
               </div>
             )}
             {view === "signup" && (
-              <>
-                <div className="rounded-lg bg-muted/50 border p-3 space-y-1.5 text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground/80">Before you create an account:</p>
-                  <ul className="space-y-1 list-disc pl-4">
-                    <li>Grace Flare is <strong className="text-foreground/70">not a medical service</strong>. AI responses are informational only — always consult your child's doctor for medical questions.</li>
-                    <li>Your child's name, age, and activity logs are sent to our <strong className="text-foreground/70">AI provider</strong> to generate insights and chat responses. Your data is never used to train AI models.</li>
-                    <li>You must be the <strong className="text-foreground/70">parent or legal guardian</strong> of any child whose data you add (required under COPPA).</li>
-                    <li>You can <strong className="text-foreground/70">export or delete</strong> all your data at any time from your profile.</li>
-                  </ul>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <Checkbox
-                    id="terms"
-                    checked={agreedToTerms}
-                    onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                    className="mt-0.5"
-                  />
-                  <Label htmlFor="terms" className="text-xs text-muted-foreground font-normal leading-snug cursor-pointer">
-                    I agree to the{" "}
-                    <Link to="/terms" target="_blank" className="text-primary underline">Terms of Service</Link>
-                    {" "}and{" "}
-                    <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>
-                    , and confirm I am the parent or legal guardian of any child whose data I add.
-                  </Label>
-                </div>
-              </>
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="pro-terms"
+                  checked={agreedToProTerms}
+                  onCheckedChange={(checked) => setAgreedToProTerms(checked === true)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="pro-terms" className="text-xs text-muted-foreground font-normal leading-snug cursor-pointer">
+                  I agree to the{" "}
+                  <Link to="/pro/terms" target="_blank" className="text-primary underline">
+                    Grace Flare Pro Terms
+                  </Link>{" "}
+                  and{" "}
+                  <Link to="/privacy" target="_blank" className="text-primary underline">
+                    Privacy Policy
+                  </Link>
+                  , and confirm I am a licensed speech-language pathologist or supervised clinician.
+                </Label>
+              </div>
             )}
             <Button
               type="submit"
               className="w-full"
-              disabled={submitting || (view === "signup" && !agreedToTerms)}
+              disabled={submitting || (view === "signup" && !agreedToProTerms)}
             >
               {submitting
                 ? "Please wait..."
@@ -375,7 +367,7 @@ export default function Auth() {
               </>
             ) : view === "login" ? (
               <>
-                Don't have an account?{" "}
+                New to Grace Flare Pro?{" "}
                 <button
                   onClick={() => setView("signup")}
                   className="text-primary font-medium hover:underline"
@@ -395,6 +387,12 @@ export default function Auth() {
               </>
             )}
           </div>
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Looking for the parent app?{" "}
+            <Link to="/auth" className="text-primary hover:underline">
+              Go to Grace Flare
+            </Link>
+          </p>
           </>
           )}
         </CardContent>

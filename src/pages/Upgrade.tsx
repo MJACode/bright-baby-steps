@@ -22,7 +22,7 @@ export default function Upgrade() {
 
   return (
     <div className="min-h-screen bg-foreground text-background pb-12">
-      <div className="max-w-lg mx-auto px-5 pt-safe">
+      <div className="max-w-lg mx-auto px-5 safe-area-top">
         <div className="flex justify-between items-center pt-4">
           <button
             className="text-sm opacity-60 hover:opacity-100"

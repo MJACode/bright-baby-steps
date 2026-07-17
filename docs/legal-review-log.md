@@ -1707,3 +1707,130 @@ triggering renewed VPC under the email-plus program; reasoning mirrors the
   under the same processing purposes and the executed Anthropic DPA; prospective
   notice, no new subprocessor — non-material change, no renewed VPC required
   (reasoning per the Phase 1 entry and the 2026-05-08 zero-dwell analysis).
+
+
+## 2026-07-17 — Grace Flare Pro (SLP surface) — in-house legal pass COMPLETE
+
+**Reviewer:** in-house legal (AI-assisted pre-review; posture per the standing
+caveat — no outside counsel; founder accepts residual risk for U.S. v1).
+**Risk: MEDIUM (managed), conditioned on the P0 items below landing before
+any real SLP signup.**
+
+### HIPAA / BAA analysis and residual risk
+Many private-practice SLPs are HIPAA Covered Entities (electronic billing,
+45 CFR § 160.103). A vendor that receives client information on a CE's behalf
+is ordinarily a Business Associate. **Decision: we do not offer a BAA and do
+not accept BA status.** Mitigation is data-minimization-by-schema: slp_clients
+accepts display name (first name/initials, ≤ 40 chars at the AI boundary) and
+age-in-months only — no surname, DOB, diagnoses, ICD codes, or clinical free
+text fields exist by design — plus a contractual PHI prohibition (Pro Terms
+§ 2) and a sole-responsibility / no-HIPAA-warranty clause (this pass's
+redline). **Residual risk, accepted:** first name + age + therapy-goal content
+in a specific clinician's caseload is arguably still individually identifiable
+health information; a regulator or plaintiff could contend BA status attaches
+despite the prohibition. **Standing directive: Grace Flare Pro must never be
+marketed as "HIPAA-compliant," "HIPAA-safe," or similar — in-app, on the
+site, or in sales copy.** Outside healthcare-regulatory counsel is a
+precondition to any BAA offer, EHR integration, or provider-directed
+marketing (consistent with the standing trigger list).
+
+### Anonymous-disclosure model (share links)
+Decision: parent access to home programs is via 256-bit bearer token
+(32 random bytes hex), 90-day expiry, SLP-revocable, no parent account.
+Anonymous surface is exactly two SECURITY DEFINER RPCs
+(20260806010000_slp_home_program_rpcs.sql): get_home_program (NULL on
+unknown/revoked/expired — no enumeration signal) and toggle_home_program_day
+(day check-off only). Owner-only RLS on the table; no anon policies. Risk
+allocation: Pro Terms § 4 names the link a bearer credential and puts
+distribution/revocation responsibility on the SLP; ShareLinkDialog warns at
+the point of copy. Accepted trade-off: link-holders can also toggle
+completed-days (integrity, not just confidentiality) — § 4 redlined to say so.
+No analytics or third-party scripts are permitted on /hp/:token routes.
+
+### New Anthropic egress path (existing DPA)
+pro-generate (edge function) sends: client display name, age in months, saved
+goal texts (≤ 10 × 300 chars), and the SLP's selections (kind, setting, area,
+session length, timeframe, target). Covered as Customer Data under the
+Anthropic DPA accepted 2026-05-08 (no-training via Commercial Terms/Usage
+Policy; SCCs incorporated; 48h breach notice). No new subprocessor; no
+notice-period obligation under Privacy § 5 triggered. **However**, Privacy § 4's
+per-feature egress enumeration, Privacy § 2's data categories, and the
+/subprocessors Anthropic purpose line did not mention Pro — closed by this
+PR's PrivacyPage/SubprocessorsPage updates.
+
+### COPPA analysis (Pro surface + /hp parent page)
+COPPA obligations attach to operators collecting personal information FROM
+children online, or operating services directed to children (16 CFR § 312.2–
+312.3). Grace Flare Pro collects information ABOUT children FROM adult
+clinicians; the /hp share page is directed to parents. The child data held
+(first name or initials + age in months) does not itself meet the § 312.2
+"personal information" definition (which requires first AND last name, or
+another enumerated identifier); the /hp page collects no child-provided data —
+the day-toggle is keyed to the bearer token, and session-scope technical data
+falls within the internal-operations support exemption (§ 312.5(c)(7)) even if
+a child taps the checkbox. **Conclusion: COPPA does not apply to the Pro
+product or the /hp surface, and the consumer VPC machinery (email-plus) is NOT
+extended to Pro.** Conditions that would reopen this analysis: adding child-
+directed content/interactivity to /hp, collecting last names or photos in Pro,
+or adding third-party trackers to /hp.
+
+### Consumer Privacy Policy coverage — P0 gap (closed in this PR)
+PrivacyPage.tsx did not cover Pro: § 2 had no SLP-client-data category, § 4
+did not list Pro drafting among Anthropic-bound features, § 5 did not
+disclose the /hp share surface, and SubprocessorsPage's Anthropic purpose line
+omitted Pro. Because ProAuth's checkbox binds SLPs to this Privacy Policy, the
+mismatch was an FTC § 5 accuracy problem. Closed by adding a "Grace Flare Pro
+(professional accounts)" section to PrivacyPage covering (a) SLP
+account/profile data; (b) client display name + age + goals + saved plans;
+(c) the Anthropic egress for Pro drafting; (d) the /hp anonymous surface and
+link-visitor technical data; and updating the /subprocessors Anthropic purpose
+line.
+
+### Pro Terms acceptance mechanism
+UX is valid clickwrap (unchecked box, hyperlinked terms, submit disabled until
+checked; Meyer v. Uber standard) plus a sign-in-wrap notice at profile
+creation. **Evidentiary gap (P0, closed in this PR):** accepted_pro_terms_at
+was a schema DEFAULT now() and pro_terms_version a hardcoded '1.0' default —
+the timestamp recorded row creation, not assent, and the checkbox state was
+never persisted. Fix landed: client passes acceptance timestamp + version
+explicitly from a shared PRO_TERMS_VERSION constant at both signup (auth
+metadata) and profile insert; column defaults remain as backstop only.
+
+### FERPA / state student-privacy (IEP-adjacent drafting)
+IEPs are education records (FERPA, 20 U.S.C. § 1232g; 34 CFR Part 99) when
+maintained by/for an educational agency. School-based SLPs using Pro with
+identifiable student data would need the school-official exception (34 CFR
+§ 99.31(a)(1)(i)) — which requires vendor contract terms we do not offer — and
+several states require specific vendor contracts (N.Y. Educ. Law § 2-d,
+CA SOPIPA). Decision: prohibit education-records input in Pro Terms § 2;
+product copy uses "IEP/IFSP-STYLE goals" (drafting aids), never "IEP goals";
+no FERPA/2-d contract offered in v1. IDEA note: goals are drafted by the IEP
+team — outputs are labeled drafts for clinician review, which is consistent.
+
+### Terms review outcome
+All nine ProTermsPage sections reviewed; redlines applied in this PR: § 1
+consumer-eligibility override + authority rep; § 2 no-HIPAA-warranty +
+education-records prohibition + prohibited-data handling; § 3 not-a-provider +
+clinician AI-disclosure allocation; § 4 "view AND check off" accuracy fix +
+link-visitor technical data; § 5 parental-authorization representation; § 7
+cross-reference corrected to Privacy §§ 8–9; § 8 auto-renewal sentence staged
+for the payments launch (CA ARL / FTC Negative Option Rule compliance is a P0
+of THAT launch, not this one); new §§ 9–10 (output ownership/non-uniqueness;
+indemnification). PARENT_DISCLAIMER rewritten to disclose AI assistance
+(pro-generate + HomeProgramPage, which now always renders the current legal
+copy in preference to stored plan.disclaimer). Banner flipped from "DRAFT —
+pending in-house legal review" to "Effective: July 17, 2026 · Last reviewed:
+2026-07-17" in the same PR because every P0 landed with it; PRO_TERMS_VERSION
+stays '1.0' (no non-test acceptances of the draft existed).
+
+### Geo-block
+Confirmed: ProAuth reuses useGeoBlock; EEA/UK signup blocked, login preserved.
+Consistent with the no-Art.-27-representative position in Privacy.
+
+### Banked for outside counsel (standing trigger list applies)
+(1) Does first-name/initials + age + goal text in a clinician's account
+constitute PHI such that BA status attaches despite the contractual
+prohibition? (2) Do CA Health & Safety Code § 1339.75 (AB 3030) and Utah
+S.B. 149 AI-disclosure duties cover SLP private practices? (3) Should Pro
+disputes move to AAA Commercial rules rather than inheriting the consumer
+arbitration provision?

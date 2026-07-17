@@ -32,6 +32,13 @@ import CryAnalyzerPage from "./pages/dashboard/CryAnalyzerPage";
 import MorePage from "./pages/dashboard/MorePage";
 import FindSlpPage from "./pages/dashboard/FindSlpPage";
 import Upgrade from "@/pages/Upgrade";
+import ProAuth from "./pages/pro/ProAuth";
+import ProLayout from "./components/pro/ProLayout";
+import ProDashboard from "./pages/pro/ProDashboard";
+import ClientDetailPage from "./pages/pro/ClientDetailPage";
+import ProUpgrade from "./pages/pro/ProUpgrade";
+import ProTermsPage from "./pages/pro/ProTermsPage";
+import HomeProgramPage from "./pages/HomeProgramPage";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
 import FAQPage from "./pages/FAQPage";
@@ -78,6 +85,16 @@ const App = () => (
                 <Route path="more" element={<MorePage />} />
                 <Route path="find-slp" element={<FindSlpPage />} />
               </Route>
+              <Route path="/pro" element={<Navigate to="/pro/dashboard" replace />} />
+              <Route path="/pro/auth" element={<ProAuth />} />
+              <Route path="/pro/terms" element={<ProTermsPage />} />
+              <Route path="/pro/upgrade" element={<ProUpgrade />} />
+              <Route path="/pro/dashboard" element={<ProLayout />}>
+                <Route index element={<ProDashboard />} />
+                <Route path="clients/:clientId" element={<ClientDetailPage />} />
+              </Route>
+              {/* Public family share page — deliberately outside both layouts. */}
+              <Route path="/hp/:token" element={<HomeProgramPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/faq" element={<FAQPage />} />
