@@ -2623,11 +2623,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "slp_client_goals_client_id_fkey"
-            columns: ["client_id"]
+            foreignKeyName: "slp_client_goals_client_id_slp_id_fkey"
+            columns: ["client_id", "slp_id"]
             isOneToOne: false
             referencedRelation: "slp_clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "slp_id"]
           },
         ]
       }
@@ -2706,11 +2706,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "slp_home_programs_client_id_fkey"
-            columns: ["client_id"]
+            foreignKeyName: "slp_home_programs_client_id_slp_id_fkey"
+            columns: ["client_id", "slp_id"]
             isOneToOne: false
             referencedRelation: "slp_clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "slp_id"]
           },
         ]
       }
@@ -2771,11 +2771,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "slp_session_plans_client_id_fkey"
-            columns: ["client_id"]
+            foreignKeyName: "slp_session_plans_client_id_slp_id_fkey"
+            columns: ["client_id", "slp_id"]
             isOneToOne: false
             referencedRelation: "slp_clients"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "slp_id"]
           },
         ]
       }

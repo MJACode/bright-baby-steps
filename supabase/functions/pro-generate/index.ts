@@ -330,7 +330,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 2000,
+        max_tokens: 3000,
         system: `${PERSONA_PROMPTS.slp}\n\n${PRO_AUDIENCE_PREAMBLE}\n\n${KIND_INSTRUCTIONS[kind as Kind]}`,
         messages: [{ role: "user", content: userText }],
       }),
@@ -346,6 +346,18 @@ serve(async (req) => {
     }
 
     const json = await response.json();
+
+    // A max_tokens stop means the JSON is cut off mid-stream — surface it as
+    // a distinct upstream failure rather than letting the truncated payload
+    // fall through to the generic 422 non-JSON branch.
+    if (json?.stop_reason === "max_tokens") {
+      console.error("pro-generate: output truncated at max_tokens for kind:", kind);
+      return new Response(
+        JSON.stringify({ error: "generation_truncated" }),
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const text = (json?.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
       .map((b: { text: string }) => b.text)

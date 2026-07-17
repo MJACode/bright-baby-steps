@@ -3,6 +3,12 @@
 -- Idempotent: re-running this is a no-op if the user already has 'pro' / 'active'.
 -- Safe if the user doesn't exist yet — the SELECT just returns no rows.
 --
+-- This REPLACES the account's 'plus' tier (subscriptions is one row per
+-- user), but the account keeps every consumer Flare+ feature because pro is
+-- a one-way superset of plus: all consumer premium checks (usePremium.tsx,
+-- chat / generate-speech-class / visit-prep-questions / mcp edge functions)
+-- accept tier 'plus' OR 'pro'. Plus does NOT get pro features.
+--
 -- To revoke: update subscriptions set tier='free', status='inactive' where user_id = (select id from auth.users where email='matt.alksninis@gmail.com');
 
 insert into public.subscriptions (user_id, tier, status, current_period_start, current_period_end, provider)

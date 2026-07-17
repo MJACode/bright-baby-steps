@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-export type Tier = "free" | "plus";
+export type Tier = "free" | "plus" | "pro";
 export type Status = "inactive" | "trialing" | "active" | "past_due" | "canceled" | "expired";
 
 interface Subscription {
@@ -15,7 +15,8 @@ interface Subscription {
 /**
  * Single source of truth for premium gating.
  *
- * `isPremium` is true when the user has an active or trialing Flare+ sub.
+ * `isPremium` is true when the user has an active or trialing Flare+ ("plus")
+ * or Grace Flare Pro ("pro") sub — pro is a superset of plus for consumer features.
  * Cached for 5 min — webhooks invalidate via `queryClient.invalidateQueries(["subscription"])`.
  */
 export function usePremium() {
@@ -37,7 +38,12 @@ export function usePremium() {
   });
 
   const sub = data ?? { tier: "free" as Tier, status: "inactive" as Status, current_period_end: null, trial_ends_at: null };
-  const isPremium = sub.tier === "plus" && (sub.status === "active" || sub.status === "trialing");
+  // "pro" (the Grace Flare Pro SLP product) is a one-way superset of "plus":
+  // pro accounts get every consumer Flare+ feature, but plus does NOT get pro
+  // features (those gate on slp_profiles + tier="pro" server-side).
+  const isPremium =
+    (sub.tier === "plus" || sub.tier === "pro") &&
+    (sub.status === "active" || sub.status === "trialing");
   const isTrialing = sub.status === "trialing";
 
   return {

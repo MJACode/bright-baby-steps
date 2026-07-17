@@ -80,7 +80,13 @@ create table if not exists public.slp_clients (
   age_months int not null check (age_months between 0 and 216),
   archived_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+
+  -- Composite-FK target for the child tables (slp_client_goals,
+  -- slp_session_plans, slp_home_programs): their (client_id, slp_id) pairs
+  -- reference (id, slp_id) here, so a child row can never pair another
+  -- SLP's client with the caller's slp_id.
+  constraint slp_clients_id_slp_id_key unique (id, slp_id)
 );
 
 comment on table public.slp_clients is
@@ -120,12 +126,18 @@ create policy slp_clients_delete
 -- ── 4. slp_client_goals — therapy goals per client. ─────────────────────────
 create table if not exists public.slp_client_goals (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references public.slp_clients(id) on delete cascade,
+  client_id uuid not null,
   slp_id uuid not null references auth.users(id) on delete cascade,  -- denormalized for cheap RLS
   goal_text text not null check (char_length(goal_text) <= 1000),
   source text not null default 'manual' check (source in ('manual', 'ai')),
   status text not null default 'active' check (status in ('active', 'met', 'archived')),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+
+  -- Composite FK: binds the denormalized slp_id to the client's actual
+  -- owner, so a row can never pair another SLP's client with your slp_id.
+  constraint slp_client_goals_client_id_slp_id_fkey
+    foreign key (client_id, slp_id)
+    references public.slp_clients (id, slp_id) on delete cascade
 );
 
 comment on table public.slp_client_goals is
@@ -164,10 +176,15 @@ create policy slp_client_goals_delete
 -- ── 5. slp_session_plans — AI-drafted session plans (history model). ────────
 create table if not exists public.slp_session_plans (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references public.slp_clients(id) on delete cascade,
+  client_id uuid not null,
   slp_id uuid not null references auth.users(id) on delete cascade,
   plan jsonb not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+
+  -- Composite FK: see slp_client_goals — prevents cross-SLP client pairing.
+  constraint slp_session_plans_client_id_slp_id_fkey
+    foreign key (client_id, slp_id)
+    references public.slp_clients (id, slp_id) on delete cascade
 );
 
 comment on table public.slp_session_plans is
@@ -211,7 +228,7 @@ create policy slp_session_plans_delete
 -- the minimal fields and require token + status='active' + unexpired.
 create table if not exists public.slp_home_programs (
   id uuid primary key default gen_random_uuid(),
-  client_id uuid not null references public.slp_clients(id) on delete cascade,
+  client_id uuid not null,
   slp_id uuid not null references auth.users(id) on delete cascade,
   share_token text not null unique default encode(gen_random_bytes(32), 'hex'),
   week_start date not null,
@@ -221,7 +238,12 @@ create table if not exists public.slp_home_programs (
   revoked_at timestamptz,
   expires_at timestamptz not null default (now() + interval '90 days'),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+
+  -- Composite FK: see slp_client_goals — prevents cross-SLP client pairing.
+  constraint slp_home_programs_client_id_slp_id_fkey
+    foreign key (client_id, slp_id)
+    references public.slp_clients (id, slp_id) on delete cascade
 );
 
 comment on table public.slp_home_programs is

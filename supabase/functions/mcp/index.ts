@@ -429,8 +429,10 @@ async function handleApprove(req: Request, origin: string) {
     .select("tier, status")
     .eq("user_id", userId)
     .maybeSingle();
+  // "pro" (Grace Flare Pro, SLP product) is a superset of "plus" for consumer features.
   const isPremium =
-    sub?.tier === "plus" && (sub?.status === "active" || sub?.status === "trialing");
+    (sub?.tier === "plus" || sub?.tier === "pro") &&
+    (sub?.status === "active" || sub?.status === "trialing");
   if (!isPremium) {
     return oauthError(
       "access_denied",
