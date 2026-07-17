@@ -99,7 +99,8 @@ function ProOnboarding() {
         <CardHeader>
           <CardTitle className="font-display text-xl font-bold">Set up your professional profile</CardTitle>
           <CardDescription>
-            Your name and credentials appear on the home programs you share with families.
+            Completing this form sets your account up as a professional (SLP) workspace. Your name
+            and credentials appear on the home programs you share with families.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -144,10 +145,20 @@ function ProOnboarding() {
               By continuing you agree to the{" "}
               <Link to="/pro/terms" target="_blank" className="text-primary underline">
                 Grace Flare Pro Terms
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy" target="_blank" className="text-primary underline">
+                Privacy Policy
               </Link>
               .
             </p>
           </form>
+          <p className="mt-4 text-center text-xs text-muted-foreground">
+            Looking for the parent app?{" "}
+            <Link to="/dashboard" className="text-primary hover:underline">
+              Go back to Grace Flare
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -63,7 +63,7 @@ export function useProEntitlement() {
 /** Pro feature registry — one place to add or remove features from the gate. */
 export const PRO_FEATURES = {
   "session-plans": "AI session plans",
-  "goal-drafting": "IEP/IFSP goal drafting",
+  "goal-drafting": "IEP/IFSP-style goal drafting",
   "home-programs": "Parent home programs",
 } as const;
 

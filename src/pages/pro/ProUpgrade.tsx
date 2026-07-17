@@ -10,7 +10,7 @@ import { useProEntitlement } from "@/hooks/pro/useProEntitlement";
 
 const PERKS = [
   { i: Sparkles, t: "Unlimited AI session plans", s: "Length- and setting-aware drafts built from each client's goals" },
-  { i: ClipboardList, t: "IEP/IFSP goal drafting", s: "Measurable goals with objectives, criteria, and timeframes" },
+  { i: ClipboardList, t: "IEP/IFSP-style goal drafting", s: "Measurable goals with objectives, criteria, and timeframes" },
   { i: Link2, t: "Parent home programs", s: "Weekly practice plans families follow from a simple share link" },
   { i: Users, t: "Caseload tools — free forever", s: "Clients and manual goals stay free; Pro unlocks the AI drafting" },
 ];
@@ -52,7 +52,7 @@ export default function ProUpgrade() {
 
   return (
     <div className="min-h-screen bg-foreground text-background pb-12">
-      <div className="max-w-lg mx-auto px-5 pt-safe">
+      <div className="max-w-lg mx-auto px-5 safe-area-top">
         <div className="flex justify-between items-center pt-4">
           <button
             className="text-sm opacity-60 hover:opacity-100 min-h-[48px]"

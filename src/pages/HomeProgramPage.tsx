@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { Heart } from "lucide-react";
@@ -9,6 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { WeeklyPlanView } from "@/components/WeeklyPlanView";
 import type { HomeProgramPlan } from "@/hooks/pro/useProGenerate";
+
+// Current legal copy must always win over the disclaimer persisted inside a
+// stored plan — stored copies go stale when legal updates the language.
+const PARENT_DISCLAIMER =
+  "This home program was drafted with AI assistance and shared with you by your child's speech-language pathologist. It contains educational suggestions, not medical advice. Every child develops at their own pace. Contact your SLP with any questions or concerns.";
 
 interface HomeProgramShare {
   clientName: string;
@@ -156,11 +161,15 @@ export default function HomeProgramPage() {
           isPremature={plan.ageCheck.correctedAgeMonths != null}
           showDiagnosisNote={false}
           escalationStyle="contact"
-          disclaimer={
-            plan.disclaimer ??
-            "These activities are educational suggestions prepared with your child's speech-language pathologist — not medical advice."
-          }
+          disclaimer={PARENT_DISCLAIMER}
         />
+
+        <p className="text-xs text-muted-foreground text-center pt-2">
+          Powered by Grace Flare ·{" "}
+          <Link to="/privacy" className="text-primary hover:underline">
+            Privacy
+          </Link>
+        </p>
       </div>
     </div>
   );

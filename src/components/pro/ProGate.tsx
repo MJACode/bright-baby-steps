@@ -8,7 +8,7 @@ const FEATURE_COPY: Record<ProFeature, string> = {
   "session-plans":
     "Draft a full session plan from this client's goals — length- and setting-aware, ready to review.",
   "goal-drafting":
-    "Turn a goal area into measurable, IEP/IFSP-ready goal statements with objectives and criteria.",
+    "Turn a goal area into measurable, IEP/IFSP-style goal statements with objectives and criteria.",
   "home-programs":
     "Build a weekly home program families can follow from a simple link — no app or account needed.",
 };
@@ -16,8 +16,6 @@ const FEATURE_COPY: Record<ProFeature, string> = {
 interface ProGateProps {
   feature: ProFeature;
   children: ReactNode;
-  /** Render style for non-Pro users. */
-  variant?: "replace" | "inline";
   /** Optional label override (defaults to PRO_FEATURES[feature]). */
   label?: string;
 }
@@ -27,7 +25,7 @@ interface ProGateProps {
  * On free tier, replaces the children with a locked teaser pointing at
  * /pro/upgrade. On Pro, renders children unchanged.
  */
-export function ProGate({ feature, children, variant = "replace", label }: ProGateProps) {
+export function ProGate({ feature, children, label }: ProGateProps) {
   const { isPro, isLoading } = useProEntitlement();
   const navigate = useNavigate();
 
@@ -35,18 +33,6 @@ export function ProGate({ feature, children, variant = "replace", label }: ProGa
   if (isPro) return <>{children}</>;
 
   const featureLabel = label ?? PRO_FEATURES[feature];
-
-  if (variant === "inline") {
-    return (
-      <button
-        onClick={() => navigate("/pro/upgrade")}
-        className="inline-flex items-center gap-1 min-h-[48px] px-2 py-0.5 rounded-md bg-foreground/90 text-[10px] font-bold tracking-wider text-warning uppercase font-mono"
-      >
-        <Lock className="w-2.5 h-2.5" strokeWidth={2.5} />
-        Pro
-      </button>
-    );
-  }
 
   return (
     <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">

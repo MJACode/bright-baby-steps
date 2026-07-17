@@ -57,6 +57,17 @@ export default function PrivacyPage() {
         </section>
 
         <section>
+          <h2 className="font-semibold text-foreground mb-2">4A. Grace Flare Pro (professional accounts)</h2>
+          <p>Grace Flare Pro is a separate product surface for licensed speech-language pathologists (SLPs), governed by the <Link to="/pro/terms" className="text-primary underline">Grace Flare Pro Terms</Link> together with this Privacy Policy. For Pro accounts we collect and process:</p>
+          <ul className="list-disc pl-5 space-y-1 mt-1">
+            <li><strong>Professional profile data:</strong> the SLP's full name, credentials (e.g. "MS, CCC-SLP"), and optional practice name, plus a record of when and which version of the Pro Terms was accepted.</li>
+            <li><strong>Client data the SLP enters:</strong> a client's first name or initials and age in months (by design, nothing more identifying), the therapy goals the SLP saves, and the session plans and home programs the SLP generates and keeps. The Pro Terms prohibit entering diagnoses, medical records, or other personal health information.</li>
+            <li><strong>AI drafting:</strong> when an SLP generates a draft, we send the client's display name, age in months, saved goal texts, and the SLP's generation settings (draft type, session length, setting, goal area, timeframe, target) to Anthropic, under the same Data Processing Addendum, no-training commitment, and retention terms described in § 4. Inputs and outputs are not used to train AI models.</li>
+            <li><strong>Shared home programs:</strong> an SLP can share a weekly home program with a family through a link containing an unguessable token. The link is a bearer credential: anyone who has it can view that program — the client's first name or initials, the plan content, and the SLP's name, credentials, and practice — and check off practice days. Links expire automatically 90 days after creation and can be revoked by the SLP at any time. When someone opens a shared link, we process the technical data described in § 2 (IP address, device and browser information) to display the page; no account is created, no advertising cookies are set, and no third-party trackers run on those pages.</li>
+          </ul>
+        </section>
+
+        <section>
           <h2 className="font-semibold text-foreground mb-2">5. Sharing your data</h2>
           <p>We do <strong>not</strong> sell your personal information, and we do not "share" it for cross-context behavioural advertising as those terms are defined under the California Consumer Privacy Act. We have not sold or shared personal information for cross-context behavioural advertising in the preceding 12 months. We share data only with:</p>
           <ul className="list-disc pl-5 space-y-1 mt-1">

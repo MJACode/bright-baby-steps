@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { PRO_TERMS_VERSION } from "@/lib/proTerms";
 import type { Database } from "@/integrations/supabase/types";
 
 export type SlpProfile = Database["public"]["Tables"]["slp_profiles"]["Row"];
@@ -36,11 +37,16 @@ export function useCreateSlpProfile() {
 
   return useMutation({
     mutationFn: async (input: CreateSlpProfileInput) => {
+      // Acceptance evidence is stamped explicitly from the client at the
+      // moment of assent — the schema defaults (now() / '1.0') remain only as
+      // a backstop and must not be relied on for the legal record.
       const { error } = await supabase.from("slp_profiles").insert({
         user_id: user!.id,
         full_name: input.fullName.trim(),
         credentials: input.credentials?.trim() || null,
         practice_name: input.practiceName?.trim() || null,
+        accepted_pro_terms_at: new Date().toISOString(),
+        pro_terms_version: PRO_TERMS_VERSION,
       });
       if (error) throw error;
     },

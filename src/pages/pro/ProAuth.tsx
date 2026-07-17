@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Globe, Stethoscope } from "lucide-react";
+import { PRO_TERMS_VERSION } from "@/lib/proTerms";
 
 type View = "login" | "signup" | "forgot" | "pending";
 
@@ -115,6 +116,11 @@ export default function ProAuth() {
               full_name: fullName,
               slp_credentials: credentials,
               slp_practice_name: practiceName,
+              // Acceptance evidence: the checkbox gates submit, so reaching
+              // here means the Pro Terms were affirmatively agreed to.
+              pro_terms_agreed: true,
+              pro_terms_version: PRO_TERMS_VERSION,
+              pro_terms_agreed_at: new Date().toISOString(),
             },
           },
         });

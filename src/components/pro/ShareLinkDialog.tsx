@@ -60,7 +60,8 @@ export function ShareLinkDialog({ open, onOpenChange, program }: ShareLinkDialog
             Share with the family
           </DialogTitle>
           <DialogDescription>
-            Anyone with this link can view the program — share it only with the family. No app or
+            Anyone with this link can view the program and check off practice days — share it only
+            with the family, and avoid posting it anywhere public or in group chats. No app or
             account needed on their end.
           </DialogDescription>
         </DialogHeader>
