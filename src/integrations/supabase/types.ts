@@ -2593,6 +2593,192 @@ export type Database = {
           },
         ]
       }
+      slp_client_goals: {
+        Row: {
+          client_id: string
+          created_at: string
+          goal_text: string
+          id: string
+          slp_id: string
+          source: string
+          status: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          goal_text: string
+          id?: string
+          slp_id: string
+          source?: string
+          status?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          goal_text?: string
+          id?: string
+          slp_id?: string
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slp_client_goals_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "slp_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      slp_clients: {
+        Row: {
+          age_months: number
+          archived_at: string | null
+          created_at: string
+          display_name: string
+          id: string
+          slp_id: string
+          updated_at: string
+        }
+        Insert: {
+          age_months: number
+          archived_at?: string | null
+          created_at?: string
+          display_name: string
+          id?: string
+          slp_id: string
+          updated_at?: string
+        }
+        Update: {
+          age_months?: number
+          archived_at?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          slp_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      slp_home_programs: {
+        Row: {
+          client_id: string
+          completed_days: number[]
+          created_at: string
+          expires_at: string
+          id: string
+          plan: Json
+          revoked_at: string | null
+          share_token: string
+          slp_id: string
+          status: string
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          client_id: string
+          completed_days?: number[]
+          created_at?: string
+          expires_at?: string
+          id?: string
+          plan: Json
+          revoked_at?: string | null
+          share_token?: string
+          slp_id: string
+          status?: string
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          client_id?: string
+          completed_days?: number[]
+          created_at?: string
+          expires_at?: string
+          id?: string
+          plan?: Json
+          revoked_at?: string | null
+          share_token?: string
+          slp_id?: string
+          status?: string
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slp_home_programs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "slp_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      slp_profiles: {
+        Row: {
+          accepted_pro_terms_at: string
+          created_at: string
+          credentials: string | null
+          full_name: string
+          practice_name: string | null
+          pro_terms_version: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accepted_pro_terms_at?: string
+          created_at?: string
+          credentials?: string | null
+          full_name: string
+          practice_name?: string | null
+          pro_terms_version?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accepted_pro_terms_at?: string
+          created_at?: string
+          credentials?: string | null
+          full_name?: string
+          practice_name?: string | null
+          pro_terms_version?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      slp_session_plans: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          plan: Json
+          slp_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          plan: Json
+          slp_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          plan?: Json
+          slp_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "slp_session_plans_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "slp_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       speech: {
         Row: {
           age_months_concern_flag: number | null
@@ -3133,6 +3319,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_home_program: { Args: { _token: string }; Returns: Json }
       get_illnesses: {
         Args: { _active_only?: boolean; _child_id: string }
         Returns: Json
@@ -3344,6 +3531,11 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      start_pro_trial: { Args: never; Returns: undefined }
+      toggle_home_program_day: {
+        Args: { _day: number; _token: string }
+        Returns: number[]
       }
       toggle_sleep_todo_item: {
         Args: { p_child_id: string; p_item: string; p_plan_date: string }
