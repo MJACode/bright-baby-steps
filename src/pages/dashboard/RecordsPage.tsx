@@ -8,7 +8,6 @@ import { MedicalTab } from "@/components/records/MedicalTab";
 import { EarlyInterventionTab } from "@/components/records/EarlyInterventionTab";
 import { NewBabyChecklistTab } from "@/components/records/NewBabyChecklistTab";
 import { FinancialTab } from "@/components/records/FinancialTab";
-import { NextStepFeed } from "@/components/NextStepFeed";
 
 const VALID_TABS = ["newbaby", "medical", "financial", "ei"] as const;
 
@@ -47,8 +46,6 @@ export default function RecordsPage() {
           {activeChild.name} • {ageMonths}mo
         </p>
       </div>
-
-      <NextStepFeed activeChild={activeChild} />
 
       <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="w-full grid grid-cols-4">
