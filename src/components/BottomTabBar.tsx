@@ -1,4 +1,4 @@
-import { Home, Moon, UtensilsCrossed, Droplets, MoreHorizontal } from "lucide-react";
+import { Home, Moon, UtensilsCrossed, Droplets, Star, MoreHorizontal } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ const tabs: Tab[] = [
   { label: "Sleep", path: "/dashboard/sleep", icon: Moon, colorClass: "text-sleep" },
   { label: "Food", path: "/dashboard/feeding", icon: UtensilsCrossed, colorClass: "text-feeding" },
   { label: "Diapers", path: "/dashboard/diapers", icon: Droplets, colorClass: "text-diapers" },
+  { label: "Milestones", path: "/dashboard/milestones", icon: Star, colorClass: "text-milestones" },
   { label: "More", path: "/dashboard/more", icon: MoreHorizontal, colorClass: "text-primary" },
 ];
 
