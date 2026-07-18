@@ -35,7 +35,7 @@ export function BottomTabBar() {
               key={tab.path}
               to={tab.path}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 flex-1 touch-target transition-colors duration-200",
+                "flex flex-col items-center justify-center gap-1 flex-1 min-w-0 touch-target transition-colors duration-200",
                 isActive ? tab.colorClass : "text-muted-foreground"
               )}
             >
@@ -46,7 +46,7 @@ export function BottomTabBar() {
                 <tab.icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
               </div>
               <span className={cn(
-                "text-[11px] font-bold tracking-wide leading-none",
+                "text-[11px] font-bold tracking-wide leading-none max-w-full truncate px-0.5",
                 isActive && "text-foreground"
               )}>
                 {tab.label}
