@@ -1,4 +1,4 @@
-import { Home, Moon, UtensilsCrossed, Droplets, MoreHorizontal } from "lucide-react";
+import { Home, Moon, UtensilsCrossed, Droplets, Star, MoreHorizontal } from "lucide-react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ const tabs: Tab[] = [
   { label: "Sleep", path: "/dashboard/sleep", icon: Moon, colorClass: "text-sleep" },
   { label: "Food", path: "/dashboard/feeding", icon: UtensilsCrossed, colorClass: "text-feeding" },
   { label: "Diapers", path: "/dashboard/diapers", icon: Droplets, colorClass: "text-diapers" },
+  { label: "Milestones", path: "/dashboard/milestones", icon: Star, colorClass: "text-milestones" },
   { label: "More", path: "/dashboard/more", icon: MoreHorizontal, colorClass: "text-primary" },
 ];
 
@@ -34,7 +35,7 @@ export function BottomTabBar() {
               key={tab.path}
               to={tab.path}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 flex-1 touch-target transition-colors duration-200",
+                "flex flex-col items-center justify-center gap-1 flex-1 min-w-0 touch-target transition-colors duration-200",
                 isActive ? tab.colorClass : "text-muted-foreground"
               )}
             >
@@ -45,7 +46,7 @@ export function BottomTabBar() {
                 <tab.icon className="w-6 h-6" strokeWidth={isActive ? 2.5 : 2} />
               </div>
               <span className={cn(
-                "text-[11px] font-bold tracking-wide leading-none",
+                "text-[11px] font-bold tracking-wide leading-none max-w-full truncate px-0.5",
                 isActive && "text-foreground"
               )}>
                 {tab.label}
