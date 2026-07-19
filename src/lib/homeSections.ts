@@ -1,7 +1,6 @@
 import {
   Sparkles,
   CalendarHeart,
-  ClipboardList,
   Moon,
   TrendingUp,
   Share2,
@@ -61,12 +60,6 @@ export const HOME_SECTIONS: { id: string; label: string; description: string; ic
     label: "What to Expect This Week",
     description: "Age-based development to look forward to",
     icon: CalendarHeart,
-  },
-  {
-    id: "visitPrep",
-    label: "Visit Prep",
-    description: "Get ready for upcoming pediatrician visits",
-    icon: ClipboardList,
   },
   {
     id: "sleepCoach",

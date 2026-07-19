@@ -53,9 +53,11 @@ interface VisitPrepCardProps {
     due_date?: string | null;
     next_appointment?: string | null;
   } | null;
+  /** Render only the Sheet (opened via the visitPrepOpener bus), no trigger card. */
+  hideTrigger?: boolean;
 }
 
-export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
+export function VisitPrepCard({ activeChild, hideTrigger = false }: VisitPrepCardProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isPremium } = usePremium();
@@ -79,6 +81,14 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
     resetQuestions();
     setAddedQuestions(new Set());
   }, [activeChild?.id, resetQuestions]);
+
+  // Mounted once at the layout level, so the component never remounts on child
+  // switch — re-sync the appointment date from the active child's row instead.
+  useEffect(() => {
+    setAppointmentDate(
+      activeChild?.next_appointment ? new Date(activeChild.next_appointment + "T00:00:00") : undefined
+    );
+  }, [activeChild?.id, activeChild?.next_appointment]);
 
   const { data: reminders = [] } = useQuery({
     queryKey: ["pediatrician-reminders", activeChild?.id],
@@ -284,30 +294,32 @@ export function VisitPrepCard({ activeChild }: VisitPrepCardProps) {
 
   return (
     <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-      <SheetTrigger asChild>
-        <Card className="border-0 bg-primary/10 cursor-pointer hover:bg-primary/15 transition-colors active:scale-[0.98]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                <Stethoscope className="w-5 h-5 text-primary" />
+      {!hideTrigger && (
+        <SheetTrigger asChild>
+          <Card className="border-0 bg-primary/10 cursor-pointer hover:bg-primary/15 transition-colors active:scale-[0.98]">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <Stethoscope className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm">Visit Prep</p>
+                  <p className="text-xs text-muted-foreground">
+                    {daysUntil !== null && daysUntil >= 0
+                      ? `Dr visit in ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`
+                      : nextAppt
+                      ? "Past appointment — update date"
+                      : "Set your next appointment"}
+                    {reminderCount > 0 && ` · ${reminderCount} reminder${reminderCount !== 1 ? "s" : ""}`}
+                    {topicCount > 0 && ` · ${topicCount} topic${topicCount !== 1 ? "s" : ""}`}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-sm">Visit Prep</p>
-                <p className="text-xs text-muted-foreground">
-                  {daysUntil !== null && daysUntil >= 0
-                    ? `Dr visit in ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`
-                    : nextAppt
-                    ? "Past appointment — update date"
-                    : "Set your next appointment"}
-                  {reminderCount > 0 && ` · ${reminderCount} reminder${reminderCount !== 1 ? "s" : ""}`}
-                  {topicCount > 0 && ` · ${topicCount} topic${topicCount !== 1 ? "s" : ""}`}
-                </p>
-              </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-            </div>
-          </CardContent>
-        </Card>
-      </SheetTrigger>
+            </CardContent>
+          </Card>
+        </SheetTrigger>
+      )}
 
       <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
         <SheetHeader>
