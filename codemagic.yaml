@@ -152,6 +152,13 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
 
+          # NSSupportsLiveActivities lets the GraceFlareWidgets extension put
+          # running sleep/feed timers on the Lock Screen + Dynamic Island.
+          # Without this key ActivityKit's areActivitiesEnabled is always
+          # false and Activity.request throws.
+          /usr/libexec/PlistBuddy -c "Add :NSSupportsLiveActivities bool true" "$PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Set :NSSupportsLiveActivities true" "$PLIST"
+
       - name: Register deep link URL scheme (graceflare://)
         # Supabase auth redirects (password reset, email confirmation) open via this scheme.
         # Add graceflare://localhost to your Supabase Auth → Redirect URLs list.
@@ -251,6 +258,16 @@ workflows:
             --type IOS_APP_STORE \
             --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
+          # Third profile for the Live Activity widget extension
+          # (GraceFlareWidgets). Same iOS Distribution cert; only the profile
+          # differs. Same caveat as the watch: `--create` makes the PROFILE,
+          # not the App ID — com.graceflare.app.widgets must already exist in
+          # the Apple Developer Portal Identifiers list.
+          app-store-connect fetch-signing-files "${BUNDLE_ID}.widgets" \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
+            --create
           keychain add-certificates
           xcode-project use-profiles
 
@@ -299,25 +316,31 @@ workflows:
               return "", ""
           ios_uuid, ios_team = pick("")
           watch_uuid, watch_team = pick(".watchkitapp")
-          team = ios_team or watch_team
+          widgets_uuid, widgets_team = pick(".widgets")
+          team = ios_team or watch_team or widgets_team
           out = []
           if team: out.append("DEVELOPMENT_TEAM=" + team)
           if ios_uuid: out.append("IOS_PROFILE_UUID=" + ios_uuid)
           if watch_uuid: out.append("WATCH_PROFILE_UUID=" + watch_uuid)
+          if widgets_uuid: out.append("WIDGETS_PROFILE_UUID=" + widgets_uuid)
           print("\n".join(out))
           sys.stderr.write("Resolved signing -> " + (" ".join(out) if out else "NONE FOUND") + "\n")
           PY
 
-      - name: Inject watchOS target + iOS glue
+      - name: Inject watchOS + widget targets + iOS glue
         # Adds the single SwiftUI watch app target (com.graceflare.app.watchkitapp),
         # the Embed Watch Content phase, per-target signing (using the UUIDs the
         # signing step exported to $CM_ENV), and copies the WatchConnectivity
         # glue from ios-watch-glue/ into the App target. See watch/README.md.
+        # Then adds the GraceFlareWidgets Live Activity extension
+        # (com.graceflare.app.widgets) + ActivityKit glue the same way. See
+        # widgets/README.md.
         # Runs AFTER signing (needs the profile UUIDs) and BEFORE the version
-        # bump (so agvtool -all also bumps the new watch target).
+        # bump (so agvtool -all also bumps the new targets).
         script: |
           set -ex
           ruby watch/project/inject_watch_target.rb
+          ruby widgets/project/inject_widgets_target.rb
 
       - name: Bump CFBundleVersion (all targets)
         # App Store Connect rejects an upload whose CFBundleVersion matches any
@@ -391,8 +414,8 @@ workflows:
           echo "Profile name:  $PROFILE_NAME"
           echo "Profile UUID:  $PROFILE_UUID"
 
-          # TWO targets (App + GraceFlareWatch) now need DIFFERENT provisioning
-          # profiles, so we CANNOT pass a single global
+          # THREE targets (App + GraceFlareWatch + GraceFlareWidgets) now need
+          # DIFFERENT provisioning profiles, so we CANNOT pass a single global
           # PROVISIONING_PROFILE_SPECIFIER on the command line — that would force
           # one profile onto both bundle ids and fail. The per-target
           # PROVISIONING_PROFILE_SPECIFIER values were written into the .pbxproj
@@ -426,6 +449,7 @@ workflows:
             <dict>
               <key>${BUNDLE_ID}</key><string>${EXPORT_IOS_UUID}</string>
               <key>${BUNDLE_ID}.watchkitapp</key><string>${WATCH_PROFILE_UUID}</string>
+              <key>${BUNDLE_ID}.widgets</key><string>${WIDGETS_PROFILE_UUID}</string>
             </dict>
           </dict>
           </plist>

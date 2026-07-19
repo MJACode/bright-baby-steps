@@ -265,6 +265,21 @@ First beta of Grace Flare. Track sleep, feeds, milestones, and growth — and as
 
 ---
 
+## Lock-screen timers (Live Activities)
+
+Running sleep / nursing / bottle / pump timers now surface on the iPhone Lock
+Screen + Dynamic Island via an ActivityKit Live Activity (iOS 16.1+), injected
+at CI time as the `GraceFlareWidgets` extension (see `widgets/README.md`).
+
+- [x] Widget extension sources + `inject_widgets_target.rb` + Capacitor plugin glue (claude)
+- [x] `sessionNotifications.ts` starts a Live Activity first, falls back to the local notification; pause/resume/side-switch updates wired into `useActiveSleep` / `useActiveFeed` (claude)
+- [x] Codemagic: third signing profile fetch, `WIDGETS_PROFILE_UUID` export, injection step, `NSSupportsLiveActivities`, export-options mapping (claude)
+- [ ] **Register App ID `com.graceflare.app.widgets`** in Apple Developer Portal → Identifiers (plain App ID, no capabilities) — the next `main` build FAILS at "Set up code signing" until this exists (you)
+- [ ] Smoke-test on device: start a nursing timer → lock the phone → ticking timer visible; pause/side-switch reflects within a second; stop dismisses it (you)
+- [ ] Follow-up: end/refresh the phone's Live Activity when a timer is started/stopped from the Apple Watch or the partner's device (claude, later)
+
+---
+
 ## Notes / decisions log
 
 - **Kids Category: explicitly NOT.** Grace Flare is parent-facing, with a COPPA email-plus VPC gate that handles compliance via `vpcGate.ts` + `CoppaDirectNotice.tsx`. Kids Category would impose stricter Apple review without giving us anything we don't already have.

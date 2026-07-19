@@ -2,12 +2,27 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { scheduleSessionNotification, cancelSessionNotification, type SessionKind } from "@/lib/sessionNotifications";
+import {
+  scheduleSessionNotification,
+  cancelSessionNotification,
+  updateTimerLiveActivity,
+  type SessionKind,
+} from "@/lib/sessionNotifications";
 
 function notificationKindFor(feeding_type: string): SessionKind {
   if (feeding_type === "breast") return "nursing";
   if (feeding_type === "pump") return "pump";
   return "bottle";
+}
+
+// Lock-screen label for the currently-running side. Bottle uses the side
+// column only as a run/pause proxy (see elapsedSecondsBottle), so it gets no
+// side label.
+function sideLabel(feeding_type: string, side: FeedingSide | null | undefined): string {
+  if (feeding_type === "bottle" || !side) return "";
+  if (side === "left") return "Left side";
+  if (side === "right") return "Right side";
+  return "Both sides";
 }
 
 export type FeedingType = "breast" | "bottle" | "pump";
@@ -117,6 +132,7 @@ export function useActiveFeed(childId: string | undefined) {
         kind: notificationKindFor(row.feeding_type),
         startedAt: row.logged_at,
         sessionId: row.id,
+        label: sideLabel(row.feeding_type, input.side),
       });
       return row;
     },
@@ -151,6 +167,22 @@ export function useActiveFeed(childId: string | undefined) {
       }
       const { error } = await supabase.from("feeding_logs").update(updates).eq("id", active.id);
       if (error) throw error;
+      // Sync the lock-screen timer to the post-switch accumulators — the same
+      // rounded minutes the in-app display restarts from. Note: while "both"
+      // is running the in-app total accrues 2s/s (both sides accumulate) but
+      // the lock screen ticks 1s/s; it's corrected at the next switch/stop.
+      const newLeftMin =
+        (updates.duration_minutes_left as number | undefined) ?? active.duration_minutes_left ?? 0;
+      const newRightMin =
+        (updates.duration_minutes_right as number | undefined) ?? active.duration_minutes_right ?? 0;
+      const elapsedSeconds =
+        active.feeding_type === "bottle" ? newLeftMin * 60 : (newLeftMin + newRightMin) * 60;
+      void updateTimerLiveActivity({
+        sessionId: active.id,
+        running: !!input.nextSide,
+        elapsedSeconds,
+        label: sideLabel(active.feeding_type, input.nextSide),
+      });
     },
     onSuccess: invalidate,
   });

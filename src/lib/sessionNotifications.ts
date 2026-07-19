@@ -1,5 +1,9 @@
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { startTimerLiveActivity, endTimerLiveActivity } from "@/integrations/liveActivity/liveActivityClient";
+
+// Re-exported so timer hooks pull every lock-screen concern from this one lib.
+export { updateTimerLiveActivity } from "@/integrations/liveActivity/liveActivityClient";
 
 export type SessionKind = "sleep" | "nursing" | "bottle" | "pump";
 
@@ -50,14 +54,32 @@ interface ScheduleArgs {
   kind: SessionKind;
   startedAt: string | Date;
   sessionId: string;
+  /** Secondary lock-screen line, e.g. "Left side" / "Nap". */
+  label?: string;
 }
 
-export async function scheduleSessionNotification({ kind, startedAt, sessionId }: ScheduleArgs): Promise<void> {
+export async function scheduleSessionNotification({ kind, startedAt, sessionId, label }: ScheduleArgs): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+  const startTime = typeof startedAt === "string" ? new Date(startedAt) : startedAt;
+
+  // Preferred surface on iOS 16.1+: a Live Activity — a self-ticking timer on
+  // the Lock Screen / Dynamic Island. When it starts, skip the local
+  // notification entirely (it would be a redundant static card).
+  const elapsedSeconds = Math.max(0, Math.round((Date.now() - startTime.getTime()) / 1000));
+  const liveActivityStarted = await startTimerLiveActivity({
+    sessionId,
+    kind,
+    running: true,
+    elapsedSeconds,
+    label: label ?? "",
+  });
+  if (liveActivityStarted) return;
+
+  // Fallback: local notification. `ongoing: true` pins it on Android; on iOS
+  // (< 16.1, or Live Activities disabled) it's a static reminder card.
   const granted = await ensureSessionNotificationPermission();
   if (!granted) return;
   const id = hashId(sessionId);
-  const startTime = typeof startedAt === "string" ? new Date(startedAt) : startedAt;
   const body = `Started at ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · tap to ${STARTED_FALLBACK === "started" ? "open" : "stop"}`;
   try {
     await LocalNotifications.schedule({
@@ -79,6 +101,8 @@ export async function scheduleSessionNotification({ kind, startedAt, sessionId }
 
 export async function cancelSessionNotification(sessionId: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
+  // End both surfaces — whichever one the start call landed on.
+  await endTimerLiveActivity(sessionId);
   const id = hashId(sessionId);
   try {
     await LocalNotifications.cancel({ notifications: [{ id }] });
