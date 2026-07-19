@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_plans: {
+        Row: {
+          child_id: string
+          completed_days: number[]
+          created_at: string
+          id: string
+          parent_id: string
+          plan: Json
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          child_id: string
+          completed_days?: number[]
+          created_at?: string
+          id?: string
+          parent_id: string
+          plan: Json
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          child_id?: string
+          completed_days?: number[]
+          created_at?: string
+          id?: string
+          parent_id?: string
+          plan?: Json
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_plans_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_memories: {
         Row: {
           child_id: string | null
@@ -493,6 +534,41 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      child_activities: {
+        Row: {
+          activity_slug: string
+          child_id: string
+          created_at: string
+          id: string
+          parent_id: string
+          tried_at: string
+        }
+        Insert: {
+          activity_slug: string
+          child_id: string
+          created_at?: string
+          id?: string
+          parent_id: string
+          tried_at?: string
+        }
+        Update: {
+          activity_slug?: string
+          child_id?: string
+          created_at?: string
+          id?: string
+          parent_id?: string
+          tried_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_activities_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
             referencedColumns: ["id"]
           },
         ]
