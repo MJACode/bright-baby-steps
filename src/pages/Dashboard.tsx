@@ -3,7 +3,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useChildren, getAge } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { SlidersHorizontal } from "lucide-react";
-import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { LeapCard } from "@/components/LeapCard";
@@ -66,9 +65,6 @@ export default function Dashboard() {
 
       {/* Voice-first quick log — free mic entry into VoiceQuickLog */}
       <VoiceQuickLogButton />
-
-      {/* Visit Prep */}
-      {isVisible("visitPrep") && <VisitPrepCard activeChild={activeChild} />}
 
       {/* Sleep Coach (Flare+) */}
       {isVisible("sleepCoach") && <SleepCoachCard activeChild={activeChild} />}

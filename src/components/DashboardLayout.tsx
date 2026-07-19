@@ -5,13 +5,15 @@ import { ChildSwitcher } from "@/components/ChildSwitcher";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRole } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
-import { UserCircle, Home, CalendarDays, ChevronLeft } from "lucide-react";
+import { UserCircle, Stethoscope, CalendarDays, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { AIChatWidget } from "@/components/AIChatWidget";
 import { QuickLogFAB } from "@/components/QuickLogFAB";
+import { VisitPrepCard } from "@/components/VisitPrepCard";
+import { openVisitPrep } from "@/lib/visitPrepOpener";
 
 // Secondary pages (no bottom-tab presence) get a back affordance to their
 // parent surface. Navigates to the parent route — not history back — so deep
@@ -89,10 +91,14 @@ export default function DashboardLayout() {
           </div>
           {!isOnboarding && (
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
-                <Link to="/dashboard" aria-label="Home">
-                  <Home className="w-5 h-5" />
-                </Link>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="touch-target text-muted-foreground"
+                aria-label="Visit prep"
+                onClick={() => openVisitPrep()}
+              >
+                <Stethoscope className="w-5 h-5" />
               </Button>
               <Button variant="ghost" size="icon" asChild className="touch-target text-muted-foreground">
                 <Link to="/dashboard/calendar" aria-label="Day view">
@@ -140,6 +146,11 @@ export default function DashboardLayout() {
       {/* Quick-log FAB — one-tap logging on every dashboard route. Caregivers
           never reach this return (CaregiverHome above mounts its own FAB). */}
       {!isOnboarding && <QuickLogFAB />}
+
+      {/* Visit Prep sheet — mounted at the layout level so the visitPrepOpener
+          subscription is live on every dashboard sub-route. Opened by the
+          header stethoscope button and NextStepFeed's checkup row. */}
+      {!isOnboarding && <VisitPrepCard activeChild={activeChild} hideTrigger />}
 
       {/* Bottom tabs */}
       {!isOnboarding && <BottomTabBar />}
