@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GraduationCap, Sparkles } from "lucide-react";
+import { GraduationCap, Sparkles, ToyBrick } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePremium } from "@/hooks/usePremium";
@@ -10,6 +10,11 @@ const PERKS = [
     icon: GraduationCap,
     title: "Speech Class: guided weekly practice",
     sub: "A 7-day, play-based plan to encourage talking — tuned to her age and your logged words.",
+  },
+  {
+    icon: ToyBrick,
+    title: "50+ play activities + weekly play plan",
+    sub: "Age-matched play ideas across motor, language, thinking, social, and sensory — with a 7-day plan built for your baby.",
   },
 ];
 

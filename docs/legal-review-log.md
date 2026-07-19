@@ -1707,3 +1707,62 @@ triggering renewed VPC under the email-plus program; reasoning mirrors the
   under the same processing purposes and the executed Anthropic DPA; prospective
   notice, no new subprocessor — non-material change, no renewed VPC required
   (reasoning per the Phase 1 entry and the 2026-05-08 zero-dwell analysis).
+
+## 2026-07-19 — Activities feature: new Anthropic edge function `generate-activity-plan` + `child_activities` table
+
+**Reviewer:** in-house (Claude pass, backend batch of the Activities plan).
+**Risk: LOW.**
+
+**What changed:**
+- New Anthropic-invoking edge function `generate-activity-plan` (the seventh:
+  chat, briefing, weekly-insights, parse-voice-log, generate-speech-class,
+  visit-prep-questions, generate-activity-plan). Generates a 7-day play plan
+  ("Weekly Play Plan", Flare+ feature on the Milestones tab) using the
+  `developmental` persona.
+- **Data sent to Anthropic:** child first name, age in months, prematurity
+  status and corrected age, parent-selected interests and temperament (both
+  from the fixed allowlists established in the 2026-07-05 Child Context
+  entries), and the titles of curated library activities recently marked
+  "Tried it". No free-text child data, no logs, no photos.
+- **Premium gate is server-side:** the function re-checks `subscriptions`
+  (tier = 'plus', status active/trialing) and returns 403 `premium_required`
+  otherwise — the Flare+ gate cannot be bypassed by calling the function
+  directly. Guardrail prompt rules mirror generate-speech-class verbatim:
+  never diagnose, never "behind"/"delayed", neutral past_window framing,
+  fixed non-medical-advice disclaimer, plus an always-supervise rule.
+- New table `public.child_activities` stores only **bounded slugs**
+  (`activity_slug` referencing client-side static content in
+  `src/data/activityLibrary.ts`) plus a date — no free text about the child
+  (same COPPA data-minimization posture as the interests/temperament
+  allowlists). New table `public.activity_plans` mirrors
+  `speech_practice_plans` (RLS via has_partner_access / partner_can_write;
+  child_id + parent_id ON DELETE CASCADE cover the deletion promise — no
+  `delete_user_account()` change needed).
+- **PrivacyPage § 4 updated in the same change:** the AI-feature enumeration
+  now names the Weekly Play Plan and a new clause discloses exactly what it
+  sends (first name, age/corrected age, selected interests and temperament,
+  recently-tried activity titles).
+
+**Analysis:** additive Flare+ feature under the same processing purposes, the
+same processor (Anthropic, executed DPA of 2026-05-08), and no new
+subprocessor; disclosure ships with (not after) the feature. Non-material
+change — no renewed VPC required (reasoning per the 2026-07-05 Child Context
+entries and the 2026-05-08 zero-dwell analysis).
+
+## 2026-07-19 — Activities feature, frontend batch: direct-notice enumeration + Privacy timestamp
+
+**Reviewer:** in-house (Claude pass, frontend batch of the Activities plan).
+**Risk: LOW.**
+
+**What changed:**
+- `CoppaDirectNotice.tsx` "What we collect" enumeration now includes "play
+  activities you mark as tried" alongside the existing tracked-data categories,
+  matching the new `child_activities` table (bounded slugs only, per the
+  2026-07-19 backend entry).
+- `PrivacyPage.tsx` "Last reviewed" bumped to July 19, 2026, per the
+  convention of bumping the timestamp whenever § 4 changes (the § 4 Weekly
+  Play Plan disclosure itself landed with the backend batch).
+
+**Analysis:** disclosure-only frontend follow-through of the backend entry
+above; no new data category beyond what that entry analyzed, no new
+subprocessor, no renewed VPC required.

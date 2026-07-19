@@ -63,8 +63,9 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
           <p className="text-foreground/80">
             Your child's name, date of birth, optional gender and photo, optional
             interests and temperament you choose from a fixed list, any tracking
-            data you log (sleep, feeding, diaper, allergens, milestones,
-            illnesses, medications, supplements), and short AI-generated notes
+            data you log (sleep, feeding, diaper, allergens, milestones, play
+            activities you mark as tried, illnesses, medications, supplements),
+            and short AI-generated notes
             about your child that you can review, edit, and delete.
           </p>
         </div>
