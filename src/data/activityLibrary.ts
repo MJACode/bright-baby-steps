@@ -7,7 +7,7 @@
  * ("watchFor") are always framed as what's going well — never as deficits.
  *
  * `supportsMilestones` strings match the milestone catalog names exactly
- * (including curly quotes and en-dashes) so they can be joined against
+ * (straight ASCII quotes and en-dashes, as stored in the DB catalog) so they can be joined against
  * milestone records without normalization.
  */
 
@@ -94,6 +94,24 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     watchFor:
       "You'll know it's landing when their hands spend more time open and the grip around your finger feels stronger.",
     supportsMilestones: ["Opens and closes hands", "Grasps objects placed in hand"],
+  },
+  {
+    id: "hands-together-play",
+    title: "Hands meet in the middle",
+    domain: "motor",
+    ageMonthsStart: 0,
+    ageMonthsEnd: 3,
+    durationMinutes: 3,
+    materials: [],
+    steps: [
+      "Lay your baby on their back during a calm, alert moment.",
+      "Gently guide their hands together at the center of their chest and let them touch.",
+      "Play pat-a-cake style claps in slow motion, narrating as you go.",
+      "Let go and watch — hands finding each other on their own is the goal.",
+    ],
+    watchFor:
+      "You'll know it's landing when your baby brings their hands together at their chest without your help — often while studying them intently.",
+    supportsMilestones: ["Opens and closes hands"],
   },
   {
     id: "coo-conversations",
@@ -216,7 +234,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     ageMonthsStart: 3,
     ageMonthsEnd: 6,
     durationMinutes: 5,
-    materials: ["A favorite toy, rattle, or crinkly wrapper-sound item"],
+    materials: ["A favorite toy, rattle, or crinkly baby toy"],
     steps: [
       "Lay your baby on a blanket on the floor, on their back or tummy.",
       "Hold the toy just out of reach off to one side and give it a shake.",
@@ -226,6 +244,8 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     watchFor:
       "You'll know it's landing when a big reach turns into a wobble, and a wobble turns into a roll.",
     supportsMilestones: ["Rolls from tummy to back", "Rolls from back to tummy"],
+    safetyNote:
+      "Whatever they roll to will go straight in the mouth — use only clean baby toys too large to swallow, never thin plastic film or wrappers.",
   },
   {
     id: "babble-back",
@@ -357,6 +377,8 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     watchFor:
       "You'll know it's landing when your baby sits a little longer and reaches a little farther each time.",
     supportsMilestones: ["Sits without support"],
+    safetyNote:
+      "Awake, supervised play only — never leave your baby propped in pillows, and clear them away if baby gets sleepy.",
   },
   {
     id: "spoon-swap",
@@ -404,7 +426,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     ageMonthsStart: 6,
     ageMonthsEnd: 9,
     durationMinutes: 5,
-    materials: ["A small toy", "A cloth or burp rag"],
+    materials: ["A baby-safe toy too big to swallow", "A cloth or burp rag"],
     steps: [
       "Sit with your baby and let them watch you tuck a toy halfway under the cloth.",
       "Ask with big drama: \"Where did it go?\"",
@@ -414,6 +436,8 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     watchFor:
       "You'll know it's landing when your baby goes looking for a toy they can no longer see.",
     supportsMilestones: ["Object permanence begins", "Finds fully hidden object"],
+    safetyNote:
+      "Hidden treasures get mouthed — choose a toy bigger than a toilet-paper-tube opening, with no small or detachable parts.",
   },
   {
     id: "name-game",
@@ -515,7 +539,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
       "You'll know it's landing when your baby pats a picture or makes a sound for a favorite page before you name it.",
     supportsMilestones: [
       "Looks where you point (joint attention)",
-      "Uses 1–3 words besides “mama”/“dada”",
+      "Uses 1–3 words besides \"mama\"/\"dada\"",
     ],
     interests: ["books"],
   },
@@ -548,7 +572,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     ageMonthsStart: 9,
     ageMonthsEnd: 12,
     durationMinutes: 5,
-    materials: ["Two plastic cups", "A small toy that fits underneath"],
+    materials: ["Two plastic cups", "A baby-safe toy that fits underneath but is too big to swallow"],
     steps: [
       "Sit face-to-face and let your baby watch you hide the toy under one cup.",
       "Ask \"Where is it?\" and let them knock over or lift the cup.",
@@ -558,6 +582,8 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     watchFor:
       "You'll know it's landing when your baby goes straight for the right cup with total confidence.",
     supportsMilestones: ["Finds fully hidden object"],
+    safetyNote:
+      "The hidden toy will be mouthed — pick one bigger than a toilet-paper-tube opening, with no small or detachable parts.",
   },
   {
     id: "wave-and-clap-copycat",
@@ -617,6 +643,27 @@ export const ACTIVITY_LIBRARY: Activity[] = [
       "You'll know it's landing when the pushing turns into confident free walking between deliveries.",
     supportsMilestones: ["Walks independently"],
     interests: ["movement"],
+  },
+  {
+    id: "chunky-crayon-scribbles",
+    title: "First scribbles",
+    domain: "motor",
+    ageMonthsStart: 12,
+    ageMonthsEnd: 18,
+    durationMinutes: 5,
+    materials: ["A chunky toddler crayon", "A big piece of paper taped to the table or floor"],
+    steps: [
+      "Tape the paper down so it stays put and hand over one chunky crayon.",
+      "Make a slow scribble of your own and say what you see: \"Round and round!\"",
+      "Let them make marks any way they like — fist grip is perfect at this age.",
+      "Celebrate every mark and hang a favorite on the fridge.",
+    ],
+    watchFor:
+      "You'll know it's landing when your toddler makes marks on purpose and looks up to show you what appeared.",
+    supportsMilestones: ["Scribbles spontaneously"],
+    safetyNote:
+      "Crayons get mouthed at this age — use chunky, non-toxic toddler crayons and stay within arm's reach.",
+    interests: ["building"],
   },
   {
     id: "two-block-towers",
@@ -769,7 +816,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     ],
     watchFor:
       "You'll know it's landing when two words start arriving together — \"more milk,\" \"daddy go,\" \"big truck.\"",
-    supportsMilestones: ["Combines two words (“more milk”, “go bye-bye”)"],
+    supportsMilestones: ["Combines two words (\"more milk\", \"go bye-bye\")"],
   },
   {
     id: "finish-the-song",
@@ -934,7 +981,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
     ageMonthsStart: 24,
     ageMonthsEnd: 36,
     durationMinutes: 6,
-    materials: ["A small toy to hide"],
+    materials: ["A toy to hide — big enough not to be a mouthing risk"],
     steps: [
       "Hide a toy somewhere easy while your toddler watches you leave the room with it.",
       "Give a two-part mission: \"Look under the pillow, then bring it to me.\"",
@@ -994,7 +1041,7 @@ export const ACTIVITY_LIBRARY: Activity[] = [
       "Pour a layer of dry oats into the tray and add cups and spoons.",
       "Show one scoop-and-pour, then hand the tools over.",
       "Narrate the work: \"Scoop... pour... all full! All empty!\"",
-      "Bury a small toy in the oats for a treasure dig before cleanup.",
+      "Bury a toy (too large to swallow) in the oats for a treasure dig before cleanup.",
     ],
     watchFor:
       "You'll know it's landing when your toddler settles into focused scooping, pouring, and digging — deep concentration is the win.",
