@@ -12,6 +12,8 @@ interface PremiumGateProps {
   variant?: "blur" | "replace" | "inline";
   /** Optional label override (defaults to PREMIUM_FEATURES[feature]). */
   label?: string;
+  /** Optional body copy override for the replace-variant teaser card. */
+  description?: string;
   /** Hide entirely on free tier (used for inline rows we don't want to tease). */
   hideOnFree?: boolean;
 }
@@ -30,6 +32,7 @@ export function PremiumGate({
   children,
   variant = "blur",
   label,
+  description,
   hideOnFree = false,
 }: PremiumGateProps) {
   const { isPremium, isLoading } = usePremium();
@@ -70,7 +73,7 @@ export function PremiumGate({
             </span>
           </div>
           <p className="text-sm text-foreground/80 leading-snug">
-            Unlock with Flare+ — predictive insights tailored to your baby.
+            {description ?? "Unlock with Flare+ — predictive insights tailored to your baby."}
           </p>
           <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
             Try free for 7 days <span aria-hidden>→</span>

@@ -52,6 +52,10 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     headline: "Walk into every checkup with your questions ready.",
     sub: "Flare+ drafts pediatrician questions from your baby's actual sleep, feeding, and growth data — for every visit, as many times as you need.",
   },
+  "activity-library": {
+    headline: "Know exactly what to play today.",
+    sub: "50+ age-matched activities across motor, language, thinking, social, and sensory play — plus a weekly play plan built for your baby.",
+  },
 };
 
 const PERKS = [

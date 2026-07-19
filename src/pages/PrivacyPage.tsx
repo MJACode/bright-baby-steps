@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: July 5, 2026 ·{" "}
+          Effective: June 20, 2026 · Last reviewed: July 19, 2026 ·{" "}
           <Link to="/subprocessors" className="underline">Subprocessors</Link>
         </p>
       </div>

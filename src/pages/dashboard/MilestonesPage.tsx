@@ -8,14 +8,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { PartyPopper, ChevronDown, Plus, Star, Trash2, Sparkles } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PartyPopper, ChevronDown, Plus, Star, Trash2, Sparkles, ToyBrick } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
 import { SpeechClass } from "@/components/SpeechClass";
 import { MilestonesPremiumCard } from "@/components/MilestonesPremiumCard";
 import { PremiumGate } from "@/components/PremiumGate";
+import { ActivitiesSection } from "@/components/activities/ActivitiesSection";
 import { MilestoneCategoryGroup } from "@/components/milestones/MilestoneCategoryGroup";
 import { MilestoneFlags } from "@/components/milestones/MilestoneFlags";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -254,6 +255,20 @@ export default function MilestonesPage() {
       </div>
 
       <Tabs defaultValue="development" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
+          <TabsTrigger
+            value="development"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-milestones/15 data-[state=active]:text-milestones data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <Star className="w-4 h-4" /> Development
+          </TabsTrigger>
+          <TabsTrigger
+            value="activities"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-milestones/15 data-[state=active]:text-milestones data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <ToyBrick className="w-4 h-4" /> Activities
+          </TabsTrigger>
+        </TabsList>
         <TabsContent value="development" className="mt-4 space-y-5">
           {!activeChild ? (
             <AddChildDialog />
@@ -465,6 +480,15 @@ export default function MilestonesPage() {
               )}
             </>
           )}
+        </TabsContent>
+
+        <TabsContent value="activities" className="mt-4">
+          <ActivitiesSection
+            child={activeChild}
+            ageMonths={ageMonths}
+            categories={categories}
+            milestoneStatuses={milestoneStatuses}
+          />
         </TabsContent>
       </Tabs>
 

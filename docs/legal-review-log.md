@@ -1748,3 +1748,21 @@ same processor (Anthropic, executed DPA of 2026-05-08), and no new
 subprocessor; disclosure ships with (not after) the feature. Non-material
 change — no renewed VPC required (reasoning per the 2026-07-05 Child Context
 entries and the 2026-05-08 zero-dwell analysis).
+
+## 2026-07-19 — Activities feature, frontend batch: direct-notice enumeration + Privacy timestamp
+
+**Reviewer:** in-house (Claude pass, frontend batch of the Activities plan).
+**Risk: LOW.**
+
+**What changed:**
+- `CoppaDirectNotice.tsx` "What we collect" enumeration now includes "play
+  activities you mark as tried" alongside the existing tracked-data categories,
+  matching the new `child_activities` table (bounded slugs only, per the
+  2026-07-19 backend entry).
+- `PrivacyPage.tsx` "Last reviewed" bumped to July 19, 2026, per the
+  convention of bumping the timestamp whenever § 4 changes (the § 4 Weekly
+  Play Plan disclosure itself landed with the backend batch).
+
+**Analysis:** disclosure-only frontend follow-through of the backend entry
+above; no new data category beyond what that entry analyzed, no new
+subprocessor, no renewed VPC required.
