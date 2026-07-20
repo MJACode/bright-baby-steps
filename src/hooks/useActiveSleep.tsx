@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { scheduleSessionNotification, cancelSessionNotification } from "@/lib/sessionNotifications";
+import {
+  scheduleSessionNotification,
+  cancelSessionNotification,
+  updateTimerLiveActivity,
+} from "@/lib/sessionNotifications";
 
 export type SleepType = "nap" | "night";
 
@@ -90,7 +94,12 @@ export function useActiveSleep(childId: string | undefined) {
         .single();
       if (error) throw error;
       const row = data as ActiveSleepRow;
-      void scheduleSessionNotification({ kind: "sleep", startedAt: row.started_at, sessionId: row.id });
+      void scheduleSessionNotification({
+        kind: "sleep",
+        startedAt: row.started_at,
+        sessionId: row.id,
+        label: input.sleep_type === "nap" ? "Nap" : "Night sleep",
+      });
       return row;
     },
     onSuccess: invalidate,
@@ -104,6 +113,12 @@ export function useActiveSleep(childId: string | undefined) {
         .update({ paused_at: new Date().toISOString() })
         .eq("id", active.id);
       if (error) throw error;
+      // Freeze the lock-screen timer at the pause-adjusted elapsed.
+      void updateTimerLiveActivity({
+        sessionId: active.id,
+        running: false,
+        elapsedSeconds: computeElapsedSeconds(active),
+      });
     },
     onSuccess: invalidate,
   });
@@ -123,6 +138,13 @@ export function useActiveSleep(childId: string | undefined) {
         })
         .eq("id", active.id);
       if (error) throw error;
+      // While paused, computeElapsedSeconds already excludes the current pause
+      // segment — it equals the frozen elapsed the timer resumes from.
+      void updateTimerLiveActivity({
+        sessionId: active.id,
+        running: true,
+        elapsedSeconds: computeElapsedSeconds(active),
+      });
     },
     onSuccess: invalidate,
   });
@@ -171,6 +193,11 @@ export function useActiveSleep(childId: string | undefined) {
         .update({ started_at: when.toISOString() })
         .eq("id", active.id);
       if (error) throw error;
+      void updateTimerLiveActivity({
+        sessionId: active.id,
+        running: !active.paused_at,
+        elapsedSeconds: computeElapsedSeconds({ ...active, started_at: when.toISOString() }),
+      });
     },
     onSuccess: invalidate,
   });
