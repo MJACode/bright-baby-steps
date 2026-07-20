@@ -133,6 +133,10 @@ export function useActiveFeed(childId: string | undefined) {
         startedAt: row.logged_at,
         sessionId: row.id,
         label: sideLabel(row.feeding_type, input.side),
+        // A feed row ticks only while active_side is set. PumpTimer's manual
+        // entry starts with side:null (deliberately non-ticking) — the
+        // lock-screen timer must start frozen too, not count up.
+        running: !!input.side,
       });
       return row;
     },
@@ -168,9 +172,10 @@ export function useActiveFeed(childId: string | undefined) {
       const { error } = await supabase.from("feeding_logs").update(updates).eq("id", active.id);
       if (error) throw error;
       // Sync the lock-screen timer to the post-switch accumulators — the same
-      // rounded minutes the in-app display restarts from. Note: while "both"
-      // is running the in-app total accrues 2s/s (both sides accumulate) but
-      // the lock screen ticks 1s/s; it's corrected at the next switch/stop.
+      // rounded minutes the in-app display restarts from. While "both" runs,
+      // the in-app total (left + right − both) also ticks 1s/s, matching the
+      // lock screen; the double-counted flush lands on both surfaces at once
+      // at the next switch/stop.
       const newLeftMin =
         (updates.duration_minutes_left as number | undefined) ?? active.duration_minutes_left ?? 0;
       const newRightMin =

@@ -56,9 +56,21 @@ interface ScheduleArgs {
   sessionId: string;
   /** Secondary lock-screen line, e.g. "Left side" / "Nap". */
   label?: string;
+  /**
+   * false = the session exists but isn't ticking (e.g. a pump row created by
+   * manual entry with no active side) — the lock-screen timer starts frozen.
+   * Defaults to true.
+   */
+  running?: boolean;
 }
 
-export async function scheduleSessionNotification({ kind, startedAt, sessionId, label }: ScheduleArgs): Promise<void> {
+export async function scheduleSessionNotification({
+  kind,
+  startedAt,
+  sessionId,
+  label,
+  running = true,
+}: ScheduleArgs): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   const startTime = typeof startedAt === "string" ? new Date(startedAt) : startedAt;
 
@@ -69,8 +81,8 @@ export async function scheduleSessionNotification({ kind, startedAt, sessionId, 
   const liveActivityStarted = await startTimerLiveActivity({
     sessionId,
     kind,
-    running: true,
-    elapsedSeconds,
+    running,
+    elapsedSeconds: running ? elapsedSeconds : 0,
     label: label ?? "",
   });
   if (liveActivityStarted) return;

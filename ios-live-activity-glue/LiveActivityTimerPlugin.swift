@@ -44,11 +44,13 @@ public class LiveActivityTimerPlugin: CAPPlugin {
         let label = call.getString("label") ?? ""
         #if canImport(ActivityKit)
         if #available(iOS 16.1, *) {
-            let started = TimerActivityManager.shared.start(
-                sessionId: sessionId, kind: kind, label: label,
-                running: running, elapsedSeconds: elapsed
-            )
-            call.resolve(["started": started])
+            Task {
+                let started = await TimerActivityManager.shared.start(
+                    sessionId: sessionId, kind: kind, label: label,
+                    running: running, elapsedSeconds: elapsed
+                )
+                call.resolve(["started": started])
+            }
             return
         }
         #endif
@@ -119,11 +121,15 @@ final class TimerActivityManager {
         )
     }
 
-    func start(sessionId: String, kind: String, label: String, running: Bool, elapsedSeconds: Double) -> Bool {
+    func start(sessionId: String, kind: String, label: String, running: Bool, elapsedSeconds: Double) async -> Bool {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
         // Replace any leftover activity for the same session (e.g. app was
-        // killed mid-session and the timer is being re-hydrated).
-        end(sessionId: sessionId)
+        // killed mid-session and the timer is being re-hydrated). Await the
+        // ends so the request below is ordered after them — otherwise two
+        // activities for the same session can briefly coexist.
+        for activity in activities(for: sessionId) {
+            await activity.end(using: activity.contentState, dismissalPolicy: .immediate)
+        }
         let attributes = TimerActivityAttributes(sessionId: sessionId, kind: kind)
         do {
             _ = try Activity.request(

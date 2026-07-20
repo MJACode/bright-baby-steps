@@ -63,7 +63,8 @@ same as was done for `com.graceflare.app.watchkitapp`.
 - Pause / resume (sleep, bottle) and side switches (nursing, pump) update the
   activity so the lock-screen elapsed matches the in-app timer (to the same
   rounded-minute baseline the in-app display restarts from after a switch).
-- While pumping "both" sides, the in-app total accrues 2s per wall-second but
-  the lock screen ticks 1s/s; it re-syncs at the next switch or stop.
+- While pumping "both" sides, the in-app total (left + right − both) ticks
+  1s/s, matching the lock screen; the double-counted per-side flush lands on
+  both surfaces at once at the next switch or stop.
 - iOS < 16.1, Live Activities disabled in Settings, and Android all fall back
   to the pre-existing local-notification card.

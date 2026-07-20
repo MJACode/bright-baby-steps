@@ -62,7 +62,7 @@ end
 
 # --- 2. Create the widget-extension target ---------------------------------
 widget_target = project.new_target(
-  :app_extension, "GraceFlareWidgets", :ios, IOS_TARGET
+  :app_extension, "GraceFlareWidgets", :ios, IOS_TARGET, nil, :swift
 )
 
 widget_target.build_configurations.each do |config|
