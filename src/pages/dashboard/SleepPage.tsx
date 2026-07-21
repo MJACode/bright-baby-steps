@@ -369,7 +369,7 @@ export default function SleepPage() {
   const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
   const [savingTimer, setSavingTimer] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
-  const [tab, setTab] = useState("plan");
+  const [tab, setTab] = useState("history");
 
   const { data: logs } = useQuery({
     queryKey: ["sleep-logs", activeChild?.id],
@@ -720,18 +720,70 @@ export default function SleepPage() {
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
           <TabsTrigger
-            value="plan"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
-          >
-            <CalendarCheck className="w-4 h-4" /> Plan
-          </TabsTrigger>
-          <TabsTrigger
             value="history"
             className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <History className="w-4 h-4" /> History
           </TabsTrigger>
+          <TabsTrigger
+            value="plan"
+            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
+          >
+            <CalendarCheck className="w-4 h-4" /> Plan & Insights
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="history" className="mt-4 space-y-5">
+          {/* Recent logs */}
+          <div className="space-y-2">
+            <h2 className="font-display font-bold text-sm">Recent Logs</h2>
+            <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
+            {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
+              <Card key={log.id} className="border-0 bg-sleep-bg">
+                <CardContent className="p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="secondary" className="text-xs">
+                      {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
+                    </Badge>
+                    <div>
+                      <p className="text-sm font-semibold">{formatElapsed(log.duration_minutes || 0)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(log.started_at), "MMM d, h:mm a")}
+                      </p>
+                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
+                    <Pencil className="w-4 h-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            )) : (
+              <Card className="border-0 bg-sleep-bg">
+                <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
+                  <CloudMoon className="w-10 h-10 text-sleep/40" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Every nap and night sleep you log will show up here.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openAdd}
+                    className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
+                  >
+                    <Plus className="w-4 h-4" /> Log a first sleep
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+            </div>
+            {logs && logs.length > 5 && (
+              <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
+                {showAll ? "Show less" : `View all ${logs.length} logs`}
+              </Button>
+            )}
+          </div>
+        </TabsContent>
 
         <TabsContent value="plan" className="mt-4 space-y-5">
           <Card className="border bg-sleep/5 border-sleep/20">
@@ -826,60 +878,7 @@ export default function SleepPage() {
             childName={activeChild.name ?? "your baby"}
             calmMode={prefs.calmMode}
           />
-        </TabsContent>
 
-        <TabsContent value="history" className="mt-4 space-y-5">
-          {/* Recent logs */}
-          <div className="space-y-2">
-            <h2 className="font-display font-bold text-sm">Recent Logs</h2>
-            <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
-            {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
-              <Card key={log.id} className="border-0 bg-sleep-bg">
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="secondary" className="text-xs">
-                      {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
-                    </Badge>
-                    <div>
-                      <p className="text-sm font-semibold">{formatElapsed(log.duration_minutes || 0)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(log.started_at), "MMM d, h:mm a")}
-                      </p>
-                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            )) : (
-              <Card className="border-0 bg-sleep-bg">
-                <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
-                  <CloudMoon className="w-10 h-10 text-sleep/40" />
-                  <p className="text-sm text-muted-foreground text-center">
-                    Every nap and night sleep you log will show up here.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={openAdd}
-                    className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
-                  >
-                    <Plus className="w-4 h-4" /> Log a first sleep
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-            </div>
-            {logs && logs.length > 5 && (
-              <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
-                {showAll ? "Show less" : `View all ${logs.length} logs`}
-              </Button>
-            )}
-          </div>
-
-          {/* Sleep Insights */}
           {activeChild && (
             <SleepInsights
               logs={logs ?? []}
