@@ -258,13 +258,13 @@ export default function MilestonesPage() {
         <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
           <TabsTrigger
             value="development"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-milestones/15 data-[state=active]:text-milestones data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-milestones/15 data-[state=active]:text-milestones data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <Star className="w-4 h-4" /> Development
           </TabsTrigger>
           <TabsTrigger
             value="activities"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-milestones/15 data-[state=active]:text-milestones data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-milestones/15 data-[state=active]:text-milestones data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <ToyBrick className="w-4 h-4" /> Activities
           </TabsTrigger>

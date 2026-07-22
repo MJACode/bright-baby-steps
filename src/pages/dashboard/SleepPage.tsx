@@ -721,13 +721,13 @@ export default function SleepPage() {
         <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
           <TabsTrigger
             value="history"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <History className="w-4 h-4" /> History
           </TabsTrigger>
           <TabsTrigger
             value="plan"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <CalendarCheck className="w-4 h-4" /> Plan & Insights
           </TabsTrigger>
