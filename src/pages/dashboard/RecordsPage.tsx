@@ -48,18 +48,18 @@ export default function RecordsPage() {
       </div>
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-4">
-          <TabsTrigger value="newbaby" className="gap-1 text-[10px] px-1">
-            <Sparkles className="w-3.5 h-3.5" /> New Baby
+        <TabsList className="w-full grid grid-cols-4 h-14 p-1 bg-muted/60">
+          <TabsTrigger value="newbaby" className="touch-target gap-1 text-sm font-bold px-1 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg h-full">
+            <Sparkles className="hidden sm:inline w-4 h-4" /> New Baby
           </TabsTrigger>
-          <TabsTrigger value="medical" className="gap-1 text-[10px] px-1">
-            <Stethoscope className="w-3.5 h-3.5" /> Medical
+          <TabsTrigger value="medical" className="touch-target gap-1 text-sm font-bold px-1 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg h-full">
+            <Stethoscope className="hidden sm:inline w-4 h-4" /> Medical
           </TabsTrigger>
-          <TabsTrigger value="financial" className="gap-1 text-[10px] px-1">
-            <DollarSign className="w-3.5 h-3.5" /> Financial
+          <TabsTrigger value="financial" className="touch-target gap-1 text-sm font-bold px-1 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg h-full">
+            <DollarSign className="hidden sm:inline w-4 h-4" /> Financial
           </TabsTrigger>
-          <TabsTrigger value="ei" className="gap-1 text-[10px] px-1">
-            <Activity className="w-3.5 h-3.5" /> EI
+          <TabsTrigger value="ei" className="touch-target gap-1 text-sm font-bold px-1 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg h-full">
+            <Activity className="hidden sm:inline w-4 h-4" /> EI
           </TabsTrigger>
         </TabsList>
 

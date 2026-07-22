@@ -68,25 +68,25 @@ export default function FeedingPage() {
         <TabsList className="grid w-full grid-cols-4 h-14 p-1 bg-muted/60">
           <TabsTrigger
             value="feeding"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <UtensilsCrossed className="w-4 h-4" /> Feeding
           </TabsTrigger>
           <TabsTrigger
             value="supplements"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <Pill className="w-4 h-4" /> Vitamins
           </TabsTrigger>
           <TabsTrigger
             value="pumping"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <Baby className="w-4 h-4" /> Pump
           </TabsTrigger>
           <TabsTrigger
             value="allergens"
-            className="touch-target gap-1 text-xs font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
+            className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <ShieldAlert className="w-4 h-4" /> Allergens
             {activeChild && totalAllergens > 0 && (
