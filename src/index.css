@@ -195,4 +195,15 @@
   .card-hover {
     @apply transition-transform active:scale-[0.99];
   }
+
+  /* Hide the scrollbar while keeping the element scrollable. Used by the
+     wheel time picker (MobileDateTimePicker) so the scroll-snap columns read
+     as clean wheels, not scroll boxes. */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
