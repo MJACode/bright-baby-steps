@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, ChevronUp, ChevronDown } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 
 interface MobileDateTimePickerProps {
@@ -14,50 +14,119 @@ interface MobileDateTimePickerProps {
   className?: string;
 }
 
+const ITEM_HEIGHT = 40; // px per row
+const VISIBLE_ROWS = 3; // rows shown at once (center row is the selection)
+const COLUMN_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
+const PAD = (COLUMN_HEIGHT - ITEM_HEIGHT) / 2; // spacer so first/last item can center
+
+/**
+ * A scrollable wheel column. Users flick/drag (touch), scroll (mouse wheel),
+ * arrow-key, or tap a visible value to change the selection — no more tapping
+ * a chevron once per minute. Scroll-snap keeps the selection locked to a value;
+ * the debounced scroll handler commits the settled value to the parent.
+ */
 function WheelColumn({
   value,
   options,
   onChange,
+  ariaLabel,
 }: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (val: string) => void;
+  ariaLabel: string;
 }) {
-  const idx = options.findIndex((o) => o.value === value);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const idx = Math.max(
+    0,
+    options.findIndex((o) => o.value === value)
+  );
 
-  const handleUp = () => {
-    const next = (idx - 1 + options.length) % options.length;
+  // Keep the DOM scroll position aligned with the selected value. Runs on mount
+  // and whenever the value changes from outside (e.g. parent clamps end >= start).
+  // The guard makes it a no-op after a user scroll settles, so there's no loop.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = idx * ITEM_HEIGHT;
+    if (Math.abs(el.scrollTop - target) > 1) {
+      el.scrollTop = target;
+    }
+  }, [idx]);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      const nearest = Math.min(
+        options.length - 1,
+        Math.max(0, Math.round(el.scrollTop / ITEM_HEIGHT))
+      );
+      if (options[nearest] && options[nearest].value !== value) {
+        onChange(options[nearest].value);
+      }
+    }, 120);
+  };
+
+  const step = (dir: 1 | -1) => {
+    const next = Math.min(options.length - 1, Math.max(0, idx + dir));
     onChange(options[next].value);
   };
 
-  const handleDown = () => {
-    const next = (idx + 1) % options.length;
-    onChange(options[next].value);
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      step(-1);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      step(1);
+    }
   };
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        onClick={handleUp}
+    <div className="relative" style={{ height: COLUMN_HEIGHT }}>
+      {/* Center selection band (painted behind the values) */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-lg bg-accent/50"
+        style={{ height: ITEM_HEIGHT }}
+      />
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onKeyDown={handleKeyDown}
+        tabIndex={0}
+        role="spinbutton"
+        aria-label={ariaLabel}
+        aria-valuemin={0}
+        aria-valuemax={options.length - 1}
+        aria-valuenow={idx}
+        aria-valuetext={options[idx]?.label ?? value}
+        className="relative h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain scrollbar-hide rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <ChevronUp className="w-4 h-4" />
-      </Button>
-      <div className="h-12 w-full flex items-center justify-center rounded-lg bg-accent/50 font-bold text-lg tabular-nums select-none">
-        {options[idx]?.label ?? value}
+        <div style={{ height: PAD }} aria-hidden />
+        {options.map((o, i) => (
+          <button
+            type="button"
+            key={o.value}
+            tabIndex={-1}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              "flex w-full snap-center items-center justify-center tabular-nums select-none transition-colors",
+              i === idx
+                ? "text-lg font-bold text-foreground"
+                : "text-base text-muted-foreground/60"
+            )}
+            style={{ height: ITEM_HEIGHT }}
+          >
+            {o.label}
+          </button>
+        ))}
+        <div style={{ height: PAD }} aria-hidden />
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-        onClick={handleDown}
-      >
-        <ChevronDown className="w-4 h-4" />
-      </Button>
     </div>
   );
 }
@@ -143,20 +212,23 @@ export function MobileDateTimePicker({
         </PopoverContent>
       </Popover>
 
-      {/* Time wheel */}
+      {/* Time wheel — scroll, flick, arrow-key, or tap to adjust */}
       <div className="grid grid-cols-[1fr_8px_1fr_1fr] items-center gap-1 px-2">
         <WheelColumn
+          ariaLabel="Hour"
           value={String(hour12)}
           options={hours12}
           onChange={(v) => updateTime(Number(v), minute, ampm)}
         />
-        <span className="text-xl font-bold text-center select-none pb-0.5">:</span>
+        <span className="text-xl font-bold text-center select-none">:</span>
         <WheelColumn
+          ariaLabel="Minute"
           value={String(minute).padStart(2, "0")}
           options={minutes}
           onChange={(v) => updateTime(hour12, Number(v), ampm)}
         />
         <WheelColumn
+          ariaLabel="AM or PM"
           value={ampm}
           options={ampmOptions}
           onChange={(v) => updateTime(hour12, minute, v)}
