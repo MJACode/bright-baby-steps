@@ -68,3 +68,33 @@ same as was done for `com.graceflare.app.watchkitapp`.
   both surfaces at once at the next switch or stop.
 - iOS < 16.1, Live Activities disabled in Settings, and Android all fall back
   to the pre-existing local-notification card.
+
+## Debugging "it's not appearing"
+
+Every failure path used to be swallowed silently, so a timer that showed
+nothing on the Lock Screen gave no signal about why. The paths now log to the
+console (visible in **Safari → Develop → [device] → Web Inspector**, or the
+Xcode device console) tagged `[LiveActivity]`, and there's a native probe:
+
+```ts
+import { getLiveActivityDiagnostics } from "@/integrations/liveActivity/liveActivityClient";
+const d = await getLiveActivityDiagnostics();
+// { pluginReachable, available, enabled, activityCount }
+```
+
+Read it top-down:
+
+1. `pluginReachable: false` on a real iOS build → the ActivityKit glue /
+   widget extension didn't compile or embed. Check that
+   `inject_widgets_target.rb` ran in CI and the archive contains
+   `PlugIns/GraceFlareWidgets.appex`.
+2. `available: false` → the device is on iOS < 16.1. Expected fallback.
+3. `enabled: false` → Live Activities are turned **off** for Grace Flare in
+   Settings (Settings → Grace Flare → Live Activities, and the system-wide
+   Settings → Face ID & Passcode / Live Activities toggles). This is the most
+   common cause. Turn it on.
+4. All true but `activityCount` stays 0 after starting a timer → the request
+   is throwing; check the `[LiveActivity] start …` warning for the reason.
+
+If a build ships at all, the widget App ID `com.graceflare.app.widgets`
+exists — otherwise `fetch-signing-files --create` fails the whole build.
