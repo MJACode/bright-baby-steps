@@ -90,7 +90,15 @@ export async function scheduleSessionNotification({
   // Fallback: local notification. `ongoing: true` pins it on Android; on iOS
   // (< 16.1, or Live Activities disabled) it's a static reminder card.
   const granted = await ensureSessionNotificationPermission();
-  if (!granted) return;
+  if (!granted) {
+    // Both lock-screen surfaces are now unavailable — this is the "I see
+    // nothing at all" case. Make it visible instead of returning silently.
+    console.warn(
+      "[LiveActivity] No lock-screen surface: Live Activity did not start AND " +
+        "notification permission is not granted. Nothing will show on the Lock Screen.",
+    );
+    return;
+  }
   const id = hashId(sessionId);
   const body = `Started at ${startTime.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · tap to ${STARTED_FALLBACK === "started" ? "open" : "stop"}`;
   try {
