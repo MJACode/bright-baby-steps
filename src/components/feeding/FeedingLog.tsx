@@ -29,6 +29,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { SevenDayChart } from "@/components/charts/SevenDayChart";
 import NursingTimer from "@/components/feeding/NursingTimer";
+import { FeedCoachCard } from "@/components/feeding/FeedCoachCard";
 import { useActiveFeed, type ActiveFeedRow } from "@/hooks/useActiveFeed";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
@@ -332,6 +333,14 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
 
   const todayLogs = logs?.filter(l => format(new Date(l.logged_at), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd")) ?? [];
 
+  // Most recent *completed* feed for the Feed Coach nudge. An in-progress timer
+  // row (source='timer' with duration still NULL) means baby is feeding right
+  // now — skip it so "it's been Xh" measures from the last finished feed.
+  const lastCompletedFeed = logs?.find(
+    (l) => !(l.duration_minutes === null && l.source === "timer"),
+  );
+  const lastFeedAt = lastCompletedFeed ? new Date(lastCompletedFeed.logged_at) : null;
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -515,6 +524,14 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
         </Dialog>
       </div>
 
+
+      {/* Feed Coach — hunger-cue reminder, escalates to "consider a feed" once
+          it's been longer than the age-typical interval since the last feed. */}
+      <FeedCoachCard
+        activeChild={activeChild}
+        lastFeedAt={lastFeedAt}
+        feedInProgress={!!pageActiveFeed}
+      />
 
       {/* 7-Day Trends Chart */}
       {activeChild && <FeedingTrendsChart childId={activeChild.id} />}
