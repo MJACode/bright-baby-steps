@@ -1,0 +1,157 @@
+# Juno-inspired features — Sick Day, Observations, Baseline, Narrative summary
+
+Branch: `claude/junos-parents-kids-features-5j4iu5`
+Full plan: see the approved plan file for rationale and verified findings.
+
+**Status legend:** `[ ]` not started · `[~]` in progress · `[x]` done
+
+**The through-line.** Structured logs answer *how much*. The narration Grace Flare
+currently discards answers *why* — which is what the parent wants and what the
+pediatrician needs. The timer is the subject; the conversation is the predicate.
+
+Grace Flare stays child-only. The in-app chat stays read-only — the conversational
+path is Claude over MCP, not a chat we build and meter.
+
+---
+
+## Phase 1 — Sick Day CRUD (frontend, no migration)
+
+`illness_logs` / `medication_logs` have correct RLS and four existing readers, and
+no writer. This phase is the missing write UI.
+
+- [~] `IllnessSection` in `src/components/records/MedicalTab.tsx`, modelled on
+      `TemperatureSection` (`:542`), mounted at `:791-795`
+- [~] Nested medication rows via `medication_logs.illness_log_id`
+- [~] `"illness-logs"` / `"medication-logs"` added to `LOG_WRITE_QUERY_KEYS`
+- [ ] QA pass
+- [ ] Record the `medication_dose_events` deferral in the PR (decision, not oversight)
+
+Gotchas: `date` not `timestamptz` (no `localInputToIso`); `dose` stays text;
+validate `end_date >= start_date`; caregiver UI hiding is a UX guardrail, not a
+security boundary.
+
+---
+
+## Phase 2 — Active-illness surfacing (frontend)
+
+- [ ] `useNextSteps.tsx` emits a `domain: "health"` item, tier `soon`
+- [ ] `QuickLogFAB` gains a "Temp" action while an illness is active
+- [ ] `TalkThisThroughButton` → pediatrician persona from the illness card
+- [ ] After 14 days open: "still going? tap to update" — a prompt, never a write
+- [ ] QA pass
+
+No `HOME_SECTIONS` entry — a live-situation affordance must not be hideable behind
+a stale preference. Illness ends only by explicit parent action; auto-closing would
+corrupt the timeline a doctor reads.
+
+---
+
+## Phase 3 — Observations: the narrative layer
+
+### 3a. Migration (backend)
+- [ ] `child_observations` — `said_at` distinct from `created_at`; nullable
+      `sleep_log_id` / `feeding_log_id` with `ON DELETE SET NULL`
+- [ ] RLS copied verbatim from `caregiver_notes` (`20260502030000`)
+- [ ] `REPLICA IDENTITY FULL` + realtime publication
+- [ ] Index `(child_id, said_at desc)`
+- [ ] **Open decision:** partner account deletion cascades their observations off
+      the owner's child record. Defensible as the author's deletion right, silent
+      data loss for the owner. Decide, then log in `docs/legal-review-log.md`.
+- [ ] `get_advisors` clean after apply
+
+### 3b. Capture (frontend)
+- [ ] `ObservationComposer.tsx` — textarea + mic, editable `said_at`.
+      Voice reuses `useSpeechRecognition`, **not** `parse-voice-log`. No AI at capture.
+- [ ] `useObservations.tsx`, routed through `invalidateAfterLogWrite`
+- [ ] `ActiveSessionBanner` mic affordance (stamps the session FK)
+- [ ] `QuickLogFAB` "Note" action for the no-session case (the majority)
+- [ ] Render inline on the day timeline
+- [ ] QA pass
+
+iOS: ActivityKit can't capture voice backgrounded, so the Live Activity deep-links
+into the composer. Watch capture is a follow-up.
+
+### 3c. Lazy extraction
+- [ ] `useChildContext` — observations join the AI context blob
+- [ ] `briefing` — last 24h feed `watch`; quote, never diagnose
+
+---
+
+## Phase 4 — Baseline deviation (frontend, client-only)
+
+- [ ] `src/lib/baseline.ts` — pure, `now` as a parameter
+- [ ] `src/lib/__tests__/baseline.test.ts`
+- [ ] `useBaseline.tsx`, `TodayCard`, `homeSections`, `Dashboard`
+- [ ] QA pass
+
+3 complete days vs. the 14 before them (drift cancels across both windows).
+Three metrics; both a 25% relative and an absolute floor must clear; coverage gate
+returns `insufficient_data` — **a drop in logging must never render as a drop in
+the child's behavior.** Illness days excluded from reference, deviations suppressed
+while an illness is active. At most one deviation shown.
+
+Required test fixtures: flat → null; 40% drop → fires; gradual 2%/week over 17 days
+→ does **not** fire; logging stopped 2 days → `insufficient_data`; illness overlap
+→ suppressed; 3-vs-2 diapers → blocked by the floor.
+
+No new notification types — in-app only for v1.
+
+---
+
+## Phase 5 — Baseline + observations into the briefing (backend)
+
+- [ ] `useBriefing` sends baseline; added to the query key
+- [ ] `briefing/index.ts` validates defensively, appends one context line
+- [ ] Prompt: exact numbers only; silent when `suppressed_illness` /
+      `insufficient_data`
+- [ ] QA pass
+
+---
+
+## Phase 6 — Narrative visit summary (backend → QA → frontend)
+
+- [ ] `supabase/functions/visit-summary/index.ts` — **fetches nothing**; consumes a
+      client-built facts block so summary and PDF body cannot disagree
+- [ ] `useVisitSummary.tsx`, `renderNarrativeSummary`, `PremiumGate` on the section
+- [ ] Guardrails: prompt bans · numeric allowlist · banned-phrase scan ·
+      deterministic template fallback
+- [ ] Fifth rule: parent observations quoted **attributed and verbatim**, never
+      absorbed into the model's voice or used to support an inference
+- [ ] QA between the backend and frontend delegations
+
+Adversarial test: an observation saying "I think she has an ear infection" — the
+model must quote it without adopting it.
+
+---
+
+## Phase 7 — Write tools over MCP only (backend → QA → frontend)
+
+In-app `AIChatWidget` stays read-only. Cut: `log_proposal` SSE frame,
+`ChatLogConfirmCard`, AIChatWidget write handling.
+
+- [ ] Migration: `source` gains `'mcp'` (per-table — only feeding/sleep carry
+      `'timer'`); add `illness_logs.source`. **No scope migration needed** — the
+      column already exists and is threaded through the OAuth flow.
+- [ ] `ResolvedToken` carries `scope` — currently `{ user_id, id }`, so nothing is
+      enforceable without this
+- [ ] `tools/list` scope-aware; `tools/call` rejects writes before JWT minting
+- [ ] Registry split + MCP annotations (`readOnlyHint: false`, `idempotentHint`)
+- [ ] `idempotency_key` on every write tool — transports retry
+- [ ] Write rate limit (reuse the `voice_parse_events` pattern)
+- [ ] Consent screen read-only vs. read+write; `ConnectClaudeSettings` downgrade
+- [ ] `SubprocessorsPage` + `PrivacyPage` copy (currently says read-only — becomes
+      false the day this ships)
+- [ ] **`docs/legal-review-log.md` entry is mandatory**
+- [ ] Flip `mcpReadCategories.test.ts` into a scope-enforcement guard
+- [ ] QA after each delegation
+
+Existing grants keep working untouched — no forced re-authorization.
+
+`log_medication` excluded: dose is the highest-harm field an LLM can get wrong, and
+over MCP there is no app-side review at all.
+
+---
+
+## Review
+
+_To be filled in as phases land._
