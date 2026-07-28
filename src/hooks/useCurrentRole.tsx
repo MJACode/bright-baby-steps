@@ -4,9 +4,12 @@ import { useAuth } from "@/hooks/useAuth";
 
 export type Role = "owner" | "coparent" | "caregiver" | "viewer";
 
-export function useCurrentRole(childId?: string): Role {
+// `role` optimistically defaults to "owner" while the query is in flight, which
+// is fine for layout decisions but unsafe for gating writes. Consumers that hide
+// controls from lower-privilege roles must wait for `isResolved`.
+export function useCurrentRoleQuery(childId?: string): { role: Role; isResolved: boolean } {
   const { user } = useAuth();
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: ["my-role", user?.id, childId],
     queryFn: async (): Promise<Role> => {
       if (!user || !childId) return "owner";
@@ -20,5 +23,9 @@ export function useCurrentRole(childId?: string): Role {
     },
     enabled: !!user && !!childId,
   });
-  return data ?? "owner";
+  return { role: query.data ?? "owner", isResolved: query.isSuccess };
+}
+
+export function useCurrentRole(childId?: string): Role {
+  return useCurrentRoleQuery(childId).role;
 }

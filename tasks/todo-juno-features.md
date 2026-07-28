@@ -32,6 +32,41 @@ security boundary.
 
 ---
 
+### Tracked out of Phase 1 — client-stamped `parent_id` (app-wide, pre-existing)
+
+Found during Phase 1 QA. Not introduced by this work and **not** fixed here,
+because it affects every log table and fixing it only for illness would make that
+table inconsistent with the rest.
+
+Every write path stamps `parent_id: user.id` — `QuickLogFAB`, `useActiveSleep`,
+`useActiveFeed`, `useVoiceLog`, and now `IllnessSection`. Two consequences,
+both confirmed against the live database:
+
+1. **INSERT is not role-enforced.** Policy is
+   `((auth.uid() = parent_id) OR partner_can_write(parent_id))`. Because the client
+   supplies its own uid as `parent_id`, the first disjunct is always true and
+   `partner_can_write` — the clause that excludes viewers — never runs. The UI gate
+   in `IllnessSection` is currently the only thing stopping a viewer write.
+2. **Partner-written rows are invisible to the owner.** SELECT is
+   `((auth.uid() = parent_id) OR has_partner_access(auth.uid(), parent_id))`, and
+   `has_partner_access` is strictly directional while `accept_partner_invitation`
+   (`20260507020000:48`) inserts exactly one row `(owner_id, partner_id)`. A
+   co-parent's illness log would not appear for the child's owner.
+
+**Blast radius today: zero.** Production has 0 active `partner_access` rows and 0
+partner-written rows across `feeding_logs` / `sleep_logs` / `diaper_logs`. Nobody
+has completed a partner invite, so there is nothing to backfill — this is the
+cheapest it will ever be to fix.
+
+- [ ] Decide the fix: stamp `parent_id` with the child's owner, or add a
+      `WITH CHECK` requiring `child_id` to belong to a child the writer can write
+      to (`can_access_child` already exists), or make `has_partner_access`
+      symmetric. Pick one and apply it across all log tables at once.
+- [ ] Until then, `IllnessSection`'s `canWrite` gate is load-bearing — say so in
+      the comment rather than calling it a UX guardrail.
+
+---
+
 ## Phase 2 — Active-illness surfacing (frontend)
 
 - [ ] `useNextSteps.tsx` emits a `domain: "health"` item, tier `soon`

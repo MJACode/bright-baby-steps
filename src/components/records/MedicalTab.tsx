@@ -11,12 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Stethoscope, Syringe, Smile, Thermometer, Plus, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
+import { Stethoscope, Syringe, Smile, Thermometer, Pill, Plus, ChevronDown, Check, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, parseISO, isValid } from "date-fns";
 import { safeFormatDate } from "@/lib/safeFormat";
 import { UpcomingVisitsSection } from "@/components/records/UpcomingVisitsSection";
 import { useChildren, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 
 interface Props {
   childId: string;
@@ -514,6 +516,532 @@ function DentalSection({ childId, parentId, ageMonths }: { childId: string; pare
   );
 }
 
+const COMMON_ILLNESSES = [
+  "Cold",
+  "Ear infection",
+  "RSV",
+  "Stomach bug",
+  "Croup",
+  "Hand-foot-and-mouth",
+];
+
+// illness_logs / medication_logs store `date`, not `timestamptz`. parseISO on a
+// bare yyyy-MM-dd yields local midnight; `new Date(...)` would yield UTC
+// midnight and render as the previous day west of Greenwich.
+function formatDateOnly(value: string | null | undefined, fmt = "MMM d, yyyy") {
+  if (!value) return "—";
+  const d = parseISO(value);
+  return isValid(d) ? format(d, fmt) : "—";
+}
+
+type IllnessRow = {
+  id: string;
+  illness_name: string;
+  start_date: string;
+  end_date: string | null;
+  notes: string | null;
+};
+
+type MedicationRow = {
+  id: string;
+  illness_log_id: string | null;
+  medication_name: string;
+  dose: string | null;
+  frequency: string | null;
+  start_date: string;
+  end_date: string | null;
+  notes: string | null;
+};
+
+const VIEW_ONLY_MESSAGE = "Your access to this child is view-only. Ask the parent who shared it with you for edit access.";
+
+// A PostgrestError carries raw Postgres text ("new row violates row-level
+// security policy for table ..."), which is meaningless to a parent. 42501 is
+// insufficient_privilege — in practice a view-only partner or one whose access
+// was revoked mid-session.
+function describeWriteError(err: unknown): string {
+  const code = typeof err === "object" && err !== null && "code" in err ? String((err as { code?: unknown }).code) : "";
+  if (code === "42501") {
+    return VIEW_ONLY_MESSAGE;
+  }
+  return err instanceof Error && err.message ? err.message : "Please try again.";
+}
+
+const emptyIllnessForm = () => ({
+  illness_name: "",
+  start_date: format(new Date(), "yyyy-MM-dd"),
+  end_date: "",
+  notes: "",
+});
+
+const emptyMedicationForm = () => ({
+  medication_name: "",
+  dose: "",
+  frequency: "",
+  start_date: format(new Date(), "yyyy-MM-dd"),
+  end_date: "",
+  notes: "",
+});
+
+function IllnessSection({ childId, parentId }: { childId: string; parentId: string }) {
+  const queryClient = useQueryClient();
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(childId);
+  // Only owner / coparent / viewer ever reach this component — DashboardLayout
+  // routes caregivers to CaregiverHome, which has no Records surface at all.
+  // This gate is what stops a viewer from writing: RecordsPage stamps
+  // parent_id with the signed-in user's own uid, which satisfies the first
+  // disjunct of the INSERT policy (auth.uid() = parent_id OR
+  // partner_can_write(parent_id)), so the viewer-excluding clause is never
+  // evaluated. The server-side fix is tracked in tasks/todo-juno-features.md
+  // ("Tracked out of Phase 1 — client-stamped `parent_id`"). Until the role
+  // query settles it reports "owner", so hold the controls back.
+  const canWrite = roleResolved && role !== "viewer";
+
+  const [illnessOpen, setIllnessOpen] = useState(false);
+  const [editingIllnessId, setEditingIllnessId] = useState<string | null>(null);
+  const [illnessForm, setIllnessForm] = useState(emptyIllnessForm);
+
+  const [medOpen, setMedOpen] = useState(false);
+  const [editingMedId, setEditingMedId] = useState<string | null>(null);
+  const [medIllnessId, setMedIllnessId] = useState<string | null>(null);
+  const [medForm, setMedForm] = useState(emptyMedicationForm);
+
+  const { data: illnesses, isLoading: illnessesLoading } = useQuery({
+    queryKey: ["illness-logs", childId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("illness_logs")
+        .select("id, illness_name, start_date, end_date, notes")
+        .eq("child_id", childId)
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data as IllnessRow[];
+    },
+  });
+
+  const { data: medications } = useQuery({
+    queryKey: ["medication-logs", childId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("medication_logs")
+        .select("id, illness_log_id, medication_name, dose, frequency, start_date, end_date, notes")
+        .eq("child_id", childId)
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data as MedicationRow[];
+    },
+  });
+
+  const upsertIllness = useMutation({
+    mutationFn: async () => {
+      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      const payload = {
+        illness_name: illnessForm.illness_name.trim(),
+        start_date: illnessForm.start_date,
+        end_date: illnessForm.end_date || null,
+        notes: illnessForm.notes.trim() || null,
+      };
+      if (editingIllnessId) {
+        const { error } = await supabase.from("illness_logs").update(payload).eq("id", editingIllnessId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("illness_logs")
+          .insert({ ...payload, child_id: childId, parent_id: parentId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      invalidateAfterLogWrite(queryClient);
+      setIllnessOpen(false);
+      setEditingIllnessId(null);
+      toast({ title: editingIllnessId ? "Illness updated" : "Illness logged" });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't save illness", description: describeWriteError(err), variant: "destructive" });
+    },
+  });
+
+  const resolveIllness = useMutation({
+    mutationFn: async (illness: IllnessRow) => {
+      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { error } = await supabase
+        .from("illness_logs")
+        .update({ end_date: today < illness.start_date ? illness.start_date : today })
+        .eq("id", illness.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAfterLogWrite(queryClient);
+      toast({ title: "Marked resolved", description: "Glad they're feeling better." });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't mark resolved", description: describeWriteError(err), variant: "destructive" });
+    },
+  });
+
+  const deleteIllness = useMutation({
+    mutationFn: async (id: string) => {
+      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      const { error } = await supabase.from("illness_logs").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_result, id) => {
+      invalidateAfterLogWrite(queryClient);
+      const moved = (medications ?? []).filter((m) => m.illness_log_id === id).length;
+      toast({
+        title: "Illness removed",
+        description: moved > 0
+          ? `${moved} medication${moved === 1 ? "" : "s"} moved to Other medications — nothing was deleted.`
+          : undefined,
+      });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't remove illness", description: describeWriteError(err), variant: "destructive" });
+    },
+  });
+
+  const upsertMedication = useMutation({
+    mutationFn: async () => {
+      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      const payload = {
+        illness_log_id: medIllnessId,
+        medication_name: medForm.medication_name.trim(),
+        dose: medForm.dose.trim() || null,
+        frequency: medForm.frequency.trim() || null,
+        start_date: medForm.start_date,
+        end_date: medForm.end_date || null,
+        notes: medForm.notes.trim() || null,
+      };
+      if (editingMedId) {
+        const { error } = await supabase.from("medication_logs").update(payload).eq("id", editingMedId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("medication_logs")
+          .insert({ ...payload, child_id: childId, parent_id: parentId });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      invalidateAfterLogWrite(queryClient);
+      setMedOpen(false);
+      setEditingMedId(null);
+      toast({ title: editingMedId ? "Medication updated" : "Medication logged" });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't save medication", description: describeWriteError(err), variant: "destructive" });
+    },
+  });
+
+  const deleteMedication = useMutation({
+    mutationFn: async (id: string) => {
+      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      const { error } = await supabase.from("medication_logs").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidateAfterLogWrite(queryClient);
+      toast({ title: "Medication removed" });
+    },
+    onError: (err) => {
+      toast({ title: "Couldn't remove medication", description: describeWriteError(err), variant: "destructive" });
+    },
+  });
+
+  const openAddIllness = () => {
+    setEditingIllnessId(null);
+    setIllnessForm(emptyIllnessForm());
+    setIllnessOpen(true);
+  };
+
+  const openEditIllness = (i: IllnessRow) => {
+    setEditingIllnessId(i.id);
+    setIllnessForm({
+      illness_name: i.illness_name,
+      start_date: i.start_date,
+      end_date: i.end_date ?? "",
+      notes: i.notes ?? "",
+    });
+    setIllnessOpen(true);
+  };
+
+  const openAddMedication = (illnessLogId: string | null) => {
+    setEditingMedId(null);
+    setMedIllnessId(illnessLogId);
+    setMedForm(emptyMedicationForm());
+    setMedOpen(true);
+  };
+
+  const openEditMedication = (m: MedicationRow) => {
+    setEditingMedId(m.id);
+    setMedIllnessId(m.illness_log_id);
+    setMedForm({
+      medication_name: m.medication_name,
+      dose: m.dose ?? "",
+      frequency: m.frequency ?? "",
+      start_date: m.start_date,
+      end_date: m.end_date ?? "",
+      notes: m.notes ?? "",
+    });
+    setMedOpen(true);
+  };
+
+  // Active (end_date IS NULL) first — same predicate the AI context blob and the
+  // get_illnesses chat tool use — then most recent start_date.
+  const sortedIllnesses = [...(illnesses ?? [])].sort((a, b) => {
+    const activeDelta = Number(!!a.end_date) - Number(!!b.end_date);
+    if (activeDelta !== 0) return activeDelta;
+    return b.start_date.localeCompare(a.start_date);
+  });
+  const standaloneMeds = (medications ?? []).filter((m) => !m.illness_log_id);
+
+  const illnessDatesValid = !illnessForm.end_date || illnessForm.end_date >= illnessForm.start_date;
+  const medDatesValid = !medForm.end_date || medForm.end_date >= medForm.start_date;
+
+  const renderMedication = (m: MedicationRow) => {
+    const details = (
+      <>
+        <p className="text-sm font-semibold">
+          {m.medication_name}
+          {m.dose ? <span className="font-normal text-muted-foreground"> · {m.dose}</span> : null}
+          {m.frequency ? <span className="font-normal text-muted-foreground"> · {m.frequency}</span> : null}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {formatDateOnly(m.start_date, "MMM d")}
+          {m.end_date ? ` – ${formatDateOnly(m.end_date, "MMM d")}` : " · ongoing"}
+        </p>
+        {m.notes && <p className="text-xs text-foreground/80 mt-1">{m.notes}</p>}
+      </>
+    );
+    return (
+      <div key={m.id} className="flex items-start gap-2 rounded-lg bg-background/70 p-2">
+        {canWrite ? (
+          <button className="flex-1 min-w-0 text-left touch-target" onClick={() => openEditMedication(m)}>
+            {details}
+          </button>
+        ) : (
+          <div className="flex-1 min-w-0">{details}</div>
+        )}
+        {canWrite && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="touch-target shrink-0 text-muted-foreground hover:text-destructive"
+            aria-label={`Remove ${m.medication_name}`}
+            onClick={() => deleteMedication.mutate(m.id)}
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Collapsible defaultOpen>
+      <CollapsibleTrigger className="flex items-center gap-2 w-full group touch-target">
+        <Pill className="w-5 h-5 text-primary" />
+        <h3 className="font-display font-bold text-lg flex-1 text-left">Illness &amp; Medications</h3>
+        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 space-y-3">
+        {illnessesLoading ? (
+          <p className="text-sm text-muted-foreground">Loading sick days…</p>
+        ) : sortedIllnesses.length > 0 ? (
+          <div className="space-y-2">
+            {sortedIllnesses.map((i) => {
+              const active = !i.end_date;
+              const meds = (medications ?? []).filter((m) => m.illness_log_id === i.id);
+              return (
+                <Card key={i.id} className={active ? "border border-warning/40 bg-warning/5" : "border-0 bg-muted/40"}>
+                  <CardContent className="p-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <p className="text-sm font-semibold flex items-center gap-2 flex-wrap">
+                          {i.illness_name}
+                          {active && (
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-warning text-warning-foreground">
+                              Active
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Started {formatDateOnly(i.start_date)}
+                          {i.end_date ? ` · resolved ${formatDateOnly(i.end_date)}` : ""}
+                        </p>
+                        {i.notes && <p className="text-xs text-foreground/80 mt-1">{i.notes}</p>}
+                      </div>
+                      {canWrite && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="touch-target shrink-0 text-muted-foreground hover:text-destructive"
+                          aria-label={`Remove ${i.illness_name}`}
+                          onClick={() => deleteIllness.mutate(i.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {meds.length > 0 && <div className="space-y-1.5">{meds.map(renderMedication)}</div>}
+
+                    {canWrite && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="gap-1 min-h-[48px]" onClick={() => openAddMedication(i.id)}>
+                          <Plus className="w-4 h-4" /> Medication
+                        </Button>
+                        <Button variant="ghost" size="sm" className="min-h-[48px]" onClick={() => openEditIllness(i)}>
+                          Edit
+                        </Button>
+                        {active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1 min-h-[48px] text-primary"
+                            disabled={resolveIllness.isPending}
+                            onClick={() => resolveIllness.mutate(i)}
+                          >
+                            <Check className="w-4 h-4" /> Mark resolved
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">
+            {canWrite
+              ? "Log a sick day to keep symptoms and doses in one place."
+              : "Sick days and medication doses show up here once they're logged."}
+          </p>
+        )}
+
+        {standaloneMeds.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Other medications</p>
+            {standaloneMeds.map(renderMedication)}
+          </div>
+        )}
+
+        {canWrite && (
+          <div className="flex flex-col gap-2">
+            <Button variant="outline" className="w-full border-dashed gap-2 touch-target" onClick={openAddIllness}>
+              <Plus className="w-4 h-4" /> Add Illness
+            </Button>
+            <Button variant="outline" className="w-full border-dashed gap-2 touch-target" onClick={() => openAddMedication(null)}>
+              <Plus className="w-4 h-4" /> Add Medication
+            </Button>
+          </div>
+        )}
+
+        <Sheet open={illnessOpen} onOpenChange={setIllnessOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl max-h-[90vh] overflow-y-auto">
+            <SheetHeader className="text-left">
+              <SheetTitle className="font-display">{editingIllnessId ? "Edit Illness" : "Log an Illness"}</SheetTitle>
+              <SheetDescription>Track what they came down with, and when it cleared.</SheetDescription>
+            </SheetHeader>
+            <div className="space-y-3 mt-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">What is it?</Label>
+                <Input
+                  list="common-illnesses"
+                  value={illnessForm.illness_name}
+                  onChange={(e) => setIllnessForm({ ...illnessForm, illness_name: e.target.value })}
+                  placeholder="e.g. Ear infection"
+                />
+                <datalist id="common-illnesses">
+                  {COMMON_ILLNESSES.map((name) => <option key={name} value={name} />)}
+                </datalist>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Started</Label>
+                <Input type="date" value={illnessForm.start_date} onChange={(e) => setIllnessForm({ ...illnessForm, start_date: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Resolved</Label>
+                <Input type="date" value={illnessForm.end_date} onChange={(e) => setIllnessForm({ ...illnessForm, end_date: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Leave empty while they're still sick.</p>
+                {!illnessDatesValid && (
+                  <p className="text-xs font-semibold text-destructive">The resolved date is before the start date — pick a later day.</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Notes</Label>
+                <Textarea value={illnessForm.notes} onChange={(e) => setIllnessForm({ ...illnessForm, notes: e.target.value })} placeholder="Symptoms, what the doctor said..." />
+              </div>
+              <Button
+                className="w-full h-12 touch-target"
+                disabled={!illnessForm.illness_name.trim() || !illnessDatesValid || upsertIllness.isPending}
+                onClick={() => upsertIllness.mutate()}
+              >
+                {upsertIllness.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        <Sheet open={medOpen} onOpenChange={setMedOpen}>
+          <SheetContent side="bottom" className="rounded-t-2xl max-h-[90vh] overflow-y-auto">
+            <SheetHeader className="text-left">
+              <SheetTitle className="font-display">{editingMedId ? "Edit Medication" : "Log a Medication"}</SheetTitle>
+              <SheetDescription>
+                {medIllnessId
+                  ? "This dose will be filed under the illness you picked."
+                  : "Not tied to an illness — good for vitamins and daily meds."}
+              </SheetDescription>
+            </SheetHeader>
+            <div className="space-y-3 mt-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Medication</Label>
+                <Input value={medForm.medication_name} onChange={(e) => setMedForm({ ...medForm, medication_name: e.target.value })} placeholder="e.g. Amoxicillin" />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs font-semibold">Dose</Label>
+                  <Input value={medForm.dose} onChange={(e) => setMedForm({ ...medForm, dose: e.target.value })} placeholder="2.5 mL" />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label className="text-xs font-semibold">Frequency</Label>
+                  <Input value={medForm.frequency} onChange={(e) => setMedForm({ ...medForm, frequency: e.target.value })} placeholder="Twice a day" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Started</Label>
+                <Input type="date" value={medForm.start_date} onChange={(e) => setMedForm({ ...medForm, start_date: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Finished</Label>
+                <Input type="date" value={medForm.end_date} onChange={(e) => setMedForm({ ...medForm, end_date: e.target.value })} />
+                <p className="text-xs text-muted-foreground">Leave empty while they're still taking it.</p>
+                {!medDatesValid && (
+                  <p className="text-xs font-semibold text-destructive">The finish date is before the start date — pick a later day.</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Notes</Label>
+                <Textarea value={medForm.notes} onChange={(e) => setMedForm({ ...medForm, notes: e.target.value })} placeholder="Prescribing doctor, side effects..." />
+              </div>
+              <Button
+                className="w-full h-12 touch-target"
+                disabled={!medForm.medication_name.trim() || !medDatesValid || upsertMedication.isPending}
+                onClick={() => upsertMedication.mutate()}
+              >
+                {upsertMedication.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 const TEMP_METHODS = [
   { value: "oral", label: "Oral" },
   { value: "rectal", label: "Rectal" },
@@ -792,6 +1320,7 @@ export function MedicalTab({ childId, parentId, ageMonths }: Props) {
       <PediatricianSection childId={childId} parentId={parentId} hasActiveFlags={(activeFlagCount ?? 0) > 0} />
       <VaccinationsSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
       <DentalSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
+      <IllnessSection childId={childId} parentId={parentId} />
       <TemperatureSection childId={childId} parentId={parentId} />
     </div>
   );
