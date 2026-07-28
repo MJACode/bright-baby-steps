@@ -19,12 +19,25 @@ path is Claude over MCP, not a chat we build and meter.
 `illness_logs` / `medication_logs` have correct RLS and four existing readers, and
 no writer. This phase is the missing write UI.
 
-- [~] `IllnessSection` in `src/components/records/MedicalTab.tsx`, modelled on
-      `TemperatureSection` (`:542`), mounted at `:791-795`
-- [~] Nested medication rows via `medication_logs.illness_log_id`
-- [~] `"illness-logs"` / `"medication-logs"` added to `LOG_WRITE_QUERY_KEYS`
-- [ ] QA pass
-- [ ] Record the `medication_dose_events` deferral in the PR (decision, not oversight)
+- [x] `IllnessSection` in `src/components/records/MedicalTab.tsx`, modelled on
+      `TemperatureSection`
+- [x] Nested medication rows via `medication_logs.illness_log_id`, falling back to
+      a standalone list when the parent illness is deleted (`ON DELETE SET NULL`)
+- [x] `"illness-logs"` / `"medication-logs"` / `"child-context"` added to
+      `LOG_WRITE_QUERY_KEYS` (the last one because `useChildContext` caches for 60s,
+      so the AI would otherwise see a stale illness list)
+- [x] Write controls gated on a **resolved** role, with the same guard inside each
+      `mutationFn` — an RLS-blocked UPDATE returns 0 rows with no error and would
+      otherwise toast a false success
+- [x] QA pass — two rounds; Fix-required → Pass
+- [x] Record the `medication_dose_events` deferral in the PR (decision, not oversight)
+
+Shipped in `74dfef5`. Typecheck clean, 192/192 tests.
+
+**Manual verification still outstanding** (needs a browser and three accounts):
+owner sees all affordances; viewer sees rows read-only with no write controls;
+coparent sees full controls. Plus a timezone check — log at 23:45 local and
+confirm the card shows today, not tomorrow.
 
 Gotchas: `date` not `timestamptz` (no `localInputToIso`); `dose` stays text;
 validate `end_date >= start_date`; caregiver UI hiding is a UX guardrail, not a
