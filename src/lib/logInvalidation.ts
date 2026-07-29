@@ -1,8 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 // Canonical invalidation set for any write to the log tables (feeding_logs,
-// sleep_logs, diaper_logs, custom_milestones, temperature_logs) — quick-log
-// FAB, voice log, and voice-log undo all go through this one list. Keys are
+// sleep_logs, diaper_logs, custom_milestones, temperature_logs, illness_logs,
+// medication_logs) — quick-log FAB, voice log, voice-log undo, and the Records
+// medical sections all go through this one list. Keys are
 // roots: react-query prefix-matches, so ["week-events"] covers
 // ["week-events", "feeding", childId, weekKey] etc. If a new surface derives
 // from these tables, add its root HERE, not at a call site.
@@ -12,6 +13,8 @@ export const LOG_WRITE_QUERY_KEYS = [
   "diaper-logs",
   "custom-milestones",
   "temperature-logs",
+  "illness-logs",
+  "medication-logs",
   "today-sleep",
   "today-feeds",
   "today-diapers",
@@ -23,6 +26,7 @@ export const LOG_WRITE_QUERY_KEYS = [
   "next-event",
   "day-events",
   "week-events",
+  "child-context",
 ] as const;
 
 export function invalidateAfterLogWrite(queryClient: QueryClient) {
