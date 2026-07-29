@@ -588,13 +588,18 @@ function IllnessSection({ childId, parentId }: { childId: string; parentId: stri
   const { role, isResolved: roleResolved } = useCurrentRoleQuery(childId);
   // Only owner / coparent / viewer ever reach this component — DashboardLayout
   // routes caregivers to CaregiverHome, which has no Records surface at all.
-  // This gate is what stops a viewer from writing: RecordsPage stamps
-  // parent_id with the signed-in user's own uid, which satisfies the first
-  // disjunct of the INSERT policy (auth.uid() = parent_id OR
-  // partner_can_write(parent_id)), so the viewer-excluding clause is never
-  // evaluated. The server-side fix is tracked in tasks/todo-juno-features.md
-  // ("Tracked out of Phase 1 — client-stamped `parent_id`"). Until the role
-  // query settles it reports "owner", so hold the controls back.
+  //
+  // This gate is a UX guardrail, not the security boundary. RLS is the boundary:
+  // 20260820000000_child_pivot_log_rls.sql repointed these policies at child_id
+  // via can_write_child(), which excludes viewers server-side, so a viewer's
+  // INSERT is rejected by Postgres regardless of what the client sends. (Before
+  // that migration this gate WAS load-bearing, because policies pivoted on the
+  // client-supplied parent_id and its first disjunct was always true.)
+  //
+  // The mutationFn guards below are still worth keeping: an RLS-blocked UPDATE
+  // returns zero rows with no error, so without them a mid-session role change
+  // would report a false success. Until the role query settles it reports
+  // "owner", so hold the controls back.
   const canWrite = roleResolved && role !== "viewer";
 
   const [illnessOpen, setIllnessOpen] = useState(false);
