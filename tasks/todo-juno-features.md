@@ -78,6 +78,34 @@ cheapest it will ever be to fix.
 - [ ] Until then, `IllnessSection`'s `canWrite` gate is load-bearing — say so in
       the comment rather than calling it a UX guardrail.
 
+**Phase 1.5 covers 17 tables.** Pre-flight against live turned up more than the
+original finding:
+
+- **0 orphan/NULL `child_id` rows** anywhere — the pivot is safe, nothing to backfill.
+- `journal_entries` and `reminders` **don't exist**; the harden migration's
+  `to_regclass` guard skipped them silently.
+- `temperature_logs`, `weight_logs` and `pediatrician_reminders` were **never
+  hardened** and still carry single `FOR ALL` policies — viewers can write to
+  them today, a second bug independent of the `parent_id` pivot.
+- `child_leaps` uses its own policy names (`child_leaps_select`…), so a blind
+  drop on the Group A pattern would leave it behind. Postgres ORs permissive
+  policies, so one survivor re-opens the hole while the migration reports success.
+- `weight_logs` was **owner-only** — no partner clause at all. The fix widens
+  access so partners can see growth data, consistent with every other log table.
+
+### Follow-up — eight more tables with the same `parent_id` pivot
+
+Out of scope for Phase 1.5, same bug:
+`child_checklist_items`, `cry_analyses`, `sleep_plans`, `scheduled_visits`,
+`speech_practice_plans`, `sleep_day_todos`, `activity_plans`, `child_activities`.
+
+- [ ] Repoint these at `child_id` using the same `can_access_child` /
+      `can_write_child` pair once Phase 1.5 has proven itself on live.
+- [ ] `can_access_child` lacks the `_user_id = auth.uid()` self-check that
+      `has_partner_access` has, and is callable over PostgREST — any authenticated
+      user can probe whether an arbitrary uid can reach an arbitrary child id.
+      One-line fix, deliberately not bundled into the RLS migration.
+
 ---
 
 ## Phase 2 — Active-illness surfacing (frontend)
