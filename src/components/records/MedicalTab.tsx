@@ -17,7 +17,7 @@ import { format, parseISO, isValid } from "date-fns";
 import { safeFormatDate } from "@/lib/safeFormat";
 import { UpcomingVisitsSection } from "@/components/records/UpcomingVisitsSection";
 import { useChildren, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
-import { useCurrentRoleQuery, VIEW_ONLY_MESSAGE } from "@/hooks/useCurrentRole";
+import { assertCanWrite, useCurrentRoleQuery, VIEW_ONLY_MESSAGE } from "@/hooks/useCurrentRole";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { HIGH_TEMP_NOTE, isHighTemp } from "@/lib/temperature";
 import { humanizeIllnessName, illnessDayCount, illnessDurationPhrase } from "@/lib/illness";
@@ -641,7 +641,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
 
   const upsertIllness = useMutation({
     mutationFn: async () => {
-      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      assertCanWrite(roleResolved, role);
       const payload = {
         illness_name: illnessForm.illness_name.trim(),
         start_date: illnessForm.start_date,
@@ -671,7 +671,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
 
   const resolveIllness = useMutation({
     mutationFn: async (illness: IllnessRow) => {
-      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      assertCanWrite(roleResolved, role);
       const today = format(new Date(), "yyyy-MM-dd");
       const { error } = await supabase
         .from("illness_logs")
@@ -690,7 +690,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
 
   const deleteIllness = useMutation({
     mutationFn: async (id: string) => {
-      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      assertCanWrite(roleResolved, role);
       const { error } = await supabase.from("illness_logs").delete().eq("id", id);
       if (error) throw error;
     },
@@ -711,7 +711,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
 
   const upsertMedication = useMutation({
     mutationFn: async () => {
-      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      assertCanWrite(roleResolved, role);
       const payload = {
         illness_log_id: medIllnessId,
         medication_name: medForm.medication_name.trim(),
@@ -744,7 +744,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
 
   const deleteMedication = useMutation({
     mutationFn: async (id: string) => {
-      if (!canWrite) throw new Error(VIEW_ONLY_MESSAGE);
+      assertCanWrite(roleResolved, role);
       const { error } = await supabase.from("medication_logs").delete().eq("id", id);
       if (error) throw error;
     },

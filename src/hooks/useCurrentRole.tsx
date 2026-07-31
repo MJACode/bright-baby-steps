@@ -12,6 +12,14 @@ export const VIEW_ONLY_MESSAGE =
 // owner can land here. Never tell them they're view-only.
 export const ROLE_UNRESOLVED_MESSAGE = "Still checking your access — try again in a moment.";
 
+// Belongs at the top of every write `mutationFn` gated on role: a sheet that was
+// already open when the role query errors or flips still fires its mutation, and
+// an RLS-blocked UPDATE returns zero rows with no error (false success toast).
+export function assertCanWrite(isResolved: boolean, role: Role): void {
+  if (!isResolved) throw new Error(ROLE_UNRESOLVED_MESSAGE);
+  if (role === "viewer") throw new Error(VIEW_ONLY_MESSAGE);
+}
+
 // `role` optimistically defaults to "owner" while the query is in flight, which
 // is fine for layout decisions but unsafe for gating writes. Consumers that hide
 // controls from lower-privilege roles must wait for `isResolved`.
