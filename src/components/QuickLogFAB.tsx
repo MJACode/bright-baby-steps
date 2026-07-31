@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { useActiveIllnesses } from "@/hooks/useActiveIllnesses";
-import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import { useCurrentRoleQuery, ROLE_UNRESOLVED_MESSAGE, VIEW_ONLY_MESSAGE } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
@@ -30,9 +30,6 @@ const quickActions = [
   { label: "Diaper", icon: Droplets, category: "diaper" as const, color: "bg-diapers text-white", illnessOnly: false },
   { label: "Temp", icon: Thermometer, category: "temp" as const, color: "bg-warning text-warning-foreground", illnessOnly: true },
 ];
-
-const VIEW_ONLY_MESSAGE =
-  "Your access to this child is view-only. Ask the parent who shared it with you for edit access.";
 
 const TIME_AGO_OPTIONS = [
   { label: "Now", value: 0 },
@@ -502,7 +499,8 @@ function TempQuickLog({ onDone }: { onDone: () => void }) {
       if (!activeChild || !user) throw new Error("No active child");
       // The sheet can already be open when the role resolves or flips, so the
       // guard belongs here as well as on the menu entry.
-      if (!roleResolved || role === "viewer") throw new Error(VIEW_ONLY_MESSAGE);
+      if (!roleResolved) throw new Error(ROLE_UNRESOLVED_MESSAGE);
+      if (role === "viewer") throw new Error(VIEW_ONLY_MESSAGE);
       if (!valueValid) throw new Error("Enter a temperature reading");
       const { error } = await supabase.from("temperature_logs").insert({
         child_id: activeChild.id,

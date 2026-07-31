@@ -2,6 +2,7 @@ import {
   ILLNESS_STALE_DAYS,
   humanizeIllnessName,
   illnessDayCount,
+  illnessDurationPhrase,
   illnessFeedMeta,
 } from "@/lib/illness";
 

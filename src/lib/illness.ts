@@ -20,6 +20,10 @@ export function illnessFeedMeta(dayCount: number): string {
     : "log a temp, a dose, or mark them better";
 }
 
+export function illnessDurationPhrase(dayCount: number): string {
+  return dayCount === 1 ? "since today" : `for ${dayCount} days`;
+}
+
 // "Cold" reads better mid-sentence as "cold", but "RSV" lowercased looks like a
 // typo — so only drop the leading capital when the rest of the name has none.
 export function humanizeIllnessName(name: string): string {

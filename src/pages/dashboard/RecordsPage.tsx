@@ -14,11 +14,25 @@ const VALID_TABS = ["newbaby", "medical", "financial", "ei"] as const;
 export default function RecordsPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const defaultTab = VALID_TABS.includes(requestedTab as typeof VALID_TABS[number])
+  // Controlled off the search param so `?tab=` deeplinks land on the right tab
+  // even when RecordsPage is already mounted (the quick-log FAB links here from
+  // Records itself, which is a same-route navigation).
+  const activeTab = VALID_TABS.includes(requestedTab as typeof VALID_TABS[number])
     ? (requestedTab as string)
     : "newbaby";
+
+  const selectTab = (tab: string) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   if (!activeChild) {
     return (
@@ -47,7 +61,7 @@ export default function RecordsPage() {
         </p>
       </div>
 
-      <Tabs defaultValue={defaultTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={selectTab} className="w-full">
         <TabsList className="w-full grid grid-cols-4 h-14 p-1 bg-muted/60">
           <TabsTrigger value="newbaby" className="touch-target gap-1 text-sm font-bold px-1 data-[state=active]:bg-primary/15 data-[state=active]:text-primary data-[state=active]:shadow-sm rounded-lg h-full">
             <Sparkles className="hidden sm:inline w-4 h-4" /> New Baby

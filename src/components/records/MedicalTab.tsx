@@ -17,10 +17,10 @@ import { format, parseISO, isValid } from "date-fns";
 import { safeFormatDate } from "@/lib/safeFormat";
 import { UpcomingVisitsSection } from "@/components/records/UpcomingVisitsSection";
 import { useChildren, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
-import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import { useCurrentRoleQuery, VIEW_ONLY_MESSAGE } from "@/hooks/useCurrentRole";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { HIGH_TEMP_NOTE, isHighTemp } from "@/lib/temperature";
-import { illnessDayCount } from "@/lib/illness";
+import { humanizeIllnessName, illnessDayCount, illnessDurationPhrase } from "@/lib/illness";
 import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
 
 interface Props {
@@ -556,8 +556,6 @@ type MedicationRow = {
   notes: string | null;
 };
 
-const VIEW_ONLY_MESSAGE = "Your access to this child is view-only. Ask the parent who shared it with you for edit access.";
-
 // A PostgrestError carries raw Postgres text ("new row violates row-level
 // security policy for table ..."), which is meaningless to a parent. 42501 is
 // insufficient_privilege — in practice a view-only partner or one whose access
@@ -863,6 +861,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
             {sortedIllnesses.map((i) => {
               const active = !i.end_date;
               const meds = (medications ?? []).filter((m) => m.illness_log_id === i.id);
+              const duration = illnessDurationPhrase(illnessDayCount(i.start_date, new Date()));
               return (
                 <Card key={i.id} className={active ? "border border-warning/40 bg-warning/5" : "border-0 bg-muted/40"}>
                   <CardContent className="p-3 space-y-2">
@@ -924,7 +923,7 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
                         {active && (
                           <TalkThisThroughButton
                             forceSkill="pediatrician"
-                            seedPrompt={`${firstName ?? "My baby"} has had ${i.illness_name} for ${illnessDayCount(i.start_date, new Date())} days. What should I keep an eye on at home, and when is it worth calling the pediatrician?`}
+                            seedPrompt={`${firstName ?? "My baby"} has had ${humanizeIllnessName(i.illness_name)} ${duration}. What should I keep an eye on at home, and when is it worth calling the pediatrician?`}
                           />
                         )}
                       </div>
