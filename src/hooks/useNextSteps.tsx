@@ -7,7 +7,13 @@ import { getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren"
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useActiveIllnesses } from "@/hooks/useActiveIllnesses";
 import { formatApproxClock } from "@/lib/gentleTime";
+import {
+  humanizeIllnessName,
+  illnessDayCount,
+  illnessFeedMeta,
+} from "@/lib/illness";
 import { toast } from "@/hooks/use-toast";
 import {
   rankNextSteps,
@@ -365,6 +371,10 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     enabled: !!activeChild,
   });
 
+  // Health — illnesses still open (end_date IS NULL). Shared cache entry with
+  // QuickLogFAB's Temp action, so both surfaces agree and only one request goes out.
+  const activeIllnesses = useActiveIllnesses(activeChild?.id ?? null);
+
   // Act-severity milestone flag — the highest-urgency developmental signal.
   // Highest severity is always "act" (we filter to it); oldest-first by
   // first_flagged_at picks the longest-standing one. Un-dismissed only.
@@ -458,6 +468,24 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
           sortHints: { daysUntil: days, order: order++ },
         });
       }
+    }
+
+    // One row per open illness, longest-running first (the query orders by
+    // start_date ascending). daysUntil 0 puts these in the closing-today band —
+    // a sick kid today is the most time-sensitive thing on the screen. Past
+    // ILLNESS_STALE_DAYS the meta asks whether it's still going; it never closes
+    // the illness for the parent.
+    for (const illness of activeIllnesses.data ?? []) {
+      const dayCount = illnessDayCount(illness.start_date, now);
+      out.push({
+        id: `illness-${illness.id}`,
+        domain: "health",
+        title: `${firstName}'s ${humanizeIllnessName(illness.illness_name)} — day ${dayCount}`,
+        meta: illnessFeedMeta(dayCount),
+        tier: "soon",
+        deeplink: { kind: "route", target: "/dashboard/records?tab=medical" },
+        sortHints: { daysUntil: 0, order: order++ },
+      });
     }
 
     // Finance
@@ -642,6 +670,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     milestones.data,
     memories.data,
     actFlag.data,
+    activeIllnesses.data,
     user,
     dayKey,
     calmMode,
@@ -877,6 +906,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
       financeItems.isLoading ||
       actFlag.isLoading ||
       memories.isLoading ||
+      activeIllnesses.isLoading ||
       visit.isLoading);
 
   const isError =
@@ -885,6 +915,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     finance.isError ||
     financeItems.isError ||
     actFlag.isError ||
+    activeIllnesses.isError ||
     visit.isError;
 
   return { items, isLoading, isError, complete, snooze, dismiss };

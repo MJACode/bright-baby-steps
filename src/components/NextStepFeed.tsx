@@ -21,7 +21,7 @@ import { openChat } from "@/lib/chatOpener";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
 import { useNextSteps } from "@/hooks/useNextSteps";
 import { useNextStepPeek } from "@/hooks/useNextStepPeek";
-import type { NextStepItem, NextStepDomain } from "@/lib/nextSteps";
+import { hasFeedActions, type NextStepItem, type NextStepDomain } from "@/lib/nextSteps";
 import { getSkill, type SkillId } from "@/components/AIChatWidget";
 
 interface ChildLite {
@@ -143,9 +143,7 @@ function NextStepRow({
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const isChat = item.deeplink.kind === "chat";
-  // Sleep and health items route to their source surface; they have no inline
-  // "complete" — there's nothing to mark done from here.
-  const canComplete = item.domain === "finance" || item.domain === "milestone";
+  const canAct = hasFeedActions(item);
 
   const handleOpen = () => {
     const { kind, target } = item.deeplink;
@@ -195,22 +193,20 @@ function NextStepRow({
     </>
   );
 
-  const completeAndMore = (
+  const completeAndMore = !canAct ? null : (
     <>
-      {canComplete && (
-        <button
-          type="button"
-          onClick={() => onComplete(item)}
-          aria-label={
-            item.domain === "milestone"
-              ? "Done for today"
-              : `Mark "${item.title}" done`
-          }
-          className="touch-target shrink-0 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
-        >
-          <Check className="w-5 h-5" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => onComplete(item)}
+        aria-label={
+          item.domain === "milestone"
+            ? "Done for today"
+            : `Mark "${item.title}" done`
+        }
+        className="touch-target shrink-0 flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+      >
+        <Check className="w-5 h-5" />
+      </button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

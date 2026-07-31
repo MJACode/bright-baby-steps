@@ -19,6 +19,9 @@ import { UpcomingVisitsSection } from "@/components/records/UpcomingVisitsSectio
 import { useChildren, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { HIGH_TEMP_NOTE, isHighTemp } from "@/lib/temperature";
+import { illnessDayCount } from "@/lib/illness";
+import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
 
 interface Props {
   childId: string;
@@ -583,8 +586,9 @@ const emptyMedicationForm = () => ({
   notes: "",
 });
 
-function IllnessSection({ childId, parentId }: { childId: string; parentId: string }) {
+function IllnessSection({ childId, parentId, childName }: { childId: string; parentId: string; childName?: string }) {
   const queryClient = useQueryClient();
+  const firstName = childName?.trim().split(/\s+/)[0];
   const { role, isResolved: roleResolved } = useCurrentRoleQuery(childId);
   // Only owner / coparent / viewer ever reach this component — DashboardLayout
   // routes caregivers to CaregiverHome, which has no Records surface at all.
@@ -893,24 +897,35 @@ function IllnessSection({ childId, parentId }: { childId: string; parentId: stri
 
                     {meds.length > 0 && <div className="space-y-1.5">{meds.map(renderMedication)}</div>}
 
-                    {canWrite && (
+                    {(canWrite || active) && (
                       <div className="flex flex-wrap gap-2 pt-1">
-                        <Button variant="outline" size="sm" className="gap-1 min-h-[48px]" onClick={() => openAddMedication(i.id)}>
-                          <Plus className="w-4 h-4" /> Medication
-                        </Button>
-                        <Button variant="ghost" size="sm" className="min-h-[48px]" onClick={() => openEditIllness(i)}>
-                          Edit
-                        </Button>
+                        {canWrite && (
+                          <>
+                            <Button variant="outline" size="sm" className="gap-1 min-h-[48px]" onClick={() => openAddMedication(i.id)}>
+                              <Plus className="w-4 h-4" /> Medication
+                            </Button>
+                            <Button variant="ghost" size="sm" className="min-h-[48px]" onClick={() => openEditIllness(i)}>
+                              Edit
+                            </Button>
+                            {active && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="gap-1 min-h-[48px] text-primary"
+                                disabled={resolveIllness.isPending}
+                                onClick={() => resolveIllness.mutate(i)}
+                              >
+                                <Check className="w-4 h-4" /> Mark resolved
+                              </Button>
+                            )}
+                          </>
+                        )}
+                        {/* Read-only, so a view-only partner keeps it. */}
                         {active && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1 min-h-[48px] text-primary"
-                            disabled={resolveIllness.isPending}
-                            onClick={() => resolveIllness.mutate(i)}
-                          >
-                            <Check className="w-4 h-4" /> Mark resolved
-                          </Button>
+                          <TalkThisThroughButton
+                            forceSkill="pediatrician"
+                            seedPrompt={`${firstName ?? "My baby"} has had ${i.illness_name} for ${illnessDayCount(i.start_date, new Date())} days. What should I keep an eye on at home, and when is it worth calling the pediatrician?`}
+                          />
                         )}
                       </div>
                     )}
@@ -1055,13 +1070,6 @@ const TEMP_METHODS = [
   { value: "ear", label: "Ear" },
 ];
 
-const HIGH_TEMP_NOTE =
-  "This reading is above the typical range. You know your baby best — when in doubt, your pediatrician is the best call. This isn't medical advice.";
-
-function toFahrenheit(value: number, unit: string) {
-  return unit === "C" ? value * 9 / 5 + 32 : value;
-}
-
 function isoToLocalInput(iso: string) {
   const d = new Date(iso);
   const offset = d.getTimezoneOffset();
@@ -1117,7 +1125,7 @@ function TemperatureSection({ childId, parentId }: { childId: string; parentId: 
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["temperature-logs", childId] });
+      invalidateAfterLogWrite(queryClient);
       setOpen(false);
       setEditingId(null);
       toast({ title: editingId ? "Reading updated" : "Temperature logged" });
@@ -1133,7 +1141,7 @@ function TemperatureSection({ childId, parentId }: { childId: string; parentId: 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["temperature-logs", childId] });
+      invalidateAfterLogWrite(queryClient);
       toast({ title: "Reading removed" });
     },
     onError: (err) => {
@@ -1167,7 +1175,7 @@ function TemperatureSection({ childId, parentId }: { childId: string; parentId: 
 
   const enteredValue = Number(form.temp_value);
   const valueValid = form.temp_value.trim() !== "" && Number.isFinite(enteredValue);
-  const formIsHigh = valueValid && toFahrenheit(enteredValue, form.unit) >= 100.4;
+  const formIsHigh = valueValid && isHighTemp(enteredValue, form.unit);
 
   return (
     <Collapsible>
@@ -1180,7 +1188,7 @@ function TemperatureSection({ childId, parentId }: { childId: string; parentId: 
         {readings && readings.length > 0 ? (
           <div className="space-y-2">
             {readings.map((r) => {
-              const high = toFahrenheit(r.temp_value, r.unit) >= 100.4;
+              const high = isHighTemp(r.temp_value, r.unit);
               return (
                 <Card key={r.id} className="border-0 bg-muted/40">
                   <CardContent className="p-3 flex items-start gap-2">
@@ -1325,7 +1333,7 @@ export function MedicalTab({ childId, parentId, ageMonths }: Props) {
       <PediatricianSection childId={childId} parentId={parentId} hasActiveFlags={(activeFlagCount ?? 0) > 0} />
       <VaccinationsSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
       <DentalSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
-      <IllnessSection childId={childId} parentId={parentId} />
+      <IllnessSection childId={childId} parentId={parentId} childName={activeChild?.name} />
       <TemperatureSection childId={childId} parentId={parentId} />
     </div>
   );
