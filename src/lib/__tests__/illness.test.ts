@@ -43,6 +43,17 @@ describe("illnessFeedMeta", () => {
   });
 });
 
+describe("illnessDurationPhrase", () => {
+  it("avoids 'for 1 days' on the day the illness is logged", () => {
+    expect(illnessDurationPhrase(1)).toBe("since today");
+  });
+
+  it("pluralises from day 2 on", () => {
+    expect(illnessDurationPhrase(2)).toBe("for 2 days");
+    expect(illnessDurationPhrase(14)).toBe("for 14 days");
+  });
+});
+
 describe("humanizeIllnessName", () => {
   it("lowercases a leading capital for sentence use", () => {
     expect(humanizeIllnessName("Cold")).toBe("cold");
