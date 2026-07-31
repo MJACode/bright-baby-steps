@@ -125,10 +125,13 @@ Out of scope for Phase 1.5, same bug:
 
 ## Phase 2 — Active-illness surfacing (frontend)
 
-- [ ] `useNextSteps.tsx` emits a `domain: "health"` item, tier `soon`
-- [ ] `QuickLogFAB` gains a "Temp" action while an illness is active
-- [ ] `TalkThisThroughButton` → pediatrician persona from the illness card
-- [ ] After 14 days open: "still going? tap to update" — a prompt, never a write
+- [x] `useNextSteps.tsx` emits a `domain: "health"` item, tier `soon`
+- [x] `QuickLogFAB` gains a "Temp" action while an illness is active
+- [x] `TalkThisThroughButton` → pediatrician persona from the illness card
+- [x] After 14 days open: "still going? tap to update" — a prompt, never a write
+- [x] Fixed en route: `NextStepRow` rendered Snooze / Not relevant for sleep and
+      health rows, whose ids no handler in `useNextSteps` resolves — a silent
+      no-op. `hasFeedActions()` now gates the whole control cluster.
 - [ ] QA pass
 
 No `HOME_SECTIONS` entry — a live-situation affordance must not be hideable behind

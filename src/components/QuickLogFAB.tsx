@@ -1,27 +1,34 @@
-import { Plus, Moon, UtensilsCrossed, Droplets, Star, TrendingUp, ArrowRight, Loader2 } from "lucide-react";
+import { Plus, Moon, UtensilsCrossed, Droplets, Star, TrendingUp, ArrowRight, Loader2, Thermometer, AlertTriangle } from "lucide-react";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { useActiveIllnesses } from "@/hooks/useActiveIllnesses";
+import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { usePreferences } from "@/hooks/usePreferences";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { HIGH_TEMP_NOTE, isHighTemp } from "@/lib/temperature";
 import { VoiceQuickLog } from "@/components/VoiceQuickLog";
 
-type SheetCategory = "sleep" | "feeding" | "diaper";
+type SheetCategory = "sleep" | "feeding" | "diaper" | "temp";
 
+// `illnessOnly` actions stay out of the menu unless the child has an open
+// illness — a temp reading is a sick-day need, not an everyday one.
 const quickActions = [
-  { label: "Sleep", icon: Moon, category: "sleep" as const, color: "bg-sleep text-white" },
-  { label: "Food", icon: UtensilsCrossed, category: "feeding" as const, color: "bg-feeding text-white" },
-  { label: "Diaper", icon: Droplets, category: "diaper" as const, color: "bg-diapers text-white" },
+  { label: "Sleep", icon: Moon, category: "sleep" as const, color: "bg-sleep text-white", illnessOnly: false },
+  { label: "Food", icon: UtensilsCrossed, category: "feeding" as const, color: "bg-feeding text-white", illnessOnly: false },
+  { label: "Diaper", icon: Droplets, category: "diaper" as const, color: "bg-diapers text-white", illnessOnly: false },
+  { label: "Temp", icon: Thermometer, category: "temp" as const, color: "bg-warning text-warning-foreground", illnessOnly: true },
 ];
 
 const TIME_AGO_OPTIONS = [
@@ -81,6 +88,14 @@ export function QuickLogFAB() {
   const [sheetCategory, setSheetCategory] = useState<SheetCategory | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const navigate = useNavigate();
+  const { activeChild } = useChildren();
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  const { data: activeIllnesses } = useActiveIllnesses(activeChild?.id);
+  const showIllnessActions =
+    (activeIllnesses?.length ?? 0) > 0 && roleResolved && role !== "viewer";
+  const visibleActions = quickActions.filter(
+    (action) => !action.illnessOnly || showIllnessActions,
+  );
 
   const pressTimer = useRef<number | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
@@ -133,7 +148,7 @@ export function QuickLogFAB() {
         {/* Expanded actions */}
         {open && (
           <div className="flex flex-col gap-2 items-end animate-in slide-in-from-bottom-2 fade-in duration-200">
-            {quickActions.map((action) => (
+            {visibleActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => handleAction(action.category)}
@@ -202,6 +217,7 @@ function QuickLogSheet({ category, onClose }: { category: SheetCategory | null; 
         {category === "sleep" && <SleepQuickLog onDone={onClose} />}
         {category === "feeding" && <FeedingQuickLog onDone={onClose} />}
         {category === "diaper" && <DiaperQuickLog onDone={onClose} />}
+        {category === "temp" && <TempQuickLog onDone={onClose} />}
       </SheetContent>
     </Sheet>
   );
@@ -458,6 +474,94 @@ function FeedingQuickLog({ onDone }: { onDone: () => void }) {
       <Button
         className="w-full"
         disabled={mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+      </Button>
+    </FormShell>
+  );
+}
+
+function TempQuickLog({ onDone }: { onDone: () => void }) {
+  const { user } = useAuth();
+  const { activeChild } = useChildren();
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  const invalidate = useQuickLogInvalidate();
+  const [tempValue, setTempValue] = useState("");
+  const [unit, setUnit] = useState<"F" | "C">("F");
+
+  const entered = Number(tempValue);
+  const valueValid = tempValue.trim() !== "" && Number.isFinite(entered);
+  const high = valueValid && isHighTemp(entered, unit);
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!activeChild || !user) throw new Error("No active child");
+      // The sheet can already be open when the role resolves or flips, so the
+      // guard belongs here as well as on the menu entry.
+      assertCanWrite(roleResolved, role);
+      if (!valueValid) throw new Error("Enter a temperature reading");
+      const { error } = await supabase.from("temperature_logs").insert({
+        child_id: activeChild.id,
+        parent_id: user.id,
+        temp_value: entered,
+        unit,
+        taken_at: new Date().toISOString(),
+        source: "manual",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast({ title: "Temperature logged 🌡️" });
+      onDone();
+    },
+    onError: (e) => {
+      toast({ title: "Couldn't log temperature", description: e instanceof Error ? e.message : "Please try again.", variant: "destructive" });
+    },
+  });
+
+  return (
+    <FormShell title="Log temperature" morePath="/dashboard/records?tab=medical" morePathLabel="Method, time and notes">
+      <div className="flex gap-2 items-end">
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor="qlog-temp" className="text-xs">Reading</Label>
+          <Input
+            id="qlog-temp"
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            placeholder={unit === "F" ? "98.6" : "37.0"}
+            value={tempValue}
+            onChange={(e) => setTempValue(e.target.value)}
+          />
+        </div>
+        <div role="group" aria-label="Unit" className="flex gap-2">
+          {(["F", "C"] as const).map((u) => (
+            <Button
+              key={u}
+              type="button"
+              aria-pressed={unit === u}
+              variant={unit === u ? "default" : "outline"}
+              className="min-h-[48px] min-w-[48px]"
+              onClick={() => setUnit(u)}
+            >
+              °{u}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {high && (
+        <Alert className="border-warning/40 bg-warning/10">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-sm">{HIGH_TEMP_NOTE}</AlertDescription>
+        </Alert>
+      )}
+
+      <Button
+        className="w-full"
+        disabled={!valueValid || mutation.isPending}
         onClick={() => mutation.mutate()}
       >
         {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}

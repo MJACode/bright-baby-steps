@@ -40,6 +40,14 @@ export interface NextStepItem {
   affinityLabel?: string;
 }
 
+// Which rows get a ✓ and a "…" menu. useNextSteps' complete/snooze/dismiss
+// handlers only resolve finance and milestone ids; sleep and health rows route
+// to their source surface and have nothing to write back from the feed. Render
+// the controls off that fact rather than shipping a tap that does nothing.
+export function hasFeedActions(item: NextStepItem): boolean {
+  return item.domain === "finance" || item.domain === "milestone";
+}
+
 // Interest slug → speech_categories.slug. Verified against the live
 // speech_categories seed — keep both sides in sync with the DB, not guesses.
 export const INTEREST_MILESTONE_CATEGORY: Record<string, string> = {

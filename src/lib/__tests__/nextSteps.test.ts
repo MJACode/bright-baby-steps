@@ -1,5 +1,6 @@
 import {
   rankNextSteps,
+  hasFeedActions,
   interestAffinityForCategory,
   matchingInterestForCategory,
   memoryNudgeDomains,
@@ -143,6 +144,59 @@ describe("rankNextSteps — affinity tie-break", () => {
     ]);
     expect(idsOf(out).slice(0, 3)).toEqual(["f1", "f2", "h1"]);
     expect(idsOf(out)[3]).toBe("f3");
+  });
+});
+
+describe("rankNextSteps — active-illness placement", () => {
+  const illness = (id: string, order: number) =>
+    item(id, "health", { tier: "soon", sortHints: { daysUntil: 0, order } });
+
+  it("puts an open illness in the closing-today band, ahead of dated deadlines", () => {
+    const out = rankNextSteps([
+      item("fin", "finance", { sortHints: { daysUntil: 12, order: 3 } }),
+      item("drill", "milestone", { sortHints: { order: 4 } }),
+      illness("illness-a", 1),
+    ]);
+    expect(idsOf(out)).toEqual(["illness-a", "fin", "drill"]);
+  });
+
+  it("keeps the longest-running illness first when several are open", () => {
+    // useNextSteps assigns `order` in query order (start_date ascending).
+    const out = rankNextSteps([illness("illness-new", 2), illness("illness-old", 1)]);
+    expect(idsOf(out)).toEqual(["illness-old", "illness-new"]);
+  });
+
+  it("still caps health at 2 of the top 3 when a checkup and two illnesses collide", () => {
+    const out = rankNextSteps([
+      item("health-checkup", "health", {
+        tier: "soon",
+        sortHints: { daysUntil: 0, order: 0 },
+      }),
+      illness("illness-a", 1),
+      illness("illness-b", 2),
+      item("drill", "milestone", { sortHints: { order: 3 } }),
+    ]);
+    expect(idsOf(out).slice(0, 3)).toEqual([
+      "health-checkup",
+      "illness-a",
+      "drill",
+    ]);
+    expect(idsOf(out)[3]).toBe("illness-b");
+  });
+});
+
+describe("hasFeedActions", () => {
+  it("is true only for the domains useNextSteps can actually write back", () => {
+    expect(hasFeedActions(item("finance-x", "finance"))).toBe(true);
+    expect(hasFeedActions(item("fincal-tax-2026", "finance"))).toBe(true);
+    expect(hasFeedActions(item("milestone-x", "milestone"))).toBe(true);
+    expect(hasFeedActions(item("actflag-x", "milestone"))).toBe(true);
+  });
+
+  it("is false for rows whose snooze/dismiss would be a silent no-op", () => {
+    expect(hasFeedActions(item("sleep-nap-window", "sleep"))).toBe(false);
+    expect(hasFeedActions(item("health-checkup", "health"))).toBe(false);
+    expect(hasFeedActions(item("illness-x", "health"))).toBe(false);
   });
 });
 
