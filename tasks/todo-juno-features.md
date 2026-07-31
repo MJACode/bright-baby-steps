@@ -71,12 +71,27 @@ partner-written rows across `feeding_logs` / `sleep_logs` / `diaper_logs`. Nobod
 has completed a partner invite, so there is nothing to backfill — this is the
 cheapest it will ever be to fix.
 
-- [ ] Decide the fix: stamp `parent_id` with the child's owner, or add a
-      `WITH CHECK` requiring `child_id` to belong to a child the writer can write
-      to (`can_access_child` already exists), or make `has_partner_access`
-      symmetric. Pick one and apply it across all log tables at once.
-- [ ] Until then, `IllnessSection`'s `canWrite` gate is load-bearing — say so in
-      the comment rather than calling it a UX guardrail.
+- [x] **Fixed and shipped in `047f4dd` (PR #190).** SELECT → `can_access_child`,
+      writes → new `can_write_child` (role set copied from `partner_can_write`).
+      `parent_id` unchanged, since it doubles as authorship; INSERT additionally
+      requires `parent_id = auth.uid()` so the "logged by" label can't be forged —
+      INSERT-only, or owners couldn't edit partner-authored rows.
+- [x] `IllnessSection`'s comment downgraded to "UX guardrail" — accurate now that
+      RLS excludes viewers server-side. The `mutationFn` guards stay, because an
+      RLS-blocked UPDATE returns 0 rows with no error.
+
+**Applied to live** — migration `20260820000000`, verified independently:
+68 policies (17 × 4), 0 `FOR ALL` survivors, 16 INSERT policies carrying the
+authorship clause, 0 on UPDATE, RLS on 17/17.
+
+⚠️ **`get_advisors` was never run** — the tool requires an approval this session
+lacked. The RLS-coverage finding was checked by direct query instead, but a manual
+advisor run is still worth doing.
+
+⚠️ **`weight_logs` access is now wider.** It was owner-only with no partner clause;
+partners can now read growth data and write-capable partners can record weights.
+Consistent with every other log table and almost certainly the original intent,
+but it is a widening rather than a repair. One-line revert if unwanted.
 
 **Phase 1.5 covers 17 tables.** Pre-flight against live turned up more than the
 original finding:
