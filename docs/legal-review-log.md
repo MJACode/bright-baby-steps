@@ -1766,3 +1766,43 @@ entries and the 2026-05-08 zero-dwell analysis).
 **Analysis:** disclosure-only frontend follow-through of the backend entry
 above; no new data category beyond what that entry analyzed, no new
 subprocessor, no renewed VPC required.
+
+---
+
+## 2026-08-08 — Communication-cue milestone batch: 15 catalog rows + flag copy
+
+**Reviewer:** in-house (Claude pass — SLP advisor authored, QA verified).
+**Risk: LOW.**
+
+**Scope:** migrations `20260821000000_communication_cue_milestones.sql` (15 new
+`speech` catalog rows closing verbal/non-verbal communication-cue gaps vs ASHA
+communicative milestones and CDC Learn the Signs. Act Early. 2022) and
+`20260822000000_communication_cue_flag_copy.sql` (SLP-authored
+`concern_flag_language` on 6 of the 15, plus reconciliation of 2 pre-existing
+rows). Both applied to live via MCP.
+
+**What changed on the flag surface** (treated as legally reviewed since the
+2026-06-19 Phase 3 entry):
+- 6 new developmental-concern strings, all written to the softened 2026-06-19
+  conventions: norm first, then "bring up with your pediatrician, who can tell
+  you whether an evaluation would help" — no diagnostic register, no app-voice
+  evaluation recommendation, no efficacy claims.
+- The factual EI line ("Early Intervention is free for children under 3 in the
+  US") now appears on a second row — the M-CHAT-weighted declarative-pointing
+  flag (`concern`, fires at 16 mo). Same already-approved sentence, no new
+  claim; consistent with Part C § 303.521 (the *evaluation* is free).
+- `Shows objects to share interest` retargeted from pointing to object-showing
+  and adjusted concern→watch, 16→15 mo (the declarative-pointing signal moved
+  to its own row so it fires exactly once). `Imitates actions` narrowed to
+  actions/gestures (sound-imitation now on `Copies sounds you make`); its
+  month/severity untouched.
+- 9 of the 15 new rows intentionally carry no flag (single consolidated
+  "gestures by 12 months" flag instead of three duplicate banners; culturally
+  variable or already-covered signals left unflagged) — reduces
+  over-flagging/anxiety exposure rather than adding to it.
+
+**Analysis:** catalog copy is celebratory, second person, non-diagnostic per
+brand rule; no new data category, no new subprocessor, no new child-data
+egress, no consent/retention/deletion surface touched, no renewed VPC
+required. Two `concern`-severity rows correctly route through the existing
+EarlyInterventionExplainer reassurance-first surface reviewed on 2026-06-19.
