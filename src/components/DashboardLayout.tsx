@@ -11,7 +11,6 @@ import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { AIChatWidget } from "@/components/AIChatWidget";
-import { QuickLogFAB } from "@/components/QuickLogFAB";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
 
@@ -142,10 +141,6 @@ export default function DashboardLayout() {
       {!isOnboarding && (
         <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
       )}
-
-      {/* Quick-log FAB — one-tap logging on every dashboard route. Caregivers
-          never reach this return (CaregiverHome above mounts its own FAB). */}
-      {!isOnboarding && <QuickLogFAB />}
 
       {/* Visit Prep sheet — mounted at the layout level so the visitPrepOpener
           subscription is live on every dashboard sub-route. Opened by the

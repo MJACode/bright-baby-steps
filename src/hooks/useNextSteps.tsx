@@ -371,8 +371,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
     enabled: !!activeChild,
   });
 
-  // Health — illnesses still open (end_date IS NULL). Shared cache entry with
-  // QuickLogFAB's Temp action, so both surfaces agree and only one request goes out.
+  // Health — illnesses still open (end_date IS NULL).
   const activeIllnesses = useActiveIllnesses(activeChild?.id ?? null);
 
   // Act-severity milestone flag — the highest-urgency developmental signal.

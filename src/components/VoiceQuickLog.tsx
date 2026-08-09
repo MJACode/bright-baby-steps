@@ -6,8 +6,8 @@
 // A single high-confidence, unambiguous parse skips review entirely: the
 // drawer closes and an undo toast confirms what was logged.
 //
-// Free for all users. Use it from QuickLogFAB, the Dashboard mic card, or
-// anywhere a "say anything" button makes sense.
+// Free for all users. Use it from VoiceQuickLogButton (Dashboard's mic card,
+// CaregiverHome) or anywhere a "say anything" button makes sense.
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
