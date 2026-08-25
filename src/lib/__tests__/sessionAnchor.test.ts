@@ -1,5 +1,6 @@
 import { renderHook, act } from "@testing-library/react";
 import {
+  customDurationMin,
   defaultStartAt,
   deriveEnd,
   floorTo5Min,
@@ -315,6 +316,8 @@ describe("duration presets across every anchor state", () => {
 });
 
 describe("anchor selection", () => {
+  afterEach(() => vi.useRealTimers());
+
   const open = (defaultMin: number) =>
     renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: defaultMin }));
 
@@ -344,6 +347,10 @@ describe("anchor selection", () => {
   });
 
   it('reads "she woke at 3:15" + 45m as a 2:30–3:15 nap', () => {
+    // Pin the clock: 3:15 PM has to be in the past for the end to be an
+    // assertion rather than a mistake, and the suite runs at any hour.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 5, 10, 16, 0));
     const { result } = open(45);
     const wokeAt = new Date();
     wokeAt.setHours(15, 15, 0, 0);
@@ -383,5 +390,96 @@ describe("anchor selection", () => {
 
     expect(result.current.endAt.getTime()).toBeLessThanOrEqual(Date.now());
     expect(result.current.startAt.getFullYear()).toBe(new Date().getFullYear());
+  });
+});
+
+describe("an end scrolled into the future", () => {
+  // MobileDateTimePicker's maxDate only gates the calendar — the hour/minute
+  // wheels will happily land the end after now.
+  const open = (defaultMin: number) =>
+    renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: defaultMin }));
+
+  const check = (r: { startAt: Date; endAt: Date; durationMin: number }) =>
+    validateSession({ ...r, now: new Date(), softMaxMin: 14 * 60, hardMaxMin: 24 * 60 });
+
+  it("blames the end, and a duration chip still clears it", () => {
+    const { result } = open(45);
+
+    act(() => result.current.setEndAt(new Date(Date.now() + 60 * MIN)));
+    expect(check(result.current).error?.field).toBe("end");
+
+    act(() => result.current.setDurationMin(20));
+
+    expect(check(result.current).error).toBeNull();
+    expect(result.current.durationMin).toBe(20);
+    expect(result.current.endAt.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("never moves a start the parent never edited into the future", () => {
+    const { result } = open(45);
+    act(() => result.current.setEndAt(new Date(Date.now() + 60 * MIN)));
+
+    act(() => result.current.setDurationMin(20));
+
+    expect(result.current.startAt.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("keeps an authored start pinned and moves the end back instead", () => {
+    const { result } = open(45);
+    const authoredStart = new Date(Date.now() - 90 * MIN);
+    act(() => result.current.setStartAt(authoredStart));
+
+    act(() => result.current.setEndAt(new Date(Date.now() + 60 * MIN)));
+    expect(check(result.current).error?.field).toBe("end");
+
+    act(() => result.current.setDurationMin(30));
+
+    expect(result.current.startAt.getTime()).toBe(authoredStart.getTime());
+    expect(check(result.current).error).toBeNull();
+  });
+
+  it("hands the anchor back once the end is scrolled into the past again", () => {
+    const { result } = open(45);
+    act(() => result.current.setEndAt(new Date(Date.now() + 60 * MIN)));
+
+    const realEnd = new Date(Date.now() - 20 * MIN);
+    realEnd.setSeconds(0, 0);
+    act(() => result.current.setEndAt(realEnd));
+    act(() => result.current.setDurationMin(30));
+
+    expect(result.current.endAt.getTime()).toBe(realEnd.getTime());
+    expect(result.current.startAt.getTime()).toBe(realEnd.getTime() - 30 * MIN);
+  });
+});
+
+describe("customDurationMin", () => {
+  it("reads hours and minutes typed into the Other fields", () => {
+    expect(customDurationMin("1", "20")).toBe(80);
+    expect(customDurationMin("", "")).toBe(0);
+    expect(customDurationMin("abc", "45")).toBe(45);
+  });
+
+  it("clamps a typed negative — min={0} only stops the steppers", () => {
+    expect(customDurationMin("-5", "")).toBe(0);
+    expect(customDurationMin("", "-30")).toBe(0);
+    expect(customDurationMin("-5", "20")).toBe(20);
+  });
+
+  it("cannot push the start into the future", () => {
+    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 45 }));
+
+    act(() => result.current.setDurationMin(customDurationMin("-5", "")));
+
+    expect(result.current.durationMin).toBe(0);
+    expect(result.current.startAt.getTime()).toBeLessThanOrEqual(Date.now());
+    const v = validateSession({
+      ...result.current,
+      now: new Date(),
+      softMaxMin: 14 * 60,
+      hardMaxMin: 24 * 60,
+    });
+    expect(v.error).toBeNull();
+    expect(v.helper).toBe("Pick how long it lasted.");
+    expect(v.canSave).toBe(false);
   });
 });

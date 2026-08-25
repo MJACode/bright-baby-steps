@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { useSessionAnchor } from "@/hooks/useSessionAnchor";
 import {
+  customDurationMin,
   formatDurationShort,
   formatDurationSpoken,
   formatEndLine,
@@ -157,7 +158,7 @@ export function PastSessionSheet({
   const applyCustom = (hours: string, minutes: string) => {
     setCustomHours(hours);
     setCustomMinutes(minutes);
-    setDurationMin((Number(hours) || 0) * 60 + (Number(minutes) || 0));
+    setDurationMin(customDurationMin(hours, minutes));
   };
 
   const handleSave = async () => {

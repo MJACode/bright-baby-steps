@@ -21,6 +21,13 @@ export function defaultStartAt(defaultDurationMin: number, now: Date = new Date(
   return floorTo5Min(new Date(now.getTime() - defaultDurationMin * 60_000));
 }
 
+// `min={0}` stops the steppers but not a typed "-5", and a negative duration
+// under the "none" anchor derives a start in the future.
+export function customDurationMin(hours: string, minutes: string): number {
+  const clamp = (v: string) => Math.max(0, Number(v) || 0);
+  return clamp(hours) * 60 + clamp(minutes);
+}
+
 export function formatDurationShort(min: number): string {
   const total = Math.max(0, Math.round(min));
   const h = Math.floor(total / 60);

@@ -68,7 +68,16 @@ export function useSessionAnchor({ open, defaultDurationMin }: UseSessionAnchorA
         const bumpedMin = Math.round((bumped.getTime() - startAt.getTime()) / 60_000);
         if (bumpedMin > 0 && bumpedMin <= AUTO_ADVANCE_MAX_MIN) candidate = bumped;
       }
-      setAnchor("end");
+      // A past session can never end in the future, so a future end is a
+      // mistake, not an assertion — taking the anchor from it would make every
+      // duration chip derive an equally-future start and leave the parent with
+      // no way out. The duration still moves so validation can point at the end
+      // they actually scrolled to; an already-authored start keeps its anchor.
+      const endsInFuture = candidate.getTime() > Date.now();
+      setAnchor((current) => {
+        if (!endsInFuture) return "end";
+        return current === "start" ? "start" : "none";
+      });
       setDurationMinState(Math.round((candidate.getTime() - startAt.getTime()) / 60_000));
     },
     [startAt, endAt],
