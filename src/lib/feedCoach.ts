@@ -40,23 +40,16 @@ export function feedGuidanceForAge(ageMonths: number): FeedGuidance {
       note: "Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.",
     };
   }
-  if (ageMonths < 4) {
-    return {
-      ageLabel: "young baby",
-      typicalCadence: "every 3–4 hours",
-      thresholdHours: 4,
-    };
-  }
   if (ageMonths < 6) {
     return {
       ageLabel: "baby",
-      typicalCadence: "every 4–5 hours",
-      thresholdHours: 4.5,
+      typicalCadence: "every 3–4 hours (about 5–7 feeds a day)",
+      thresholdHours: 4,
     };
   }
   return {
     ageLabel: "older baby",
-    typicalCadence: "every 4–5 hours, alongside solids",
+    typicalCadence: "every 4–5 hours, alongside solids (about 4–5 milk feeds a day)",
     thresholdHours: 5,
     note: "Around this age, breast milk or formula stays the main source of nutrition while solids are introduced.",
   };

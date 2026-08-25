@@ -17,8 +17,20 @@ describe("feedGuidanceForAge", () => {
 
   it("widens the threshold as the baby gets older", () => {
     expect(feedGuidanceForAge(2).thresholdHours).toBe(4);
-    expect(feedGuidanceForAge(5).thresholdHours).toBe(4.5);
     expect(feedGuidanceForAge(9).thresholdHours).toBe(5);
+  });
+
+  it("keeps the every-3-to-4-hours bracket flat through 4 months (AAP guidance doesn't shift until 6 months)", () => {
+    const g = feedGuidanceForAge(4);
+    expect(g.thresholdHours).toBe(4);
+    expect(g.typicalCadence).toMatch(/3–4 hours/);
+  });
+
+  it("flips to the older-baby bracket exactly at 6 months", () => {
+    expect(feedGuidanceForAge(5).thresholdHours).toBe(4);
+    const g = feedGuidanceForAge(6);
+    expect(g.thresholdHours).toBe(5);
+    expect(g.ageLabel).toBe("older baby");
   });
 
   it("mentions solids for the 6-month-plus bracket", () => {
@@ -51,7 +63,7 @@ describe("deriveFeedCoachState", () => {
   });
 
   it("is due exactly at the threshold boundary", () => {
-    const lastFeedAt = new Date(NOW.getTime() - 4 * 60 * 60 * 1000); // 4h, young-baby threshold
+    const lastFeedAt = new Date(NOW.getTime() - 4 * 60 * 60 * 1000); // 4h threshold for the 1–6mo bracket
     const s = deriveFeedCoachState({ ageMonths: 2, lastFeedAt, now: NOW });
     expect(s.kind).toBe("due");
   });
