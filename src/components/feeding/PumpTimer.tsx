@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Play, Pause, Square, RotateCcw, Milk, Clock, ChevronDown } from "lucide-react";
+import { Play, Pause, Square, RotateCcw, Milk, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -15,6 +16,14 @@ import {
   type FeedingSide,
 } from "@/hooks/useActiveFeed";
 import { getErrorMessage } from "@/lib/handleRlsError";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { formatDurationShort } from "@/lib/sessionAnchor";
+import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+
+const PUMP_PRESETS = [10, 15, 20, 25, 30, 45];
+const PAST_PUMP_TITLE = "Add past pump";
 
 function formatTime(totalSeconds: number) {
   const mins = Math.floor(totalSeconds / 60);
@@ -35,6 +44,8 @@ interface PumpTimerProps {
 // model — instead, parents can pump one side then the other; the timer
 // flushes per-side elapsed minutes to duration_minutes_left / _right).
 export default function PumpTimer({ childId }: PumpTimerProps) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { active, start, setSide, stop, cancel } = useActiveFeed(childId);
   const activeIsPump = !!active && active.feeding_type === "pump";
   useSecondTicker(!!activeIsPump && !!active?.active_side);
@@ -52,13 +63,9 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   const [showStopForm, setShowStopForm] = useState(false);
   const [amountLeft, setAmountLeft] = useState("");
   const [amountRight, setAmountRight] = useState("");
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualMinutes, setManualMinutes] = useState("");
-  // Manual override — when the parent typed a duration instead of using the
-  // live timer, this wins. Reset on cancel/save.
-  const [manualOverrideMin, setManualOverrideMin] = useState<number | null>(null);
-
-  const displaySeconds = manualOverrideMin !== null ? manualOverrideMin * 60 : totalSeconds;
+  const [pastOpen, setPastOpen] = useState(false);
+  const [pastLeft, setPastLeft] = useState("");
+  const [pastRight, setPastRight] = useState("");
 
   const onTap = async (next: FeedingSide) => {
     if (!childId) return;
@@ -95,7 +102,6 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
       setShowStopForm(false);
       setAmountLeft("");
       setAmountRight("");
-      setManualOverrideMin(null);
     } catch (err) {
       toast({ title: "Couldn't reset", description: getErrorMessage(err), variant: "destructive" });
     }
@@ -114,7 +120,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
         await setSide.mutateAsync({ nextSide: null });
       }
       await stop.mutateAsync({
-        totalDurationMinutes: Math.max(1, Math.round(displaySeconds / 60)),
+        totalDurationMinutes: Math.max(1, Math.round(totalSeconds / 60)),
         amount_oz: totalOz,
         amount_oz_left: leftOz,
         amount_oz_right: rightOz,
@@ -124,34 +130,47 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
       setShowStopForm(false);
       setAmountLeft("");
       setAmountRight("");
-      setManualOverrideMin(null);
     } catch (err) {
       toast({ title: "Couldn't save", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 
-  const onManualApply = async () => {
-    if (!childId) return;
-    const mins = Number(manualMinutes);
-    if (!mins || mins <= 0) return;
-    try {
-      // Start an in-progress row so the rest of the save path is unchanged.
-      // The live ticker stays off; the displayed elapsed comes from manualOverrideMin.
-      if (!activeIsPump) {
-        await start.mutateAsync({ feeding_type: "pump", side: null });
-      } else if (activeSide) {
-        // Existing live session in progress — fold any running segment in,
-        // then add the manual time on top so the user's typed value wins.
-        await setSide.mutateAsync({ nextSide: null });
-      }
-      setManualOverrideMin(mins);
-      setManualOpen(false);
-      setManualMinutes("");
-      setShowStopForm(true);
-    } catch (err) {
-      toast({ title: "Couldn't apply manual time", description: getErrorMessage(err), variant: "destructive" });
-    }
-  };
+  const savePastPump = useMutation({
+    mutationFn: async ({ startAt, durationMin, notes }: PastSessionValue) => {
+      const leftOz = pastLeft ? parseFloat(pastLeft) : null;
+      const rightOz = pastRight ? parseFloat(pastRight) : null;
+      const { error } = await supabase.from("feeding_logs").insert({
+        child_id: childId!,
+        parent_id: user!.id,
+        feeding_type: "pump",
+        logged_at: startAt.toISOString(),
+        duration_minutes: durationMin,
+        amount_oz: leftOz !== null || rightOz !== null ? (leftOz ?? 0) + (rightOz ?? 0) : null,
+        amount_oz_left: leftOz,
+        amount_oz_right: rightOz,
+        side: leftOz !== null && rightOz !== null ? "both" : leftOz !== null ? "left" : rightOz !== null ? "right" : null,
+        notes: notes.trim() || null,
+        source: "manual",
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, { startAt, endAt, durationMin }) => {
+      invalidateAfterLogWrite(queryClient);
+      setPastLeft("");
+      setPastRight("");
+      toast({
+        title: `Pump logged · ${formatDurationShort(durationMin)}`,
+        description: `${format(startAt, "h:mm a")} – ${format(endAt, "h:mm a")}`,
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't save pump",
+        description: getErrorMessage(err, "Please try again."),
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <Card className="border-0 bg-feeding/10">
@@ -165,7 +184,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
           <div
             className={cn(
               "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
-              activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
+              activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 motion-safe:before:animate-ping",
             )}
           >
             <div
@@ -174,15 +193,15 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
                 activeSide ? "text-feeding" : "text-foreground",
               )}
             >
-              {formatTime(displaySeconds)}
+              {formatTime(totalSeconds)}
             </div>
           </div>
           <span className="text-xs text-muted-foreground">
             {activeSide === "left" && "Pumping left..."}
             {activeSide === "right" && "Pumping right..."}
             {activeSide === "both" && "Pumping both sides..."}
-            {!activeSide && displaySeconds > 0 && (manualOverrideMin !== null ? "Manual entry" : "Paused")}
-            {!activeSide && displaySeconds === 0 && "Tap a side to start"}
+            {!activeSide && totalSeconds > 0 && "Paused"}
+            {!activeSide && totalSeconds === 0 && "Tap a side to start"}
           </span>
         </div>
 
@@ -237,7 +256,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
           </Button>
         </div>
 
-        {displaySeconds > 0 && !showStopForm && (
+        {totalSeconds > 0 && !showStopForm && (
           <div className="flex justify-center gap-2 pt-1">
             {activeSide && (
               <Button type="button" variant="ghost" size="sm" className="touch-target gap-1.5" onClick={onPause}>
@@ -259,42 +278,20 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
         )}
 
         {!activeSide && !showStopForm && (
-          <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
-              >
-                <Clock className="w-3 h-3" />
-                Enter total duration manually
-                <ChevronDown className={cn("w-3 h-3 transition-transform", manualOpen && "rotate-180")} />
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2">
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Total minutes</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    value={manualMinutes}
-                    onChange={(e) => setManualMinutes(e.target.value)}
-                    placeholder="e.g. 20"
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-8 bg-feeding hover:bg-feeding/90 text-xs"
-                  onClick={onManualApply}
-                  disabled={!manualMinutes || Number(manualMinutes) <= 0}
-                >
-                  Apply
-                </Button>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <Button
+            type="button"
+            variant="outline"
+            className="touch-target w-full h-14 gap-2 font-bold text-base border-feeding/40 text-feeding hover:bg-feeding-bg"
+            onClick={() => {
+              setPastLeft("");
+              setPastRight("");
+              setPastOpen(true);
+            }}
+            disabled={!childId}
+          >
+            <History className="w-5 h-5" />
+            {PAST_PUMP_TITLE}
+          </Button>
         )}
 
         {showStopForm && (
@@ -339,6 +336,49 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
             </div>
           </div>
         )}
+        <PastSessionSheet
+          open={pastOpen}
+          onOpenChange={setPastOpen}
+          title={PAST_PUMP_TITLE}
+          saveLabel="Save pump"
+          accentClass="bg-feeding"
+          durationPresets={PUMP_PRESETS}
+          defaultDurationMin={20}
+          softMaxMin={60}
+          hardMaxMin={480}
+          isSaving={savePastPump.isPending}
+          onSave={(v) => savePastPump.mutateAsync(v).then(() => undefined)}
+          detail={
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="past-pump-left" className="text-xs font-semibold">Left (oz)</Label>
+                <Input
+                  id="past-pump-left"
+                  type="number"
+                  step="0.5"
+                  inputMode="decimal"
+                  value={pastLeft}
+                  onChange={(e) => setPastLeft(e.target.value)}
+                  placeholder="0"
+                  className="h-12 text-base md:text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="past-pump-right" className="text-xs font-semibold">Right (oz)</Label>
+                <Input
+                  id="past-pump-right"
+                  type="number"
+                  step="0.5"
+                  inputMode="decimal"
+                  value={pastRight}
+                  onChange={(e) => setPastRight(e.target.value)}
+                  placeholder="0"
+                  className="h-12 text-base md:text-sm"
+                />
+              </div>
+            </div>
+          }
+        />
       </CardContent>
     </Card>
   );

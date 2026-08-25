@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Play, Pause, RotateCcw, ChevronDown, Clock } from "lucide-react";
+import { Play, Pause, RotateCcw, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -13,12 +11,20 @@ import {
   type ActiveFeedRow,
 } from "@/hooks/useActiveFeed";
 import { getErrorMessage } from "@/lib/handleRlsError";
+import { supabase } from "@/integrations/supabase/client";
+import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+
+const NURSING_PRESETS = [5, 10, 15, 20, 25, 30];
+const PAST_FEED_TITLE = "Add past feed";
 
 interface NursingTimerProps {
   childId: string | undefined;
   side: string;
   onSideChange: (side: string) => void;
   onDurationChange: (minutes: number) => void;
+  // The sheet fills the parent dialog's form rather than writing a row — the
+  // dialog's own Save button still owns the insert, so there's one save path.
+  onStartAtChange?: (startAt: Date) => void;
   onActiveRowChange?: (row: ActiveFeedRow | null) => void;
   // When editing an existing completed log, the parent passes the existing
   // duration in minutes. The timer ignores the active-session flow in that case.
@@ -40,6 +46,7 @@ export default function NursingTimer({
   side,
   onSideChange,
   onDurationChange,
+  onStartAtChange,
   onActiveRowChange,
   initialMinutes,
   editMode,
@@ -101,9 +108,28 @@ export default function NursingTimer({
     if (derived && derived !== side) onSideChange(derived);
   }, [leftSeconds, rightSeconds, side, onSideChange]);
 
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualMinutes, setManualMinutes] = useState("");
-  const [manualSide, setManualSide] = useState<"left" | "right" | "both">("left");
+  const [pastOpen, setPastOpen] = useState(false);
+  const [pastSide, setPastSide] = useState<"left" | "right" | "both">("left");
+
+  // Babies alternate sides, so the most useful default is the opposite of the
+  // last side on record. This key is already in the canonical invalidation list.
+  const { data: lastSide } = useQuery({
+    queryKey: ["last-nursing-side", childId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("feeding_logs")
+        .select("side")
+        .eq("child_id", childId!)
+        .eq("feeding_type", "breast")
+        .in("side", ["left", "right"])
+        .order("logged_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.side as "left" | "right" | null) ?? null;
+    },
+    enabled: !!childId,
+  });
 
   const toggleSide = async (next: "left" | "right") => {
     if (editMode) {
@@ -147,28 +173,28 @@ export default function NursingTimer({
     }
   };
 
-  const handleManualApply = () => {
-    const mins = Number(manualMinutes);
-    if (mins > 0) {
-      if (editMode) {
-        setEditActive(null);
-        if (manualSide === "left") {
-          setEditLeft(mins * 60);
-          setEditRight(0);
-        } else if (manualSide === "right") {
-          setEditLeft(0);
-          setEditRight(mins * 60);
-        } else {
-          const half = (mins * 60) / 2;
-          setEditLeft(half);
-          setEditRight(half);
-        }
+  const openPastSheet = () => {
+    setPastSide(lastSide === "left" ? "right" : lastSide === "right" ? "left" : "left");
+    setPastOpen(true);
+  };
+
+  const handlePastApply = async ({ startAt, durationMin }: PastSessionValue) => {
+    if (editMode) {
+      setEditActive(null);
+      if (pastSide === "left") {
+        setEditLeft(durationMin * 60);
+        setEditRight(0);
+      } else if (pastSide === "right") {
+        setEditLeft(0);
+        setEditRight(durationMin * 60);
+      } else {
+        setEditLeft((durationMin * 60) / 2);
+        setEditRight((durationMin * 60) / 2);
       }
-      onDurationChange(mins);
-      onSideChange(manualSide);
-      setManualOpen(false);
-      setManualMinutes("");
     }
+    onDurationChange(durationMin);
+    onSideChange(pastSide);
+    onStartAtChange?.(startAt);
   };
 
   return (
@@ -178,7 +204,7 @@ export default function NursingTimer({
         <div
           className={cn(
             "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
-            activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
+            activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 motion-safe:before:animate-ping",
           )}
         >
           <div
@@ -235,64 +261,52 @@ export default function NursingTimer({
         </div>
       )}
 
-      {/* Manual entry */}
+      {/* Past entry */}
       {!activeSide && (
-        <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
-            >
-              <Clock className="w-3 h-3" />
-              Enter total duration manually
-              <ChevronDown className={cn("w-3 h-3 transition-transform", manualOpen && "rotate-180")} />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2 space-y-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Side</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(["left", "both", "right"] as const).map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    size="sm"
-                    variant={manualSide === s ? "default" : "outline"}
-                    className={cn(
-                      "h-8 text-xs capitalize touch-target",
-                      manualSide === s && "bg-feeding hover:bg-feeding/90",
-                    )}
-                    onClick={() => setManualSide(s)}
-                  >
-                    {s}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Total minutes</Label>
-                <Input
-                  type="number"
-                  value={manualMinutes}
-                  onChange={(e) => setManualMinutes(e.target.value)}
-                  placeholder="e.g. 15"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 bg-feeding hover:bg-feeding/90 text-xs"
-                onClick={handleManualApply}
-                disabled={!manualMinutes || Number(manualMinutes) <= 0}
-              >
-                Apply
-              </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        <Button
+          type="button"
+          variant="outline"
+          className="touch-target w-full h-14 gap-2 font-bold text-base border-feeding/40 text-feeding hover:bg-feeding-bg"
+          onClick={openPastSheet}
+        >
+          <History className="w-5 h-5" />
+          {PAST_FEED_TITLE}
+        </Button>
       )}
+
+      <PastSessionSheet
+        open={pastOpen}
+        onOpenChange={setPastOpen}
+        title={PAST_FEED_TITLE}
+        saveLabel="Use these times"
+        accentClass="bg-feeding"
+        durationPresets={NURSING_PRESETS}
+        defaultDurationMin={15}
+        softMaxMin={60}
+        hardMaxMin={480}
+        onSave={handlePastApply}
+        detail={
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground" id="past-feed-side-label">Side</p>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="past-feed-side-label">
+              {(["left", "both", "right"] as const).map((sideOption) => (
+                <Button
+                  key={sideOption}
+                  type="button"
+                  variant={pastSide === sideOption ? "default" : "outline"}
+                  className={cn(
+                    "touch-target capitalize font-semibold",
+                    pastSide === sideOption && "bg-feeding hover:bg-feeding/90",
+                  )}
+                  onClick={() => setPastSide(sideOption)}
+                >
+                  {sideOption}
+                </Button>
+              ))}
+            </div>
+          </div>
+        }
+      />
     </div>
   );
 }

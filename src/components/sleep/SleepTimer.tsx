@@ -1,38 +1,47 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Play, Pause, Square, Sun, Moon, ChevronDown, Clock, X } from "lucide-react";
+import { Play, Pause, Square, Sun, Moon, History, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useActiveSleep, useElapsedSeconds, type SleepType } from "@/hooks/useActiveSleep";
 import { getErrorMessage } from "@/lib/handleRlsError";
-import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
+import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
 
 interface SleepTimerProps {
   childId: string | undefined;
-  onManualSubmit: (durationMinutes: number, sleepType: SleepType, endedAt: Date) => Promise<void> | void;
+  onManualSubmit: (
+    startedAt: Date,
+    endedAt: Date,
+    sleepType: SleepType,
+    notes: string,
+  ) => Promise<void>;
   isSavingManual?: boolean;
+  checkOverlap?: (start: Date, end: Date) => { start: Date; end: Date } | null;
 }
 
-export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: SleepTimerProps) {
+// Evenings and the small hours are almost always a night sleep — defaulting to
+// "nap" at 9 PM makes the parent fix the toggle every single time.
+function sleepTypeForHour(hour: number): SleepType {
+  return hour >= 18 || hour < 5 ? "night" : "nap";
+}
+
+const NAP_PRESETS = [20, 30, 45, 60, 90, 120];
+const NIGHT_PRESETS = [240, 360, 480, 600, 660, 720];
+
+export default function SleepTimer({ childId, onManualSubmit, isSavingManual, checkOverlap }: SleepTimerProps) {
   const { active, start, pause, resume, stop, cancel, isStale } = useActiveSleep(childId);
   const elapsedSeconds = useElapsedSeconds(active);
 
-  const [pendingSleepType, setPendingSleepType] = useState<SleepType>("nap");
+  const [pendingSleepType, setPendingSleepType] = useState<SleepType>(() =>
+    sleepTypeForHour(new Date().getHours()),
+  );
   const [startOffsetMin, setStartOffsetMin] = useState(0);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualHours, setManualHours] = useState("");
-  const [manualMinutes, setManualMinutes] = useState("");
-  const [manualEndedAt, setManualEndedAt] = useState<Date>(new Date());
+  const [pastOpen, setPastOpen] = useState(false);
 
   const offsetChips: { label: string; value: number }[] = [
     { label: "Now", value: 0 },
-    { label: "−5m", value: 5 },
-    { label: "−10m", value: 10 },
-    { label: "−15m", value: 15 },
-    { label: "−30m", value: 30 },
+    { label: "10m ago", value: 10 },
+    { label: "30m ago", value: 30 },
   ];
 
   const sleepType: SleepType = (active?.sleep_type as SleepType | undefined) ?? pendingSleepType;
@@ -78,22 +87,16 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
     }
   };
 
-  const handleManualApply = async () => {
-    const hrs = Number(manualHours) || 0;
-    const mins = Number(manualMinutes) || 0;
-    const totalMins = hrs * 60 + mins;
-    if (totalMins > 0) {
-      await onManualSubmit(totalMins, pendingSleepType, manualEndedAt);
-      setManualOpen(false);
-      setManualHours("");
-      setManualMinutes("");
-      setManualEndedAt(new Date());
-    }
+  const handlePastSave = async ({ startAt, endAt, notes }: PastSessionValue) => {
+    await onManualSubmit(startAt, endAt, pendingSleepType, notes);
   };
 
   const hours = Math.floor(elapsedSeconds / 3600);
   const mins = Math.floor((elapsedSeconds % 3600) / 60);
   const secs = elapsedSeconds % 60;
+  const startLabel = pendingSleepType === "nap" ? "Start Nap" : "Start Sleep";
+  const pastLabel = pendingSleepType === "nap" ? "Add past nap" : "Add past sleep";
+
   const display = hours > 0
     ? `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
     : `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
@@ -133,7 +136,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
         <div
           className={cn(
             "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-sleep-bg/60 ring-1 ring-inset ring-sleep/15",
-            isRunning && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 before:animate-ping",
+            isRunning && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 motion-safe:before:animate-ping",
           )}
         >
           <div
@@ -191,24 +194,34 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
       )}
 
       {/* Controls */}
-      <div className="flex gap-2 justify-center">
-        {!timerActive ? (
+      {!timerActive ? (
+        <div className="grid grid-cols-2 gap-2">
           <Button
             type="button"
-            size="lg"
-            className="flex-1 max-w-[260px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90 text-lg py-6"
+            className="touch-target h-14 gap-2 font-bold text-base bg-sleep hover:bg-sleep/90"
             onClick={handleStart}
             disabled={!childId || start.isPending}
           >
-            <Play className="w-6 h-6" />
-            {sleepType === "nap" ? "Start Nap" : "Start Sleep"}
+            <Play className="w-5 h-5" />
+            {startLabel}
             {startOffsetMin > 0 && (
-              <span className="font-semibold opacity-90">· {startOffsetMin}m ago</span>
+              <span className="font-semibold opacity-90">· {startOffsetMin}m</span>
             )}
           </Button>
-        ) : (
-          <>
-            {isRunning ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="touch-target h-14 gap-2 font-bold text-base border-sleep/40 text-sleep hover:bg-sleep-bg"
+            onClick={() => setPastOpen(true)}
+            disabled={!childId}
+          >
+            <History className="w-5 h-5" />
+            {pastLabel}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex gap-2 justify-center">
+          {isRunning ? (
               <Button
                 type="button"
                 variant="outline"
@@ -219,31 +232,30 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
               >
                 <Pause className="w-5 h-5" /> Pause
               </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="flex-1 max-w-[140px] touch-target gap-2 font-bold"
-                onClick={() => resume.mutate()}
-                disabled={resume.isPending}
-              >
-                <Play className="w-5 h-5" /> Resume
-              </Button>
-            )}
+          ) : (
             <Button
               type="button"
+              variant="outline"
               size="lg"
-              className="flex-1 max-w-[140px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90"
-              onClick={handleStop}
-              disabled={stop.isPending}
+              className="flex-1 max-w-[140px] touch-target gap-2 font-bold"
+              onClick={() => resume.mutate()}
+              disabled={resume.isPending}
             >
-              <Square className="w-5 h-5" />
-              {stop.isPending ? "Saving..." : "Stop & Save"}
+              <Play className="w-5 h-5" /> Resume
             </Button>
-          </>
-        )}
-      </div>
+          )}
+          <Button
+            type="button"
+            size="lg"
+            className="flex-1 max-w-[140px] touch-target gap-2 font-bold bg-sleep hover:bg-sleep/90"
+            onClick={handleStop}
+            disabled={stop.isPending}
+          >
+            <Square className="w-5 h-5" />
+            {stop.isPending ? "Saving..." : "Stop & Save"}
+          </Button>
+        </div>
+      )}
 
       {/* Cancel — only when active, to delete the session without logging */}
       {timerActive && (
@@ -261,74 +273,27 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual }: 
         </div>
       )}
 
-      {/* Manual duration entry — only when no active session */}
-      {!timerActive && (
-        <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
-            >
-              <Clock className="w-3 h-3" />
-              Enter duration manually
-              <ChevronDown className={cn("w-3 h-3 transition-transform", manualOpen && "rotate-180")} />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3 space-y-3">
-            <MobileDateTimePicker
-              value={manualEndedAt}
-              onChange={setManualEndedAt}
-              maxDate={new Date()}
-              label="When did it end?"
-            />
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Hours</Label>
-                <Input
-                  type="number"
-                  value={manualHours}
-                  onChange={(e) => setManualHours(e.target.value)}
-                  placeholder="0"
-                  className="h-8 text-sm"
-                  min="0"
-                  max="24"
-                />
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Minutes</Label>
-                <Input
-                  type="number"
-                  value={manualMinutes}
-                  onChange={(e) => setManualMinutes(e.target.value)}
-                  placeholder="30"
-                  className="h-8 text-sm"
-                  min="0"
-                  max="59"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 bg-sleep hover:bg-sleep/90 text-xs"
-                onClick={handleManualApply}
-                disabled={
-                  isSavingManual ||
-                  ((Number(manualHours) || 0) * 60 + (Number(manualMinutes) || 0)) <= 0
-                }
-              >
-                {isSavingManual ? "..." : "Save"}
-              </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
       {/* Hint */}
-      {!timerActive && !manualOpen && (
+      {!timerActive && (
         <p className="text-xs text-center text-muted-foreground">
-          Tap Start to time, or enter duration manually. Timer keeps running if you close the app.
+          Start now, or add one that already happened. The timer keeps running if you close the app.
         </p>
       )}
+
+      <PastSessionSheet
+        open={pastOpen}
+        onOpenChange={setPastOpen}
+        title={pastLabel}
+        saveLabel={pendingSleepType === "nap" ? "Save nap" : "Save sleep"}
+        accentClass="bg-sleep"
+        durationPresets={pendingSleepType === "nap" ? NAP_PRESETS : NIGHT_PRESETS}
+        defaultDurationMin={pendingSleepType === "nap" ? 45 : 600}
+        softMaxMin={14 * 60}
+        hardMaxMin={24 * 60}
+        checkOverlap={checkOverlap}
+        onSave={handlePastSave}
+        isSaving={isSavingManual}
+      />
     </div>
   );
 }
