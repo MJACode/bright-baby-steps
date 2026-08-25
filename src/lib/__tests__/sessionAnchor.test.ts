@@ -199,3 +199,105 @@ describe("validateSession", () => {
     expect(v.error?.message).toBe("This overlaps a sleep from 2:00 to 3:15 PM.");
   });
 });
+
+describe("duration presets from a cold open", () => {
+  // The real preset sets and defaults each surface passes to PastSessionSheet.
+  const MODULES = [
+    { name: "nap", presets: [20, 30, 45, 60, 90, 120], defaultMin: 45, softMaxMin: 14 * 60, hardMaxMin: 24 * 60 },
+    { name: "night", presets: [240, 360, 480, 600, 660, 720], defaultMin: 600, softMaxMin: 14 * 60, hardMaxMin: 24 * 60 },
+    { name: "nursing", presets: [5, 10, 15, 20, 25, 30], defaultMin: 15, softMaxMin: 60, hardMaxMin: 480 },
+    { name: "pump", presets: [10, 15, 20, 25, 30, 45], defaultMin: 20, softMaxMin: 60, hardMaxMin: 480 },
+  ];
+
+  it.each(MODULES)(
+    "$name: every preset is saveable with no other interaction",
+    ({ presets, defaultMin, softMaxMin, hardMaxMin }) => {
+      for (const preset of presets) {
+        const { result, unmount } = renderHook(() =>
+          useSessionAnchor({ open: true, defaultDurationMin: defaultMin }),
+        );
+        const openedAt = Date.now();
+
+        act(() => result.current.setDurationMin(preset));
+
+        const { startAt, endAt, durationMin } = result.current;
+        const v = validateSession({ startAt, endAt, durationMin, now: new Date(), softMaxMin, hardMaxMin });
+        expect({ preset, error: v.error, canSave: v.canSave }).toEqual({
+          preset,
+          error: null,
+          canSave: true,
+        });
+        // Still pinned at ≈now: never in the future, never more than the 5-minute
+        // floor behind the moment the sheet opened.
+        expect(endAt.getTime()).toBeLessThanOrEqual(Date.now());
+        expect(endAt.getTime()).toBeGreaterThan(openedAt - 5 * MIN);
+        expect(durationMin).toBe(preset);
+        unmount();
+      }
+    },
+  );
+
+  it("keeps the end at ≈now for a preset longer than the default", () => {
+    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+    const seededStart = result.current.startAt;
+
+    act(() => result.current.setDurationMin(120));
+
+    expect(result.current.startAt.getTime()).toBeLessThan(seededStart.getTime());
+    expect(result.current.durationMin).toBe(120);
+    expect(result.current.endAt.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("re-derives the start from now − the new duration, not from the seeded start", () => {
+    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+    const openedAt = Date.now();
+
+    act(() => result.current.setDurationMin(120));
+
+    const start = result.current.startAt.getTime();
+    expect(start).toBeLessThanOrEqual(openedAt - 120 * MIN);
+    expect(start).toBeGreaterThan(openedAt - 125 * MIN);
+  });
+});
+
+describe("startTouched freezes the anchor", () => {
+  it("stops tracking the duration once the start is edited directly", () => {
+    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+    const start = new Date(2026, 5, 10, 9, 0);
+    act(() => result.current.setStartAt(start));
+
+    act(() => result.current.setDurationMin(120));
+
+    expect(result.current.startAt).toEqual(start);
+    expect(result.current.endAt).toEqual(new Date(2026, 5, 10, 11, 0));
+  });
+
+  it("stops tracking the duration once the end is edited", () => {
+    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+    const seededStart = result.current.startAt;
+
+    act(() => result.current.setEndAt(new Date(seededStart.getTime() + 10 * MIN)));
+    expect(result.current.durationMin).toBe(10);
+
+    act(() => result.current.setDurationMin(30));
+
+    expect(result.current.startAt).toEqual(seededStart);
+    expect(result.current.durationMin).toBe(30);
+  });
+
+  it("releases the anchor again on the next closed→open re-seed", () => {
+    const { result, rerender } = renderHook(
+      ({ open }) => useSessionAnchor({ open, defaultDurationMin: 15 }),
+      { initialProps: { open: true } },
+    );
+    act(() => result.current.setStartAt(new Date(2026, 5, 10, 9, 0)));
+
+    rerender({ open: false });
+    rerender({ open: true });
+
+    act(() => result.current.setDurationMin(120));
+
+    expect(result.current.endAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(result.current.startAt.getFullYear()).toBe(new Date().getFullYear());
+  });
+});
