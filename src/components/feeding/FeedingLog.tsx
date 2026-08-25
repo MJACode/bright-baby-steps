@@ -17,7 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { badgeVariants } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,6 +36,12 @@ import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { GroupedLogList } from "@/components/logging/GroupedLogList";
+import { useLogHistory } from "@/hooks/useLogHistory";
+import { summarizeFeedingDay } from "@/lib/logDaySummary";
+import type { Tables } from "@/integrations/supabase/types";
+
+type FeedingLogRow = Tables<"feeding_logs">;
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -104,7 +110,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  // History reaches further back than the page query's 50 rows, so the delete
+  // path can't look the row back up by id — hold onto the row itself.
+  const [editingRow, setEditingRow] = useState<FeedingLogRow | null>(null);
   const [feedType, setFeedType] = useState("breast");
   const [side, setSide] = useState<string>("");
   const [durationMin, setDurationMin] = useState("");
@@ -196,20 +204,30 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     enabled: !!activeChild,
   });
 
-  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
+  const history = useLogHistory<FeedingLogRow>({
+    table: "feeding_logs",
+    childId: activeChild?.id,
+    dateColumn: "logged_at",
+  });
+
+  const loggedByNames = useLoggedByNames([
+    ...(logs?.map((l) => l.parent_id) ?? []),
+    ...history.logs.map((l) => l.parent_id),
+  ]);
 
   const resetForm = () => {
     setEditingId(null);
+    setEditingRow(null);
     setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(new Date());
   };
 
-  const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
+  const deleteLog = useDeleteWithUndo<FeedingLogRow>({
     table: "feeding_logs",
     invalidateKeys: [["feeding-logs"], ["feeding-trends-7d"], ["activity-feed"], ["last-nursing-side"]],
   });
 
   const handleDelete = () => {
-    const row = logs?.find((l) => l.id === editingId);
+    const row = editingRow;
     if (!row) return;
     setDialogOpen(false);
     resetForm();
@@ -223,8 +241,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     });
   };
 
-  const openEdit = (log: NonNullable<typeof logs>[0]) => {
+  const openEdit = (log: FeedingLogRow) => {
     setEditingId(log.id);
+    setEditingRow(log);
     setFeedType(log.feeding_type);
     setSide(log.side || "");
     setDurationMin(log.duration_minutes ? String(log.duration_minutes) : "");
@@ -536,67 +555,83 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       {/* 7-Day Trends Chart */}
       {activeChild && <FeedingTrendsChart childId={activeChild.id} />}
 
-      {/* Recent logs */}
       <div className="space-y-2">
-        <h3 className="font-display font-bold text-sm">Recent Feeds</h3>
-        <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
-        {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
-          <Card key={log.id} className="border-0 bg-feeding-bg">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="text-xs">
-                  {log.feeding_type === "breast" ? "🤱" : log.feeding_type === "bottle" ? "🍼" : log.feeding_type === "pump" ? "🧴" : "🥣"} {log.feeding_type}
-                </Badge>
-                <div>
-                  <p className="text-sm font-semibold">
-                    {log.feeding_type === "pump" && (log.amount_oz_left || log.amount_oz_right)
-                      ? `L: ${log.amount_oz_left ?? 0}oz R: ${log.amount_oz_right ?? 0}oz (${log.amount_oz ?? 0}oz total)`
-                      : log.amount_oz ? `${log.amount_oz} oz` : ""
-                    } {log.duration_minutes ? `${log.duration_minutes} min` : ""}
-                    {log.food_description ? log.food_description : ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(log.logged_at), "MMM d, h:mm a")}
-                    {log.food_category && ` · ${foodCategories.find(c => c.value === log.food_category)?.label || log.food_category}`}
-                  </p>
-                  {log.reaction_noted && (
-                    <p className="text-xs text-[hsl(var(--warning))] flex items-center gap-1 mt-0.5">
-                      <AlertTriangle className="w-3 h-3" /> Reaction noted{log.reaction_description ? `: ${log.reaction_description}` : ""}
-                    </p>
-                  )}
-                  <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {log.side && <Badge variant="outline" className="text-xs capitalize">{log.side}</Badge>}
-                <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-feeding" onClick={() => openEdit(log)} aria-label="Edit feed">
-                  <Pencil className="w-4 h-4" />
+        <h2 className="font-display font-bold text-sm">History</h2>
+        <GroupedLogList<FeedingLogRow>
+          logs={history.logs}
+          isLoading={history.isLoading}
+          isError={history.isError}
+          hasEarlier={history.hasEarlier}
+          onShowEarlier={history.showEarlier}
+          getDate={(log) => log.logged_at}
+          summarize={summarizeFeedingDay}
+          labels={{ unit: "feed", unitPlural: "feeds" }}
+          renderRow={(log) => {
+            const detail = [
+              log.feeding_type === "pump" && (log.amount_oz_left || log.amount_oz_right)
+                ? `L: ${log.amount_oz_left ?? 0}oz R: ${log.amount_oz_right ?? 0}oz (${log.amount_oz ?? 0}oz total)`
+                : log.amount_oz
+                  ? `${log.amount_oz} oz`
+                  : "",
+              log.duration_minutes ? `${log.duration_minutes} min` : "",
+              log.food_description || "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const time = format(new Date(log.logged_at), "h:mm a");
+            return (
+              <Card key={log.id} className="border-0 bg-feeding-bg">
+                <button
+                  type="button"
+                  onClick={() => openEdit(log)}
+                  aria-label={`Edit ${log.feeding_type} feed${detail ? `, ${detail}` : ""}, ${time}${log.reaction_noted ? ", reaction noted" : ""}`}
+                  className="touch-target w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-feeding/10 motion-reduce:transition-none"
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>
+                      {log.feeding_type === "breast" ? "🤱" : log.feeding_type === "bottle" ? "🍼" : log.feeding_type === "pump" ? "🧴" : "🥣"} {log.feeding_type}
+                    </span>
+                    <span className="min-w-0">
+                      {detail && <span className="block text-sm font-semibold">{detail}</span>}
+                      <span className="block text-xs text-foreground/75">
+                        {time}
+                        {log.food_category && ` · ${foodCategories.find(c => c.value === log.food_category)?.label || log.food_category}`}
+                      </span>
+                      {log.reaction_noted && (
+                        <span className="mt-0.5 flex items-center gap-1 text-xs text-[hsl(var(--warning))]">
+                          <AlertTriangle aria-hidden className="w-3 h-3" /> Reaction noted{log.reaction_description ? `: ${log.reaction_description}` : ""}
+                        </span>
+                      )}
+                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {log.side && (
+                      <span className={cn(badgeVariants({ variant: "outline" }), "capitalize border-border")}>{log.side}</span>
+                    )}
+                    <Pencil aria-hidden className="w-4 h-4 text-muted-foreground" />
+                  </span>
+                </button>
+              </Card>
+            );
+          }}
+          emptyState={
+            <Card className="border-0 bg-card/60">
+              <CardContent className="p-6 flex flex-col items-center justify-center gap-3">
+                <UtensilsCrossed className="w-10 h-10 text-feeding/40" />
+                <p className="text-sm text-muted-foreground text-center">
+                  Log {activeChild.name}'s first feed to start spotting patterns
+                </p>
+                <Button
+                  onClick={() => setDialogOpen(true)}
+                  className="gap-1.5 touch-target bg-feeding hover:bg-feeding/90 text-white"
+                >
+                  <Plus className="w-4 h-4" /> Log a feed
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )) : (
-          <Card className="border-0 bg-card/60">
-            <CardContent className="p-6 flex flex-col items-center justify-center gap-3">
-              <UtensilsCrossed className="w-10 h-10 text-feeding/40" />
-              <p className="text-sm text-muted-foreground text-center">
-                Log {activeChild.name}'s first feed to start spotting patterns
-              </p>
-              <Button
-                onClick={() => setDialogOpen(true)}
-                className="gap-1.5 touch-target bg-feeding hover:bg-feeding/90 text-white"
-              >
-                <Plus className="w-4 h-4" /> Log a feed
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-        </div>
-        {logs && logs.length > 5 && (
-          <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
-            {showAll ? "Show less" : `View all ${logs.length} feeds`}
-          </Button>
-        )}
+              </CardContent>
+            </Card>
+          }
+        />
       </div>
     </div>
   );

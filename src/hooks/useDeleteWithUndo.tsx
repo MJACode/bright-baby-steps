@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-quer
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 
 type UndoableTable = "sleep_logs" | "feeding_logs" | "diaper_logs" | "custom_milestones";
 
@@ -31,6 +32,9 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
   const queryClient = useQueryClient();
 
   const invalidateAll = () => {
+    // Every table this hook supports is a log table, so the canonical list is
+    // the floor — callers keep their extra keys on top of it.
+    invalidateAfterLogWrite(queryClient);
     invalidateKeys.forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
   };
 
