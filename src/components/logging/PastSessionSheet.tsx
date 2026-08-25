@@ -37,6 +37,9 @@ type PastSessionSheetProps = {
   checkOverlap?: (start: Date, end: Date) => { start: Date; end: Date } | null;
   onSave: (v: PastSessionValue) => Promise<void>;
   isSaving?: boolean;
+  // Off when the consuming form already owns a Notes field — two of them in one
+  // flow leaves the parent guessing which one gets saved.
+  showNotes?: boolean;
 };
 
 export function PastSessionSheet({
@@ -53,6 +56,7 @@ export function PastSessionSheet({
   checkOverlap,
   onSave,
   isSaving,
+  showNotes = true,
 }: PastSessionSheetProps) {
   const { startAt, durationMin, endAt, setStartAt, setDurationMin, setEndAt } = useSessionAnchor({
     open,
@@ -70,12 +74,14 @@ export function PastSessionSheet({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const wasOpen = useRef(open);
+  const wasOther = useRef(false);
   useEffect(() => {
     if (open && !wasOpen.current) {
       setEndMode(false);
       setCustomOpen(false);
       setCustomHours("");
       setCustomMinutes("");
+      wasOther.current = false;
       setNotesOpen(false);
       setNotes("");
       setSaveError(null);
@@ -91,6 +97,17 @@ export function PastSessionSheet({
   const presetIndex = durationPresets.indexOf(durationMin);
   const isOther = customOpen || presetIndex === -1;
   const selectedIndex = isOther ? durationPresets.length : presetIndex;
+
+  // An end-time edit can land on a non-preset duration, which flips Other on
+  // without anyone touching the chip. Seed the fields on the transition, or the
+  // first keystroke in Hours reads an empty Minutes and wipes it.
+  useEffect(() => {
+    if (isOther && !wasOther.current) {
+      setCustomHours(String(Math.floor(Math.max(0, durationMin) / 60)));
+      setCustomMinutes(String(Math.max(0, durationMin) % 60));
+    }
+    wasOther.current = isOther;
+  }, [isOther, durationMin]);
 
   const overlap = checkOverlap && durationMin > 0 ? checkOverlap(startAt, endAt) : null;
   const { error, warning, helper, canSave } = validateSession({
@@ -118,8 +135,6 @@ export function PastSessionSheet({
 
   const selectChip = (index: number) => {
     if (index === durationPresets.length) {
-      setCustomHours(String(Math.floor(Math.max(0, durationMin) / 60)));
-      setCustomMinutes(String(Math.max(0, durationMin) % 60));
       setCustomOpen(true);
       return;
     }
@@ -310,7 +325,7 @@ export function PastSessionSheet({
             </p>
           )}
 
-          {notesOpen ? (
+          {!showNotes ? null : notesOpen ? (
             <div className="space-y-1">
               <Label htmlFor="past-session-notes" className="text-xs font-semibold">
                 Notes

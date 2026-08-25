@@ -148,7 +148,9 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
         amount_oz: leftOz !== null || rightOz !== null ? (leftOz ?? 0) + (rightOz ?? 0) : null,
         amount_oz_left: leftOz,
         amount_oz_right: rightOz,
-        side: leftOz !== null && rightOz !== null ? "both" : leftOz !== null ? "left" : rightOz !== null ? "right" : null,
+        // Which oz field was filled says nothing about which breast was pumped —
+        // a parent who pumps both and types one total would be recorded as 'left'.
+        side: null,
         notes: notes.trim() || null,
         source: "manual",
       });
@@ -161,13 +163,6 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
       toast({
         title: `Pump logged · ${formatDurationShort(durationMin)}`,
         description: `${format(startAt, "h:mm a")} – ${format(endAt, "h:mm a")}`,
-      });
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't save pump",
-        description: getErrorMessage(err, "Please try again."),
-        variant: "destructive",
       });
     },
   });
@@ -277,7 +272,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
           </div>
         )}
 
-        {!activeSide && !showStopForm && (
+        {!activeIsPump && !showStopForm && (
           <Button
             type="button"
             variant="outline"
@@ -303,6 +298,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
                 <Input
                   type="number"
                   step="0.5"
+                  min={0}
                   inputMode="decimal"
                   value={amountLeft}
                   onChange={(e) => setAmountLeft(e.target.value)}
@@ -314,6 +310,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
                 <Input
                   type="number"
                   step="0.5"
+                  min={0}
                   inputMode="decimal"
                   value={amountRight}
                   onChange={(e) => setAmountRight(e.target.value)}
@@ -356,6 +353,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
                   id="past-pump-left"
                   type="number"
                   step="0.5"
+                  min={0}
                   inputMode="decimal"
                   value={pastLeft}
                   onChange={(e) => setPastLeft(e.target.value)}
@@ -369,6 +367,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
                   id="past-pump-right"
                   type="number"
                   step="0.5"
+                  min={0}
                   inputMode="decimal"
                   value={pastRight}
                   onChange={(e) => setPastRight(e.target.value)}

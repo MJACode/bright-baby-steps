@@ -194,7 +194,7 @@ export function MobileDateTimePicker({
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-start text-left font-normal h-10"
+            className="w-full justify-start text-left font-normal h-12"
           >
             <CalendarIcon className="w-4 h-4 mr-2 text-muted-foreground" />
             {format(value, "EEE, MMM d, yyyy")}

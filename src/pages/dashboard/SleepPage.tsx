@@ -33,7 +33,6 @@ import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
-import { getErrorMessage } from "@/lib/handleRlsError";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
@@ -392,6 +391,8 @@ export default function SleepPage() {
 
   // sleep_logs carries an exclusion constraint (no_overlapping_sleep) — surface
   // the clash before the insert so the parent sees which session is in the way.
+  // Only covers the 50 rows the query holds, so back-filling something older
+  // falls through to the constraint and its generic copy.
   const findSleepOverlap = useCallback(
     (start: Date, end: Date) => {
       const hit = logs?.find((l) => {
@@ -424,13 +425,6 @@ export default function SleepPage() {
     },
     onSuccess: () => {
       invalidateAfterLogWrite(queryClient);
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't save sleep",
-        description: getErrorMessage(err, "Please try again."),
-        variant: "destructive",
-      });
     },
   });
 

@@ -178,6 +178,8 @@ export default function NursingTimer({
     setPastOpen(true);
   };
 
+  // The parent dialog owns Notes and the insert, so the sheet runs with its own
+  // note field hidden and only hands back the times.
   const handlePastApply = async ({ startAt, durationMin }: PastSessionValue) => {
     if (editMode) {
       setEditActive(null);
@@ -261,8 +263,9 @@ export default function NursingTimer({
         </div>
       )}
 
-      {/* Past entry */}
-      {!activeSide && (
+      {/* Past entry — hidden whenever a breast row is live, paused included:
+          the parent form binds that row and would save over it. */}
+      {(editMode ? !activeSide : !activeIsBreast) && (
         <Button
           type="button"
           variant="outline"
@@ -285,6 +288,7 @@ export default function NursingTimer({
         softMaxMin={60}
         hardMaxMin={480}
         onSave={handlePastApply}
+        showNotes={false}
         detail={
           <div className="space-y-1">
             <p className="text-xs font-semibold text-muted-foreground" id="past-feed-side-label">Side</p>

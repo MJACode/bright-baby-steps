@@ -200,7 +200,7 @@ describe("validateSession", () => {
   });
 });
 
-describe("duration presets from a cold open", () => {
+describe("duration presets across every anchor state", () => {
   // The real preset sets and defaults each surface passes to PastSessionSheet.
   const MODULES = [
     { name: "nap", presets: [20, 30, 45, 60, 90, 120], defaultMin: 45, softMaxMin: 14 * 60, hardMaxMin: 24 * 60 },
@@ -209,13 +209,14 @@ describe("duration presets from a cold open", () => {
     { name: "pump", presets: [10, 15, 20, 25, 30, 45], defaultMin: 20, softMaxMin: 60, hardMaxMin: 480 },
   ];
 
+  const open = (defaultMin: number) =>
+    renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: defaultMin }));
+
   it.each(MODULES)(
-    "$name: every preset is saveable with no other interaction",
+    "$name (anchor none): every preset is saveable with no other interaction",
     ({ presets, defaultMin, softMaxMin, hardMaxMin }) => {
       for (const preset of presets) {
-        const { result, unmount } = renderHook(() =>
-          useSessionAnchor({ open: true, defaultDurationMin: defaultMin }),
-        );
+        const { result, unmount } = open(defaultMin);
         const openedAt = Date.now();
 
         act(() => result.current.setDurationMin(preset));
@@ -237,8 +238,61 @@ describe("duration presets from a cold open", () => {
     },
   );
 
+  it.each(MODULES)(
+    "$name (anchor end): every preset is saveable and extends back from the asserted end",
+    ({ presets, defaultMin, softMaxMin, hardMaxMin }) => {
+      for (const preset of presets) {
+        const { result, unmount } = open(defaultMin);
+        // The parent authors an end 10 minutes before the seeded one.
+        act(() => result.current.setEndAt(new Date(result.current.endAt.getTime() - 10 * MIN)));
+        const assertedEnd = result.current.endAt;
+
+        act(() => result.current.setDurationMin(preset));
+
+        const { startAt, endAt, durationMin } = result.current;
+        const v = validateSession({ startAt, endAt, durationMin, now: new Date(), softMaxMin, hardMaxMin });
+        expect({ preset, error: v.error, canSave: v.canSave }).toEqual({
+          preset,
+          error: null,
+          canSave: true,
+        });
+        expect(endAt.getTime()).toBe(assertedEnd.getTime());
+        expect(startAt.getTime()).toBe(assertedEnd.getTime() - preset * MIN);
+        expect(durationMin).toBe(preset);
+        unmount();
+      }
+    },
+  );
+
+  it.each(MODULES)(
+    "$name (anchor start): every preset holds the authored start and moves the end",
+    ({ presets, defaultMin, softMaxMin, hardMaxMin }) => {
+      const longest = Math.max(...presets);
+      for (const preset of presets) {
+        const { result, unmount } = open(defaultMin);
+        // Far enough back that even the longest preset still ends before now.
+        const authoredStart = new Date(Date.now() - (longest + 1) * MIN);
+        act(() => result.current.setStartAt(authoredStart));
+
+        act(() => result.current.setDurationMin(preset));
+
+        const { startAt, endAt, durationMin } = result.current;
+        const v = validateSession({ startAt, endAt, durationMin, now: new Date(), softMaxMin, hardMaxMin });
+        expect({ preset, error: v.error, canSave: v.canSave }).toEqual({
+          preset,
+          error: null,
+          canSave: true,
+        });
+        expect(startAt.getTime()).toBe(authoredStart.getTime());
+        expect(endAt.getTime()).toBe(authoredStart.getTime() + preset * MIN);
+        expect(durationMin).toBe(preset);
+        unmount();
+      }
+    },
+  );
+
   it("keeps the end at ≈now for a preset longer than the default", () => {
-    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+    const { result } = open(15);
     const seededStart = result.current.startAt;
 
     act(() => result.current.setDurationMin(120));
@@ -249,7 +303,7 @@ describe("duration presets from a cold open", () => {
   });
 
   it("re-derives the start from now − the new duration, not from the seeded start", () => {
-    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+    const { result } = open(15);
     const openedAt = Date.now();
 
     act(() => result.current.setDurationMin(120));
@@ -260,9 +314,12 @@ describe("duration presets from a cold open", () => {
   });
 });
 
-describe("startTouched freezes the anchor", () => {
-  it("stops tracking the duration once the start is edited directly", () => {
-    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
+describe("anchor selection", () => {
+  const open = (defaultMin: number) =>
+    renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: defaultMin }));
+
+  it("freezes the start once it is authored, so the duration moves the end", () => {
+    const { result } = open(15);
     const start = new Date(2026, 5, 10, 9, 0);
     act(() => result.current.setStartAt(start));
 
@@ -272,22 +329,49 @@ describe("startTouched freezes the anchor", () => {
     expect(result.current.endAt).toEqual(new Date(2026, 5, 10, 11, 0));
   });
 
-  it("stops tracking the duration once the end is edited", () => {
-    const { result } = renderHook(() => useSessionAnchor({ open: true, defaultDurationMin: 15 }));
-    const seededStart = result.current.startAt;
+  it("pins the end once it is authored, so the duration moves the start", () => {
+    const { result } = open(15);
 
-    act(() => result.current.setEndAt(new Date(seededStart.getTime() + 10 * MIN)));
+    act(() => result.current.setEndAt(new Date(result.current.startAt.getTime() + 10 * MIN)));
+    const assertedEnd = result.current.endAt;
     expect(result.current.durationMin).toBe(10);
 
     act(() => result.current.setDurationMin(30));
 
-    expect(result.current.startAt).toEqual(seededStart);
+    expect(result.current.endAt.getTime()).toBe(assertedEnd.getTime());
+    expect(result.current.startAt.getTime()).toBe(assertedEnd.getTime() - 30 * MIN);
     expect(result.current.durationMin).toBe(30);
+  });
+
+  it('reads "she woke at 3:15" + 45m as a 2:30–3:15 nap', () => {
+    const { result } = open(45);
+    const wokeAt = new Date();
+    wokeAt.setHours(15, 15, 0, 0);
+
+    act(() => result.current.setEndAt(wokeAt));
+    act(() => result.current.setDurationMin(45));
+
+    const expectedStart = new Date(wokeAt);
+    expectedStart.setHours(14, 30, 0, 0);
+    expect(result.current.startAt).toEqual(expectedStart);
+    expect(result.current.endAt).toEqual(wokeAt);
+  });
+
+  it("re-authoring the start after an end edit hands the anchor back to the start", () => {
+    const { result } = open(45);
+    act(() => result.current.setEndAt(new Date(result.current.endAt.getTime() - 10 * MIN)));
+
+    const start = new Date(2026, 5, 10, 9, 0);
+    act(() => result.current.setStartAt(start));
+    act(() => result.current.setDurationMin(90));
+
+    expect(result.current.startAt).toEqual(start);
+    expect(result.current.endAt).toEqual(new Date(2026, 5, 10, 10, 30));
   });
 
   it("releases the anchor again on the next closed→open re-seed", () => {
     const { result, rerender } = renderHook(
-      ({ open }) => useSessionAnchor({ open, defaultDurationMin: 15 }),
+      ({ open: isOpen }) => useSessionAnchor({ open: isOpen, defaultDurationMin: 15 }),
       { initialProps: { open: true } },
     );
     act(() => result.current.setStartAt(new Date(2026, 5, 10, 9, 0)));
