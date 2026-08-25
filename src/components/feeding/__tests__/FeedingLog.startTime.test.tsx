@@ -121,6 +121,22 @@ const bottleRow = (): ActiveFeedRow =>
     source: "timer",
   }) as unknown as ActiveFeedRow;
 
+const breastRow = (): ActiveFeedRow =>
+  ({
+    id: "nursing-row",
+    child_id: "child-1",
+    parent_id: "parent-1",
+    feeding_type: "breast",
+    logged_at: ROW_LOGGED_AT,
+    duration_minutes: null,
+    duration_minutes_left: null,
+    duration_minutes_right: null,
+    side: "left",
+    active_side: "left",
+    side_started_at: ROW_LOGGED_AT,
+    source: "timer",
+  }) as unknown as ActiveFeedRow;
+
 const renderLog = () =>
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -128,10 +144,35 @@ const renderLog = () =>
     </QueryClientProvider>,
   );
 
-const startedValue = () => screen.getByTestId("picker-Started").textContent ?? "";
+const rerenderLog = (rerender: (ui: React.ReactElement) => void) =>
+  rerender(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <FeedingLog />
+    </QueryClientProvider>,
+  );
 
 const drawerState = () =>
   document.querySelector("[data-vaul-drawer]")?.getAttribute("data-state") ?? "gone";
+
+// PastSessionSheet renders a "Started" picker of its own and vaul leaves the
+// drawer mounted after it closes, so scope the read to the dialog's copy.
+const startedValue = () => {
+  const drawer = document.querySelector("[data-vaul-drawer]");
+  const dialogPicker = screen
+    .getAllByTestId("picker-Started")
+    .find((el) => !drawer?.contains(el));
+  return dialogPicker?.textContent ?? "";
+};
+
+const applyPastFeed = async () => {
+  fireEvent.click(await screen.findByText("Add past feed"));
+  await waitFor(() => expect(screen.getByRole("radio", { name: "30m" })).toBeInTheDocument());
+  fireEvent.click(screen.getByRole("radio", { name: "30m" }));
+  fireEvent.click(screen.getByRole("button", { name: "Use these times" }));
+  // vaul keeps the drawer mounted through an exit transition that never
+  // completes in jsdom, so read the closed state off the element.
+  await waitFor(() => expect(drawerState()).toBe("closed"));
+};
 
 beforeEach(() => {
   activeRow = null;
@@ -160,7 +201,7 @@ describe("FeedingLog start time when a live timer row is bound", () => {
     expect(update?.payload.logged_at).toBe(ROW_LOGGED_AT);
   });
 
-  it("keeps a typed correction when the binding effect re-runs", async () => {
+  it("keeps a typed correction across a bottle → breast → bottle round-trip", async () => {
     activeRow = bottleRow();
     renderLog();
 
@@ -168,12 +209,128 @@ describe("FeedingLog start time when a live timer row is bound", () => {
     fireEvent.click(screen.getByTestId("correct-Started"));
     expect(startedValue()).toBe(CORRECTED_AT);
 
-    // Round-tripping the feed type re-runs the bottle binding effect with the
-    // same row; re-seeding here would silently revert what the parent typed.
-    fireEvent.click(screen.getByRole("button", { name: "🥣 Solid" }));
+    // Breast unbinds the row (NursingTimer pushes null for a bottle session),
+    // and coming back binds it again — re-seeding on that second bind would
+    // silently revert what the parent typed.
+    fireEvent.click(screen.getByRole("button", { name: "🤱 Breast" }));
+    await waitFor(() => expect(startedValue()).toBe(CORRECTED_AT));
     fireEvent.click(screen.getByRole("button", { name: "🍼 Bottle" }));
 
     await waitFor(() => expect(startedValue()).toBe(CORRECTED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+    await waitFor(() => expect(writes.length).toBeGreaterThan(0));
+    expect(writes.find((w) => w.op === "update")?.payload.logged_at).toBe(CORRECTED_AT);
+  });
+
+  it("keeps a typed correction across a nursing → bottle → breast round-trip", async () => {
+    activeRow = breastRow();
+    renderLog();
+
+    await waitFor(() => expect(startedValue()).toBe(ROW_LOGGED_AT));
+    fireEvent.click(screen.getByTestId("correct-Started"));
+    expect(startedValue()).toBe(CORRECTED_AT);
+
+    // Bottle unmounts the timer and unbinds (the live row is a breast one);
+    // returning remounts it and binds the same row a second time.
+    fireEvent.click(screen.getByRole("button", { name: "🍼 Bottle" }));
+    await waitFor(() => expect(startedValue()).toBe(CORRECTED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "🤱 Breast" }));
+
+    await waitFor(() => expect(startedValue()).toBe(CORRECTED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+    await waitFor(() => expect(writes.length).toBeGreaterThan(0));
+    const update = writes.find((w) => w.op === "update");
+    expect(update?.id).toBe("nursing-row");
+    expect(update?.payload.logged_at).toBe(CORRECTED_AT);
+  });
+
+  it("inserts the feed being typed when a session arrives mid-entry", async () => {
+    const { rerender } = renderLog();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Log a feed/i }));
+    fireEvent.click(screen.getByRole("button", { name: "🍼 Bottle" }));
+    fireEvent.click(screen.getByTestId("correct-Started"));
+    expect(startedValue()).toBe(CORRECTED_AT);
+
+    // A watch/partner bottle session starts while the parent is still typing a
+    // bottle they gave 90 minutes ago. It's a different feed: it keeps its own
+    // start and stays running, and Save writes the feed they were typing.
+    activeRow = bottleRow();
+    rerenderLog(rerender);
+
+    expect(startedValue()).toBe(CORRECTED_AT);
+    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+
+    await waitFor(() => expect(writes.length).toBeGreaterThan(0));
+    expect(writes.some((w) => w.op === "update")).toBe(false);
+    expect(writes.find((w) => w.op === "insert")?.payload.logged_at).toBe(CORRECTED_AT);
+  });
+
+  it("logs a solid at now, not at the bound bottle session's start", async () => {
+    activeRow = bottleRow();
+    renderLog();
+
+    await waitFor(() => expect(startedValue()).toBe(ROW_LOGGED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "🥣 Solid" }));
+
+    // Leaving bottle drops the row, so the solid entry is a fresh INSERT that
+    // must not inherit the hour the bottle session began.
+    await waitFor(() => expect(startedValue()).not.toBe(ROW_LOGGED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+
+    await waitFor(() => expect(writes.length).toBeGreaterThan(0));
+    const insert = writes.find((w) => w.op === "insert");
+    expect(insert).toBeDefined();
+    expect(writes.some((w) => w.op === "update")).toBe(false);
+    expect(Date.now() - new Date(insert?.payload.logged_at as string).getTime()).toBeLessThan(60 * 1000);
+  });
+});
+
+describe("FeedingLog when the dialog is closed without saving", () => {
+  it("drops a cancelled start time before an arriving session reopens the dialog", async () => {
+    const { rerender } = renderLog();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Log a feed/i }));
+    await waitFor(() => expect(screen.getByText("Log a Feed")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("correct-Started"));
+    expect(startedValue()).toBe(CORRECTED_AT);
+
+    // Cancel closes without going through Radix's onOpenChange, so the reset
+    // has to hang off the button itself — otherwise the typed time stays and
+    // claims to be the parent's for the *next* thing that opens this dialog.
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Log a Feed")).not.toBeInTheDocument());
+
+    // A watch-started bottle session arrives; the auto-open effect reopens the
+    // dialog and binds the row, which Save then finalizes.
+    activeRow = bottleRow();
+    rerenderLog(rerender);
+
+    await waitFor(() => expect(startedValue()).toBe(ROW_LOGGED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+
+    await waitFor(() => expect(writes.length).toBeGreaterThan(0));
+    const update = writes.find((w) => w.op === "update");
+    expect(update?.id).toBe("watch-bottle-row");
+    expect(update?.payload.logged_at).toBe(ROW_LOGGED_AT);
+  });
+
+  it("reopens as a blank Log a Feed after cancelling an edit", async () => {
+    activeRow = bottleRow();
+    renderLog();
+
+    await waitFor(() => expect(startedValue()).toBe(ROW_LOGGED_AT));
+    fireEvent.click(screen.getByRole("button", { name: "🥣 Solid" }));
+    fireEvent.change(screen.getByPlaceholderText("e.g. pureed sweet potato"), {
+      target: { value: "avocado" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Log a Feed")).not.toBeInTheDocument());
+
+    fireEvent.click(await screen.findByRole("button", { name: /Log a feed/i }));
+    await waitFor(() => expect(screen.getByText("Log a Feed")).toBeInTheDocument());
+    expect(screen.queryByDisplayValue("avocado")).not.toBeInTheDocument();
   });
 });
 
@@ -182,21 +339,34 @@ describe("FeedingLog start time when no row is bound", () => {
     renderLog();
     fireEvent.click(screen.getByRole("button", { name: /Log a feed/i }));
 
-    fireEvent.click(await screen.findByText("Add past feed"));
-    await waitFor(() => expect(screen.getByRole("radio", { name: "30m" })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("radio", { name: "30m" }));
-    fireEvent.click(screen.getByRole("button", { name: "Use these times" }));
-
     // handlePastApply pushes the past start and *then* unbinds the row, so the
-    // null bind must leave the applied start alone. vaul keeps the drawer
-    // mounted through an exit transition that never completes in jsdom, so read
-    // the closed state off the element and click through by text.
-    await waitFor(() => expect(drawerState()).toBe("closed"));
+    // null bind must leave the applied start alone.
+    await applyPastFeed();
+    // The drawer aria-hides the rest of the tree, so click through by text.
     fireEvent.click(screen.getByText("Save Feed"));
 
     await waitFor(() => expect(writes.some((w) => w.op === "insert")).toBe(true));
     const insert = writes.find((w) => w.op === "insert");
     const loggedAt = new Date(insert?.payload.logged_at as string).getTime();
     expect(Date.now() - loggedAt).toBeGreaterThan(25 * 60 * 1000);
+  });
+
+  it("keeps the applied past start when the feed type changes", async () => {
+    renderLog();
+    fireEvent.click(screen.getByRole("button", { name: /Log a feed/i }));
+
+    await applyPastFeed();
+    const applied = startedValue();
+    expect(Date.now() - new Date(applied).getTime()).toBeGreaterThan(25 * 60 * 1000);
+
+    // Switching type re-runs the bottle-binding effect with no row to bind. The
+    // start the parent chose in the sheet is theirs, so that pass must leave it
+    // alone instead of re-stamping "Started" to now.
+    fireEvent.click(screen.getByText("🍼 Bottle"));
+    expect(startedValue()).toBe(applied);
+
+    fireEvent.click(screen.getByText("Save Feed"));
+    await waitFor(() => expect(writes.some((w) => w.op === "insert")).toBe(true));
+    expect(writes.find((w) => w.op === "insert")?.payload.logged_at).toBe(applied);
   });
 });

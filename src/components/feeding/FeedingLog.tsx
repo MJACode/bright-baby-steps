@@ -126,21 +126,48 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   // active feeding_logs row from the timer. Save then UPDATEs that row instead
   // of INSERTing a new one.
   const [activeRow, setActiveRow] = useState<ActiveFeedRow | null>(null);
-  // Which row's start time the form is currently showing. Binding a row seeds
-  // "Started" from it exactly once, so Save's UPDATE keeps the time the session
-  // actually began instead of rewriting it to now — and a correction the parent
-  // types afterwards survives the binding effects re-running.
-  const boundStartRowId = useRef<string | null>(null);
-  const handleActiveRowChange = useCallback((row: ActiveFeedRow | null) => {
+  // What's bound right now, readable synchronously. The bottle effect and
+  // NursingTimer can both push within one tick, so a state read would answer
+  // for the previous render. bindActiveRow is the only writer of either.
+  const boundRowId = useRef<string | null>(null);
+  const bindActiveRow = useCallback((row: ActiveFeedRow | null) => {
+    boundRowId.current = row?.id ?? null;
     setActiveRow(row);
+  }, []);
+  // Who authored the value in "Started", and which feed they authored it for:
+  // the session bound when they set it, or null for a manual entry with nothing
+  // bound. Null here means the app chose the value. Every write goes through one
+  // of the two setters below, so the answer can't drift — nothing else calls
+  // setLoggedAt or touches this ref.
+  const authoredStart = useRef<{ forRowId: string | null } | null>(null);
+  // The parent said so — the "Started" picker or the times they chose in the
+  // past-feed sheet.
+  const setAuthoredStart = useCallback((next: Date) => {
+    authoredStart.current = { forRowId: boundRowId.current };
+    setLoggedAt(next);
+  }, []);
+  // The app said so — a bound session's own start, a timer starting or
+  // resetting, or a blank form falling back to now.
+  const setDerivedStart = useCallback((next: Date) => {
+    authoredStart.current = null;
+    setLoggedAt(next);
+  }, []);
+  // "Started" shows the start of the feed this form is about to write, so a
+  // time the parent typed holds for exactly the feed they typed it against.
+  // The same session re-binding (a tab round-trip, a refetch) keeps it. A
+  // different session is a different feed: it keeps its own start, and it stays
+  // running rather than becoming the row Save overwrites, so the entry the
+  // parent was typing is still inserted as its own feed.
+  const handleActiveRowChange = useCallback((row: ActiveFeedRow | null) => {
     if (!row) {
-      boundStartRowId.current = null;
+      bindActiveRow(null);
       return;
     }
-    if (boundStartRowId.current === row.id) return;
-    boundStartRowId.current = row.id;
-    setLoggedAt(new Date(row.logged_at));
-  }, []);
+    const authored = authoredStart.current;
+    if (authored && authored.forRowId !== row.id) return;
+    bindActiveRow(row);
+    if (!authored) setDerivedStart(new Date(row.logged_at));
+  }, [bindActiveRow, setDerivedStart]);
 
   // Resume the in-progress solid feed when the user comes back from the
   // Allergen Tracker via the "← Back to your feed log" banner.
@@ -185,11 +212,16 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   // and duration_minutes NULL. When such a session is active and the bottle
   // form is open, bind it as the activeRow so Save *finalizes* that row
   // (recording the oz) instead of inserting a duplicate and leaving the watch
-  // session stuck as an unstoppable "in progress" ghost. NursingTimer owns
-  // this wiring for breast feeds via onActiveRowChange; this covers bottle.
+  // session stuck as an unstoppable "in progress" ghost.
+  // Leaving bottle unbinds: a row left bound keeps its start time in "Started",
+  // so a fresh solid/pump entry would be logged at the hour that session began.
+  // Breast is NursingTimer's to bind — it pushes its own row (or null) on
+  // mount, and this effect, which commits after it, would clobber that.
   useEffect(() => {
-    if (editingId || feedType !== "bottle") return;
-    handleActiveRowChange(pageActiveFeed?.feeding_type === "bottle" ? pageActiveFeed : null);
+    if (editingId || feedType === "breast") return;
+    const row = feedType === "bottle" && pageActiveFeed?.feeding_type === "bottle" ? pageActiveFeed : null;
+    handleActiveRowChange(row);
+    if (!row && !authoredStart.current) setDerivedStart(new Date());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedType, editingId, pageActiveFeed?.id, pageActiveFeed?.feeding_type]);
 
@@ -211,9 +243,18 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
 
   const resetForm = () => {
-    boundStartRowId.current = null;
     setEditingId(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(new Date());
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setDerivedStart(new Date());
+  };
+
+  // Every close goes through here. Radix only calls onOpenChange for closes it
+  // initiates, so a programmatic setDialogOpen(false) would skip the reset and
+  // leave the next open holding this session's start time, bound row and
+  // editingId.
+  const closeDialog = () => {
+    setDialogOpen(false);
+    resetForm();
+    bindActiveRow(null);
   };
 
   const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
@@ -224,9 +265,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const handleDelete = () => {
     const row = logs?.find((l) => l.id === editingId);
     if (!row) return;
-    setDialogOpen(false);
-    resetForm();
-    setActiveRow(null);
+    closeDialog();
     deleteLog.mutate(row, {
       onSuccess: () => {
         // Deleting an in-progress timer feed must also cancel its scheduled
@@ -249,7 +288,11 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     setReactionNoted(log.reaction_noted || false);
     setReactionDescription(log.reaction_description || "");
     setNotes(log.notes || "");
-    setLoggedAt(new Date(log.logged_at));
+    // Edit mode already locks every re-seeding path out (the bottle-bind effect
+    // returns on editingId, the timer returns on editMode), so this doesn't need
+    // to arm the flag — and arming it would outlive the dialog on any close that
+    // skipped the reset.
+    setDerivedStart(new Date(log.logged_at));
     setDialogOpen(true);
   };
 
@@ -315,9 +358,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     onSuccess: () => {
       invalidateAfterLogWrite(queryClient);
       queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", activeChild?.id] });
-      setDialogOpen(false);
-      resetForm();
-      setActiveRow(null);
+      closeDialog();
       toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼" });
     },
     onError: (err) => {
@@ -365,11 +406,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
         <Dialog
           open={dialogOpen}
           onOpenChange={(open) => {
-            setDialogOpen(open);
-            if (!open) {
-              resetForm();
-              setActiveRow(null);
-            }
+            if (open) setDialogOpen(true);
+            else closeDialog();
           }}
         >
           <DialogTrigger asChild>
@@ -396,7 +434,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   side={side}
                   onSideChange={setSide}
                   onDurationChange={handleTimerDuration}
-                  onStartAtChange={setLoggedAt}
+                  onTimerStartAt={setDerivedStart}
+                  onPastStartApplied={setAuthoredStart}
                   onActiveRowChange={handleActiveRowChange}
                   initialMinutes={durationMin ? Number(durationMin) : undefined}
                   editMode={!!editingId}
@@ -482,8 +521,10 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                       size="sm"
                       className="gap-1.5 text-xs text-feeding hover:text-feeding/80 px-0"
                       onClick={() => {
+                        // The draft above is what crosses the tab switch, and
+                        // pendingResume puts it back on the way in.
                         onNavigateToAllergens({ foodDesc, foodCategory, reactionNoted, reactionDescription, notes });
-                        setDialogOpen(false);
+                        closeDialog();
                       }}
                     >
                       <ShieldAlert className="w-3.5 h-3.5" />
@@ -494,7 +535,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               )}
 
               <div className="space-y-1">
-                <MobileDateTimePicker value={loggedAt} onChange={setLoggedAt} maxDate={new Date()} label="Started" />
+                <MobileDateTimePicker value={loggedAt} onChange={setAuthoredStart} maxDate={new Date()} label="Started" />
               </div>
 
               <div className="space-y-1">
@@ -507,7 +548,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   type="button"
                   variant="outline"
                   className="flex-1 touch-target"
-                  onClick={() => setDialogOpen(false)}
+                  onClick={closeDialog}
                   disabled={saveMutation.isPending}
                 >
                   Cancel
