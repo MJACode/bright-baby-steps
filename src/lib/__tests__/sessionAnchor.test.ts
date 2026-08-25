@@ -3,8 +3,10 @@ import {
   customDurationMin,
   defaultStartAt,
   deriveEnd,
+  elapsedMinutes,
   floorTo5Min,
   formatEndLine,
+  validateInProgressStart,
   validateSession,
 } from "@/lib/sessionAnchor";
 import { useSessionAnchor } from "@/hooks/useSessionAnchor";
@@ -481,5 +483,63 @@ describe("customDurationMin", () => {
     expect(v.error).toBeNull();
     expect(v.helper).toBe("Pick how long it lasted.");
     expect(v.canSave).toBe(false);
+  });
+});
+
+describe("validateInProgressStart", () => {
+  const now = new Date(2026, 5, 10, 15, 0, 0);
+  const args = { now, softMaxMin: 14 * 60, hardMaxMin: 24 * 60 };
+
+  it("saves a start that's hours back — an open-ended sleep has no length to pick", () => {
+    const v = validateInProgressStart({ startAt: new Date(2026, 5, 10, 12, 30), ...args });
+    expect(v.error).toBeNull();
+    expect(v.warning).toBeNull();
+    expect(v.helper).toBeNull();
+    expect(v.canSave).toBe(true);
+  });
+
+  it("saves a start of right now — that's just Start Nap", () => {
+    const v = validateInProgressStart({ startAt: now, ...args });
+    expect(v.canSave).toBe(true);
+  });
+
+  it("rejects a start in the future", () => {
+    const v = validateInProgressStart({ startAt: new Date(2026, 5, 10, 15, 30), ...args });
+    expect(v.error).toEqual({ field: "start", message: "That's later than now. Pick a time up to now." });
+    expect(v.canSave).toBe(false);
+  });
+
+  it("rejects a start further back than the hard ceiling", () => {
+    const v = validateInProgressStart({ startAt: new Date(2026, 5, 9, 14, 0), ...args });
+    expect(v.error?.field).toBe("start");
+    expect(v.error?.message).toBe("That's more than a day ago. Check the time.");
+    expect(v.canSave).toBe(false);
+  });
+
+  // The row goes in with ended_at NULL, so the exclusion constraint stays quiet
+  // until Stop — hours later, when the parent can't reconstruct the times.
+  it("blocks a start that reaches back into an already-logged sleep", () => {
+    const v = validateInProgressStart({
+      startAt: new Date(2026, 5, 10, 13, 0),
+      ...args,
+      overlap: { start: new Date(2026, 5, 10, 12, 30), end: new Date(2026, 5, 10, 13, 40) },
+    });
+    expect(v.error?.message).toBe("This overlaps a sleep from 12:30 to 1:40 PM.");
+    expect(v.canSave).toBe(false);
+  });
+
+  it("warns past the soft ceiling but still saves", () => {
+    const v = validateInProgressStart({ startAt: new Date(2026, 5, 9, 22, 0), ...args });
+    expect(v.error).toBeNull();
+    expect(v.warning?.message).toBe("Still going after 17h. Save it if that's right.");
+    expect(v.canSave).toBe(true);
+  });
+});
+
+describe("elapsedMinutes", () => {
+  it("rounds to the nearest minute and never goes negative", () => {
+    const now = new Date(2026, 5, 10, 15, 0, 0);
+    expect(elapsedMinutes(new Date(2026, 5, 10, 14, 30, 20), now)).toBe(30);
+    expect(elapsedMinutes(new Date(2026, 5, 10, 15, 30), now)).toBe(0);
   });
 });

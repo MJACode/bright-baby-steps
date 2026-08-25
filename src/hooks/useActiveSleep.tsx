@@ -80,9 +80,15 @@ export function useActiveSleep(childId: string | undefined) {
   const invalidateActive = () => queryClient.invalidateQueries({ queryKey: activeKey });
 
   const start = useMutation({
-    mutationFn: async (input: { sleep_type: SleepType; startedMinutesAgo?: number }) => {
+    mutationFn: async (input: {
+      sleep_type: SleepType;
+      startedMinutesAgo?: number;
+      // Exact start for "they've been asleep since 3:40 and I forgot to hit
+      // Start" — the offset chips can't reach an arbitrary time.
+      startedAt?: Date;
+    }) => {
       const offsetMs = (input.startedMinutesAgo ?? 0) * 60_000;
-      const startedAt = new Date(Date.now() - offsetMs).toISOString();
+      const startedAt = (input.startedAt ?? new Date(Date.now() - offsetMs)).toISOString();
       const { data, error } = await supabase
         .from("sleep_logs")
         .insert({

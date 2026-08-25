@@ -724,7 +724,7 @@ export default function SleepPage() {
                 <p className="font-bold text-xs mb-1.5">How to use this page</p>
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
-                  <p>Forgot to start the timer? Tap <strong>Add past nap</strong> and enter when it started and how long it lasted.</p>
+                  <p>Forgot to start the timer? Tap <strong>Log earlier nap</strong> — set when it started, then say whether they're still asleep or already up.</p>
                   <p>Tap any row under <strong>History</strong> to edit or delete it.</p>
                 </div>
               </div>

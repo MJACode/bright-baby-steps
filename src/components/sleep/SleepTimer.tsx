@@ -91,11 +91,33 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual, ch
     await onManualSubmit(startAt, endAt, pendingSleepType, notes);
   };
 
+  // Still asleep, just never hit Start: run the live timer from the moment they
+  // went down instead of asking for an end time that hasn't happened yet.
+  const handleInProgressSave = async (startAt: Date) => {
+    try {
+      await start.mutateAsync({ sleep_type: pendingSleepType, startedAt: startAt });
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      throw new Error(
+        msg.includes("one_active_sleep_per_child")
+          ? "A sleep is already running on another device."
+          : msg || "Please try again.",
+      );
+    }
+    setStartOffsetMin(0);
+    toast({
+      title: pendingSleepType === "nap" ? "Nap timer running ☀️" : "Sleep timer running 🌙",
+      description: `Started ${startAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`,
+    });
+  };
+
   const hours = Math.floor(elapsedSeconds / 3600);
   const mins = Math.floor((elapsedSeconds % 3600) / 60);
   const secs = elapsedSeconds % 60;
   const startLabel = pendingSleepType === "nap" ? "Start Nap" : "Start Sleep";
-  const pastLabel = pendingSleepType === "nap" ? "Add past nap" : "Add past sleep";
+  // Covers both halves of the sheet: one that began earlier and is still going,
+  // and one that's already over.
+  const pastLabel = pendingSleepType === "nap" ? "Log earlier nap" : "Log earlier sleep";
 
   const display = hours > 0
     ? `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
@@ -276,7 +298,8 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual, ch
       {/* Hint */}
       {!timerActive && (
         <p className="text-xs text-center text-muted-foreground">
-          Start now, or add one that already happened. The timer keeps running if you close the app.
+          Start now, or log one that began earlier — still going or already over. The timer keeps
+          running if you close the app.
         </p>
       )}
 
@@ -292,7 +315,14 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual, ch
         hardMaxMin={24 * 60}
         checkOverlap={checkOverlap}
         onSave={handlePastSave}
-        isSaving={isSavingManual}
+        inProgress={{
+          optionLabel: pendingSleepType === "nap" ? "Still napping" : "Still asleep",
+          endedOptionLabel: "Already woke up",
+          elapsedLabel: pendingSleepType === "nap" ? "Napping for" : "Asleep for",
+          saveLabel: pendingSleepType === "nap" ? "Start nap timer" : "Start sleep timer",
+          onSave: handleInProgressSave,
+        }}
+        isSaving={isSavingManual || start.isPending}
       />
     </div>
   );
