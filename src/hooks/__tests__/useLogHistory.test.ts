@@ -123,11 +123,37 @@ describe("capHistoryWindow", () => {
     expect(result.logs).toEqual(rows.slice(0, 3));
   });
 
-  it("detects a server-side cap below the row limit we asked for", () => {
+  // The server can cap its response below the limit we asked for, so a short
+  // array is no proof we hold the whole window — only `count` is. Once a count
+  // is present the row limit stops being consulted at all, which is what these
+  // three cases pin.
+  it.each([
+    { maxRows: 1000, label: "far above the rows we got" },
+    { maxRows: 2, label: "exactly the rows we got" },
+    { maxRows: undefined, label: "left at the default" },
+  ])("trusts count over a row limit that sits $label", ({ maxRows }) => {
     const rows = [row("2026-08-25T10:00:00"), row("2026-08-24T10:00:00")];
-    const result = capHistoryWindow({ rows, count: 5000, dateColumn, maxRows: 1000 });
+    const result = capHistoryWindow({ rows, count: 5000, dateColumn, maxRows });
     expect(result.truncated).toBe(true);
     expect(result.logs).toEqual([rows[0]]);
+  });
+
+  it("reads a full limit+1 fetch as whole when the count agrees", () => {
+    // The query asks for one row more than the cap so a full window is
+    // distinguishable from a capped one. count === rows.length means we hold
+    // everything, even though the array is one longer than maxRows.
+    const rows = [
+      row("2026-08-25T10:00:00"),
+      row("2026-08-24T10:00:00"),
+      row("2026-08-23T10:00:00"),
+    ];
+    expect(capHistoryWindow({ rows, count: 3, dateColumn, maxRows: 2 })).toEqual({
+      logs: rows,
+      truncated: false,
+    });
+    // With no count all we can compare is lengths, and that same fetch has to
+    // read as capped rather than silently undercounting its oldest day.
+    expect(capHistoryWindow({ rows, count: null, dateColumn, maxRows: 2 }).truncated).toBe(true);
   });
 
   it("falls back to the row count when the server sends no count", () => {
