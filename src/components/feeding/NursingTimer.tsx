@@ -62,14 +62,32 @@ export default function NursingTimer({
   editMode,
 }: NursingTimerProps) {
   const { active, start, setSide, cancel } = useActiveFeed(childId);
-  const activeIsBreast = !!active && active.feeding_type === "breast";
-  useSecondTicker(!!activeIsBreast && !!active?.active_side);
 
   // In-memory counters: the ticker when editing a completed log, and the times
   // handed back by "Add past feed" when no live row exists.
   const [editLeft, setEditLeft] = useState(() => sideSeconds(initialMinutes ?? 0, side).left);
   const [editRight, setEditRight] = useState(() => sideSeconds(initialMinutes ?? 0, side).right);
   const [editActive, setEditActive] = useState<"left" | "right" | null>(null);
+
+  // Once the parent has applied times from "Add past feed", this form describes
+  // a finished feed. A row that shows up afterwards (a partner starting one on
+  // another device, arriving on the next focus refetch) belongs to a different
+  // session — it must neither take over the face nor become the row Save writes.
+  const [pastApplied, setPastApplied] = useState(false);
+
+  // Some breast session is running on the server. Only ever used to keep the
+  // past-feed form out of the way — it stays true for a session this form
+  // doesn't own.
+  const breastRowExists = !!active && active.feeding_type === "breast";
+
+  // The one predicate for "this timer owns that row". The face, the ticker, the
+  // tap handler and the row the parent saves into all read this single value —
+  // when any of them derives liveness on its own, a tap mutates a session the
+  // face isn't showing.
+  const liveRow = !editMode && !pastApplied && breastRowExists ? active : null;
+
+  useSecondTicker(!!liveRow?.active_side);
+
   useEffect(() => {
     if (!editMode) return;
     if (!editActive) return;
@@ -80,33 +98,24 @@ export default function NursingTimer({
     return () => clearInterval(i);
   }, [editMode, editActive]);
 
-  // Once the parent has applied times from "Add past feed", this form describes
-  // a finished feed. A row that shows up afterwards (a partner starting one on
-  // another device, arriving on the next focus refetch) belongs to a different
-  // session — it must neither take over the face nor become the row Save writes.
-  const [pastApplied, setPastApplied] = useState(false);
-
-  // Notify parent when the active row changes so it can save by UPDATE.
-  // Dep on `active?.id` (not the whole `active` object) — react-query returns
-  // a new object reference on every refetch, which would fire this effect on
-  // every focus/poll and cause an unnecessary parent re-render cascade.
+  // Notify parent when the owned row changes so it can save by UPDATE.
+  // Dep on the id (not the whole row object) — react-query returns a new object
+  // reference on every refetch, which would fire this effect on every
+  // focus/poll and cause an unnecessary parent re-render cascade.
   useEffect(() => {
     if (editMode) return;
-    onActiveRowChange?.(activeIsBreast && !pastApplied ? active : null);
+    onActiveRowChange?.(liveRow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIsBreast, active?.id, onActiveRowChange, editMode, pastApplied]);
+  }, [liveRow?.id, onActiveRowChange, editMode]);
 
-  // A live row is the source of truth while one exists. Without one the
+  // The owned row is the source of truth while one exists. Without one the
   // in-memory counters drive the face, so times applied from "Add past feed"
   // are visible instead of reading 00:00 and being dropped on the next remount.
-  const showsLiveRow = !editMode && !pastApplied && activeIsBreast;
-  const leftSeconds = showsLiveRow ? elapsedSecondsForSide(active, "left") : editLeft;
-  const rightSeconds = showsLiveRow ? elapsedSecondsForSide(active, "right") : editRight;
+  const leftSeconds = liveRow ? elapsedSecondsForSide(liveRow, "left") : editLeft;
+  const rightSeconds = liveRow ? elapsedSecondsForSide(liveRow, "right") : editRight;
   const activeSide: "left" | "right" | null = editMode
     ? editActive
-    : showsLiveRow
-      ? ((active?.active_side as "left" | "right" | null) ?? null)
-      : null;
+    : ((liveRow?.active_side as "left" | "right" | null) ?? null);
   const totalSeconds = leftSeconds + rightSeconds;
 
   // Push total minutes + derived side back to the parent form so the existing
@@ -152,21 +161,29 @@ export default function NursingTimer({
       return;
     }
     if (!childId) return;
+    // A session is running that this form doesn't own — the face is showing an
+    // applied past feed. Starting would collide with the unique index and
+    // pausing would silently re-flush someone else's minutes, so do neither.
+    if (!liveRow && breastRowExists) {
+      toast({ title: "Already feeding", description: "A feed is already running on another device." });
+      return;
+    }
     try {
       // First-time start: insert active row with this side.
-      if (!activeIsBreast) {
-        await start.mutateAsync({ feeding_type: "breast", side: next });
+      if (!liveRow) {
+        const row = await start.mutateAsync({ feeding_type: "breast", side: next });
         // The live row is the face now, so anything applied from the past-feed
-        // sheet is done with. Clear it only once the insert actually landed.
+        // sheet is done with, including the start time the parent is holding.
+        // Clear it only once the insert actually landed.
         setPastApplied(false);
         setEditLeft(0);
         setEditRight(0);
+        onStartAtChange?.(new Date(row.logged_at));
         return;
       }
       // Toggling the currently-active side off pauses (active_side=null).
-      // Toggling to the other side flushes + switches. Read the side off the
-      // row, not the face — the face can be showing an applied past entry.
-      const target = active?.active_side === next ? null : next;
+      // Toggling to the other side flushes + switches.
+      const target = liveRow.active_side === next ? null : next;
       await setSide.mutateAsync({ nextSide: target });
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -178,19 +195,31 @@ export default function NursingTimer({
     }
   };
 
+  // Reset hands the parent form a blank feed, so every value this timer pushed
+  // into it has to come back too — a leftover start time or side would be saved
+  // against times the user just cleared.
+  const clearTimes = () => {
+    setEditActive(null);
+    setEditLeft(0);
+    setEditRight(0);
+    setPastApplied(false);
+    onDurationChange(0);
+    onSideChange("");
+    // In edit mode the log's own start time belongs to the dialog's date
+    // picker, and re-stamping it would move a feed logged days ago to today.
+    if (!editMode) onStartAtChange?.(new Date());
+  };
+
   const handleReset = async () => {
-    // Without a live row there's nothing on the server to cancel — clear the
+    // Without an owned row there's nothing on the server to cancel — clear the
     // in-memory counters, which is what an applied past feed put there.
-    if (!showsLiveRow) {
-      setEditActive(null);
-      setEditLeft(0);
-      setEditRight(0);
-      setPastApplied(false);
-      onDurationChange(0);
+    if (!liveRow) {
+      clearTimes();
       return;
     }
     try {
       await cancel.mutateAsync();
+      clearTimes();
     } catch (err) {
       toast({ title: "Couldn't reset", description: getErrorMessage(err), variant: "destructive" });
     }
@@ -225,13 +254,13 @@ export default function NursingTimer({
   // as the row Save overwrites. The trigger hides itself, but an already-open
   // sheet has to go too.
   useEffect(() => {
-    if (editMode || !activeIsBreast || !pastOpen) return;
+    if (editMode || !breastRowExists || !pastOpen) return;
     setPastOpen(false);
     toast({
       title: "Nursing started",
       description: "A feed is running now, so the past-feed form closed. Add it again once it ends.",
     });
-  }, [editMode, activeIsBreast, pastOpen]);
+  }, [editMode, breastRowExists, pastOpen]);
 
   return (
     <div className="space-y-3">
@@ -299,7 +328,7 @@ export default function NursingTimer({
 
       {/* Past entry — hidden whenever a breast row is live, paused included:
           the parent form binds that row and would save over it. */}
-      {(editMode ? !activeSide : !activeIsBreast) && (
+      {(editMode ? !activeSide : !breastRowExists) && (
         <Button
           type="button"
           variant="outline"

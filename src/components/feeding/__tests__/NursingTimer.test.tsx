@@ -5,7 +5,18 @@ import NursingTimer from "@/components/feeding/NursingTimer";
 import type { ActiveFeedRow } from "@/hooks/useActiveFeed";
 
 let activeRow: ActiveFeedRow | null = null;
-const startFeed = vi.fn(async () => {});
+const START_LOGGED_AT = "2026-08-25T10:41:00.000Z";
+const startFeed = vi.fn(async () => ({ ...liveRow(), id: "my-row", logged_at: START_LOGGED_AT }));
+// Module-level so assertions see the same spy the component called — building
+// these inside useActiveFeed() hands every render a fresh vi.fn().
+const setActiveSide = vi.fn(async () => {});
+const cancelFeed = vi.fn(async () => {});
+const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
+
+vi.mock("@/hooks/use-toast", () => ({
+  toast: toastSpy,
+  useToast: () => ({ toast: toastSpy, dismiss: vi.fn(), toasts: [] }),
+}));
 
 vi.mock("@/integrations/supabase/client", () => {
   const chain: Record<string, unknown> = new Proxy(
@@ -28,8 +39,8 @@ vi.mock("@/hooks/useActiveFeed", async (importOriginal) => {
     useActiveFeed: () => ({
       active: activeRow,
       start: { mutateAsync: startFeed },
-      setSide: { mutateAsync: vi.fn(async () => {}) },
-      cancel: { mutateAsync: vi.fn(async () => {}) },
+      setSide: { mutateAsync: setActiveSide },
+      cancel: { mutateAsync: cancelFeed },
     }),
   };
 });
@@ -105,6 +116,11 @@ const applyPastFeed = async (minutesLabel: string) => {
   await waitFor(() => expect(sheetState()).toBe("closed"));
 };
 
+// The past-feed drawer stays mounted after closing and aria-hides the rest of
+// the tree, so role queries can't see the timer's own buttons.
+const leftSide = () =>
+  screen.getByText((_content, el) => el?.tagName === "BUTTON" && !!el.textContent?.includes("Left"));
+
 const remountTimer = () => {
   fireEvent.click(screen.getByTestId("toggle-type"));
   fireEvent.click(screen.getByTestId("toggle-type"));
@@ -113,7 +129,19 @@ const remountTimer = () => {
 beforeEach(() => {
   activeRow = null;
   startFeed.mockClear();
+  setActiveSide.mockClear();
+  cancelFeed.mockClear();
+  toastSpy.mockClear();
 });
+
+const loggedAt = () => screen.getByTestId("logged-at").textContent ?? "";
+
+const rerenderHarness = (rerender: (ui: React.ReactElement) => void) =>
+  rerender(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <Harness />
+    </QueryClientProvider>,
+  );
 
 describe("NursingTimer past-feed entry with no live session", () => {
   it("shows the applied duration on the face and hands it to the form", async () => {
@@ -163,6 +191,31 @@ describe("NursingTimer past-feed entry with no live session", () => {
     expect(screen.getByTestId("duration")).toHaveTextContent("");
     expect(screen.getByText("Tap a side to start")).toBeInTheDocument();
   });
+
+  it("clears the applied start time and side on Reset", async () => {
+    renderHarness();
+    await applyPastFeed("30m");
+    const applied = loggedAt();
+    expect(screen.getByTestId("side")).toHaveTextContent("left");
+
+    fireEvent.click(screen.getByText("Reset"));
+
+    // Both were pushed to the parent by the past feed; a cleared form must not
+    // keep saving against them.
+    expect(screen.getByTestId("side").textContent).toBe("");
+    expect(new Date(loggedAt()).getTime()).toBeGreaterThan(new Date(applied).getTime() + 60_000);
+  });
+
+  it("moves the form's start time to the row a started feed inserted", async () => {
+    renderHarness();
+    await applyPastFeed("30m");
+    expect(loggedAt()).not.toBe(START_LOGGED_AT);
+
+    fireEvent.click(leftSide());
+
+    await waitFor(() => expect(loggedAt()).toBe(START_LOGGED_AT));
+    expect(startFeed).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("NursingTimer when a feed starts on another device", () => {
@@ -171,11 +224,7 @@ describe("NursingTimer when a feed starts on another device", () => {
     await openPastSheet();
 
     activeRow = liveRow();
-    rerender(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <Harness />
-      </QueryClientProvider>,
-    );
+    rerenderHarness(rerender);
 
     await waitFor(() => expect(sheetState()).toBe("closed"));
   });
@@ -185,11 +234,7 @@ describe("NursingTimer when a feed starts on another device", () => {
     await applyPastFeed("30m");
 
     activeRow = liveRow();
-    rerender(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <Harness />
-      </QueryClientProvider>,
-    );
+    rerenderHarness(rerender);
 
     // Saving must insert a new row, not overwrite the session still running.
     expect(screen.getByTestId("bound")).toHaveTextContent("none");
@@ -197,15 +242,30 @@ describe("NursingTimer when a feed starts on another device", () => {
     expect(screen.getAllByText("30:00").length).toBeGreaterThan(0);
   });
 
+  it("does not touch that row when a side is tapped", async () => {
+    const { rerender } = renderHarness();
+    await applyPastFeed("30m");
+
+    activeRow = liveRow();
+    rerenderHarness(rerender);
+
+    fireEvent.click(leftSide());
+
+    // The face is showing the applied past feed, so a tap must not pause or
+    // re-flush the session it isn't showing.
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "Already feeding" })),
+    );
+    expect(setActiveSide).not.toHaveBeenCalled();
+    expect(startFeed).not.toHaveBeenCalled();
+    expect(screen.getAllByText("30:00").length).toBeGreaterThan(0);
+  });
+
   it("binds the live row when no past times were applied", async () => {
     const { rerender } = renderHarness();
 
     activeRow = liveRow();
-    rerender(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <Harness />
-      </QueryClientProvider>,
-    );
+    rerenderHarness(rerender);
 
     await waitFor(() => expect(screen.getByTestId("bound")).toHaveTextContent("partner-row"));
     expect(screen.getByText("Nursing on left...")).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,6 +188,10 @@ export function PastSessionSheet({
             >
               {title}
             </DrawerTitle>
+            <DrawerDescription className="sr-only">
+              Set when it started and how long it lasted. The button showing the end time expands so you
+              can set that instead.
+            </DrawerDescription>
           </DrawerHeader>
 
           {detail}

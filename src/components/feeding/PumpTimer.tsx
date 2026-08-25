@@ -47,13 +47,17 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { active, start, setSide, stop, cancel } = useActiveFeed(childId);
-  const activeIsPump = !!active && active.feeding_type === "pump";
-  useSecondTicker(!!activeIsPump && !!active?.active_side);
+  // The one predicate for "this timer owns that row" — the active feed can be a
+  // nursing or bottle session. The face, the ticker and every handler read this
+  // single value; reading the running side off `active` directly showed
+  // "Pumping left..." for a nursing session.
+  const pumpRow = active?.feeding_type === "pump" ? active : null;
+  useSecondTicker(!!pumpRow?.active_side);
 
-  const leftSeconds = activeIsPump && active ? elapsedSecondsForSide(active, "left") : 0;
-  const rightSeconds = activeIsPump && active ? elapsedSecondsForSide(active, "right") : 0;
-  const bothSeconds = activeIsPump && active ? elapsedSecondsBoth(active) : 0;
-  const activeSide = (active?.active_side as FeedingSide | null) ?? null;
+  const leftSeconds = elapsedSecondsForSide(pumpRow, "left");
+  const rightSeconds = elapsedSecondsForSide(pumpRow, "right");
+  const bothSeconds = elapsedSecondsBoth(pumpRow);
+  const activeSide = (pumpRow?.active_side as FeedingSide | null) ?? null;
   // Sequential pumps (right then left) accumulate as left + right. While "both"
   // is active, the same wall-clock segment ticks both sides in parallel, so it
   // appears in both leftSeconds and rightSeconds — subtract bothSeconds once to
@@ -70,7 +74,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   const onTap = async (next: FeedingSide) => {
     if (!childId) return;
     try {
-      if (!activeIsPump) {
+      if (!pumpRow) {
         await start.mutateAsync({ feeding_type: "pump", side: next });
         return;
       }
@@ -87,7 +91,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   };
 
   const onPause = async () => {
-    if (!activeIsPump) return;
+    if (!pumpRow) return;
     try {
       await setSide.mutateAsync({ nextSide: null });
     } catch (err) {
@@ -96,7 +100,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   };
 
   const onReset = async () => {
-    if (!activeIsPump) return;
+    if (!pumpRow) return;
     try {
       await cancel.mutateAsync();
       setShowStopForm(false);
@@ -108,7 +112,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
   };
 
   const onSave = async () => {
-    if (!activeIsPump) return;
+    if (!pumpRow) return;
     const leftOz = amountLeft ? parseFloat(amountLeft) : null;
     const rightOz = amountRight ? parseFloat(amountRight) : null;
     const totalOz =
@@ -272,7 +276,7 @@ export default function PumpTimer({ childId }: PumpTimerProps) {
           </div>
         )}
 
-        {!activeIsPump && !showStopForm && (
+        {!pumpRow && !showStopForm && (
           <Button
             type="button"
             variant="outline"
