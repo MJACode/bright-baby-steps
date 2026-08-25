@@ -9,9 +9,11 @@ import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { useSessionAnchor } from "@/hooks/useSessionAnchor";
 import {
   customDurationMin,
+  elapsedMinutes,
   formatDurationShort,
   formatDurationSpoken,
   formatEndLine,
+  validateInProgressStart,
   validateSession,
 } from "@/lib/sessionAnchor";
 import { getErrorMessage } from "@/lib/handleRlsError";
@@ -22,6 +24,24 @@ export type PastSessionValue = {
   endAt: Date;
   durationMin: number;
   notes: string;
+};
+
+/**
+ * Opt-in second mode for logs that haven't finished yet: the parent sets only a
+ * start time and the consumer starts a live timer from it. Consumers that have
+ * nowhere to put a running session (the feeding forms) simply omit the prop and
+ * the sheet stays a completed-session form.
+ */
+export type InProgressOption = {
+  /** Segmented-control label for the still-happening choice, e.g. "Still napping". */
+  optionLabel: string;
+  /** Segmented-control label for the completed choice, e.g. "Already woke up". */
+  endedOptionLabel: string;
+  /** Prefix for the live readout, e.g. "Napping for" -> "Napping for 1h 15m". */
+  elapsedLabel: string;
+  /** Primary-button label, e.g. "Start nap timer". */
+  saveLabel: string;
+  onSave: (startAt: Date) => Promise<void>;
 };
 
 type PastSessionSheetProps = {
@@ -37,6 +57,7 @@ type PastSessionSheetProps = {
   detail?: React.ReactNode;
   checkOverlap?: (start: Date, end: Date) => { start: Date; end: Date } | null;
   onSave: (v: PastSessionValue) => Promise<void>;
+  inProgress?: InProgressOption;
   isSaving?: boolean;
   // Off when the consuming form already owns a Notes field — two of them in one
   // flow leaves the parent guessing which one gets saved.
@@ -56,6 +77,7 @@ export function PastSessionSheet({
   detail,
   checkOverlap,
   onSave,
+  inProgress,
   isSaving,
   showNotes = true,
 }: PastSessionSheetProps) {
@@ -66,10 +88,13 @@ export function PastSessionSheet({
 
   const titleRef = useRef<HTMLHeadingElement>(null);
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const modeRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [endMode, setEndMode] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [customHours, setCustomHours] = useState("");
   const [customMinutes, setCustomMinutes] = useState("");
+  const [mode, setMode] = useState<"ended" | "in_progress">("ended");
+  const [now, setNow] = useState(() => new Date());
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -79,6 +104,7 @@ export function PastSessionSheet({
   useEffect(() => {
     if (open && !wasOpen.current) {
       setEndMode(false);
+      setMode("ended");
       setCustomOpen(false);
       setCustomHours("");
       setCustomMinutes("");
@@ -110,29 +136,71 @@ export function PastSessionSheet({
     wasOther.current = isOther;
   }, [isOther, durationMin]);
 
-  const overlap = checkOverlap && durationMin > 0 ? checkOverlap(startAt, endAt) : null;
-  const { error, warning, helper, canSave } = validateSession({
-    startAt,
-    endAt,
-    durationMin,
-    now: new Date(),
-    softMaxMin,
-    hardMaxMin,
-    overlap,
-  });
+  const inProgressMode = !!inProgress && mode === "in_progress";
+
+  // The live readout and the "is this start still in the past" check both need a
+  // `now` that moves. Only tick in the in-progress mode that reads it — a
+  // re-render every 30s under the duration wheels would fight a flick in
+  // progress for nothing.
+  useEffect(() => {
+    if (!open || !inProgressMode) return;
+    setNow(new Date());
+    const i = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(i);
+  }, [open, inProgressMode]);
+
+  // An in-progress sleep is open-ended, so it collides with anything already
+  // logged after its start. Checking start->now covers that: a log ending later
+  // than now can't exist.
+  const overlap = !checkOverlap
+    ? null
+    : inProgressMode
+      ? checkOverlap(startAt, now)
+      : durationMin > 0
+        ? checkOverlap(startAt, endAt)
+        : null;
+
+  const { error, warning, helper, canSave } = inProgressMode
+    ? validateInProgressStart({ startAt, now, softMaxMin, hardMaxMin, overlap })
+    : validateSession({
+        startAt,
+        endAt,
+        durationMin,
+        now: new Date(),
+        softMaxMin,
+        hardMaxMin,
+        overlap,
+      });
 
   const endLine = formatEndLine(startAt, endAt);
+  const elapsedMin = elapsedMinutes(startAt, now);
 
   // WheelColumn commits every 120ms during a flick; announcing each commit
   // floods VoiceOver, so only speak once the parent has settled.
   const [announcement, setAnnouncement] = useState("");
+  const spokenSummary = inProgressMode
+    ? `${inProgress!.elapsedLabel} ${formatDurationSpoken(elapsedMin)}.`
+    : `${endLine}. ${formatDurationSpoken(durationMin)}.`;
   useEffect(() => {
-    const t = setTimeout(
-      () => setAnnouncement(`${endLine}. ${formatDurationSpoken(durationMin)}.`),
-      400,
-    );
+    const t = setTimeout(() => setAnnouncement(spokenSummary), 400);
     return () => clearTimeout(t);
-  }, [endLine, durationMin]);
+  }, [spokenSummary]);
+
+  const modeOptions = inProgress
+    ? ([
+        { value: "in_progress" as const, label: inProgress.optionLabel },
+        { value: "ended" as const, label: inProgress.endedOptionLabel },
+      ])
+    : [];
+
+  const handleModeKeyDown = (e: React.KeyboardEvent) => {
+    if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(e.key)) return;
+    e.preventDefault();
+    const next = modeOptions.find((o) => o.value !== mode);
+    if (!next) return;
+    setMode(next.value);
+    modeRefs.current[modeOptions.indexOf(next)]?.focus();
+  };
 
   const selectChip = (index: number) => {
     if (index === durationPresets.length) {
@@ -164,7 +232,8 @@ export function PastSessionSheet({
   const handleSave = async () => {
     setSaveError(null);
     try {
-      await onSave({ startAt, endAt, durationMin, notes });
+      if (inProgressMode) await inProgress!.onSave(startAt);
+      else await onSave({ startAt, endAt, durationMin, notes });
       onOpenChange(false);
     } catch (err) {
       setSaveError(getErrorMessage(err, "Something went wrong. Please try again."));
@@ -189,10 +258,48 @@ export function PastSessionSheet({
               {title}
             </DrawerTitle>
             <DrawerDescription className="sr-only">
-              Set when it started and how long it lasted. The button showing the end time expands so you
-              can set that instead.
+              {inProgress
+                ? "Choose whether it's still going or already over, then set when it started. For one that's over, the button showing the end time expands so you can set that instead."
+                : "Set when it started and how long it lasted. The button showing the end time expands so you can set that instead."}
             </DrawerDescription>
           </DrawerHeader>
+
+          {inProgress && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground" id="past-session-mode-label">
+                Where is it now?
+              </p>
+              <div
+                role="radiogroup"
+                aria-labelledby="past-session-mode-label"
+                onKeyDown={handleModeKeyDown}
+                className="grid grid-cols-2 gap-2"
+              >
+                {modeOptions.map((option, i) => {
+                  const checked = mode === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      ref={(el) => { modeRefs.current[i] = el; }}
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      tabIndex={checked ? 0 : -1}
+                      onClick={() => setMode(option.value)}
+                      className={cn(
+                        "min-h-[48px] px-3 rounded-full text-sm font-semibold transition-colors",
+                        checked
+                          ? cn(accentClass, "text-white")
+                          : "bg-muted text-foreground hover:bg-muted/70",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {detail}
 
@@ -203,7 +310,7 @@ export function PastSessionSheet({
             <MobileDateTimePicker value={startAt} onChange={setStartAt} maxDate={new Date()} label="Started" />
           </div>
 
-          {endMode && (
+          {endMode && !inProgressMode && (
             <div
               aria-invalid={error?.field === "end" || undefined}
               aria-describedby={describedBy("end")}
@@ -218,105 +325,114 @@ export function PastSessionSheet({
             </div>
           )}
 
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground" id="past-session-duration-label">
-              How long
-            </p>
-            <div
-              role="radiogroup"
-              aria-labelledby="past-session-duration-label"
-              aria-describedby={describedBy("duration") ?? (helper ? helperId : undefined)}
-              onKeyDown={handleChipKeyDown}
-              className="flex flex-wrap gap-2"
-            >
-              {durationPresets.map((preset, i) => {
-                const checked = selectedIndex === i;
-                return (
+          {inProgressMode ? (
+            <div className="flex min-h-[48px] items-center justify-center rounded-xl bg-muted/60 px-4 text-sm font-semibold text-foreground">
+              {inProgress!.elapsedLabel} {formatDurationShort(elapsedMin)}
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground" id="past-session-duration-label">
+                  How long
+                </p>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="past-session-duration-label"
+                  aria-describedby={describedBy("duration") ?? (helper ? helperId : undefined)}
+                  onKeyDown={handleChipKeyDown}
+                  className="flex flex-wrap gap-2"
+                >
+                  {durationPresets.map((preset, i) => {
+                    const checked = selectedIndex === i;
+                    return (
+                      <button
+                        key={preset}
+                        ref={(el) => { chipRefs.current[i] = el; }}
+                        type="button"
+                        role="radio"
+                        aria-checked={checked}
+                        tabIndex={checked ? 0 : -1}
+                        onClick={() => selectChip(i)}
+                        className={cn(
+                          "min-h-[48px] min-w-[48px] px-4 rounded-full text-sm font-semibold transition-colors",
+                          checked
+                            ? cn(accentClass, "text-white")
+                            : "bg-muted text-foreground hover:bg-muted/70",
+                        )}
+                      >
+                        {formatDurationShort(preset)}
+                      </button>
+                    );
+                  })}
                   <button
-                    key={preset}
-                    ref={(el) => { chipRefs.current[i] = el; }}
+                    ref={(el) => { chipRefs.current[durationPresets.length] = el; }}
                     type="button"
                     role="radio"
-                    aria-checked={checked}
-                    tabIndex={checked ? 0 : -1}
-                    onClick={() => selectChip(i)}
+                    aria-checked={isOther}
+                    tabIndex={isOther ? 0 : -1}
+                    onClick={() => selectChip(durationPresets.length)}
                     className={cn(
                       "min-h-[48px] min-w-[48px] px-4 rounded-full text-sm font-semibold transition-colors",
-                      checked
-                        ? cn(accentClass, "text-white")
-                        : "bg-muted text-foreground hover:bg-muted/70",
+                      isOther ? cn(accentClass, "text-white") : "bg-muted text-foreground hover:bg-muted/70",
                     )}
                   >
-                    {formatDurationShort(preset)}
+                    Other
                   </button>
-                );
-              })}
-              <button
-                ref={(el) => { chipRefs.current[durationPresets.length] = el; }}
-                type="button"
-                role="radio"
-                aria-checked={isOther}
-                tabIndex={isOther ? 0 : -1}
-                onClick={() => selectChip(durationPresets.length)}
-                className={cn(
-                  "min-h-[48px] min-w-[48px] px-4 rounded-full text-sm font-semibold transition-colors",
-                  isOther ? cn(accentClass, "text-white") : "bg-muted text-foreground hover:bg-muted/70",
+                </div>
+
+                {isOther && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-1">
+                      <Label htmlFor="past-session-hours" className="text-xs font-semibold">
+                        Hours
+                      </Label>
+                      <Input
+                        id="past-session-hours"
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        value={customHours}
+                        onChange={(e) => applyCustom(e.target.value, customMinutes)}
+                        placeholder="0"
+                        className="h-12 text-base md:text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="past-session-minutes" className="text-xs font-semibold">
+                        Minutes
+                      </Label>
+                      <Input
+                        id="past-session-minutes"
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        value={customMinutes}
+                        onChange={(e) => applyCustom(customHours, e.target.value)}
+                        placeholder="0"
+                        className="h-12 text-base md:text-sm"
+                      />
+                    </div>
+                  </div>
                 )}
-              >
-                Other
-              </button>
-            </div>
-
-            {isOther && (
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <div className="space-y-1">
-                  <Label htmlFor="past-session-hours" className="text-xs font-semibold">
-                    Hours
-                  </Label>
-                  <Input
-                    id="past-session-hours"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={customHours}
-                    onChange={(e) => applyCustom(e.target.value, customMinutes)}
-                    placeholder="0"
-                    className="h-12 text-base md:text-sm"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="past-session-minutes" className="text-xs font-semibold">
-                    Minutes
-                  </Label>
-                  <Input
-                    id="past-session-minutes"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={customMinutes}
-                    onChange={(e) => applyCustom(customHours, e.target.value)}
-                    placeholder="0"
-                    className="h-12 text-base md:text-sm"
-                  />
-                </div>
               </div>
-            )}
-          </div>
 
-          <div>
-            <button
-              type="button"
-              onClick={() => setEndMode((v) => !v)}
-              aria-expanded={endMode}
-              className="flex w-full min-h-[48px] items-center justify-center gap-1.5 rounded-lg text-sm font-semibold text-foreground hover:bg-muted/60 transition-colors"
-            >
-              {endLine}
-              <ChevronDown className={cn("w-4 h-4 transition-transform", endMode && "rotate-180")} />
-            </button>
-            <span className="sr-only" aria-live="polite" aria-atomic="true">
-              {announcement}
-            </span>
-          </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setEndMode((v) => !v)}
+                  aria-expanded={endMode}
+                  className="flex w-full min-h-[48px] items-center justify-center gap-1.5 rounded-lg text-sm font-semibold text-foreground hover:bg-muted/60 transition-colors"
+                >
+                  {endLine}
+                  <ChevronDown className={cn("w-4 h-4 transition-transform", endMode && "rotate-180")} />
+                </button>
+              </div>
+            </>
+          )}
+
+          <span className="sr-only" aria-live="polite" aria-atomic="true">
+            {announcement}
+          </span>
 
           {error && (
             <p id={errorId} role="alert" className="text-sm text-destructive">
@@ -330,7 +446,7 @@ export function PastSessionSheet({
             </p>
           )}
 
-          {!showNotes ? null : notesOpen ? (
+          {!showNotes || inProgressMode ? null : notesOpen ? (
             <div className="space-y-1">
               <Label htmlFor="past-session-notes" className="text-xs font-semibold">
                 Notes
@@ -378,7 +494,7 @@ export function PastSessionSheet({
             onClick={handleSave}
             disabled={!canSave || isSaving}
           >
-            {isSaving ? "Saving..." : saveLabel}
+            {isSaving ? "Saving..." : inProgressMode ? inProgress!.saveLabel : saveLabel}
           </Button>
         </div>
       </DrawerContent>

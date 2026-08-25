@@ -128,3 +128,56 @@ export function validateSession({
     canSave: !error && durationMin > 0,
   };
 }
+
+// --- In-progress entry -------------------------------------------------------
+// "It started at 3:40 and they're still asleep." There's no end time to author
+// yet, so the only thing to validate is the start: it can't be in the future,
+// can't be so far back that it's obviously a mis-scroll, and can't reach back
+// into a sleep that's already logged (the exclusion constraint would reject the
+// row on Stop, hours later, when the parent can no longer fix it).
+
+export function elapsedMinutes(startAt: Date, now: Date): number {
+  return Math.max(0, Math.round((now.getTime() - startAt.getTime()) / 60_000));
+}
+
+export type ValidateInProgressArgs = {
+  startAt: Date;
+  now: Date;
+  softMaxMin: number;
+  hardMaxMin: number;
+  overlap?: { start: Date; end: Date } | null;
+};
+
+export function validateInProgressStart({
+  startAt,
+  now,
+  softMaxMin,
+  hardMaxMin,
+  overlap,
+}: ValidateInProgressArgs): SessionValidation {
+  const elapsed = elapsedMinutes(startAt, now);
+
+  let error: SessionIssue | null = null;
+  if (startAt.getTime() > now.getTime()) {
+    error = { field: "start", message: "That's later than now. Pick a time up to now." };
+  } else if (elapsed > hardMaxMin) {
+    error = { field: "start", message: `That's more than ${ceilingLabel(hardMaxMin)} ago. Check the time.` };
+  } else if (overlap) {
+    error = {
+      field: "start",
+      message: `This overlaps a sleep from ${formatOverlapRange(overlap.start, overlap.end)}.`,
+    };
+  }
+
+  const warning =
+    !error && elapsed > softMaxMin
+      ? {
+          field: "start" as const,
+          message: `Still going after ${formatDurationShort(elapsed)}. Save it if that's right.`,
+        }
+      : null;
+
+  // A start of "right now" is a perfectly good in-progress entry — it's just
+  // Start Nap — so unlike a completed session there's no minimum to clear.
+  return { error, warning, helper: null, canSave: !error };
+}
