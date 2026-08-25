@@ -4,17 +4,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
-import { format } from "date-fns";
+import { format, startOfDay } from "date-fns";
 
 interface MobileDateTimePickerProps {
   value: Date;
   onChange: (date: Date) => void;
   maxDate?: Date;
+  minDate?: Date;
   label?: string;
   className?: string;
 }
 
-const ITEM_HEIGHT = 40; // px per row
+const ITEM_HEIGHT = 48; // px per row — the rows are tap targets (WCAG 2.5.8)
 const VISIBLE_ROWS = 3; // rows shown at once (center row is the selection)
 const COLUMN_HEIGHT = ITEM_HEIGHT * VISIBLE_ROWS;
 const PAD = (COLUMN_HEIGHT - ITEM_HEIGHT) / 2; // spacer so first/last item can center
@@ -150,6 +151,7 @@ export function MobileDateTimePicker({
   value,
   onChange,
   maxDate,
+  minDate,
   label,
   className,
 }: MobileDateTimePickerProps) {
@@ -192,7 +194,7 @@ export function MobileDateTimePicker({
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-start text-left font-normal h-10"
+            className="w-full justify-start text-left font-normal h-12"
           >
             <CalendarIcon className="w-4 h-4 mr-2 text-muted-foreground" />
             {format(value, "EEE, MMM d, yyyy")}
@@ -203,9 +205,12 @@ export function MobileDateTimePicker({
             mode="single"
             selected={value}
             onSelect={handleDateSelect}
-            disabled={(date) =>
-              maxDate ? date > maxDate : date > new Date()
-            }
+            disabled={(date) => {
+              if (maxDate ? date > maxDate : date > new Date()) return true;
+              // react-day-picker hands us midnight, so compare at day
+              // granularity or the start's own day would be disabled.
+              return minDate ? date < startOfDay(minDate) : false;
+            }}
             initialFocus
             className="p-3 pointer-events-auto"
           />

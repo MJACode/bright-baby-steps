@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Play, Pause, RotateCcw, ChevronDown, Clock } from "lucide-react";
+import { Play, Pause, RotateCcw, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -13,12 +11,20 @@ import {
   type ActiveFeedRow,
 } from "@/hooks/useActiveFeed";
 import { getErrorMessage } from "@/lib/handleRlsError";
+import { supabase } from "@/integrations/supabase/client";
+import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+
+const NURSING_PRESETS = [5, 10, 15, 20, 25, 30];
+const PAST_FEED_TITLE = "Add past feed";
 
 interface NursingTimerProps {
   childId: string | undefined;
   side: string;
   onSideChange: (side: string) => void;
   onDurationChange: (minutes: number) => void;
+  // The sheet fills the parent dialog's form rather than writing a row — the
+  // dialog's own Save button still owns the insert, so there's one save path.
+  onStartAtChange?: (startAt: Date) => void;
   onActiveRowChange?: (row: ActiveFeedRow | null) => void;
   // When editing an existing completed log, the parent passes the existing
   // duration in minutes. The timer ignores the active-session flow in that case.
@@ -35,23 +41,53 @@ function formatTime(totalSeconds: number) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+// Splitting "both" down the middle is what an applied past feed does, so the
+// same split has to seed the counters on remount (Bottle → Breast re-mounts
+// this component) or the side derives back down to "left".
+function sideSeconds(totalMinutes: number, side: string): { left: number; right: number } {
+  const seconds = Math.max(0, Math.round(totalMinutes)) * 60;
+  if (side === "right") return { left: 0, right: seconds };
+  if (side === "both") return { left: seconds / 2, right: seconds / 2 };
+  return { left: seconds, right: 0 };
+}
+
 export default function NursingTimer({
   childId,
   side,
   onSideChange,
   onDurationChange,
+  onStartAtChange,
   onActiveRowChange,
   initialMinutes,
   editMode,
 }: NursingTimerProps) {
   const { active, start, setSide, cancel } = useActiveFeed(childId);
-  const activeIsBreast = !!active && active.feeding_type === "breast";
-  useSecondTicker(!!activeIsBreast && !!active?.active_side);
 
-  // Edit-mode fallback: keep the old in-memory ticker for editing a completed log.
-  const [editLeft, setEditLeft] = useState(initialMinutes && side !== "right" ? initialMinutes * 60 : 0);
-  const [editRight, setEditRight] = useState(initialMinutes && side === "right" ? initialMinutes * 60 : 0);
+  // In-memory counters: the ticker when editing a completed log, and the times
+  // handed back by "Add past feed" when no live row exists.
+  const [editLeft, setEditLeft] = useState(() => sideSeconds(initialMinutes ?? 0, side).left);
+  const [editRight, setEditRight] = useState(() => sideSeconds(initialMinutes ?? 0, side).right);
   const [editActive, setEditActive] = useState<"left" | "right" | null>(null);
+
+  // Once the parent has applied times from "Add past feed", this form describes
+  // a finished feed. A row that shows up afterwards (a partner starting one on
+  // another device, arriving on the next focus refetch) belongs to a different
+  // session — it must neither take over the face nor become the row Save writes.
+  const [pastApplied, setPastApplied] = useState(false);
+
+  // Some breast session is running on the server. Only ever used to keep the
+  // past-feed form out of the way — it stays true for a session this form
+  // doesn't own.
+  const breastRowExists = !!active && active.feeding_type === "breast";
+
+  // The one predicate for "this timer owns that row". The face, the ticker, the
+  // tap handler and the row the parent saves into all read this single value —
+  // when any of them derives liveness on its own, a tap mutates a session the
+  // face isn't showing.
+  const liveRow = !editMode && !pastApplied && breastRowExists ? active : null;
+
+  useSecondTicker(!!liveRow?.active_side);
+
   useEffect(() => {
     if (!editMode) return;
     if (!editActive) return;
@@ -62,29 +98,24 @@ export default function NursingTimer({
     return () => clearInterval(i);
   }, [editMode, editActive]);
 
-  // Notify parent when the active row changes so it can save by UPDATE.
-  // Dep on `active?.id` (not the whole `active` object) — react-query returns
-  // a new object reference on every refetch, which would fire this effect on
-  // every focus/poll and cause an unnecessary parent re-render cascade.
+  // Notify parent when the owned row changes so it can save by UPDATE.
+  // Dep on the id (not the whole row object) — react-query returns a new object
+  // reference on every refetch, which would fire this effect on every
+  // focus/poll and cause an unnecessary parent re-render cascade.
   useEffect(() => {
     if (editMode) return;
-    onActiveRowChange?.(activeIsBreast ? active : null);
+    onActiveRowChange?.(liveRow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIsBreast, active?.id, onActiveRowChange, editMode]);
+  }, [liveRow?.id, onActiveRowChange, editMode]);
 
-  const leftSeconds = editMode
-    ? editLeft
-    : activeIsBreast
-      ? elapsedSecondsForSide(active, "left")
-      : 0;
-  const rightSeconds = editMode
-    ? editRight
-    : activeIsBreast
-      ? elapsedSecondsForSide(active, "right")
-      : 0;
+  // The owned row is the source of truth while one exists. Without one the
+  // in-memory counters drive the face, so times applied from "Add past feed"
+  // are visible instead of reading 00:00 and being dropped on the next remount.
+  const leftSeconds = liveRow ? elapsedSecondsForSide(liveRow, "left") : editLeft;
+  const rightSeconds = liveRow ? elapsedSecondsForSide(liveRow, "right") : editRight;
   const activeSide: "left" | "right" | null = editMode
     ? editActive
-    : ((active?.active_side as "left" | "right" | null) ?? null);
+    : ((liveRow?.active_side as "left" | "right" | null) ?? null);
   const totalSeconds = leftSeconds + rightSeconds;
 
   // Push total minutes + derived side back to the parent form so the existing
@@ -101,9 +132,28 @@ export default function NursingTimer({
     if (derived && derived !== side) onSideChange(derived);
   }, [leftSeconds, rightSeconds, side, onSideChange]);
 
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualMinutes, setManualMinutes] = useState("");
-  const [manualSide, setManualSide] = useState<"left" | "right" | "both">("left");
+  const [pastOpen, setPastOpen] = useState(false);
+  const [pastSide, setPastSide] = useState<"left" | "right" | "both">("left");
+
+  // Babies alternate sides, so the most useful default is the opposite of the
+  // last side on record. This key is already in the canonical invalidation list.
+  const { data: lastSide } = useQuery({
+    queryKey: ["last-nursing-side", childId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("feeding_logs")
+        .select("side")
+        .eq("child_id", childId!)
+        .eq("feeding_type", "breast")
+        .in("side", ["left", "right"])
+        .order("logged_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.side as "left" | "right" | null) ?? null;
+    },
+    enabled: !!childId,
+  });
 
   const toggleSide = async (next: "left" | "right") => {
     if (editMode) {
@@ -111,15 +161,29 @@ export default function NursingTimer({
       return;
     }
     if (!childId) return;
+    // A session is running that this form doesn't own — the face is showing an
+    // applied past feed. Starting would collide with the unique index and
+    // pausing would silently re-flush someone else's minutes, so do neither.
+    if (!liveRow && breastRowExists) {
+      toast({ title: "Already feeding", description: "A feed is already running on another device." });
+      return;
+    }
     try {
       // First-time start: insert active row with this side.
-      if (!activeIsBreast) {
-        await start.mutateAsync({ feeding_type: "breast", side: next });
+      if (!liveRow) {
+        const row = await start.mutateAsync({ feeding_type: "breast", side: next });
+        // The live row is the face now, so anything applied from the past-feed
+        // sheet is done with, including the start time the parent is holding.
+        // Clear it only once the insert actually landed.
+        setPastApplied(false);
+        setEditLeft(0);
+        setEditRight(0);
+        onStartAtChange?.(new Date(row.logged_at));
         return;
       }
       // Toggling the currently-active side off pauses (active_side=null).
       // Toggling to the other side flushes + switches.
-      const target = activeSide === next ? null : next;
+      const target = liveRow.active_side === next ? null : next;
       await setSide.mutateAsync({ nextSide: target });
     } catch (err) {
       const msg = getErrorMessage(err);
@@ -131,45 +195,72 @@ export default function NursingTimer({
     }
   };
 
+  // Reset hands the parent form a blank feed, so every value this timer pushed
+  // into it has to come back too — a leftover start time or side would be saved
+  // against times the user just cleared.
+  const clearTimes = () => {
+    setEditActive(null);
+    setEditLeft(0);
+    setEditRight(0);
+    setPastApplied(false);
+    onDurationChange(0);
+    onSideChange("");
+    // In edit mode the log's own start time belongs to the dialog's date
+    // picker, and re-stamping it would move a feed logged days ago to today.
+    if (!editMode) onStartAtChange?.(new Date());
+  };
+
   const handleReset = async () => {
-    if (editMode) {
-      setEditActive(null);
-      setEditLeft(0);
-      setEditRight(0);
-      onDurationChange(0);
+    // Without an owned row there's nothing on the server to cancel — clear the
+    // in-memory counters, which is what an applied past feed put there.
+    if (!liveRow) {
+      clearTimes();
       return;
     }
-    if (!activeIsBreast) return;
     try {
       await cancel.mutateAsync();
+      clearTimes();
     } catch (err) {
       toast({ title: "Couldn't reset", description: getErrorMessage(err), variant: "destructive" });
     }
   };
 
-  const handleManualApply = () => {
-    const mins = Number(manualMinutes);
-    if (mins > 0) {
-      if (editMode) {
-        setEditActive(null);
-        if (manualSide === "left") {
-          setEditLeft(mins * 60);
-          setEditRight(0);
-        } else if (manualSide === "right") {
-          setEditLeft(0);
-          setEditRight(mins * 60);
-        } else {
-          const half = (mins * 60) / 2;
-          setEditLeft(half);
-          setEditRight(half);
-        }
-      }
-      onDurationChange(mins);
-      onSideChange(manualSide);
-      setManualOpen(false);
-      setManualMinutes("");
-    }
+  const openPastSheet = () => {
+    setPastSide(lastSide === "left" ? "right" : lastSide === "right" ? "left" : "left");
+    setPastOpen(true);
   };
+
+  // The parent dialog owns Notes and the insert, so the sheet runs with its own
+  // note field hidden and only hands back the times.
+  const handlePastApply = async ({ startAt, durationMin }: PastSessionValue) => {
+    const { left, right } = sideSeconds(durationMin, pastSide);
+    setEditActive(null);
+    setEditLeft(left);
+    setEditRight(right);
+    setPastApplied(true);
+    onDurationChange(durationMin);
+    onSideChange(pastSide);
+    onStartAtChange?.(startAt);
+    // These times describe a feed that already finished, so Save must insert a
+    // new row — never finalize a session someone else just started.
+    onActiveRowChange?.(null);
+    toast({
+      title: "Times added",
+      description: `Tap ${editMode ? "Update Feed" : "Save Feed"} to finish logging it.`,
+    });
+  };
+
+  // A feed started on another device while this sheet was open would be bound
+  // as the row Save overwrites. The trigger hides itself, but an already-open
+  // sheet has to go too.
+  useEffect(() => {
+    if (editMode || !breastRowExists || !pastOpen) return;
+    setPastOpen(false);
+    toast({
+      title: "Nursing started",
+      description: "A feed is running now, so the past-feed form closed. Add it again once it ends.",
+    });
+  }, [editMode, breastRowExists, pastOpen]);
 
   return (
     <div className="space-y-3">
@@ -178,7 +269,7 @@ export default function NursingTimer({
         <div
           className={cn(
             "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
-            activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 before:animate-ping",
+            activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 motion-safe:before:animate-ping",
           )}
         >
           <div
@@ -235,64 +326,54 @@ export default function NursingTimer({
         </div>
       )}
 
-      {/* Manual entry */}
-      {!activeSide && (
-        <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mx-auto"
-            >
-              <Clock className="w-3 h-3" />
-              Enter total duration manually
-              <ChevronDown className={cn("w-3 h-3 transition-transform", manualOpen && "rotate-180")} />
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-2 space-y-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Side</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(["left", "both", "right"] as const).map((s) => (
-                  <Button
-                    key={s}
-                    type="button"
-                    size="sm"
-                    variant={manualSide === s ? "default" : "outline"}
-                    className={cn(
-                      "h-8 text-xs capitalize touch-target",
-                      manualSide === s && "bg-feeding hover:bg-feeding/90",
-                    )}
-                    onClick={() => setManualSide(s)}
-                  >
-                    {s}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <Label className="text-xs">Total minutes</Label>
-                <Input
-                  type="number"
-                  value={manualMinutes}
-                  onChange={(e) => setManualMinutes(e.target.value)}
-                  placeholder="e.g. 15"
-                  className="h-8 text-sm"
-                />
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                className="h-8 bg-feeding hover:bg-feeding/90 text-xs"
-                onClick={handleManualApply}
-                disabled={!manualMinutes || Number(manualMinutes) <= 0}
-              >
-                Apply
-              </Button>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+      {/* Past entry — hidden whenever a breast row is live, paused included:
+          the parent form binds that row and would save over it. */}
+      {(editMode ? !activeSide : !breastRowExists) && (
+        <Button
+          type="button"
+          variant="outline"
+          className="touch-target w-full h-14 gap-2 font-bold text-base border-feeding/40 text-feeding hover:bg-feeding-bg"
+          onClick={openPastSheet}
+        >
+          <History className="w-5 h-5" />
+          {PAST_FEED_TITLE}
+        </Button>
       )}
+
+      <PastSessionSheet
+        open={pastOpen}
+        onOpenChange={setPastOpen}
+        title={PAST_FEED_TITLE}
+        saveLabel="Use these times"
+        accentClass="bg-feeding"
+        durationPresets={NURSING_PRESETS}
+        defaultDurationMin={15}
+        softMaxMin={60}
+        hardMaxMin={480}
+        onSave={handlePastApply}
+        showNotes={false}
+        detail={
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground" id="past-feed-side-label">Side</p>
+            <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="past-feed-side-label">
+              {(["left", "both", "right"] as const).map((sideOption) => (
+                <Button
+                  key={sideOption}
+                  type="button"
+                  variant={pastSide === sideOption ? "default" : "outline"}
+                  className={cn(
+                    "touch-target capitalize font-semibold",
+                    pastSide === sideOption && "bg-feeding hover:bg-feeding/90",
+                  )}
+                  onClick={() => setPastSide(sideOption)}
+                >
+                  {sideOption}
+                </Button>
+              ))}
+            </div>
+          </div>
+        }
+      />
     </div>
   );
 }

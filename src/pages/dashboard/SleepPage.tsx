@@ -33,10 +33,11 @@ import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
-import { getErrorMessage } from "@/lib/handleRlsError";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import type { FerberSchedule } from "@/hooks/useSleepPlan";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
@@ -388,25 +389,42 @@ export default function SleepPage() {
 
   const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
 
+  // sleep_logs carries an exclusion constraint (no_overlapping_sleep) — surface
+  // the clash before the insert so the parent sees which session is in the way.
+  // Only covers the 50 rows the query holds, so back-filling something older
+  // falls through to the constraint and its generic copy.
+  const findSleepOverlap = useCallback(
+    (start: Date, end: Date) => {
+      const hit = logs?.find((l) => {
+        if (!l.ended_at) return false;
+        return new Date(l.started_at).getTime() < end.getTime() && start.getTime() < new Date(l.ended_at).getTime();
+      });
+      return hit ? { start: new Date(hit.started_at), end: new Date(hit.ended_at!) } : null;
+    },
+    [logs],
+  );
+
   const addLog = useMutation({
-    mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string }) => {
+    mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string; notes: string | null }) => {
       const { error } = await supabase.from("sleep_logs").insert({
         ...log,
         child_id: activeChild!.id,
         parent_id: user!.id,
       });
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string }).code === "23P01") {
+          const hit = findSleepOverlap(new Date(log.started_at), new Date(log.ended_at));
+          throw new Error(
+            hit
+              ? `This overlaps a sleep from ${formatOverlapRange(hit.start, hit.end)}.`
+              : "This overlaps a sleep you've already logged. Check the times.",
+          );
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-    },
-    onError: (err) => {
-      toast({
-        title: "Couldn't save sleep",
-        description: getErrorMessage(err, "Please try again."),
-        variant: "destructive",
-      });
+      invalidateAfterLogWrite(queryClient);
     },
   });
 
@@ -488,21 +506,27 @@ export default function SleepPage() {
     setEditDialogOpen(true);
   };
 
-  const handleTimerComplete = useCallback(async (durationMinutes: number, sleepType: "nap" | "night", endedAt: Date) => {
-    setSavingTimer(true);
-    const endTime = endedAt;
-    const startTime = new Date(endTime.getTime() - durationMinutes * 60 * 1000);
-    try {
-      await addLog.mutateAsync({
-        started_at: startTime.toISOString(),
-        ended_at: endTime.toISOString(),
-        sleep_type: sleepType,
-      });
-      toast({ title: sleepType === "nap" ? "Nap logged! ☀️" : "Sleep logged! 🌙" });
-    } finally {
-      setSavingTimer(false);
-    }
-  }, [addLog]);
+  const handleTimerComplete = useCallback(
+    async (startedAt: Date, endedAt: Date, sleepType: "nap" | "night", notes: string) => {
+      setSavingTimer(true);
+      try {
+        await addLog.mutateAsync({
+          started_at: startedAt.toISOString(),
+          ended_at: endedAt.toISOString(),
+          sleep_type: sleepType,
+          notes: notes.trim() || null,
+        });
+        const minutes = Math.round((endedAt.getTime() - startedAt.getTime()) / 60000);
+        toast({
+          title: `${sleepType === "nap" ? "Nap" : "Sleep"} logged · ${formatDurationShort(minutes)}`,
+          description: `${format(startedAt, "h:mm a")} – ${format(endedAt, "h:mm a")}`,
+        });
+      } finally {
+        setSavingTimer(false);
+      }
+    },
+    [addLog],
+  );
 
   const formatElapsed = (mins: number) => {
     const h = Math.floor(mins / 60);
@@ -680,7 +704,7 @@ export default function SleepPage() {
                 <p className="font-bold text-xs mb-1.5">How to use this page</p>
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
-                  <p>Need to log something you forgot? Open <strong>Enter duration manually</strong> below the timer.</p>
+                  <p>Forgot to start the timer? Tap <strong>Add past nap</strong> and enter when it started and how long it lasted.</p>
                   <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
                 </div>
               </div>
@@ -692,7 +716,12 @@ export default function SleepPage() {
       {/* Live Sleep Timer — Primary CTA */}
       <Card className="border-0 bg-sleep-bg/60">
         <CardContent className="p-4">
-          <SleepTimer childId={activeChild?.id} onManualSubmit={handleTimerComplete} isSavingManual={savingTimer} />
+          <SleepTimer
+            childId={activeChild?.id}
+            onManualSubmit={handleTimerComplete}
+            isSavingManual={savingTimer}
+            checkOverlap={findSleepOverlap}
+          />
         </CardContent>
       </Card>
 

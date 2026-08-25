@@ -35,6 +35,7 @@ import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -299,10 +300,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
+      invalidateAfterLogWrite(queryClient);
       queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", activeChild?.id] });
-      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-      queryClient.invalidateQueries({ queryKey: ["last-nursing-side"] });
       setDialogOpen(false);
       resetForm();
       setActiveRow(null);
@@ -384,6 +383,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   side={side}
                   onSideChange={setSide}
                   onDurationChange={handleTimerDuration}
+                  onStartAtChange={setLoggedAt}
                   onActiveRowChange={handleActiveRowChange}
                   initialMinutes={durationMin ? Number(durationMin) : undefined}
                   editMode={!!editingId}
@@ -481,7 +481,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               )}
 
               <div className="space-y-1">
-                <MobileDateTimePicker value={loggedAt} onChange={setLoggedAt} maxDate={new Date()} label="Time" />
+                <MobileDateTimePicker value={loggedAt} onChange={setLoggedAt} maxDate={new Date()} label="Started" />
               </div>
 
               <div className="space-y-1">

@@ -133,9 +133,8 @@ export function useActiveFeed(childId: string | undefined) {
         startedAt: row.logged_at,
         sessionId: row.id,
         label: sideLabel(row.feeding_type, input.side),
-        // A feed row ticks only while active_side is set. PumpTimer's manual
-        // entry starts with side:null (deliberately non-ticking) — the
-        // lock-screen timer must start frozen too, not count up.
+        // A feed row ticks only while active_side is set, so a session started
+        // with side:null must show a frozen lock-screen timer, not count up.
         running: !!input.side,
       });
       return row;
