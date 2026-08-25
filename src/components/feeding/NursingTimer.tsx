@@ -22,9 +22,13 @@ interface NursingTimerProps {
   side: string;
   onSideChange: (side: string) => void;
   onDurationChange: (minutes: number) => void;
-  // The sheet fills the parent dialog's form rather than writing a row — the
-  // dialog's own Save button still owns the insert, so there's one save path.
-  onStartAtChange?: (startAt: Date) => void;
+  // The timer moved the start itself: a session that just began, or a Reset
+  // handing back a blank feed. App-authored, so the form may re-seed over it.
+  onTimerStartAt?: (startAt: Date) => void;
+  // The start the parent chose in the past-feed sheet. The sheet fills the
+  // dialog's form rather than writing a row — Save still owns the insert — and
+  // this value is theirs, so nothing the form re-binds may overwrite it.
+  onPastStartApplied?: (startAt: Date) => void;
   onActiveRowChange?: (row: ActiveFeedRow | null) => void;
   // When editing an existing completed log, the parent passes the existing
   // duration in minutes. The timer ignores the active-session flow in that case.
@@ -56,7 +60,8 @@ export default function NursingTimer({
   side,
   onSideChange,
   onDurationChange,
-  onStartAtChange,
+  onTimerStartAt,
+  onPastStartApplied,
   onActiveRowChange,
   initialMinutes,
   editMode,
@@ -178,7 +183,7 @@ export default function NursingTimer({
         setPastApplied(false);
         setEditLeft(0);
         setEditRight(0);
-        onStartAtChange?.(new Date(row.logged_at));
+        onTimerStartAt?.(new Date(row.logged_at));
         return;
       }
       // Toggling the currently-active side off pauses (active_side=null).
@@ -207,7 +212,7 @@ export default function NursingTimer({
     onSideChange("");
     // In edit mode the log's own start time belongs to the dialog's date
     // picker, and re-stamping it would move a feed logged days ago to today.
-    if (!editMode) onStartAtChange?.(new Date());
+    if (!editMode) onTimerStartAt?.(new Date());
   };
 
   const handleReset = async () => {
@@ -240,7 +245,7 @@ export default function NursingTimer({
     setPastApplied(true);
     onDurationChange(durationMin);
     onSideChange(pastSide);
-    onStartAtChange?.(startAt);
+    onPastStartApplied?.(startAt);
     // These times describe a feed that already finished, so Save must insert a
     // new row — never finalize a session someone else just started.
     onActiveRowChange?.(null);

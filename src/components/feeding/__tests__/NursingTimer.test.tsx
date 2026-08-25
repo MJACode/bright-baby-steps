@@ -58,14 +58,25 @@ const liveRow = (): ActiveFeedRow =>
 
 // Mirrors how FeedingLog drives the timer: it owns side/duration/loggedAt and
 // re-mounts the timer whenever the feed type changes (Breast → Bottle → Breast).
+// The two start-time props go to *different* setters, exactly as the real form
+// wires them — routing both to one setter would hide which one the timer used.
 function Harness() {
   const [side, setSide] = useState("");
   const [durationMin, setDurationMin] = useState("");
   const [bound, setBound] = useState<ActiveFeedRow | null>(null);
   const [loggedAt, setLoggedAt] = useState<Date>(new Date());
+  const [startAuthor, setStartAuthor] = useState<"none" | "app" | "parent">("none");
   const [showTimer, setShowTimer] = useState(true);
   const onDurationChange = useCallback((m: number) => setDurationMin(m > 0 ? String(m) : ""), []);
   const onActiveRowChange = useCallback((row: ActiveFeedRow | null) => setBound(row), []);
+  const onTimerStartAt = useCallback((d: Date) => {
+    setStartAuthor("app");
+    setLoggedAt(d);
+  }, []);
+  const onPastStartApplied = useCallback((d: Date) => {
+    setStartAuthor("parent");
+    setLoggedAt(d);
+  }, []);
 
   return (
     <>
@@ -76,13 +87,15 @@ function Harness() {
       <span data-testid="side">{side}</span>
       <span data-testid="bound">{bound?.id ?? "none"}</span>
       <span data-testid="logged-at">{loggedAt.toISOString()}</span>
+      <span data-testid="start-author">{startAuthor}</span>
       {showTimer && (
         <NursingTimer
           childId="child-1"
           side={side}
           onSideChange={setSide}
           onDurationChange={onDurationChange}
-          onStartAtChange={setLoggedAt}
+          onTimerStartAt={onTimerStartAt}
+          onPastStartApplied={onPastStartApplied}
           onActiveRowChange={onActiveRowChange}
           initialMinutes={durationMin ? Number(durationMin) : undefined}
         />
@@ -135,6 +148,7 @@ beforeEach(() => {
 });
 
 const loggedAt = () => screen.getByTestId("logged-at").textContent ?? "";
+const startAuthor = () => screen.getByTestId("start-author").textContent ?? "";
 
 const rerenderHarness = (rerender: (ui: React.ReactElement) => void) =>
   rerender(
@@ -206,6 +220,31 @@ describe("NursingTimer past-feed entry with no live session", () => {
     expect(new Date(loggedAt()).getTime()).toBeGreaterThan(new Date(applied).getTime() + 60_000);
   });
 
+  it("hands the applied start back as the parent's, not the timer's", async () => {
+    renderHarness();
+    expect(startAuthor()).toBe("none");
+
+    await applyPastFeed("30m");
+
+    // These are the times the parent typed into the sheet. Reporting them
+    // through the app-authored callback would let the form re-stamp them the
+    // next time it re-binds.
+    expect(startAuthor()).toBe("parent");
+    expect(Date.now() - new Date(loggedAt()).getTime()).toBeGreaterThan(25 * 60 * 1000);
+  });
+
+  it("hands a Reset's blank start back as the timer's own", async () => {
+    renderHarness();
+    await applyPastFeed("30m");
+    expect(startAuthor()).toBe("parent");
+
+    fireEvent.click(screen.getByText("Reset"));
+
+    // Reset throws the parent's times away, so the "now" it falls back to is
+    // the app's guess again — the form must stay free to re-seed over it.
+    expect(startAuthor()).toBe("app");
+  });
+
   it("moves the form's start time to the row a started feed inserted", async () => {
     renderHarness();
     await applyPastFeed("30m");
@@ -214,6 +253,8 @@ describe("NursingTimer past-feed entry with no live session", () => {
     fireEvent.click(leftSide());
 
     await waitFor(() => expect(loggedAt()).toBe(START_LOGGED_AT));
+    // The session's own start is the app's, so a later re-bind may replace it.
+    expect(startAuthor()).toBe("app");
     expect(startFeed).toHaveBeenCalledTimes(1);
   });
 });
