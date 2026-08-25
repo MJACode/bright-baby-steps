@@ -337,7 +337,7 @@ describe("FeedingLog when the dialog is closed without saving", () => {
 describe("FeedingLog start time when no row is bound", () => {
   it("keeps the past start applied from Add past feed", async () => {
     renderLog();
-    fireEvent.click(screen.getByRole("button", { name: /Log a feed/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Log a feed/i }));
 
     // handlePastApply pushes the past start and *then* unbinds the row, so the
     // null bind must leave the applied start alone.
@@ -353,7 +353,7 @@ describe("FeedingLog start time when no row is bound", () => {
 
   it("keeps the applied past start when the feed type changes", async () => {
     renderLog();
-    fireEvent.click(screen.getByRole("button", { name: /Log a feed/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Log a feed/i }));
 
     await applyPastFeed();
     const applied = startedValue();

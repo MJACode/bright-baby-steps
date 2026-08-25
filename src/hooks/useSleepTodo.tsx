@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { addHours, startOfDay, endOfDay, format } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { useToast } from "@/hooks/use-toast";
 import { parseSleepPlanOverrides, useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
@@ -80,13 +81,6 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
       variant: "destructive",
     });
 
-  // useActiveSleep's invalidate doesn't prefix-match this card's day-logs key,
-  // so refetch it explicitly on start/stop or the card lags up to 60s.
-  const invalidateTodayLogs = () =>
-    queryClient.invalidateQueries({
-      queryKey: ["sleep-today-logs", childId, today],
-    });
-
   // A "nap" started inside the night window is really bedtime — store it as
   // night so buildSleepPlan's raw sleep_type aggregates stay clean.
   const startNap = () =>
@@ -96,28 +90,22 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
           ? "night"
           : "nap",
       },
-      { onSuccess: invalidateTodayLogs, onError: onMutationError },
+      { onError: onMutationError },
     );
   const startBedtime = () =>
     start.mutate(
       { sleep_type: "night" },
-      { onSuccess: invalidateTodayLogs, onError: onMutationError },
+      { onError: onMutationError },
     );
   const stopActive = () =>
-    stop.mutate(undefined, {
-      onSuccess: invalidateTodayLogs,
-      onError: onMutationError,
-    });
+    stop.mutate(undefined, { onError: onMutationError });
   const handleToggle = (id: string) =>
     toggleItem.mutate(id, { onError: onMutationError });
   const setWakeTime = (when: Date) =>
     setWakeAnchor.mutate(when, { onError: onMutationError });
 
   const editActiveStart = (when: Date) =>
-    editStart.mutate(when, {
-      onSuccess: invalidateTodayLogs,
-      onError: onMutationError,
-    });
+    editStart.mutate(when, { onError: onMutationError });
 
   const editDoneStart = async (logId: string, when: Date) => {
     try {
@@ -126,7 +114,7 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
         .update({ started_at: when.toISOString() })
         .eq("id", logId);
       if (error) throw error;
-      invalidateTodayLogs();
+      invalidateAfterLogWrite(queryClient);
     } catch (err) {
       onMutationError(err);
     }

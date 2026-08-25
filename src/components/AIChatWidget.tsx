@@ -16,6 +16,7 @@ import { useChatHistory, type Message, type ToolCallSummary } from "@/hooks/useC
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useChatUsage } from "@/hooks/useChatUsage";
 import { onChatOpen } from "@/lib/chatOpener";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 
 const HEALTH_SKILLS = new Set(["pediatrician", "slp", "developmental", "nutrition", "sleep"]);
 
@@ -233,7 +234,7 @@ export function AIChatWidget({ activeChildId, quickLogMode }: AIChatWidgetProps)
         const { error } = await supabase.from("diaper_logs").insert({ child_id: activeChildId, parent_id: user.id, diaper_type: action.data.diaper_type });
         if (error) throw error;
       }
-      ["sleep-logs", "today-sleep", "today-feeds", "today-diapers", "activity-feed"].forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+      invalidateAfterLogWrite(queryClient);
       setPendingAction(null);
       const confirmMsg: Message = { role: "assistant", content: `✅ Logged! ${action.label}` };
       setMessages((prev) => [...prev, confirmMsg]);

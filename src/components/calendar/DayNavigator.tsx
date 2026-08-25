@@ -1,5 +1,6 @@
 import { useRef } from "react";
-import { format, isSameDay, addDays, subDays, startOfDay, isToday } from "date-fns";
+import { format, addDays, subDays, startOfDay, isToday } from "date-fns";
+import { dayLabel } from "@/lib/dayLabel";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
@@ -15,11 +16,7 @@ export function DayNavigator({ date, onChange }: Props) {
   const isOnFuture = date > today;
   const canGoForward = !isOnToday && !isOnFuture ? true : false;
 
-  const dateLabel = isOnToday
-    ? "Today"
-    : isSameDay(date, subDays(today, 1))
-    ? "Yesterday"
-    : format(date, "EEE, MMM d");
+  const dateLabel = dayLabel(date, today, { weekday: false });
 
   function pickDate(value: string) {
     if (!value) return;

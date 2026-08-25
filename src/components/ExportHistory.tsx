@@ -84,7 +84,7 @@ export default function ExportHistory() {
             <p className="text-xs text-muted-foreground">
               Past reports you've generated. Click to re-download with the same date range.
             </p>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
+            <div className="space-y-2">
               {history.map((exp) => (
                 <div
                   key={exp.id}

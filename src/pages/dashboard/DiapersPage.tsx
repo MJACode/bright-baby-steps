@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { badgeVariants } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -20,6 +20,13 @@ import { PageInstructions } from "@/components/PageInstructions";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
+import { GroupedLogList } from "@/components/logging/GroupedLogList";
+import { useLogHistory } from "@/hooks/useLogHistory";
+import { summarizeDiaperDay } from "@/lib/logDaySummary";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import type { Tables } from "@/integrations/supabase/types";
+
+type DiaperLogRow = Tables<"diaper_logs">;
 
 const colors = ["yellow", "green", "brown", "dark-brown", "black", "red"];
 const consistencies = ["watery", "loose", "soft", "formed", "hard/pellets"];
@@ -31,7 +38,9 @@ export default function DiapersPage() {
   const location = useLocation();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [showAll, setShowAll] = useState(false);
+  // History reaches further back than the page query's 100 rows, so the delete
+  // path can't look the row back up by id — hold onto the row itself.
+  const [editingRow, setEditingRow] = useState<DiaperLogRow | null>(null);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedConsistency, setSelectedConsistency] = useState("");
   const [notes, setNotes] = useState("");
@@ -56,10 +65,20 @@ export default function DiapersPage() {
     enabled: !!activeChild,
   });
 
-  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
+  const history = useLogHistory<DiaperLogRow>({
+    table: "diaper_logs",
+    childId: activeChild?.id,
+    dateColumn: "logged_at",
+  });
+
+  const loggedByNames = useLoggedByNames([
+    ...(logs?.map((l) => l.parent_id) ?? []),
+    ...history.logs.map((l) => l.parent_id),
+  ]);
 
   const resetForm = () => {
     setEditingId(null);
+    setEditingRow(null);
     setDiaperType("dirty");
     setSelectedColor(""); setSelectedConsistency(""); setNotes(""); setFlag(false); setLogTime(new Date());
   };
@@ -80,22 +99,23 @@ export default function DiapersPage() {
     }
   }, [location.state, activeChild]);
 
-  const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
+  const deleteLog = useDeleteWithUndo<DiaperLogRow>({
     table: "diaper_logs",
     invalidateKeys: [["diaper-logs"], ["activity-feed"]],
   });
 
   const handleDelete = () => {
-    const row = logs?.find((l) => l.id === editingId);
+    const row = editingRow;
     if (!row) return;
     setModalOpen(false);
     resetForm();
     deleteLog.mutate(row);
   };
 
-  const openEdit = (log: NonNullable<typeof logs>[0]) => {
+  const openEdit = (log: DiaperLogRow) => {
     setEditingId(log.id);
-    setDiaperType((log.diaper_type as "wet" | "dirty" | "both") ?? "dirty");
+    setEditingRow(log);
+    setDiaperType(((log.diaper_type === "mixed" ? "both" : log.diaper_type) as "wet" | "dirty" | "both") ?? "dirty");
     setSelectedColor(log.color || "");
     setSelectedConsistency(log.consistency || "");
     setNotes(log.notes || "");
@@ -127,8 +147,7 @@ export default function DiapersPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      invalidateAfterLogWrite(queryClient);
       resetForm();
       setModalOpen(false);
       toast({ title: editingId ? "Diaper updated! ✏️" : "Diaper logged! 🧷" });
@@ -159,8 +178,7 @@ export default function DiapersPage() {
       if (error) throw error;
     },
     onSuccess: (_data, type) => {
-      queryClient.invalidateQueries({ queryKey: ["diaper-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      invalidateAfterLogWrite(queryClient);
       const labels: Record<typeof type, string> = {
         wet: "Wet diaper logged! 💧",
         dirty: "Dirty diaper logged! 💩",
@@ -229,7 +247,7 @@ export default function DiapersPage() {
       <PageInstructions tint="diaper">
         <p><strong>Wet, Dirty, Both</strong> — tap one of the three big buttons for a one-tap log.</p>
         <p>Need to record color, consistency, or a rash? Tap the <strong>+</strong> button on the top right.</p>
-        <p>Tap the pencil on any row to edit or delete it.</p>
+        <p>Tap any row under <strong>History</strong> to edit or delete it.</p>
       </PageInstructions>
 
       {/* Three quick-add buttons: wet, dirty, both — for one-tap logging */}
@@ -471,44 +489,74 @@ export default function DiapersPage() {
         </CardContent>
       </Card>
 
-      {/* Recent logs */}
       <div className="space-y-2">
-        <h2 className="font-display font-bold text-sm">Recent Changes</h2>
-        <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
-        {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
-          <Card key={log.id} className="border-0 bg-diapers-bg">
-            <CardContent className="p-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="text-xs">
-                  {log.diaper_type === "wet" ? "💧 wet" : log.diaper_type === "both" ? "💧💩 both" : "💩 dirty"}
-                </Badge>
-                <div>
-                  <p className="text-sm font-semibold">
-                    {log.diaper_type === "wet"
-                      ? "Wet diaper"
-                      : [log.color, log.consistency].filter(Boolean).join(" · ") || (log.diaper_type === "both" ? "Wet + dirty diaper" : "Dirty diaper")}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{format(new Date(log.logged_at), "MMM d, h:mm a")}</p>
-                  <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {log.flag_for_attention && <AlertTriangle className="w-4 h-4 text-destructive" />}
-                <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-diapers" onClick={() => openEdit(log)} aria-label="Edit diaper log">
-                  <Pencil className="w-4 h-4" />
+        <h2 className="font-display font-bold text-sm">History</h2>
+        <GroupedLogList<DiaperLogRow>
+          logs={history.logs}
+          isLoading={history.isLoading}
+          isError={history.isError}
+          hasEarlier={history.hasEarlier}
+          truncated={history.truncated}
+          onShowEarlier={history.showEarlier}
+          onRetry={history.refetch}
+          getDate={(log) => log.logged_at}
+          summarize={summarizeDiaperDay}
+          labels={{ unit: "change", unitPlural: "changes" }}
+          renderRow={(log) => {
+            const isBoth = log.diaper_type === "both" || log.diaper_type === "mixed";
+            const typeLabel = log.diaper_type === "wet" ? "wet diaper" : isBoth ? "wet and dirty diaper" : "dirty diaper";
+            const detail =
+              log.diaper_type === "wet"
+                ? "Wet diaper"
+                : [log.color, log.consistency].filter(Boolean).join(" · ") ||
+                  (isBoth ? "Wet + dirty diaper" : "Dirty diaper");
+            return (
+              <Card key={log.id} className="border-0 bg-diapers-bg">
+                <button
+                  type="button"
+                  onClick={() => openEdit(log)}
+                  aria-label={`Edit ${typeLabel}, ${detail}, ${format(new Date(log.logged_at), "h:mm a")}${log.flag_for_attention ? ", flagged for attention" : ""}`}
+                  className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-diapers/10 motion-reduce:transition-none"
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>
+                      {log.diaper_type === "wet" ? "💧 wet" : isBoth ? "💧💩 both" : "💩 dirty"}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{detail}</span>
+                      <span className="block text-xs text-foreground/75">
+                        {format(new Date(log.logged_at), "h:mm a")}
+                      </span>
+                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {log.flag_for_attention && <AlertTriangle aria-hidden className="w-4 h-4 text-destructive" />}
+                    <Pencil aria-hidden className="w-4 h-4 text-muted-foreground" />
+                  </span>
+                </button>
+              </Card>
+            );
+          }}
+          emptyState={
+            <Card className="border-0 bg-diapers-bg">
+              <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
+                <Droplets className="w-10 h-10 text-diapers/40" />
+                <p className="text-sm text-muted-foreground text-center">
+                  Every diaper change you log will show up here.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { resetForm(); setModalOpen(true); }}
+                  className="gap-1.5 text-diapers border-diapers/30 hover:bg-diapers-bg touch-target"
+                >
+                  <Plus className="w-4 h-4" /> Log a first change
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )) : (
-          <p className="text-sm text-muted-foreground">No diaper logs yet. Tap + to log a diaper.</p>
-        )}
-        </div>
-        {logs && logs.length > 5 && (
-          <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
-            {showAll ? "Show less" : `View all ${logs.length} changes`}
-          </Button>
-        )}
+              </CardContent>
+            </Card>
+          }
+        />
       </div>
     </div>
   );

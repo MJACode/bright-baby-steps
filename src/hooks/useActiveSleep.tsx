@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import {
   scheduleSessionNotification,
   cancelSessionNotification,
@@ -45,8 +46,10 @@ export function useActiveSleep(childId: string | undefined) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const activeKey = ["sleep-logs", "active", childId];
+
   const { data: active, isLoading } = useQuery({
-    queryKey: ["sleep-logs", "active", childId],
+    queryKey: activeKey,
     enabled: !!childId && !!user,
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -70,12 +73,11 @@ export function useActiveSleep(childId: string | undefined) {
     },
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["sleep-logs", "active", childId] });
-    queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
-    queryClient.invalidateQueries({ queryKey: ["sleep-today-logs"] });
-    queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-  };
+  const invalidate = () => invalidateAfterLogWrite(queryClient);
+  // pause/resume write only paused_at + paused_accumulated_seconds and leave the
+  // row in progress, so nothing outside the active-session query can change.
+  // The full log-write fan-out would cost ~10 refetches per tap.
+  const invalidateActive = () => queryClient.invalidateQueries({ queryKey: activeKey });
 
   const start = useMutation({
     mutationFn: async (input: { sleep_type: SleepType; startedMinutesAgo?: number }) => {
@@ -120,7 +122,7 @@ export function useActiveSleep(childId: string | undefined) {
         elapsedSeconds: computeElapsedSeconds(active),
       });
     },
-    onSuccess: invalidate,
+    onSuccess: invalidateActive,
   });
 
   const resume = useMutation({
@@ -146,7 +148,7 @@ export function useActiveSleep(childId: string | undefined) {
         elapsedSeconds: computeElapsedSeconds(active),
       });
     },
-    onSuccess: invalidate,
+    onSuccess: invalidateActive,
   });
 
   const stop = useMutation({

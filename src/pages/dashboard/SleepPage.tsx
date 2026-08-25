@@ -8,7 +8,7 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useLeaps } from "@/hooks/useLeaps";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { badgeVariants } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,12 @@ import { useSleepPlan } from "@/hooks/useSleepPlan";
 import type { FerberSchedule } from "@/hooks/useSleepPlan";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
+import { GroupedLogList } from "@/components/logging/GroupedLogList";
+import { useLogHistory } from "@/hooks/useLogHistory";
+import { summarizeSleepDay } from "@/lib/logDaySummary";
+import type { Tables } from "@/integrations/supabase/types";
+
+type SleepLogRow = Tables<"sleep_logs">;
 
 function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
   const { data: trendLogs } = useQuery({
@@ -362,9 +368,11 @@ export default function SleepPage() {
   const { data: leaps } = useLeaps(activeChild ?? null);
 
   // Edit state
-  const [showAll, setShowAll] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // History rows can be older than the 50 the stats query holds, so the delete
+  // path can't look the row back up by id — hold onto the row itself.
+  const [editingRow, setEditingRow] = useState<SleepLogRow | null>(null);
   const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
   const [editStartedAt, setEditStartedAt] = useState<Date>(new Date());
   const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
@@ -387,7 +395,16 @@ export default function SleepPage() {
     enabled: !!activeChild,
   });
 
-  const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
+  const history = useLogHistory<SleepLogRow>({
+    table: "sleep_logs",
+    childId: activeChild?.id,
+    dateColumn: "started_at",
+  });
+
+  const loggedByNames = useLoggedByNames([
+    ...(logs?.map((l) => l.parent_id) ?? []),
+    ...history.logs.map((l) => l.parent_id),
+  ]);
 
   // sleep_logs carries an exclusion constraint (no_overlapping_sleep) — surface
   // the clash before the insert so the parent sees which session is in the way.
@@ -460,10 +477,10 @@ export default function SleepPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
+      invalidateAfterLogWrite(queryClient);
       setEditDialogOpen(false);
       setEditingId(null);
+      setEditingRow(null);
       toast({ title: editingId ? "Sleep log updated! ✏️" : "Sleep logged! 😴" });
     },
     onError: (error: Error) => {
@@ -477,10 +494,11 @@ export default function SleepPage() {
   });
 
   const handleDelete = () => {
-    const row = logs?.find((l) => l.id === editingId);
+    const row = editingRow;
     if (!row) return;
     setEditDialogOpen(false);
     setEditingId(null);
+    setEditingRow(null);
     deleteLog.mutate(row, {
       onSuccess: () => {
         // Deleting an in-progress timer session must also cancel its scheduled
@@ -492,14 +510,16 @@ export default function SleepPage() {
 
   const openAdd = () => {
     setEditingId(null);
+    setEditingRow(null);
     setEditSleepType("nap");
     setEditStartedAt(new Date(Date.now() - 30 * 60 * 1000));
     setEditEndedAt(new Date());
     setEditDialogOpen(true);
   };
 
-  const openEdit = (log: NonNullable<typeof logs>[0]) => {
+  const openEdit = (log: SleepLogRow) => {
     setEditingId(log.id);
+    setEditingRow(log);
     setEditSleepType(log.sleep_type as "nap" | "night");
     setEditStartedAt(new Date(log.started_at));
     setEditEndedAt(log.ended_at ? new Date(log.ended_at) : new Date());
@@ -528,7 +548,7 @@ export default function SleepPage() {
     [addLog],
   );
 
-  const formatElapsed = (mins: number) => {
+  const formatMinutes = (mins: number) => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
@@ -705,7 +725,7 @@ export default function SleepPage() {
                 <div className="space-y-1.5 text-xs text-muted-foreground">
                   <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
                   <p>Forgot to start the timer? Tap <strong>Add past nap</strong> and enter when it started and how long it lasted.</p>
-                  <p>Tap a row in <strong>Recent sleeps</strong> to edit or delete it.</p>
+                  <p>Tap any row under <strong>History</strong> to edit or delete it.</p>
                 </div>
               </div>
             </PopoverContent>
@@ -763,54 +783,66 @@ export default function SleepPage() {
         </TabsList>
 
         <TabsContent value="history" className="mt-4 space-y-5">
-          {/* Recent logs */}
           <div className="space-y-2">
-            <h2 className="font-display font-bold text-sm">Recent Logs</h2>
-            <div className={showAll ? "max-h-[400px] overflow-y-auto space-y-2 pr-1" : "space-y-2"}>
-            {logs && logs.length > 0 ? (showAll ? logs : logs.slice(0, 5)).map((log) => (
-              <Card key={log.id} className="border-0 bg-sleep-bg">
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="secondary" className="text-xs">
-                      {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
-                    </Badge>
-                    <div>
-                      <p className="text-sm font-semibold">{formatElapsed(log.duration_minutes || 0)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(log.started_at), "MMM d, h:mm a")}
-                      </p>
-                      <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-12 w-12 -my-2 -mr-1 text-muted-foreground hover:text-sleep" onClick={() => openEdit(log)} aria-label="Edit sleep log">
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            )) : (
-              <Card className="border-0 bg-sleep-bg">
-                <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
-                  <CloudMoon className="w-10 h-10 text-sleep/40" />
-                  <p className="text-sm text-muted-foreground text-center">
-                    Every nap and night sleep you log will show up here.
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={openAdd}
-                    className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
-                  >
-                    <Plus className="w-4 h-4" /> Log a first sleep
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-            </div>
-            {logs && logs.length > 5 && (
-              <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground" onClick={() => setShowAll(!showAll)}>
-                {showAll ? "Show less" : `View all ${logs.length} logs`}
-              </Button>
-            )}
+            <h2 className="font-display font-bold text-sm">History</h2>
+            <GroupedLogList<SleepLogRow>
+              logs={history.logs}
+              isLoading={history.isLoading}
+              isError={history.isError}
+              hasEarlier={history.hasEarlier}
+              truncated={history.truncated}
+              onShowEarlier={history.showEarlier}
+              onRetry={history.refetch}
+              getDate={(log) => log.started_at}
+              summarize={summarizeSleepDay}
+              labels={{ unit: "sleep", unitPlural: "sleeps" }}
+              renderRow={(log) => {
+                const minutes = log.duration_minutes || 0;
+                const typeLabel = log.sleep_type === "nap" ? "nap" : "night sleep";
+                return (
+                  <Card key={log.id} className="border-0 bg-sleep-bg">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(log)}
+                      aria-label={`Edit ${typeLabel}, ${minutes} minutes, ${format(new Date(log.started_at), "h:mm a")}`}
+                      className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sleep/10 motion-reduce:transition-none"
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>
+                          {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold">{formatMinutes(minutes)}</span>
+                          <span className="block text-xs text-foreground/75">
+                            {format(new Date(log.started_at), "h:mm a")}
+                          </span>
+                          <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                        </span>
+                      </span>
+                      <Pencil aria-hidden className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
+                  </Card>
+                );
+              }}
+              emptyState={
+                <Card className="border-0 bg-sleep-bg">
+                  <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
+                    <CloudMoon className="w-10 h-10 text-sleep/40" />
+                    <p className="text-sm text-muted-foreground text-center">
+                      Every nap and night sleep you log will show up here.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openAdd}
+                      className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
+                    >
+                      <Plus className="w-4 h-4" /> Log a first sleep
+                    </Button>
+                  </CardContent>
+                </Card>
+              }
+            />
           </div>
         </TabsContent>
 
@@ -931,7 +963,7 @@ export default function SleepPage() {
       />
 
       {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) setEditingId(null); }}>
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) { setEditingId(null); setEditingRow(null); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-display">{editingId ? "Edit Sleep Log" : "Log Sleep"}</DialogTitle>
