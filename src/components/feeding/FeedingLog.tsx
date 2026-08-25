@@ -126,8 +126,20 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   // active feeding_logs row from the timer. Save then UPDATEs that row instead
   // of INSERTing a new one.
   const [activeRow, setActiveRow] = useState<ActiveFeedRow | null>(null);
+  // Which row's start time the form is currently showing. Binding a row seeds
+  // "Started" from it exactly once, so Save's UPDATE keeps the time the session
+  // actually began instead of rewriting it to now — and a correction the parent
+  // types afterwards survives the binding effects re-running.
+  const boundStartRowId = useRef<string | null>(null);
   const handleActiveRowChange = useCallback((row: ActiveFeedRow | null) => {
     setActiveRow(row);
+    if (!row) {
+      boundStartRowId.current = null;
+      return;
+    }
+    if (boundStartRowId.current === row.id) return;
+    boundStartRowId.current = row.id;
+    setLoggedAt(new Date(row.logged_at));
   }, []);
 
   // Resume the in-progress solid feed when the user comes back from the
@@ -177,7 +189,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   // this wiring for breast feeds via onActiveRowChange; this covers bottle.
   useEffect(() => {
     if (editingId || feedType !== "bottle") return;
-    setActiveRow(pageActiveFeed?.feeding_type === "bottle" ? pageActiveFeed : null);
+    handleActiveRowChange(pageActiveFeed?.feeding_type === "bottle" ? pageActiveFeed : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [feedType, editingId, pageActiveFeed?.id, pageActiveFeed?.feeding_type]);
 
@@ -199,6 +211,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const loggedByNames = useLoggedByNames(logs?.map((l) => l.parent_id) ?? []);
 
   const resetForm = () => {
+    boundStartRowId.current = null;
     setEditingId(null);
     setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setLoggedAt(new Date());
   };
