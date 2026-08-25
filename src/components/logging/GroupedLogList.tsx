@@ -19,6 +19,8 @@ interface GroupedLogListProps<T> {
   labels: { unit: string; unitPlural: string };
   emptyState: ReactNode;
   hasEarlier: boolean;
+  // The window hit the row cap, so there's nothing further back to offer.
+  truncated?: boolean;
   onShowEarlier: () => void;
   onRetry: () => void;
 }
@@ -33,6 +35,7 @@ export function GroupedLogList<T>({
   labels,
   emptyState,
   hasEarlier,
+  truncated = false,
   onShowEarlier,
   onRetry,
 }: GroupedLogListProps<T>) {
@@ -69,11 +72,12 @@ export function GroupedLogList<T>({
   useEffect(() => {
     const keys = groups.map((g) => g.key);
     if (awaitingEarlierRef.current) {
+      // Clear it either way: a widen that surfaced no new day must not leave the
+      // flag armed for the next unrelated groups change (midnight rollover, a
+      // log arriving from another device) to steal focus with no user action.
+      awaitingEarlierRef.current = false;
       const firstNew = keys.find((k) => !previousKeysRef.current.includes(k));
-      if (firstNew) {
-        awaitingEarlierRef.current = false;
-        headerRefs.current[firstNew]?.focus();
-      }
+      if (firstNew) headerRefs.current[firstNew]?.focus();
     }
     previousKeysRef.current = keys;
   }, [groups]);
@@ -84,8 +88,8 @@ export function GroupedLogList<T>({
         {[0, 1].map((i) => (
           <div key={i} className="space-y-2">
             <Skeleton className="h-14 w-full rounded-lg" />
-            <Skeleton className="h-16 w-full rounded-xl" />
-            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-2xl" />
+            <Skeleton className="h-16 w-full rounded-2xl" />
           </div>
         ))}
       </div>
@@ -98,12 +102,14 @@ export function GroupedLogList<T>({
         <p className="text-sm text-muted-foreground">
           Your history didn't load just now. Tap below to try again.
         </p>
-        <Button variant="outline" className="w-full touch-target" onClick={onRetry}>
+        <Button variant="outline" className="w-full touch-target" onClick={() => onRetry()}>
           Try again
         </Button>
       </div>
     );
   }
+
+  const daysShown = groups.filter((g) => g.logs.length > 0).length;
 
   // A parent whose last log predates the window still needs the way back to it,
   // so "nothing here yet" is only true when there's nothing earlier either.
@@ -177,7 +183,11 @@ export function GroupedLogList<T>({
         );
       })}
 
-      {hasEarlier ? (
+      {truncated ? (
+        <p className="px-3 py-2 text-sm text-muted-foreground">
+          Showing your most recent {daysShown} {daysShown === 1 ? "day" : "days"}.
+        </p>
+      ) : hasEarlier ? (
         <Button
           variant="outline"
           className="w-full touch-target"

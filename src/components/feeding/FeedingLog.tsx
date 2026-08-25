@@ -563,6 +563,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
           isLoading={history.isLoading}
           isError={history.isError}
           hasEarlier={history.hasEarlier}
+          truncated={history.truncated}
           onShowEarlier={history.showEarlier}
           onRetry={history.refetch}
           getDate={(log) => log.logged_at}

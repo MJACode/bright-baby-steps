@@ -63,8 +63,10 @@ export function useActiveFeed(childId: string | undefined) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
+  const activeKey = ["feeding-logs", "active", childId];
+
   const { data: active, isLoading } = useQuery({
-    queryKey: ["feeding-logs", "active", childId],
+    queryKey: activeKey,
     enabled: !!childId && !!user,
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -87,6 +89,11 @@ export function useActiveFeed(childId: string | undefined) {
   });
 
   const invalidate = () => invalidateAfterLogWrite(queryClient);
+  // Switching sides writes active_side, side_started_at and the per-side
+  // accumulators — the row stays in progress and duration_minutes / amount_oz /
+  // side (what every derived query reads) are untouched. It's the most-tapped
+  // control in a feed, so it refetches only the session it changed.
+  const invalidateActive = () => queryClient.invalidateQueries({ queryKey: activeKey });
 
   const start = useMutation({
     mutationFn: async (input: { feeding_type: FeedingType; side?: FeedingSide | null }) => {
@@ -185,7 +192,7 @@ export function useActiveFeed(childId: string | undefined) {
         label: sideLabel(active.feeding_type, input.nextSide),
       });
     },
-    onSuccess: invalidate,
+    onSuccess: invalidateActive,
   });
 
   const stop = useMutation({
