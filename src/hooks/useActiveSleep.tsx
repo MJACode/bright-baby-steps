@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import {
   scheduleSessionNotification,
   cancelSessionNotification,
@@ -70,12 +71,7 @@ export function useActiveSleep(childId: string | undefined) {
     },
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["sleep-logs", "active", childId] });
-    queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
-    queryClient.invalidateQueries({ queryKey: ["sleep-today-logs"] });
-    queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-  };
+  const invalidate = () => invalidateAfterLogWrite(queryClient);
 
   const start = useMutation({
     mutationFn: async (input: { sleep_type: SleepType; startedMinutesAgo?: number }) => {

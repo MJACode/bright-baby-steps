@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import {
   scheduleSessionNotification,
   cancelSessionNotification,
@@ -85,11 +86,7 @@ export function useActiveFeed(childId: string | undefined) {
     },
   });
 
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", childId] });
-    queryClient.invalidateQueries({ queryKey: ["feeding-logs"] });
-    queryClient.invalidateQueries({ queryKey: ["activity-feed"] });
-  };
+  const invalidate = () => invalidateAfterLogWrite(queryClient);
 
   const start = useMutation({
     mutationFn: async (input: { feeding_type: FeedingType; side?: FeedingSide | null }) => {

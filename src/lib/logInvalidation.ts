@@ -11,11 +11,6 @@ export const LOG_WRITE_QUERY_KEYS = [
   "feeding-logs",
   "sleep-logs",
   "diaper-logs",
-  // Day-grouped History lists (useLogHistory) — table-name roots so they stay
-  // distinct from the page-level queries above, which must not be widened.
-  "sleep_logs-history",
-  "feeding_logs-history",
-  "diaper_logs-history",
   "custom-milestones",
   "temperature-logs",
   "illness-logs",

@@ -497,6 +497,7 @@ export default function DiapersPage() {
           isError={history.isError}
           hasEarlier={history.hasEarlier}
           onShowEarlier={history.showEarlier}
+          onRetry={history.refetch}
           getDate={(log) => log.logged_at}
           summarize={summarizeDiaperDay}
           labels={{ unit: "change", unitPlural: "changes" }}
@@ -514,7 +515,7 @@ export default function DiapersPage() {
                   type="button"
                   onClick={() => openEdit(log)}
                   aria-label={`Edit ${typeLabel}, ${detail}, ${format(new Date(log.logged_at), "h:mm a")}${log.flag_for_attention ? ", flagged for attention" : ""}`}
-                  className="touch-target w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-diapers/10 motion-reduce:transition-none"
+                  className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-diapers/10 motion-reduce:transition-none"
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>

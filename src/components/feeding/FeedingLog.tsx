@@ -171,6 +171,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     if (autoOpenedFor.current === pageActiveFeed.id) return;
     autoOpenedFor.current = pageActiveFeed.id;
     setEditingId(null);
+    setEditingRow(null);
     setFeedType(pageActiveFeed.feeding_type);
     setSide(pageActiveFeed.side ?? "");
     setDialogOpen(true);
@@ -563,6 +564,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
           isError={history.isError}
           hasEarlier={history.hasEarlier}
           onShowEarlier={history.showEarlier}
+          onRetry={history.refetch}
           getDate={(log) => log.logged_at}
           summarize={summarizeFeedingDay}
           labels={{ unit: "feed", unitPlural: "feeds" }}
@@ -585,7 +587,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   type="button"
                   onClick={() => openEdit(log)}
                   aria-label={`Edit ${log.feeding_type} feed${detail ? `, ${detail}` : ""}, ${time}${log.reaction_noted ? ", reaction noted" : ""}`}
-                  className="touch-target w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-feeding/10 motion-reduce:transition-none"
+                  className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-feeding/10 motion-reduce:transition-none"
                 >
                   <span className="flex items-center gap-3 min-w-0">
                     <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>

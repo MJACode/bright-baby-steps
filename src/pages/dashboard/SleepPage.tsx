@@ -791,6 +791,7 @@ export default function SleepPage() {
               isError={history.isError}
               hasEarlier={history.hasEarlier}
               onShowEarlier={history.showEarlier}
+              onRetry={history.refetch}
               getDate={(log) => log.started_at}
               summarize={summarizeSleepDay}
               labels={{ unit: "sleep", unitPlural: "sleeps" }}
@@ -803,7 +804,7 @@ export default function SleepPage() {
                       type="button"
                       onClick={() => openEdit(log)}
                       aria-label={`Edit ${typeLabel}, ${minutes} minutes, ${format(new Date(log.started_at), "h:mm a")}`}
-                      className="touch-target w-full rounded-xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sleep/10 motion-reduce:transition-none"
+                      className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sleep/10 motion-reduce:transition-none"
                     >
                       <span className="flex items-center gap-3 min-w-0">
                         <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>

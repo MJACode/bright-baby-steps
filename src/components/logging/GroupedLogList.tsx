@@ -20,6 +20,7 @@ interface GroupedLogListProps<T> {
   emptyState: ReactNode;
   hasEarlier: boolean;
   onShowEarlier: () => void;
+  onRetry: () => void;
 }
 
 export function GroupedLogList<T>({
@@ -33,6 +34,7 @@ export function GroupedLogList<T>({
   emptyState,
   hasEarlier,
   onShowEarlier,
+  onRetry,
 }: GroupedLogListProps<T>) {
   const todayKey = format(new Date(), "yyyy-MM-dd");
   const yesterdayKey = format(subDays(new Date(), 1), "yyyy-MM-dd");
@@ -45,11 +47,14 @@ export function GroupedLogList<T>({
     const grouped = groupLogsByDay(logs, getDate);
     if (!grouped.some((g) => g.key === todayKey)) {
       const now = new Date();
-      grouped.unshift({
+      grouped.push({
         key: todayKey,
         date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
         logs: [],
       });
+      // The date picker allows a future timestamp, so Today isn't always the
+      // newest group — re-sort rather than assuming it belongs at the top.
+      grouped.sort((a, b) => b.date.getTime() - a.date.getTime());
     }
     return grouped;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,9 +94,14 @@ export function GroupedLogList<T>({
 
   if (isError) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Your history didn't load just now. Check your connection and pull to refresh.
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Your history didn't load just now. Tap below to try again.
+        </p>
+        <Button variant="outline" className="w-full touch-target" onClick={onRetry}>
+          Try again
+        </Button>
+      </div>
     );
   }
 
