@@ -150,3 +150,34 @@ describe("PastSessionSheet without the in-progress option", () => {
     expect(screen.getByRole("button", { name: "Save nap" })).toBeInTheDocument();
   });
 });
+
+// Both date-time pickers open at once are taller than the drawer, so a
+// validation message in the scrolling body sits below the fold while the sticky
+// footer keeps Save on screen. The parent taps a disabled button and sees no
+// reason for it — which reads as "Save does nothing".
+describe("PastSessionSheet validation visibility", () => {
+  it("keeps the reason Save is disabled in the same container as Save", () => {
+    setup();
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "25" } });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("That's longer than a day. Check the times.");
+
+    const save = screen.getByRole("button", { name: "Save nap" });
+    expect(save).toBeDisabled();
+    expect(alert.parentElement).toContainElement(save);
+  });
+
+  it("keeps the length helper with Save too", () => {
+    setup();
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "0" } });
+
+    const helper = screen.getByText("Pick how long it lasted.");
+    const save = screen.getByRole("button", { name: "Save nap" });
+    expect(save).toBeDisabled();
+    expect(helper.parentElement).toContainElement(save);
+  });
+});
