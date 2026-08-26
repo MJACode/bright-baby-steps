@@ -434,18 +434,6 @@ export function PastSessionSheet({
             {announcement}
           </span>
 
-          {error && (
-            <p id={errorId} role="alert" className="text-sm text-destructive">
-              {error.message}
-            </p>
-          )}
-          {warning && <p className="text-sm text-warning">{warning.message}</p>}
-          {helper && (
-            <p id={helperId} className="text-sm text-muted-foreground">
-              {helper}
-            </p>
-          )}
-
           {!showNotes || inProgressMode ? null : notesOpen ? (
             <div className="space-y-1">
               <Label htmlFor="past-session-notes" className="text-xs font-semibold">
@@ -471,31 +459,49 @@ export function PastSessionSheet({
             </Button>
           )}
 
+        </div>
+
+        {/* Why Save is disabled has to travel with Save. Both date-time pickers
+            open at once are taller than the drawer, so a message left in the
+            scrolling body sits below the fold while the sticky footer stays
+            visible — the parent taps a dead button and sees no reason for it. */}
+        <div className="sticky bottom-0 space-y-2 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {error && (
+            <p id={errorId} role="alert" className="text-sm text-destructive">
+              {error.message}
+            </p>
+          )}
+          {warning && <p className="text-sm text-warning">{warning.message}</p>}
+          {helper && (
+            <p id={helperId} className="text-sm text-muted-foreground">
+              {helper}
+            </p>
+          )}
           {saveError && (
             <p role="alert" className="text-sm text-destructive">
               {saveError}
             </p>
           )}
-        </div>
 
-        <div className="sticky bottom-0 flex gap-2 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <Button
-            type="button"
-            variant="outline"
-            className="touch-target font-bold"
-            onClick={() => onOpenChange(false)}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            className={cn("touch-target flex-1 font-bold text-white hover:opacity-90", accentClass)}
-            onClick={handleSave}
-            disabled={!canSave || isSaving}
-          >
-            {isSaving ? "Saving..." : inProgressMode ? inProgress!.saveLabel : saveLabel}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="touch-target font-bold"
+              onClick={() => onOpenChange(false)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className={cn("touch-target flex-1 font-bold text-white hover:opacity-90", accentClass)}
+              onClick={handleSave}
+              disabled={!canSave || isSaving}
+            >
+              {isSaving ? "Saving..." : inProgressMode ? inProgress!.saveLabel : saveLabel}
+            </Button>
+          </div>
         </div>
       </DrawerContent>
     </Drawer>
