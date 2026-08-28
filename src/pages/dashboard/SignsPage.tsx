@@ -247,7 +247,7 @@ export default function SignsPage() {
       <div className="space-y-2 pt-1">
         <p className="text-xs text-muted-foreground leading-relaxed">
           {SIGNS_RED_FLAG}{" "}
-          <Link to="/dashboard/records?tab=ei" className="underline font-semibold text-milestones">
+          <Link to="/dashboard/early-intervention" className="underline font-semibold text-milestones">
             Early Intervention resources
           </Link>
         </p>

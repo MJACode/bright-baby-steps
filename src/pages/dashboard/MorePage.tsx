@@ -1,9 +1,10 @@
 // "More" — secondary navigation surfaced from the bottom tab bar.
-// Lists everything that doesn't have a dedicated bar tab: Records,
-// Growth, Cry insights, Weekly insights, Profile.
+// Lists everything that doesn't have a dedicated bar tab. The four record
+// surfaces (New Baby, Medical, Financial, Early Intervention) each get their
+// own line item here rather than sitting behind a tab bar inside Records.
 
 import { Link } from "react-router-dom";
-import { ChevronRight, FileText, Ear, TrendingUp, User, Sparkles, Scale, Speech, Brain } from "lucide-react";
+import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Speech, Stethoscope, TrendingUp, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -29,10 +30,34 @@ const tools: ToolItem[] = [
     iconClass: "text-primary",
   },
   {
-    label: "Records",
-    description: "Medical, financial, EI, New Baby",
+    label: "New Baby",
+    description: "First-weeks checklist with deadlines",
     icon: FileText,
-    path: "/dashboard/records",
+    path: "/dashboard/new-baby",
+    colorClass: "bg-primary/10",
+    iconClass: "text-primary",
+  },
+  {
+    label: "Medical",
+    description: "Visits, vaccines, meds, temperature",
+    icon: Stethoscope,
+    path: "/dashboard/medical",
+    colorClass: "bg-primary/10",
+    iconClass: "text-primary",
+  },
+  {
+    label: "Financial",
+    description: "Insurance, savings, tax credits",
+    icon: DollarSign,
+    path: "/dashboard/financial",
+    colorClass: "bg-finance/10",
+    iconClass: "text-finance",
+  },
+  {
+    label: "Early Intervention",
+    description: "Referrals, providers, eligibility",
+    icon: Activity,
+    path: "/dashboard/early-intervention",
     colorClass: "bg-primary/10",
     iconClass: "text-primary",
   },
@@ -96,7 +121,7 @@ export default function MorePage() {
     <div className="space-y-5 pb-24">
       <div>
         <h1 className="font-display text-2xl font-bold">More</h1>
-        <p className="text-muted-foreground text-sm mt-1">Records, growth, insights, and your account.</p>
+        <p className="text-muted-foreground text-sm mt-1">Checklists, growth, insights, and your account.</p>
       </div>
 
       <div className="space-y-2">

@@ -244,7 +244,7 @@ serve(async (req) => {
       }
     }
 
-    const recordsUrl = `${appUrl}/dashboard/records`;
+    const recordsUrl = `${appUrl}/dashboard/medical`;
     const subject = buildSubject(payload);
     const html = buildHtml(payload, recordsUrl);
     const text = buildText(payload, recordsUrl);

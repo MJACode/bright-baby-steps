@@ -17,7 +17,10 @@ import { openVisitPrep } from "@/lib/visitPrepOpener";
 // parent surface. Navigates to the parent route — not history back — so deep
 // links land somewhere sensible. Tab routes are intentionally absent.
 const backTargets: Record<string, { to: string; label: string }> = {
-  "/dashboard/records": { to: "/dashboard/more", label: "More" },
+  "/dashboard/new-baby": { to: "/dashboard/more", label: "More" },
+  "/dashboard/medical": { to: "/dashboard/more", label: "More" },
+  "/dashboard/financial": { to: "/dashboard/more", label: "More" },
+  "/dashboard/early-intervention": { to: "/dashboard/more", label: "More" },
   "/dashboard/growth": { to: "/dashboard/more", label: "More" },
   "/dashboard/leaps": { to: "/dashboard/more", label: "More" },
   "/dashboard/find-slp": { to: "/dashboard/more", label: "More" },
