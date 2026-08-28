@@ -4,12 +4,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { differenceInMonths, differenceInWeeks, differenceInDays, isValid, parseISO } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePremium } from "@/hooks/usePremium";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PartnerRolePicker, type SyncChoice } from "@/components/onboarding/PartnerRolePicker";
 import { InviteShareSheet } from "@/components/onboarding/InviteShareSheet";
+import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { MAX_ADDITIONAL_USERS } from "@/lib/partnerInvite";
 import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
 import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
@@ -144,6 +147,7 @@ function computeAge(dob: string): string | null {
 
 export function OnboardingWizard() {
   const { user } = useAuth();
+  const { isPremium } = usePremium();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -161,6 +165,7 @@ export function OnboardingWizard() {
   const [partnerChoice, setPartnerChoice] = useState<SyncChoice | null>(null);
   const [partnerSheetOpen, setPartnerSheetOpen] = useState(false);
   const [partnerInviteSent, setPartnerInviteSent] = useState(false);
+  const [partnerUpgradeOpen, setPartnerUpgradeOpen] = useState(false);
   const hasPartnerStampedRef = useRef(false);
 
   // Steps 1–5 are the pre-completion inputs (step 4 is optional child
@@ -389,16 +394,25 @@ export function OnboardingWizard() {
         ) : (
           <button
             type="button"
-            onClick={() => setPartnerCardOpen(true)}
+            onClick={() => (isPremium ? setPartnerCardOpen(true) : setPartnerUpgradeOpen(true))}
             className="w-full max-w-xs min-h-[48px] rounded-2xl border border-border bg-card px-4 py-3.5 text-left mb-8 flex items-start gap-3 transition-colors hover:bg-muted"
           >
             <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
               <UserPlus className="w-4 h-4" />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="block text-sm font-semibold text-foreground">Parenting with a partner?</span>
+              <span className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-foreground">Parenting with a partner?</span>
+                {!isPremium && (
+                  <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-foreground text-warning text-[9px] font-bold uppercase tracking-wider font-mono">
+                    Flare+
+                  </span>
+                )}
+              </span>
               <span className="block text-xs text-muted-foreground mt-0.5">
-                Invite them to sync — you can also do this anytime from Profile → Partner Access.
+                {isPremium
+                  ? "Invite them to sync — you can also do this anytime from Profile → Partner Access."
+                  : `Flare+ adds up to ${MAX_ADDITIONAL_USERS} more people to your account, synced live.`}
               </span>
             </span>
           </button>
@@ -407,6 +421,12 @@ export function OnboardingWizard() {
         <Button className="w-full max-w-xs" onClick={handleFinish}>
           {cta.label}
         </Button>
+
+        <UpgradeSheet
+          open={partnerUpgradeOpen}
+          onOpenChange={setPartnerUpgradeOpen}
+          feature="multi-caregiver"
+        />
 
         {partnerChoice?.kind === "invite" && user && (
           <InviteShareSheet

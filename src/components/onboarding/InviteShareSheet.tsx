@@ -17,6 +17,7 @@ import {
   shareInvite,
   copyInviteUrl,
   ROLE_COPY,
+  describePartnerError,
   type PartnerRole,
 } from "@/lib/partnerInvite";
 import { supabase } from "@/integrations/supabase/client";
@@ -80,9 +81,12 @@ export function InviteShareSheet({
       setCode(r.inviteCode);
       setStatus("ready");
       return { url: r.url, code: r.inviteCode };
-    } catch {
+    } catch (err) {
       setStatus("error");
-      toast({ title: "Couldn't create invite link", variant: "destructive" });
+      toast({
+        title: describePartnerError(err, "Couldn't create invite link"),
+        variant: "destructive",
+      });
       return null;
     } finally {
       creatingRef.current = false;
