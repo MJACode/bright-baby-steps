@@ -125,7 +125,7 @@ export default function AcceptInvite() {
                 <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4 leading-relaxed">
                   <li>The child's name, date of birth, photo, and prematurity status.</li>
                   <li>All sleep, feeding, diaper, allergen, milestone, illness, medication, and supplement records the family logs.</li>
-                  <li>AI-generated briefings, weekly insights, and chat that use the child's data.</li>
+                  <li>AI-generated briefings, weekly insights, and suggestions that use the child's data.</li>
                 </ul>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   By accepting, you become a co-controller of this child's data alongside the inviting parent.

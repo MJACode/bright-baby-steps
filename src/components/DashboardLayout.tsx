@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
-import { AIChatWidget } from "@/components/AIChatWidget";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
 
@@ -133,14 +132,6 @@ export default function DashboardLayout() {
         )}
         <Outlet />
       </main>
-
-      {/* AI chat dialog — mounted at the layout level so the chatOpener
-          subscription is live on every dashboard sub-route. The widget has no
-          visible entry of its own; in-page surfaces like SleepTriageCard hand
-          off via the chatOpener bus. */}
-      {!isOnboarding && (
-        <AIChatWidget activeChildId={activeChild?.id} quickLogMode />
-      )}
 
       {/* Visit Prep sheet — mounted at the layout level so the visitPrepOpener
           subscription is live on every dashboard sub-route. Opened by the

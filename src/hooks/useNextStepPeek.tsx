@@ -26,7 +26,7 @@ export function useNextStepPeek(opts: {
     enabled:
       enabled &&
       !!childId &&
-      item.deeplink.kind === "chat" &&
+      item.deeplink.kind === "ask" &&
       !!seedPrompt &&
       !!forceSkill,
     staleTime: 6 * 60 * 60 * 1000,

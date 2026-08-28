@@ -1978,3 +1978,101 @@ merge). `CLAUDE.md` "edge functions" line updated seven → six.
 3. Confirm no out-of-repo surface (App Store / Play Store listing, marketing site,
    onboarding upsell, screenshots) still advertises voice logging — those live outside
    this repo and were not reviewable here.
+
+---
+
+## 2026-08-28 — In-app AI chat removed; conversational data flow to Anthropic ends
+
+**Scope:** `src/pages/PrivacyPage.tsx` (§ 2 collection, § 3 purposes, § 4 AI processing),
+`src/pages/FAQPage.tsx` ("What do the AI features do?" + the third-party answer),
+`src/pages/SubprocessorsPage.tsx` (Supabase and Anthropic entries),
+`src/pages/TermsPage.tsx` § 3 (not-medical-advice list), `src/pages/Auth.tsx` signup
+disclosure, `src/pages/AcceptInvite.tsx` partner-consent list,
+`src/components/CoppaDirectNotice.tsx` (COPPA direct notice),
+`src/pages/dashboard/ProfilePage.tsx` and `ChildContextPage.tsx`. Code: deleted
+`AIChatWidget`, `chatOpener`, `useChatHistory`, `useChatUsage`, `ShareWeekCard`, and
+`TalkThisThroughButton`, plus every handoff into the chat (Leap card, milestone flags,
+sleep plan, Next Steps, three Records tabs).
+
+**Trigger:** Product decision to keep AI *insights* only and remove the ability for a
+parent to converse with the AI. Subtractive for the largest free-text data flow we had.
+
+**Risk levels surfaced (in-house review, this change):**
+- **P0:** none.
+- **P1 — the `chat` edge function stays deployed, and still accepts free-form input.**
+  `SpeechInsightsPanel` (Word & Sound Journal) posts a single prompt to
+  `/functions/v1/chat` with `skill: "slp"` and renders the streamed answer inline. That
+  is a one-shot insight, not a conversation, and the founder asked to keep insights — so
+  the function was **not** deleted. But it still takes an arbitrary `messages[]` array
+  from any authenticated caller, so a determined user (or a future developer) can still
+  converse with it outside the UI. The disclosure is therefore written to match the
+  endpoint's real capability, not just the UI: § 4 covers the Word & Sound Journal flow
+  explicitly. **Follow-up:** narrow the function's request contract to the insight shape
+  (single prompt, fixed persona, no multi-turn history) so "no chat" is enforced by the
+  server and not only by the absence of a button. Tracked below.
+- **P1 — retained chat history must not be misdescribed as deleted.** Prior
+  conversations remain in `chat_conversations` / `chat_messages` (no destructive
+  migration). Deleting the § 2 "Chat data" line would have implied we no longer hold it.
+  **Resolved:** § 2 now carries a "Chat history (historical)" entry stating the feature
+  was removed on 2026-08-28, that no new chat data is created, that saved conversations
+  are still stored and exportable from Profile, and that account deletion removes them —
+  all three of which are true in code (`ProfilePage` export still includes
+  `chatConversations`; `_purge_user_data()` still covers both tables).
+- **P2 — AI-memory provenance (resolved).** § 2 described AI-memory notes as saved
+  "from your chats, briefings, and weekly insights". Chat was a real memory source
+  (`fireExtractMemory` fired from `chat/index.ts`), so the sentence was accurate until
+  now and would have become false. Narrowed to briefings and weekly insights, which is
+  what still writes memories.
+- **P2 — no deceptive paywall claim.** Unlike the photo-milestone removal, chat was
+  never sold as a Flare+ perk: `PREMIUM_FEATURES` has no chat entry, and the only
+  upgrade prompt was the free-tier message counter inside the widget, which is deleted
+  with it. Nothing in `Upgrade.tsx` or `UpgradeSheet.tsx` needed a change. Verified by
+  grep, not assumption.
+- **P2 — escalation copy no longer routes to a bot.** Speech Class and Weekly Play Plan
+  rendered "<red flag> — ask the <persona> chat." With no chat, that copy would have
+  dead-ended a parent on a red-flag row. Both now read "worth raising with your
+  pediatrician" / "a speech-language pathologist", and the two generator prompts were
+  changed to point at a professional rather than "the relevant chat persona". This is a
+  safety-relevant improvement, not just copy hygiene.
+
+**Verified consistent (policy-vs-code):** the favorable direction holds — the copy now
+claims *less* data goes to Anthropic and the code confirms it (no conversational UI, no
+new chat rows). Every surviving § 4 clause was checked against a function still on disk;
+the Word & Sound Journal insight flow was **added** to § 4 and `/subprocessors` because
+it was previously covered only implicitly by the chat clause and would otherwise have
+become an undisclosed flow.
+
+**Intentionally unchanged (no schema migration, no data loss):**
+- `chat_conversations` and `chat_messages`, their RLS, and their deletion paths.
+  Historical conversations are parent data; they stay exportable and stay covered by
+  `delete_user_account()` / `_purge_user_data()`.
+- `_shared/personas.ts` — still the source of truth for `next-step-peek`,
+  `generate-speech-class`, `generate-activity-plan`, and the retained insight endpoint.
+- `TRIAGE_CONTENT` in `src/lib/sleepTriage.ts` (~845 lines of authored sleep guidance
+  carrying `chatPrompt` fields and "Open the chat" copy). It has had **no consumer since
+  the SleepTriageCard was removed** — it was already dead before this change. Left in
+  place because deleting authored clinical copy is a product call, not cleanup. It is
+  not user-visible, so it creates no disclosure risk; it should be either revived or
+  deleted deliberately.
+
+**Product changes the founder should know about (not legal items):** the "Share the
+week" home card is gone entirely (it existed only to open the chat), as are the "Ask
+about this leap", "Try an activity at home", "Talk to Sleep Coach about this", and
+"Talk this through" buttons. The Next Steps feed keeps its inline AI answer — only the
+"Continue in chat" button below it was removed — and its deeplink kind was renamed
+`chat` → `ask`. One consequence worth watching: the retained function's free-tier quota
+(10 requests per UTC day) now gates the Word & Sound Journal insight alone, and the
+counter that used to explain it lived in the deleted widget. The 429 body was reworded
+for that caller and `SpeechInsightsPanel` now renders it, so a free parent who runs out
+sees "they reset at midnight UTC, or upgrade to Flare+" instead of a generic failure.
+
+**Code refs:** branch `claude/remove-log-by-voice-0pmm90` (commit hash to follow on
+merge). `CLAUDE.md` gained a standing "no conversational AI" convention.
+
+**Outstanding:**
+1. **Narrow the `chat` edge function to the insight contract** (P1 above), or move the
+   Word & Sound Journal insight onto its own function and delete `chat` outright.
+2. Redeploy `next-step-peek`, `generate-speech-class`, and `generate-activity-plan` —
+   all three carry prompt changes in this commit.
+3. Confirm no out-of-repo surface (App Store / Play listing, marketing site,
+   screenshots, onboarding upsell) still advertises an AI chat or "ask the AI anything".

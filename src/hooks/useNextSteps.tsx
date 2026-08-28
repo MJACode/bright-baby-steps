@@ -609,7 +609,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         tier: "default",
         affinityLabel: interestLabel ?? undefined,
         deeplink: {
-          kind: "chat",
+          kind: "ask",
           target: "developmental",
           seedPrompt:
             `Give me a simple activity to encourage my baby toward "${drill.name}".` +
@@ -644,7 +644,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         meta: "free to ask — no diagnosis needed",
         tier: "redflag",
         deeplink: {
-          kind: "chat",
+          kind: "ask",
           target: "developmental",
           forceSkill: "developmental",
           seedPrompt:

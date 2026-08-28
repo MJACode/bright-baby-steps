@@ -45,7 +45,6 @@ import {
   type FinancialFirstKey,
 } from "@/lib/financeStages";
 import { WhyThisMatters } from "@/components/records/WhyThisMatters";
-import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
 
 type ChecklistItem = Tables<"financial_checklist_items">;
 
@@ -432,12 +431,6 @@ function ChecklistItemCard({
                 <ExternalLink className="w-3 h-3" /> Learn more
               </a>
             )}
-            <div className="pt-1">
-              <TalkThisThroughButton
-                seedPrompt={`Help me think through "${item.title}" for my baby. ${completed ? "I've marked it done." : "I haven't started it yet."}`}
-                forceSkill="financial"
-              />
-            </div>
             <SponsorBlock item={item} />
           </div>
         )}

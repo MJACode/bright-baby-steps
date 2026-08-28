@@ -9,7 +9,6 @@ import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { NextEventBand } from "@/components/NextEventBand";
 import { TodayCard } from "@/components/TodayCard";
-import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
@@ -67,9 +66,6 @@ export default function Dashboard() {
 
       {/* Developmental Leaps */}
       {isVisible("leaps") && <LeapCard activeChild={activeChild} />}
-
-      {/* Share the week with family — weekly, dismissible nudge into the AI chat */}
-      {isVisible("shareWeek") && <ShareWeekCard activeChild={activeChild} />}
 
       <button
         type="button"

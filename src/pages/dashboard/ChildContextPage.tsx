@@ -494,7 +494,7 @@ export default function ChildContextPage() {
           ) : groupedMemories.length === 0 ? (
             <div className="rounded-xl bg-muted/40 p-4">
               <p className="text-sm text-foreground leading-relaxed">
-                Nothing remembered yet. As you chat and log, Grace Flare keeps the
+                Nothing remembered yet. As you log, Grace Flare keeps the
                 durable stuff — {firstName}'s routines, likes, and quirks — and uses
                 it to tailor advice. You're always in control here.
               </p>
@@ -647,7 +647,7 @@ export default function ChildContextPage() {
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             This is the information Grace Flare uses to personalize {firstName}'s
-            briefings, chat answers, and Next Steps. It never trains AI models and is
+            briefings, insights, and Next Steps. It never trains AI models and is
             never used for advertising. You can delete any of it, any time.
           </p>
           <div className="flex flex-wrap gap-2">

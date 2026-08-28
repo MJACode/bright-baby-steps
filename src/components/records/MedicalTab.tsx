@@ -20,8 +20,6 @@ import { useChildren, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { assertCanWrite, useCurrentRoleQuery, VIEW_ONLY_MESSAGE } from "@/hooks/useCurrentRole";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { HIGH_TEMP_NOTE, isHighTemp } from "@/lib/temperature";
-import { humanizeIllnessName, illnessDayCount, illnessDurationPhrase } from "@/lib/illness";
-import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
 
 interface Props {
   childId: string;
@@ -584,9 +582,8 @@ const emptyMedicationForm = () => ({
   notes: "",
 });
 
-function IllnessSection({ childId, parentId, childName }: { childId: string; parentId: string; childName?: string }) {
+function IllnessSection({ childId, parentId }: { childId: string; parentId: string }) {
   const queryClient = useQueryClient();
-  const firstName = childName?.trim().split(/\s+/)[0];
   const { role, isResolved: roleResolved } = useCurrentRoleQuery(childId);
   // Only owner / coparent / viewer ever reach this component — DashboardLayout
   // routes caregivers to CaregiverHome, which has no Records surface at all.
@@ -861,7 +858,6 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
             {sortedIllnesses.map((i) => {
               const active = !i.end_date;
               const meds = (medications ?? []).filter((m) => m.illness_log_id === i.id);
-              const duration = illnessDurationPhrase(illnessDayCount(i.start_date, new Date()));
               return (
                 <Card key={i.id} className={active ? "border border-warning/40 bg-warning/5" : "border-0 bg-muted/40"}>
                   <CardContent className="p-3 space-y-2">
@@ -918,13 +914,6 @@ function IllnessSection({ childId, parentId, childName }: { childId: string; par
                               </Button>
                             )}
                           </>
-                        )}
-                        {/* Read-only, so a view-only partner keeps it. */}
-                        {active && (
-                          <TalkThisThroughButton
-                            forceSkill="pediatrician"
-                            seedPrompt={`${firstName ?? "My baby"} has had ${humanizeIllnessName(i.illness_name)} ${duration}. What should I keep an eye on at home, and when is it worth calling the pediatrician?`}
-                          />
                         )}
                       </div>
                     )}
@@ -1332,7 +1321,7 @@ export function MedicalTab({ childId, parentId, ageMonths }: Props) {
       <PediatricianSection childId={childId} parentId={parentId} hasActiveFlags={(activeFlagCount ?? 0) > 0} />
       <VaccinationsSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
       <DentalSection childId={childId} parentId={parentId} ageMonths={ageMonths} />
-      <IllnessSection childId={childId} parentId={parentId} childName={activeChild?.name} />
+      <IllnessSection childId={childId} parentId={parentId} />
       <TemperatureSection childId={childId} parentId={parentId} />
     </div>
   );

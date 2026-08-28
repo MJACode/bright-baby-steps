@@ -1,3 +1,11 @@
+// NOTE (2026-08-28): the in-app AI chat was removed — there is no conversational
+// UI left in the client. This function stays deployed because it is the backend
+// for a one-shot AI *insight*: SpeechInsightsPanel posts a single prompt with
+// skill "slp" and renders the streamed answer inline in the Word & Sound
+// Journal. It still accepts a free-form `messages[]` array, so it remains a
+// general-purpose endpoint for any authenticated caller; narrowing it to the
+// insight shape is a tracked follow-up. Do not wire new conversational UI to it.
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS, type PersonaKey } from "../_shared/personas.ts";
@@ -150,9 +158,12 @@ function extractLastUserText(messages: unknown): string {
 // deno-lint-ignore no-explicit-any
 declare const EdgeRuntime: { waitUntil: (p: Promise<any>) => void } | undefined;
 
-// Free tier: 10 expert messages / UTC day. Flare+ (subscriptions.tier='plus',
-// status in ('active','trialing')) is unlimited. Keep in sync with the
-// FREE_DAILY_LIMIT constant in src/hooks/useChatUsage.tsx.
+// Free tier: 10 requests / UTC day. Flare+ (subscriptions.tier='plus',
+// status in ('active','trialing')) is unlimited. Since the chat UI was removed
+// on 2026-08-28 this quota gates one surface only — the Word & Sound Journal
+// insight — so the 429 body is worded for that caller. There is no longer a
+// client-side mirror of this constant; SpeechInsightsPanel renders the
+// `message` field below verbatim.
 const FREE_DAILY_LIMIT = 10;
 
 const corsHeaders = {
@@ -251,7 +262,7 @@ serve(async (req) => {
             limit: FREE_DAILY_LIMIT,
             used,
             upgradeUrl: "/upgrade",
-            message: `You've used all ${FREE_DAILY_LIMIT} free expert messages today. Upgrade to Flare+ for unlimited access.`,
+            message: `You've used all ${FREE_DAILY_LIMIT} free AI insights today. They reset at midnight UTC, or upgrade to Flare+ for unlimited insights.`,
           }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );

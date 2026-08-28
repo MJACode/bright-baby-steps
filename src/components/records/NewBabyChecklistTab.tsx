@@ -9,7 +9,6 @@ import { format } from "date-fns";
 import { resolveAllChecklistItems, type ChecklistItemKey, type ChecklistUrgency, type ResolvedChecklistItem } from "@/lib/checklistDeadlines";
 import { BirthCertificateForm } from "@/components/records/BirthCertificateTab";
 import { WhyThisMatters } from "@/components/records/WhyThisMatters";
-import { TalkThisThroughButton } from "@/components/records/TalkThisThroughButton";
 
 interface Props {
   childId: string;
@@ -222,9 +221,6 @@ export function NewBabyChecklistTab({ childId, parentId, childName, childDob }: 
                       Not applicable
                     </Button>
                   )}
-                  <TalkThisThroughButton
-                    seedPrompt={`Help me think through "${item.title}" for my baby. ${isComplete ? "I've marked it done." : "I haven't started it yet."}`}
-                  />
                 </div>
               )}
               {isComplete && (

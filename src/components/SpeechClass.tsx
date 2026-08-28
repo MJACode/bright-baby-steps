@@ -295,11 +295,11 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature }: Spee
               <ul className="space-y-1">
                 {plan.escalation.map((e, i) => (
                   <li key={i} className="text-xs text-muted-foreground leading-snug">
-                    {e.redFlag} — ask the{" "}
+                    {e.redFlag} — worth raising with{" "}
                     <span className="font-semibold text-foreground">
-                      {e.persona === "slp" ? "speech (SLP)" : "pediatrician"}
-                    </span>{" "}
-                    chat.
+                      {e.persona === "slp" ? "a speech-language pathologist" : "your pediatrician"}
+                    </span>
+                    .
                   </li>
                 ))}
               </ul>

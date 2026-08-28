@@ -74,6 +74,10 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
       const wordList = entries?.slice(0, 30).map((e) => e.word_or_sound).join(", ") ?? "";
       const prompt = `Analyze this baby's speech development. Child: ${childName}, age: ${ageMonths} months. Total vocabulary logged: ${totalCount} words/sounds. Words this week: ${stats?.recentCount ?? 0}. Weekly rate: ${stats?.weeklyRate ?? 0}. Recent words: ${wordList}. Age benchmark: ${benchmark.label}. Give a brief, warm, encouraging 2-3 sentence insight about their language development progress. Include one specific activity suggestion.`;
 
+      // Posts a single prompt to the `chat` edge function and renders the
+      // streamed answer inline — this is a one-shot insight, not a
+      // conversation. The chat UI was removed on 2026-08-28; this panel is the
+      // only remaining caller of that function, which is why it stays deployed.
       const { data: { session } } = await supabase.auth.getSession();
       const resp = await fetch(
         "https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/chat",
@@ -90,6 +94,17 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
         }
       );
 
+      // The daily free-tier quota comes back as a 429 with a human-readable
+      // `message`. Show it rather than the generic failure copy — the parent
+      // can act on "resets at midnight" but not on "try again later".
+      if (resp.status === 429) {
+        const body = await resp.json().catch(() => null);
+        setAiInsight(
+          body?.message ??
+            "You've used today's free AI insights. They reset at midnight UTC.",
+        );
+        return;
+      }
       if (!resp.ok) throw new Error("Request failed");
       if (!resp.body) throw new Error("No response body");
 

@@ -422,7 +422,7 @@ export default function ProfilePage() {
             <Shield className="w-3.5 h-3.5" /> AI & Data
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Grace Flare uses AI to generate chat responses, daily briefings, and weekly insights. Your child's activity data is processed by our AI provider to enable these features. You may disable briefings in Preferences at any time.
+            Grace Flare uses AI to generate daily briefings, weekly insights, and in-app suggestions. Your child's activity data is processed by our AI provider to enable these features. You may disable briefings in Preferences at any time.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

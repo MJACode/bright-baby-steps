@@ -1,5 +1,5 @@
 // Module-level event bus for opening the VisitPrep Sheet from outside the card
-// that owns it — mirrors chatOpener.ts. The Next Step feed surfaces a "checkup
+// that owns it. The Next Step feed surfaces a "checkup
 // in N days" row that needs to open VisitPrepCard's existing Sheet; rather than
 // lift the Sheet's open state up into the Dashboard, the feed dispatches here
 // and VisitPrepCard subscribes once on mount.

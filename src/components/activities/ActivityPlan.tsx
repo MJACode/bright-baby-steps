@@ -279,11 +279,11 @@ export function ActivityPlan({
               <ul className="space-y-1">
                 {plan.escalation.map((e, i) => (
                   <li key={i} className="text-xs text-muted-foreground leading-snug">
-                    {e.redFlag} — ask the{" "}
+                    {e.redFlag} — worth raising with{" "}
                     <span className="font-semibold text-foreground">
-                      {e.persona === "developmental" ? "development" : e.persona}
-                    </span>{" "}
-                    chat.
+                      {e.persona === "developmental" ? "your pediatrician or an OT" : "your pediatrician"}
+                    </span>
+                    .
                   </li>
                 ))}
               </ul>
