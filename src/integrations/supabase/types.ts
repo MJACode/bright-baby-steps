@@ -2059,6 +2059,7 @@ export type Database = {
           label: string | null
           owner_id: string
           partner_id: string
+          paused_at: string | null
           revoked_at: string | null
           role: Database["public"]["Enums"]["partner_role"]
           status: string
@@ -2070,6 +2071,7 @@ export type Database = {
           label?: string | null
           owner_id: string
           partner_id: string
+          paused_at?: string | null
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["partner_role"]
           status?: string
@@ -2081,6 +2083,7 @@ export type Database = {
           label?: string | null
           owner_id?: string
           partner_id?: string
+          paused_at?: string | null
           revoked_at?: string | null
           role?: Database["public"]["Enums"]["partner_role"]
           status?: string
@@ -3411,7 +3414,14 @@ export type Database = {
         Args: { _invite_code: string }
         Returns: Json
       }
+      owner_has_plus: { Args: { _owner_id: string }; Returns: boolean }
       partner_can_write: { Args: { _owner_id: string }; Returns: boolean }
+      partner_seat_limit: { Args: { _owner_id: string }; Returns: number }
+      partner_seats_used: { Args: { _owner_id: string }; Returns: number }
+      set_partner_access_paused: {
+        Args: { _partner_id: string; _paused: boolean }
+        Returns: undefined
+      }
       purge_inactive_account: {
         Args: { _target_uid: string }
         Returns: undefined

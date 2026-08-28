@@ -60,7 +60,7 @@ export const PREMIUM_FEATURES = {
   "predictions": "Predictive next-event",
   "cry-analysis": "Cry & sound analysis",
   "growth-analytics": "Detailed growth analytics",
-  "multi-caregiver": "Multi-caregiver sync",
+  "multi-caregiver": "Partner & caregiver access",
   "expert-library": "Expert content library",
   "unlimited-history": "Unlimited log history",
   "exports": "PDF reports & exports",
