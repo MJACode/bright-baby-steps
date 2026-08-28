@@ -482,7 +482,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
         title: `${firstName}'s ${humanizeIllnessName(illness.illness_name)} — day ${dayCount}`,
         meta: illnessFeedMeta(dayCount),
         tier: "soon",
-        deeplink: { kind: "route", target: "/dashboard/records?tab=medical" },
+        deeplink: { kind: "route", target: "/dashboard/medical" },
         sortHints: { daysUntil: 0, order: order++ },
       });
     }
@@ -531,7 +531,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
             tier: insuranceWindow ? "soon" : "default",
             deeplink: {
               kind: "route",
-              target: "/dashboard/records?tab=financial",
+              target: "/dashboard/financial",
             },
             sortHints: insuranceWindow
               ? {
@@ -564,7 +564,7 @@ export function useNextSteps(activeChild: ChildLite | null): UseNextStepsResult 
           tier: "default",
           deeplink: {
             kind: "route",
-            target: "/dashboard/records?tab=financial",
+            target: "/dashboard/financial",
           },
           sortHints:
             event.type === "birthday-savings"

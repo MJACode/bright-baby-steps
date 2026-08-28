@@ -27,7 +27,7 @@ import McpConsentPage from "./pages/McpConsentPage";
 import NotFound from "./pages/NotFound";
 import WeeklyInsightsPage from "./pages/dashboard/WeeklyInsightsPage";
 import AnalyticsPage from "./pages/dashboard/AnalyticsPage";
-import RecordsPage from "./pages/dashboard/RecordsPage";
+import RecordsPage, { RecordsRedirect } from "./pages/dashboard/RecordsPage";
 import CalendarPage from "./pages/dashboard/CalendarPage";
 import CryAnalyzerPage from "./pages/dashboard/CryAnalyzerPage";
 import MorePage from "./pages/dashboard/MorePage";
@@ -70,11 +70,16 @@ const App = () => (
                 <Route path="child-context" element={<ChildContextPage />} />
                 <Route path="leaps" element={<LeapsPage />} />
                 <Route path="growth" element={<GrowthPage />} />
-                <Route path="financial" element={<Navigate to="/dashboard/records?tab=financial" replace />} />
                 <Route path="profile" element={<ProfilePage />} />
                 <Route path="weekly" element={<WeeklyInsightsPage />} />
                 <Route path="analytics" element={<AnalyticsPage />} />
-                <Route path="records" element={<RecordsPage />} />
+                {/* The four record surfaces are top-level routes listed in More,
+                    not tabs inside a single Records page. */}
+                <Route path="new-baby" element={<RecordsPage section="newbaby" />} />
+                <Route path="medical" element={<RecordsPage section="medical" />} />
+                <Route path="financial" element={<RecordsPage section="financial" />} />
+                <Route path="early-intervention" element={<RecordsPage section="ei" />} />
+                <Route path="records" element={<RecordsRedirect />} />
                 <Route path="calendar" element={<CalendarPage />} />
                 <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
                 <Route path="more" element={<MorePage />} />
