@@ -32,8 +32,11 @@ export function useCurrentRoleQuery(childId?: string): { role: Role; isResolved:
       const { data: child } = await supabase.from("children")
         .select("parent_id").eq("id", childId).maybeSingle();
       if (child?.parent_id === user.id) return "owner";
+      // status matters: a paused or revoked row still exists, and reading its
+      // role would hand a shut-off partner co-parent controls in the UI.
       const { data: access } = await supabase.from("partner_access")
         .select("role").eq("partner_id", user.id).eq("owner_id", child?.parent_id ?? "")
+        .eq("status", "active")
         .maybeSingle();
       return (access?.role as Role) ?? "viewer";
     },

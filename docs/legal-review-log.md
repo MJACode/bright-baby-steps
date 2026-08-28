@@ -1981,6 +1981,66 @@ merge). `CLAUDE.md` "edge functions" line updated seven → six.
 
 ---
 
+## 2026-08-28 — Additional users gated behind Flare+ + owner-controlled shut-off
+
+**Scope reviewed:** `supabase/migrations/20260828100000_partner_seats_flare_plus.sql`
+(seat helpers, RLS access functions, seat triggers, `accept_partner_invitation`,
+`set_partner_access_paused`), `src/components/PartnerManagement.tsx`,
+`src/components/OnboardingWizard.tsx` (step 7 invite card),
+`src/pages/AcceptInvite.tsx`, `src/hooks/useCurrentRole.tsx`,
+`supabase/functions/check-notifications/index.ts` (partner fan-out).
+
+**What changed (product):** additional users on an account — the 2nd and 3rd
+person, i.e. co-parent / caregiver / viewer — are now a Flare+ feature. Free
+tier: zero seats. Flare+: two. The primary parent can pause any additional
+user's access at any time and restore it later, alongside the existing
+permanent removal.
+
+**Why this is a legal-log item.** `accept_partner_invitation` is the RPC that
+stamps `partner_access.consent_acknowledged_at` (T3, 2026-05-07). It was
+modified, and the set of people who can read a child's record changed.
+
+**Consent flow — unchanged and verified.** The invitee still checks the
+Privacy/Terms consent box in `AcceptInvite.tsx`, and the RPC still stamps
+`consent_acknowledged_at = now()` on insert (and preserves any earlier stamp
+via `COALESCE` on the conflict path). The only reordering is that the
+invitation is marked `accepted` before the `partner_access` insert, so the
+invite's own pending seat is not double-counted; both statements run in one
+transaction, so a rejected insert rolls the invitation back to `pending`. No
+consent moment was removed, weakened, or moved.
+
+**Data-minimisation direction is favourable.** Every change here *narrows* who
+can read a child's record:
+- `has_partner_access` / `partner_can_write` / `can_access_child` now also
+  require an active or trialing Flare+ subscription on the owner. A lapsed
+  subscription auto-suspends every additional user at the RLS layer.
+- `useCurrentRole` now filters `status = 'active'`, so a paused or revoked
+  partner no longer resolves to a co-parent role in the UI.
+- `check-notifications` no longer fans push out to partners of a non-Flare+
+  owner (it runs on the service role, so RLS would not have filtered them).
+
+**Retention / deletion promises — unaffected.** No rows are deleted by this
+change and no new personal data is collected. `paused_at` is a timestamp on an
+existing row. `partner_access` still cascades from `auth.users`, so
+`_purge_user_data()` and the final `DELETE FROM auth.users` behave exactly as
+before — **Privacy § 8 deletion language remains accurate.** No new
+subprocessor, no new egress, no change to any AI data flow.
+
+**Risk noted and accepted by the founder (P2, product not legal):** existing
+free-tier accounts that already have an active partner lose that partner's
+access on deploy. Nothing is deleted and access returns the moment the owner
+subscribes, and `PartnerManagement.tsx` shows an explicit "Shared access is on
+hold" banner explaining why and how to restore it. If any such account exists
+in production at deploy time, notify those owners out-of-band — a co-parent
+silently losing sight of their child's record is a support and trust problem
+even though it is not a privacy one.
+
+**Outstanding:** none blocking. If Flare+ seat counts change, update
+`partner_seat_limit()` and `MAX_ADDITIONAL_USERS` in `src/lib/partnerInvite.ts`
+together.
+
+---
+
 ## 2026-08-28 — In-app AI chat removed; conversational data flow to Anthropic ends
 
 **Scope:** `src/pages/PrivacyPage.tsx` (§ 2 collection, § 3 purposes, § 4 AI processing),

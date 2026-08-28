@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Users, CheckCircle, XCircle, Loader2, ShieldCheck } from "lucide-react";
-import { ROLE_COPY, type PartnerRole } from "@/lib/partnerInvite";
+import { ROLE_COPY, describePartnerError, type PartnerRole } from "@/lib/partnerInvite";
 
 export default function AcceptInvite() {
   const { code } = useParams<{ code: string }>();
@@ -18,6 +18,7 @@ export default function AcceptInvite() {
   const [invite, setInvite] = useState<any>(null);
   const [accepting, setAccepting] = useState(false);
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -81,7 +82,12 @@ export default function AcceptInvite() {
       setTimeout(() => navigate("/dashboard"), 2000);
     } catch (err) {
       console.error(err);
-      toast({ title: "Failed to accept invite", variant: "destructive" });
+      // Seat-limit and lapsed-subscription rejections come back from the RPC
+      // with machine-readable prefixes — the invitee should see why, not a
+      // generic failure.
+      const message = describePartnerError(err, "Failed to accept invite");
+      setErrorMessage(message);
+      toast({ title: message, variant: "destructive" });
       setStatus("error");
     } finally {
       setAccepting(false);
@@ -196,7 +202,7 @@ export default function AcceptInvite() {
           {status === "error" && (
             <div className="flex flex-col items-center gap-2 py-4">
               <XCircle className="w-12 h-12 text-destructive" />
-              <p className="text-sm">Invalid or expired invite link.</p>
+              <p className="text-sm">{errorMessage ?? "Invalid or expired invite link."}</p>
               <Button variant="outline" onClick={() => navigate("/dashboard")}>Go to Dashboard</Button>
             </div>
           )}

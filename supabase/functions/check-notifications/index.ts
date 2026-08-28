@@ -316,6 +316,21 @@ Deno.serve(async (req) => {
   // don't re-query partner_access.
   const partnersByOwner = new Map<string, string[]>();
 
+  // Additional users are a Flare+ feature and are auto-suspended when the
+  // owner's subscription lapses (migration 20260828100000). This function runs
+  // on the service role, so RLS won't filter them out for us — check the same
+  // helper the RLS layer uses. Memoized: the owner loop revisits the same user
+  // once per child.
+  const plusByOwner = new Map<string, boolean>();
+  const ownerHasPlus = async (ownerId: string): Promise<boolean> => {
+    const cached = plusByOwner.get(ownerId);
+    if (cached !== undefined) return cached;
+    const { data } = await supabase.rpc("owner_has_plus", { _owner_id: ownerId });
+    const hasPlus = data === true;
+    plusByOwner.set(ownerId, hasPlus);
+    return hasPlus;
+  };
+
   for (const child of children) {
     const userId = child.parent_id;
     const eightHoursAgo = new Date(now.getTime() - 8 * 60 * 60 * 1000).toISOString();
@@ -761,11 +776,15 @@ Deno.serve(async (req) => {
     // Also notify partners — fans out every notif queued for this child in
     // this iteration to each active partner. Mirrors the existing pattern;
     // covers all 5 sleep-plan types plus the legacy 4 and the visit reminders.
-    const { data: partners } = await supabase
-      .from("partner_access")
-      .select("partner_id")
-      .eq("owner_id", userId)
-      .eq("status", "active");
+    // Skipped entirely when the owner isn't on Flare+: those partners can't
+    // open the child anyway, so a push would just be a dead-end tap.
+    const partners = (await ownerHasPlus(userId))
+      ? (await supabase
+          .from("partner_access")
+          .select("partner_id")
+          .eq("owner_id", userId)
+          .eq("status", "active")).data
+      : null;
 
     if (partners) {
       partnersByOwner.set(userId, partners.map((p: { partner_id: string }) => p.partner_id));

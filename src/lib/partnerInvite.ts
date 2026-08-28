@@ -30,6 +30,66 @@ export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: 
   },
 };
 
+/**
+ * Additional users (the 2nd and 3rd person on the account) are a Flare+
+ * feature. Free tier gets zero seats. Mirrors `partner_seat_limit()` in
+ * migration 20260828100000 — change both together.
+ */
+export const MAX_ADDITIONAL_USERS = 2;
+
+export type PartnerAccessStatus = "active" | "paused" | "revoked";
+
+export interface SeatSummary {
+  /** Seats taken by active partners, paused partners, and outstanding invites. */
+  used: number;
+  limit: number;
+  remaining: number;
+  canInvite: boolean;
+}
+
+/**
+ * Seat math, shared by PartnerManagement and the onboarding invite card.
+ * A paused partner still holds their seat — only removing them frees one.
+ */
+export function seatSummary(opts: {
+  isPremium: boolean;
+  /** partner_access rows with status active or paused. */
+  partnerCount: number;
+  /** partner_invitations rows still pending and unexpired. */
+  pendingInviteCount: number;
+}): SeatSummary {
+  const limit = opts.isPremium ? MAX_ADDITIONAL_USERS : 0;
+  const used = opts.partnerCount + opts.pendingInviteCount;
+  const remaining = Math.max(0, limit - used);
+  return { used, limit, remaining, canInvite: remaining > 0 };
+}
+
+/**
+ * The seat triggers and RPCs raise machine-readable prefixes so the UI can say
+ * something useful instead of "Something went wrong". Anything unrecognized
+ * falls back to `fallback`.
+ */
+export function describePartnerError(err: unknown, fallback: string): string {
+  const message =
+    typeof err === "string"
+      ? err
+      : ((err as { message?: string } | null)?.message ?? "");
+
+  if (message.includes("FLARE_PLUS_REQUIRED")) {
+    return "This account needs an active Flare+ subscription to share access.";
+  }
+  if (message.includes("SEAT_LIMIT_REACHED")) {
+    return `Flare+ includes ${MAX_ADDITIONAL_USERS} additional users. Remove someone to free up a spot.`;
+  }
+  if (message.includes("Invalid or expired")) {
+    return "This invite has expired or has already been used.";
+  }
+  if (message.includes("Cannot accept your own")) {
+    return "You can't accept your own invite.";
+  }
+  return fallback;
+}
+
 export interface CreateInviteArgs {
   ownerId: string;
   role: PartnerRole;
