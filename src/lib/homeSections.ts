@@ -3,7 +3,6 @@ import {
   CalendarHeart,
   Moon,
   TrendingUp,
-  Share2,
   UtensilsCrossed,
   Droplets,
   Star,
@@ -74,11 +73,5 @@ export const HOME_SECTIONS: { id: string; label: string; description: string; ic
     label: "Developmental Leaps",
     description: "Track your baby's current leap",
     icon: TrendingUp,
-  },
-  {
-    id: "shareWeek",
-    label: "Share the Week",
-    description: "A weekly recap to send to family",
-    icon: Share2,
   },
 ];

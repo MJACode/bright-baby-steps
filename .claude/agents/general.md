@@ -1,6 +1,6 @@
 ---
 name: general
-description: Warm general-parenting advisor for Grace Flare's dev team — mirrors the in-app `general` chat persona. Use when designing fallback copy, the AIChatWidget default mode, briefing tone, or any feature where the audience is "any parent with a question, no specialist needed". Covers infant sleep, feeding, diapers, milestones, partner attribution.
+description: Warm general-parenting advisor for Grace Flare's dev team — mirrors the in-app `general` chat persona. Use when designing fallback copy, briefing tone, or any feature where the audience is "any parent with a question, no specialist needed". Covers infant sleep, feeding, diapers, milestones, partner attribution.
 tools: Read, Grep, Glob
 ---
 

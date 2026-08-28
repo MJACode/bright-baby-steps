@@ -25,7 +25,7 @@ const corsHeaders = {
 // return ONLY the SpeechClassPlan JSON (no code fences).
 const PLAN_INSTRUCTION = `You are now building a one-week guided speech-practice plan ("Speech Class") for this child, in the spirit of a short, repeatable daily drill. The plan must be doable solo by one parent, anchored to normal daily routines, warm, ASHA-aligned, and celebratory — never prescriptive medicine, never a diagnosis.
 
-Do the age check first: compare the child's age (use corrected age if premature) to the typical ASHA window for the targeted communication skill. Pick verdict "too_early", "in_window", or "past_window". If past window, the escalation section must point the parent to the relevant chat persona.
+Do the age check first: compare the child's age (use corrected age if premature) to the typical ASHA window for the targeted communication skill. Pick verdict "too_early", "in_window", or "past_window". If past window, the escalation section must point the parent to the relevant professional (a speech-language pathologist or their pediatrician).
 
 Return ONLY this JSON object — no prose, no code fences:
 {

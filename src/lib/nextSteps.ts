@@ -5,8 +5,8 @@ export type NextStepDomain = "sleep" | "milestone" | "finance" | "health";
 export type NextStepTier = "default" | "soon" | "redflag";
 
 export interface NextStepDeeplink {
-  kind: "route" | "chat" | "sheet";
-  // route → a router path; chat → ignored (seedPrompt/forceSkill drive it);
+  kind: "route" | "ask" | "sheet";
+  // route → a router path; ask → ignored (seedPrompt/forceSkill drive it);
   // sheet → an opaque key the feed maps to opening an existing Sheet.
   target: string;
   seedPrompt?: string;

@@ -3,7 +3,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { useLeaps } from "@/hooks/useLeaps";
-import { openChat } from "@/lib/chatOpener";
 
 interface ChildLite {
   id: string;
@@ -19,7 +18,7 @@ export function LeapCard({ activeChild }: { activeChild: ChildLite | null }) {
 
   if (!activeChild) return null;
 
-  const shell = (title: string, body: string, showLeapCta: boolean) => (
+  const shell = (title: string, body: string) => (
     <Card className="border bg-milestones/5 border-milestones/20">
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-2">
@@ -40,20 +39,6 @@ export function LeapCard({ activeChild }: { activeChild: ChildLite | null }) {
           >
             See all leaps
           </Button>
-          {showLeapCta && (
-            <Button
-              onClick={() =>
-                openChat({
-                  seedPrompt: "Tell me about my baby's current developmental leap",
-                  forceSkill: "developmental",
-                  source: "leap_card",
-                })
-              }
-              className="flex-1 min-h-[48px] bg-milestones text-white hover:bg-milestones/90"
-            >
-              Ask about this leap
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>
@@ -63,7 +48,6 @@ export function LeapCard({ activeChild }: { activeChild: ChildLite | null }) {
     return shell(
       "Leaps begin once baby arrives",
       "After your baby is born, we'll guide you through each developmental leap — the fussy stretches and the new skills that often follow.",
-      false,
     );
   }
 
@@ -75,25 +59,22 @@ export function LeapCard({ activeChild }: { activeChild: ChildLite | null }) {
     return shell(
       `Leap ${n} may be underway`,
       "Extra fussiness is a normal part of a leap — a burst of new skills often follows. Hang in there; you're doing great.",
-      true,
     );
   }
 
   if (currentStatus.phase === "sunny") {
-    return shell("New skills emerging", currentStatus.leap.sunnySummary, true);
+    return shell("New skills emerging", currentStatus.leap.sunnySummary);
   }
 
   if (nextLeap) {
     return shell(
       `Next leap around week ${nextLeap.leapWeek}`,
       "Things are settled for now. We'll let you know when the next leap may be on its way.",
-      false,
     );
   }
 
   return shell(
     "Leaps complete",
     "Your baby has grown through all the early developmental leaps — what an incredible journey. Keep celebrating every new skill.",
-    false,
   );
 }

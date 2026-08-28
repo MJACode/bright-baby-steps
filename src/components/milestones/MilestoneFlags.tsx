@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { AlertTriangle, ExternalLink, ChevronDown, Sparkles } from "lucide-react";
+import { AlertTriangle, ExternalLink, ChevronDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { openChat } from "@/lib/chatOpener";
 import { EarlyInterventionExplainer } from "./EarlyInterventionExplainer";
 
 type Severity = "watch" | "concern" | "act";
@@ -216,21 +215,6 @@ export function MilestoneFlags({
                   {m.concern_flag_language && (
                     <p className="text-sm leading-relaxed text-foreground/90">{m.concern_flag_language}</p>
                   )}
-
-                  <Button
-                    variant="outline"
-                    className="w-full touch-target"
-                    onClick={() =>
-                      openChat({
-                        seedPrompt: `Give me one simple, low-pressure activity using common household items to gently encourage my baby toward "${m.name}".`,
-                        forceSkill: "developmental",
-                        source: "milestone_flags",
-                      })
-                    }
-                  >
-                    <Sparkles className="w-4 h-4 mr-1.5" />
-                    Try an activity at home
-                  </Button>
 
                   <div className="flex items-center justify-between gap-2">
                     {m.clinical_source_url ? (

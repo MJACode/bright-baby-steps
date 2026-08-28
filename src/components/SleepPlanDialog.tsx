@@ -8,7 +8,6 @@ import {
   Clock,
   ListChecks,
   Minus,
-  MessageCircle,
   Moon,
   Plus,
   Save,
@@ -22,7 +21,6 @@ import { formatDistanceToNow } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
-import { openChat } from "@/lib/chatOpener";
 import { buildSleepPlan, NAPS_BY_BRACKET, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
 import { useSaveSleepPlan, useSleepPlan, type FerberSchedule, type SleepPlanOverrides } from "@/hooks/useSleepPlan";
 import { SleepMethodPicker } from "@/components/SleepMethodPicker";
@@ -223,7 +221,7 @@ export function SleepPlanDialog({
         ferber_schedule: ferberSchedule,
       });
 
-      toast({ title: "Plan saved", description: "We'll reference it in chats and briefings." });
+      toast({ title: "Plan saved", description: "We'll reference it in your briefings." });
       onOpenChange(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Couldn't save the plan. Try again in a moment.";
@@ -231,15 +229,6 @@ export function SleepPlanDialog({
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleHandoff = () => {
-    openChat({
-      seedPrompt: `Help me work through this sleep plan for ${childName}.`,
-      forceSkill: "sleep",
-      source: "sleep_plan",
-    });
-    onOpenChange(false);
   };
 
   const applyWake = (value: string | null) => {
@@ -755,15 +744,6 @@ export function SleepPlanDialog({
             >
               <Save className="w-4 h-4" />
               {saving ? "Saving…" : "Save to my plan"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleHandoff}
-              className="w-full touch-target gap-2"
-            >
-              <MessageCircle className="w-4 h-4" />
-              Talk to Sleep Coach about this
             </Button>
             <Button
               type="button"

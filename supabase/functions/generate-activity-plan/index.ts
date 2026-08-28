@@ -29,7 +29,7 @@ const corsHeaders = {
 // model to return ONLY the ActivityPlan JSON (no code fences).
 const PLAN_INSTRUCTION = `You are now building a one-week play plan ("Weekly Play Plan") for this child — seven short, doable-at-home activities that support development through play. The plan must be doable solo by one tired parent with household props, warm, evidence-aligned (CDC/AAP milestone framing), and celebratory — never prescriptive medicine, never a diagnosis.
 
-Do the age check first: compare the child's age (use corrected age if premature) to the typical developmental window for the skills the week targets. Pick verdict "too_early", "in_window", or "past_window". If past window, the escalation section must point the parent to the relevant chat persona.
+Do the age check first: compare the child's age (use corrected age if premature) to the typical developmental window for the skills the week targets. Pick verdict "too_early", "in_window", or "past_window". If past window, the escalation section must point the parent to the relevant professional (their pediatrician or an occupational therapist).
 
 Return ONLY this JSON object — no prose, no code fences:
 {

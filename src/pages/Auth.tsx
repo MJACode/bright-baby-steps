@@ -313,7 +313,7 @@ export default function Auth() {
                   <p className="font-medium text-foreground/80">Before you create an account:</p>
                   <ul className="space-y-1 list-disc pl-4">
                     <li>Grace Flare is <strong className="text-foreground/70">not a medical service</strong>. AI responses are informational only — always consult your child's doctor for medical questions.</li>
-                    <li>Your child's name, age, and activity logs are sent to our <strong className="text-foreground/70">AI provider</strong> to generate insights and chat responses. Your data is never used to train AI models.</li>
+                    <li>Your child's name, age, and activity logs are sent to our <strong className="text-foreground/70">AI provider</strong> to generate briefings, insights, and suggestions. Your data is never used to train AI models.</li>
                     <li>You must be the <strong className="text-foreground/70">parent or legal guardian</strong> of any child whose data you add (required under COPPA).</li>
                     <li>You can <strong className="text-foreground/70">export or delete</strong> all your data at any time from your profile.</li>
                   </ul>

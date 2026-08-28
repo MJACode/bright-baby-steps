@@ -29,7 +29,7 @@ export default function TermsPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">3. Not medical advice</h2>
-          <p>Grace Flare is an informational tool only. <strong>Nothing in this app — including AI-generated chat responses, briefings, insights, the Pediatrician Export PDF, or any other content — constitutes medical advice, diagnosis, or treatment.</strong> Grace Flare is not a medical device and has not been reviewed or approved by the FDA or any equivalent regulator. The Pediatrician Export PDF is a convenience summary of what you have logged; it is not a medical record. Always seek the guidance of your child's physician or other qualified healthcare provider with any questions you have regarding a medical condition. In a medical emergency, call 911 or go to your nearest emergency room.</p>
+          <p>Grace Flare is an informational tool only. <strong>Nothing in this app — including AI-generated briefings, insights, suggestions, practice plans, the Pediatrician Export PDF, or any other content — constitutes medical advice, diagnosis, or treatment.</strong> Grace Flare is not a medical device and has not been reviewed or approved by the FDA or any equivalent regulator. The Pediatrician Export PDF is a convenience summary of what you have logged; it is not a medical record. Always seek the guidance of your child's physician or other qualified healthcare provider with any questions you have regarding a medical condition. In a medical emergency, call 911 or go to your nearest emergency room.</p>
         </section>
 
         <section>

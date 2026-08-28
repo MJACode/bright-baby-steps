@@ -12,11 +12,11 @@ const corsHeaders = {
 
 // Static, model-independent fallback. Never blocks the row: any LLM/runtime
 // failure returns HTTP 200 with one of these so the inline teaser always has
-// something warm to show and the "Continue in chat" button still works.
+// something warm to show in the row.
 function fallbackAnswer(childName?: string): string {
   return childName
-    ? `Every baby moves at their own pace — short, playful bursts of practice a few times a day are plenty. Tap Continue in chat for ideas tailored to ${childName}.`
-    : `Every baby moves at their own pace — short, playful bursts of practice a few times a day are plenty. Tap Continue in chat for ideas tailored to your little one.`;
+    ? `Every baby moves at their own pace — short, playful bursts of practice a few times a day are plenty. ${childName} has time.`
+    : `Every baby moves at their own pace — short, playful bursts of practice a few times a day are plenty. Your little one has time.`;
 }
 
 serve(async (req) => {
@@ -121,9 +121,9 @@ serve(async (req) => {
     }
 
     // Leading cached persona block keeps the inline peek consistent with the
-    // in-app chat. The appended block constrains length/format for the teaser.
+    // shared personas. The appended block constrains length/format for the row.
     const previewInstruction =
-      "You are giving a short preview answer that will appear inline on the home screen, above a 'Continue in chat' button. Answer in 2-3 short sentences, 60 words max. Give one concrete, low-pressure suggestion. Be warm and celebratory, never diagnostic or alarming. Do not greet, do not sign off, do not ask follow-up questions. Plain text only — no markdown, no bullet points.";
+      "You are giving a short answer that appears inline on the home screen. It is the whole answer — the parent cannot ask a follow-up, so leave nothing hanging. Answer in 2-3 short sentences, 60 words max. Give one concrete, low-pressure suggestion. Be warm and celebratory, never diagnostic or alarming. Do not greet, do not sign off, do not ask follow-up questions. Plain text only — no markdown, no bullet points.";
 
     const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
       { type: "text", text: PERSONA_PROMPTS[personaKey], cache_control: { type: "ephemeral" } },

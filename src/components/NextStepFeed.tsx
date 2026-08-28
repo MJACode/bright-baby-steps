@@ -17,12 +17,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Check, MoreHorizontal, ChevronDown, Sparkles, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { openChat } from "@/lib/chatOpener";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
 import { useNextSteps } from "@/hooks/useNextSteps";
 import { useNextStepPeek } from "@/hooks/useNextStepPeek";
 import { hasFeedActions, type NextStepItem, type NextStepDomain } from "@/lib/nextSteps";
-import { getSkill, type SkillId } from "@/components/AIChatWidget";
+import { getSkill, type SkillId } from "@/lib/skills";
 
 interface ChildLite {
   id: string;
@@ -62,17 +61,7 @@ function PeekPanel({
   open: boolean;
 }) {
   const peek = useNextStepPeek({ childId, item, enabled: open });
-  const skill = getSkill(item.deeplink.forceSkill as SkillId);
-  const PersonaIcon = skill?.icon ?? Sparkles;
   const firstName = childName?.trim().split(/\s+/)[0];
-
-  const handleContinue = () => {
-    openChat({
-      seedPrompt: item.deeplink.seedPrompt ?? "",
-      forceSkill: item.deeplink.forceSkill as SkillId,
-      source: "next_step_feed",
-    });
-  };
 
   return (
     <div
@@ -102,21 +91,9 @@ function PeekPanel({
         </div>
       ) : (
         <p className="text-sm text-muted-foreground text-left">
-          Tap Continue in chat and I'll think it through with you.
+          No suggestion to show right now — check back a little later.
         </p>
       )}
-
-      {/* Primary action → solid fill for prominence + AA contrast. The soft
-          persona tint (skill.color) reads as a chip, not a CTA, and fails
-          contrast on the tinted panel — keep that tint on the "Ask AI" badge. */}
-      <Button
-        size="sm"
-        onClick={handleContinue}
-        className="mt-3 min-h-[48px] gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
-      >
-        <PersonaIcon className="w-4 h-4" />
-        Continue in chat
-      </Button>
 
       <p className="text-[11px] text-muted-foreground italic mt-2">
         General guidance — not medical advice.
@@ -142,7 +119,7 @@ function NextStepRow({
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const isChat = item.deeplink.kind === "chat";
+  const isAsk = item.deeplink.kind === "ask";
   const canAct = hasFeedActions(item);
 
   const handleOpen = () => {
@@ -230,7 +207,7 @@ function NextStepRow({
     </>
   );
 
-  if (isChat) {
+  if (isAsk) {
     const skill = getSkill(item.deeplink.forceSkill as SkillId);
     return (
       <Collapsible open={open} onOpenChange={setOpen}>
@@ -382,7 +359,7 @@ export function NextStepFeed({
     (item) =>
       item.domain === "finance" ||
       item.domain === "health" ||
-      item.deeplink.kind === "chat",
+      item.deeplink.kind === "ask",
   );
 
   return (

@@ -73,7 +73,7 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
         <div>
           <p className="font-medium text-foreground">How we use it</p>
           <p className="text-foreground/80">
-            To provide tracking features, generate AI-assisted briefings and chat
+            To provide tracking features, generate AI-assisted briefings and insights
             responses, and produce charts and milestone progress for you. We do
             not use your child's data to train AI models or for advertising.
           </p>
