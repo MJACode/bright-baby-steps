@@ -45,7 +45,7 @@ Return ONLY this JSON object — no prose, no code fences:
   "dailyPlan": [ { "anchor": "routine anchor e.g. 'post-feed'", "rep": "what to do then" } ],
   "weekProgression": [ { "days": "Days 1-2", "focus": "..." }, { "days": "Days 3-4", "focus": "..." }, { "days": "Days 5-7", "focus": "..." } ],
   "escalation": [ { "redFlag": "a specific observation that means stop and ask an expert", "persona": "slp" | "pediatrician" } ],
-  "howToLog": "tell the parent to voice-log via Quick Log or log a custom milestone (source: drill) — keep to one or two sentences",
+  "howToLog": "tell the parent to log a custom milestone on the Milestones tab (source: drill) — keep to one or two sentences",
   "disclaimer": "General educational information, not medical advice or a diagnosis. Consult a speech-language pathologist for professional assessment."
 }
 

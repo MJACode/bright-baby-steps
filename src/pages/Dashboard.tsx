@@ -12,7 +12,6 @@ import { TodayCard } from "@/components/TodayCard";
 import { ShareWeekCard } from "@/components/ShareWeekCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
-import { VoiceQuickLogButton } from "@/components/VoiceQuickLogButton";
 
 
 export default function Dashboard() {
@@ -62,9 +61,6 @@ export default function Dashboard() {
         showBriefing={isVisible("briefing")}
         showWhatToExpect={isVisible("whatToExpect")}
       />
-
-      {/* Voice-first quick log — free mic entry into VoiceQuickLog */}
-      <VoiceQuickLogButton />
 
       {/* Sleep Coach (Flare+) */}
       {isVisible("sleepCoach") && <SleepCoachCard activeChild={activeChild} />}

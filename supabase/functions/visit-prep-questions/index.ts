@@ -156,7 +156,7 @@ serve(async (req) => {
 
     if (!isPremium) {
       // Free tier: one draft per (user, child, visit_date). Fail-open on a
-      // count error (same convention as parse-voice-log's abuse counter) —
+      // count error (the convention for every counted-usage gate here) —
       // worst case is one extra free draft, and the error is logged.
       const { count: existingDrafts, error: draftCountError } = await supabase
         .from("visit_prep_drafts")
