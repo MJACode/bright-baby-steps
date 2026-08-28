@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PartyPopper, ChevronDown, Plus, Star, Trash2, Sparkles, ToyBrick } from "lucide-react";
+import { PartyPopper, ChevronDown, ChevronRight, Hand, Plus, Star, Trash2, Sparkles, ToyBrick } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import { WordSoundJournal } from "@/components/WordSoundJournal";
@@ -467,6 +468,23 @@ export default function MilestonesPage() {
               </Dialog>
 
               <WordSoundJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
+
+              <Link to="/dashboard/signs" className="block touch-target">
+                <Card className="border-0 bg-milestones-bg active:scale-[0.99] transition-transform">
+                  <CardContent className="p-4 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
+                      <Hand className="w-5 h-5 text-milestones" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold">Baby Signs</p>
+                      <p className="text-xs text-muted-foreground">
+                        Teach your baby to tell you what they need — before words.
+                      </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
+                  </CardContent>
+                </Card>
+              </Link>
 
               {ageMonths >= 9 && (
                 <PremiumGate feature="speech-class" variant="replace">

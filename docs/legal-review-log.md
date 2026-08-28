@@ -1809,6 +1809,41 @@ EarlyInterventionExplainer reassurance-first surface reviewed on 2026-06-19.
 
 ---
 
+## 2026-08-28 — Baby Signs feature, frontend batch: `child_signs` disclosure + direct-notice enumeration
+
+**Reviewer:** in-house (Claude pass, frontend batch of the Baby Signs plan).
+**Risk: LOW.**
+
+**What changed:**
+- New Flare+ feature "Baby Signs" (`/dashboard/signs`): a staged, ASL-based
+  sign-language program with per-child progress tracking. All program content
+  is a static client-side library (`src/data/signLibrary.ts`) — no AI
+  involvement, no edge function, no child-data egress of any kind.
+- New table `public.child_signs` (backend batch) stores only **bounded slugs**
+  (`sign_slug` referencing the static library) plus a status from a fixed
+  three-value set (`introduced`/`emerging`/`signing`) and an optional
+  first-signed date — no free text about the child (same COPPA
+  data-minimization posture as `child_activities` and the
+  interests/temperament allowlists). RLS mirrors `child_activities`
+  (has_partner_access / partner_can_write; rows are owner-keyed via
+  `children.parent_id` per the 2026-06-06 sleep_day_todos convention;
+  child_id + parent_id ON DELETE CASCADE cover the deletion promise — no
+  `delete_user_account()` change needed).
+- `CoppaDirectNotice.tsx` "What we collect" enumeration now includes
+  "sign-language signs you mark as introduced or used" alongside the existing
+  tracked-data categories, matching the new `child_signs` table.
+- **No PrivacyPage § 4 change needed:** the feature is a static client-side
+  library with no AI processing and no new subprocessor, so the AI-feature
+  enumeration is unaffected (unlike the 2026-07-19 `generate-activity-plan`
+  entry, which added Anthropic egress).
+
+**Analysis:** additive Flare+ feature, bounded-slug data only, no new
+subprocessor, no new egress; disclosure ships with (not after) the feature.
+Non-material change — no renewed VPC required (reasoning per the 2026-07-19
+Activities entries and the 2026-05-08 zero-dwell analysis).
+
+---
+
 ## 2026-08-28 — Account consolidation: juliabogdan22@ made primary, matt.alksninis@ demoted to co-parent
 
 **Reviewer:** in-house (Claude pass, founder-directed).

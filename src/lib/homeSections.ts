@@ -14,6 +14,7 @@ import {
   CalendarDays,
   BarChart3,
   Ear,
+  Hand,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ export const QUICK_TILES: QuickTile[] = [
   { id: "sleep", label: "Sleep", hint: "Naps & nights", icon: Moon, path: "/dashboard/sleep", tile: "bg-sleep-bg", chip: "bg-sleep/15 text-sleep", labelColor: "text-sleep", dot: "bg-sleep" },
   { id: "diaper", label: "Diaper", hint: "Wet & dirty changes", icon: Droplets, path: "/dashboard/diapers", tile: "bg-diapers-bg", chip: "bg-diapers/15 text-diapers", labelColor: "text-diapers", dot: "bg-diapers" },
   { id: "milestone", label: "Milestone", hint: "Firsts & memories", icon: Star, path: "/dashboard/milestones", tile: "bg-milestones-bg", chip: "bg-milestones/15 text-milestones", labelColor: "text-milestones", dot: "bg-milestones" },
+  { id: "signs", label: "Baby Signs", hint: "Sign language program", icon: Hand, path: "/dashboard/signs", tile: "bg-milestones-bg", chip: "bg-milestones/15 text-milestones", labelColor: "text-milestones", dot: "bg-milestones" },
   { id: "financial", label: "Financial", hint: "Checklist & records", icon: DollarSign, path: "/dashboard/records?tab=financial", tile: "bg-finance-bg", chip: "bg-finance/15 text-finance", labelColor: "text-finance", dot: "bg-finance" },
   { id: "growth", label: "Growth", hint: "Weight & height", icon: Scale, path: "/dashboard/growth", tile: "bg-primary/10", chip: "bg-primary/15 text-primary", labelColor: "text-primary", dot: "bg-primary" },
   { id: "records", label: "Records", hint: "Medical, financial, EI", icon: FileText, path: "/dashboard/records", tile: "bg-primary/10", chip: "bg-primary/15 text-primary", labelColor: "text-primary", dot: "bg-primary" },

@@ -56,6 +56,10 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     headline: "Know exactly what to play today.",
     sub: "50+ age-matched activities across motor, language, thinking, social, and sensory play — plus a weekly play plan built for your baby.",
   },
+  "baby-signs": {
+    headline: "Talk with your baby before they can talk.",
+    sub: "A staged, ASL-based sign program — 20 signs from MILK to THANK YOU, with progress tracking for every sign your baby learns.",
+  },
 };
 
 const PERKS = [
