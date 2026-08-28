@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GraduationCap, Sparkles, ToyBrick } from "lucide-react";
+import { GraduationCap, Hand, Sparkles, ToyBrick } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePremium } from "@/hooks/usePremium";
@@ -15,6 +15,11 @@ const PERKS = [
     icon: ToyBrick,
     title: "50+ play activities + weekly play plan",
     sub: "Age-matched play ideas across motor, language, thinking, social, and sensory — with a 7-day plan built for your baby.",
+  },
+  {
+    icon: Hand,
+    title: "Baby Signs: ASL-based sign program",
+    sub: "20 signs in 5 stages — communicate before words come, with per-sign progress tracking.",
   },
 ];
 
