@@ -33,9 +33,12 @@ language development, always say the word while signing.
 - [x] Backend: migration `20260828000000_child_signs.sql` + types.ts entry
       (types hand-patched; replace with a real `generate_typescript_types`
       regen when the Supabase MCP is available)
-- [~] Frontend: signLibrary.ts, useSignProgress hook, SignsPage, route,
+- [x] Frontend: signLibrary.ts, useSignProgress hook, SignsPage, route,
       quick tile, premium-surface entries, Milestones entry card
-- [ ] QA pass (qa agent) → fixes if required
+- [x] QA pass (qa agent) → Fix-required → all 4 findings fixed
+      (owner-keyed parent_id per the sleep_day_todos precedent;
+      CoppaDirectNotice enumeration + legal-review-log entry;
+      server-authoritative first_signed_at; guarded deletes)
 - [x] Draft PR #203 opened (watched)
 
 ## SLP review outcomes (folded into content spec)
