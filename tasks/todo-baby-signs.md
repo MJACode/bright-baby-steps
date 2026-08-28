@@ -30,11 +30,35 @@ language development, always say the word while signing.
 
 ## Plan
 
-- [~] Backend: migration `20260828000000_child_signs.sql` + types.ts entry
-- [ ] Frontend: signLibrary.ts, useSignProgress hook, SignsPage, route,
+- [x] Backend: migration `20260828000000_child_signs.sql` + types.ts entry
+      (types hand-patched; replace with a real `generate_typescript_types`
+      regen when the Supabase MCP is available)
+- [~] Frontend: signLibrary.ts, useSignProgress hook, SignsPage, route,
       quick tile, premium-surface entries, Milestones entry card
 - [ ] QA pass (qa agent) → fixes if required
-- [ ] Commit, push, draft PR
+- [x] Draft PR #203 opened (watched)
+
+## SLP review outcomes (folded into content spec)
+
+- Claims softened: signing *doesn't delay* talking / reduces frustration —
+  no "accelerates speech" claim (evidence doesn't support it)
+- Sign-back window 8–14 mo (+ "weeks of consistent modeling" expectation;
+  not signing back is not by itself a concern)
+- Red-flag copy keyed to real cutoffs: no gestures by 12 mo, no words by
+  16 mo, regression → free Early Intervention evaluation
+- MORE (duck-beak flattened-O) and HURT (twist) descriptions corrected;
+  "ASL-based" labeling everywhere (GENTLE is a baby-sign adaptation)
+- Bilingual copy: signs bridge both languages; independent sign counts as
+  a word in total vocabulary
+- MORE overgeneralization tip: pair with the specific sign
+
+## Follow-ups (out of v1 scope)
+
+- [ ] Custom sign slot (baby's own high-motivation word) — needs a design
+      decision vs. the bounded-slug COPPA posture (`custom_milestones` is
+      precedent for free text)
+- [ ] Auto-feed "Signs it" entries into the Word & Sound Journal /
+      expressive-vocabulary count (v1 nudges via toast instead)
 
 ## Post-merge (manual)
 
