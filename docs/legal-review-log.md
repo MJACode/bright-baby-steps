@@ -1900,3 +1900,81 @@ verification and deliberately **left untouched** — outside the requested
 scope. It should be consolidated or deleted separately on the owner's
 instruction. The `merge_backup_20260828` schema should be dropped once the
 merge is confirmed good in the running app.
+
+---
+
+## 2026-08-28 — Log-by-voice retired; voice-transcript data flow to Anthropic removed
+
+**Scope:** `src/pages/PrivacyPage.tsx` (§ 4 AI processing), `src/pages/FAQPage.tsx`
+("Is my child's data sent to third parties?"), `src/pages/SubprocessorsPage.tsx`
+(Anthropic `purpose` + `dataCategories`). Code: the
+`supabase/functions/parse-voice-log/` edge function was deleted along with
+`src/components/VoiceQuickLog.tsx`, `src/components/VoiceQuickLogButton.tsx`, and
+`src/hooks/useVoiceLog.tsx`; the mic card was removed from `Dashboard.tsx` and
+`CaregiverHome.tsx`.
+
+**Trigger:** Product decision to retire the log-by-voice feature. Like the
+2026-06-21 photo-milestone removal, this is a **subtractive** change — it removes a
+data flow to our AI subprocessor rather than adding one.
+
+**Risk levels surfaced (in-house review, this change):**
+- **P0:** none.
+- **P1 — a live edge function outlives the disclosure that covered it.** Deleting
+  `supabase/functions/parse-voice-log/` from the repo does not undeploy it; the
+  function stays ACTIVE on the Supabase project until it is removed by hand in the
+  dashboard (there is no MCP delete tool — same gap noted for `detect-milestone` on
+  2026-06-21). While deployed it still accepts an authenticated request and forwards a
+  transcript to Anthropic — a data flow Privacy § 4, the FAQ, and `/subprocessors` no
+  longer disclose as of this change. **Resolution:** tracked as the first outstanding
+  item below; it must be deleted in the Supabase dashboard, and until it is, the
+  disclosure gap is real (mitigated only by the fact that no shipped client calls it).
+- **P1 — store listing advertises a removed capability.** The App Store description
+  draft in `tasks/todo.md` § listing copy claimed "Log feeds, sleep, and diapers in two
+  taps — or by voice, hands-free". Selling a capability we no longer deliver is the
+  FTC § 5 deceptive-claim direction that was P1 on the photo removal. **Resolved** in
+  the repo copy; the *live* store listing is out of repo — see outstanding.
+- **P2 — privacy-label accuracy (resolved).** `tasks/todo.md`'s Apple privacy-label
+  matrix listed "User Content → Audio Data: Yes" sourced to voice logs. The row stays
+  **Yes** — `useSpeechRecognition` still backs mic dictation in `AIChatWidget` — but its
+  source was corrected to AI-chat dictation. Speech is transcribed to text and the
+  audio itself is still never uploaded or retained, so the answer to Apple's question is
+  unchanged; only the justification moved.
+- **P2 — copy hygiene (resolved).** Privacy § 4, the FAQ third-party answer, and the
+  Subprocessors Anthropic entry read cleanly post-removal (no dangling conjunctions, no
+  orphaned clauses), and no surviving sentence claims we parse voice notes. The
+  remaining Anthropic data-flow list (chat, briefings, weekly insights, Visit Prep,
+  Speech Class, Weekly Play Plan) was checked against the edge functions still on disk —
+  no clause for a still-shipping feature was removed.
+
+**Verified consistent (policy-vs-code):** the favorable direction holds — the copy now
+claims *less* data goes to Anthropic and the code confirms it (`parse-voice-log`
+deleted from the repo; six Anthropic-invoking functions remain), subject to the P1
+undeploy item above.
+
+**Intentionally unchanged (no schema migration, no data loss):**
+- `public.voice_parse_events` (table, RLS policies, index) is left as a harmless orphan,
+  matching the photo-removal precedent. It still references `auth.users ON DELETE
+  CASCADE`, so it keeps purging through `_purge_user_data()` / the final
+  `DELETE FROM auth.users` — **Privacy § 8 deletion promises remain accurate.**
+- The `source` CHECK constraints on the log tables still permit `'voice'`. Historical
+  rows logged by voice are parent data, not feature code: they keep rendering (the
+  "Voice" chip in `EventDetailsPopover`) and keep their null-`ended_at` handling in
+  `sleepTodo` / `useActiveSleep`. Nothing was rewritten or deleted.
+
+**Product regression accepted by the founder (not a legal item, recorded for the
+trail):** caregiver-role partners had no logging affordance other than the voice card
+(`DashboardLayout` short-circuits the caregiver role to `CaregiverHome` on every
+route, so they never reach the per-tab log forms). The founder chose to remove voice
+and leave that gap rather than build a replacement surface in this change; a code
+comment in `CaregiverHome.tsx` records it.
+
+**Code refs:** branch `claude/remove-log-by-voice-0pmm90` (commit hash to follow on
+merge). `CLAUDE.md` "edge functions" line updated seven → six.
+
+**Outstanding:**
+1. **Delete the deployed `parse-voice-log` function in the Supabase dashboard** — until
+   then a live endpoint carries an undisclosed transcript flow to Anthropic (P1 above).
+2. Redeploy `generate-speech-class`; its prompt no longer tells parents to voice-log.
+3. Confirm no out-of-repo surface (App Store / Play Store listing, marketing site,
+   onboarding upsell, screenshots) still advertises voice logging — those live outside
+   this repo and were not reviewable here.

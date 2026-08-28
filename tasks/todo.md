@@ -143,7 +143,7 @@ Run through the critical flows on-device. Each is a separate gate.
 - [ ] Onboarding wizard step 1–5 → "Finish setup" → personalized welcome → dashboard
 - [ ] Log a feeding, sleep, diaper — each persists and syncs
 - [ ] Capture a milestone photo (camera permission prompt should fire once)
-- [ ] Voice log a feeding (mic + speech-recognition prompts should fire once)
+- [ ] Dictate an AI chat message (mic + speech-recognition prompts should fire once)
 - [ ] AI chat: send a message and watch it stream token-by-token (this is the SSE / `fetch` + `ReadableStream` path — confirm WKAppBoundDomains didn't break it)
 - [ ] Export My Data
 - [ ] Delete Account → confirm → app returns to signed-out state
@@ -172,7 +172,7 @@ not required.
 | **Health & Fitness → Health** | Yes | Yes | No | App Functionality, Product Personalization | `sleep_logs`, `feeding_logs`, `diaper_logs`, `child_milestones`, `illness_logs`, `medication_logs`, growth percentile |
 | **Sensitive Info** | No | — | — | — | We collect child DOB + name; Apple's Sensitive Info is narrowly defined (race, religion, biometrics, etc.) and child data is **not** in that set. Disclose under "Other Data" instead. |
 | **User Content → Photos or Videos** | Yes | Yes | No | App Functionality | Milestone photos via `@capacitor/camera`, stored in Supabase Storage `milestone-photos/{uid}/*` |
-| **User Content → Audio Data** | Yes | Yes | No | App Functionality | Voice logs via `@capacitor-community/speech-recognition` → `parse-voice-log` edge function. Audio is transcribed server-side and the audio itself is not retained. |
+| **User Content → Audio Data** | Yes | Yes | No | App Functionality | AI-chat dictation via `@capacitor-community/speech-recognition`. Speech is transcribed on-device into the chat box; the audio itself is not retained or uploaded. (Log-by-voice and its `parse-voice-log` function were retired 2026-08-28.) |
 | **User Content → Customer Support** | Yes | Yes | No | App Functionality | `FeedbackDialog` screenshots in Supabase Storage `feedback-screenshots/{uid}/*` |
 | **User Content → Other User Content** | Yes | Yes | No | App Functionality, Product Personalization | AI chat history in `chat_conversations` / `chat_messages`. Sent to Anthropic per Privacy § 4 (DPA in place). |
 | **Identifiers → User ID** | Yes | Yes | No | App Functionality | Supabase auth `uid` (UUID) |
@@ -214,7 +214,7 @@ Built for new and second-time parents who want a real system, not a noisy timeli
 
 WHAT YOU CAN DO
 
-• Log feeds, sleep, and diapers in two taps — or by voice, hands-free
+• Log feeds, sleep, and diapers in two taps
 • Track milestones with photos and a private family timeline
 • Ask the AI advisors anything — pediatrician, sleep, nutrition, SLP, financial, and developmental — and get answers grounded in AAP, CDC, ASHA, and Ellyn Satter guidance
 • Get a personalized Today's Briefing each morning with a wake window, feed plan, and what to watch for

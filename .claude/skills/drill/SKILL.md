@@ -24,7 +24,7 @@ Before writing the drill, confirm or infer:
 4. Spread reps across the day, anchored to existing routines the app already tracks: post-feed, between naps, pre-bath, during diaper change. Use 3-5 reps total.
 5. Write a 7-day progression: what changes day 1 → day 4 → day 7. Difficulty should ramp by extending duration, removing supports, or adding variation — not by piling on reps.
 6. Write the escalation guidance: 2-3 specific red-flag observations that mean "stop drilling, ask the right expert in chat". Name the chat persona (`general` / `slp` / `pediatrician`).
-7. Tell the parent how to log progress in Grace Flare: voice log via the QuickLogFAB, or insert a `custom_milestones` row when the milestone is hit (`source: "drill"`).
+7. Tell the parent how to log progress in Grace Flare: insert a `custom_milestones` row from the Milestones tab when the milestone is hit (`source: "drill"`).
 
 # Output format
 
@@ -59,8 +59,7 @@ Before writing the drill, confirm or infer:
 - <red flag 2> → ask the <persona> chat
 
 ## How to log progress
-- Daily: voice-log "[child] did [milestone activity]" via the Quick Log button
-- When hit: log a milestone (category: <category>, source: drill)
+- When hit: log a custom milestone on the Milestones tab (category: <category>, source: drill)
 ```
 
 # Rules
