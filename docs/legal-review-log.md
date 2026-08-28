@@ -1841,3 +1841,62 @@ EarlyInterventionExplainer reassurance-first surface reviewed on 2026-06-19.
 subprocessor, no new egress; disclosure ships with (not after) the feature.
 Non-material change — no renewed VPC required (reasoning per the 2026-07-19
 Activities entries and the 2026-05-08 zero-dwell analysis).
+
+---
+
+## 2026-08-28 — Account consolidation: juliabogdan22@ made primary, matt.alksninis@ demoted to co-parent
+
+**Reviewer:** in-house (Claude pass, founder-directed).
+**Risk: LOW** (data-subject-initiated consolidation of two accounts belonging
+to the same household, covering the same child).
+
+**Scope:** a live-data operation on project `ieuznbvvwdvhtirzwkly`, not a code
+change. No migration file — the work was one-off DML, recorded here because it
+touched a consent record and performed a deletion.
+
+**What happened.** Two accounts were tracking the same infant (identical DOB
+2026-04-18) under two names: `matt.alksninis@gmail.com` / "Layla" (created
+2026-04-24) and `juliabogdan22@gmail.com` / "Lulu" (created 2026-05-23). At the
+account holder's request the household consolidated onto Julia's account as
+primary, with Matt retained as co-parent.
+
+1. **Partner link.** Inserted `partner_access` (owner = Julia, partner = Matt,
+   role `coparent`, status `active`) and set `profiles.has_partner = true` on
+   Julia. `consent_acknowledged_at` was stamped at insert time.
+2. **Data migration.** Matt's child-scoped records were repointed onto Julia's
+   child rather than discarded, because his account held the newborn month
+   (Apr 24 – May 23) that Julia's account never had. Tables under child-scoped
+   RLS kept `parent_id = Matt` so the app still attributes those entries to him
+   as co-parent; tables under parent-scoped RLS had `parent_id` repointed to
+   Julia, without which she could not have read her own child's records.
+3. **Deletions.** The duplicate child row was deleted, cascading away 429
+   machine-generated `child_memories` (all `source_function` in briefing /
+   chat / weekly-insights / sleep-triage, none pinned, none parent-authored),
+   253 stale notifications, and 18 of Matt's AI chat threads.
+4. **Backup.** Every affected row (964 total) was snapshotted to schema
+   `merge_backup_20260828` before any destructive step.
+
+**Consent analysis.** The `partner_access` row was written server-side rather
+than through `accept_partner_invitation`, so it bypassed the T3 invitee
+consent screen added 2026-05-07. This is acceptable here and **is not a
+precedent for bypassing that flow**: the invitee (Matt) is the same natural
+person who requested the link, so the consent moment the screen exists to
+capture was satisfied directly, and `consent_acknowledged_at` records it.
+Julia's VPC remains intact and unaffected (`vpc_method = 'email-plus'`,
+completed 2026-05-23); the surviving child sits under her already-verified
+consent. No new data category, subprocessor, or egress path.
+
+**Deletion analysis.** All deletions were of the requesting user's own data,
+initiated by that user, and are consistent with the Privacy § 8 deletion
+promise. Nothing belonging to Julia was deleted. Where the two accounts held
+conflicting records for the same event (12 speech milestones, 1 milestone
+flag, 3 sleep entries), the merge preserved the earliest true achievement date
+and Julia's copy of the event, so consolidation did not silently rewrite the
+child's record in either direction.
+
+**Follow-up:** a third account, `matthew.alksninis@gmail.com` (created
+2026-05-09, one sign-in, its own near-empty "Layla"), was found during
+verification and deliberately **left untouched** — outside the requested
+scope. It should be consolidated or deleted separately on the owner's
+instruction. The `merge_backup_20260828` schema should be dropped once the
+merge is confirmed good in the running app.
