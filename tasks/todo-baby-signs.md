@@ -70,4 +70,15 @@ language development, always say the word while signing.
 
 ## Review
 
-_(filled in when done)_
+Shipped on PR #203 (commit 24c93f3). Backend + frontend + QA cycle done:
+migration `child_signs` (file-only — **not applied to live**), sign library
+(20 signs / 5 stages, SLP-vetted copy), `/dashboard/signs` page with
+PremiumGate, entry points (Milestones card, quick tile, upgrade surfaces),
+COPPA direct-notice enumeration + legal-review-log entry.
+
+**Merge is held** (auto-merge policy § 5 pause): main auto-deploys to prod,
+and `/dashboard/signs` queries `child_signs` — merging before the migration
+is applied to live would error for anyone opening the page. Apply
+`20260828000000_child_signs.sql` first (`supabase db push` or Supabase MCP
+`apply_migration` once reconnected), then regen types
+(`generate_typescript_types`) to replace the hand-patched entry, then merge.
