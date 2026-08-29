@@ -390,7 +390,8 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* About your baby — child context hub */}
+      {/* What Grace Flare remembers — the AI personalization hub. Lives here
+          (not under More) because it's a settings surface, not a daily read. */}
       {activeChild && (
         <Card className="border-0 bg-card">
           <CardContent className="p-0">
@@ -403,10 +404,10 @@ export default function ProfilePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm">
-                  About {contextFirstName}
+                  What Grace Flare remembers
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  What Grace Flare knows, and how it's used
+                  Review or delete what personalizes {contextFirstName}'s suggestions
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
