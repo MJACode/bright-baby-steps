@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { format, subDays } from "date-fns";
+import { format } from "date-fns";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,11 +40,10 @@ export function GroupedLogList<T>({
   onRetry,
 }: GroupedLogListProps<T>) {
   const todayKey = format(new Date(), "yyyy-MM-dd");
-  const yesterdayKey = format(subDays(new Date(), 1), "yyyy-MM-dd");
 
-  // Deterministic on every mount — deliberately not persisted. Today and
-  // Yesterday open, everything older closed.
-  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set([todayKey, yesterdayKey]));
+  // Deterministic on every mount — deliberately not persisted. Today open,
+  // every past day closed.
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set([todayKey]));
 
   const groups = useMemo(() => {
     const grouped = groupLogsByDay(logs, getDate);
