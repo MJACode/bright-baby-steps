@@ -46,7 +46,7 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
   },
   "speech-class": {
     headline: "A weekly speech practice plan, built for your baby.",
-    sub: "Flare+ turns your Word & Sound Journal into a guided 7-day plan — one small activity a day, tuned to her age.",
+    sub: "Flare+ turns your Word Journal into a guided 7-day plan — one small activity a day, tuned to her age.",
   },
   "visit-prep-ai": {
     headline: "Walk into every checkup with your questions ready.",

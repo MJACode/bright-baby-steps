@@ -26,8 +26,8 @@ const SUBPROCESSORS: Subprocessor[] = [
   {
     /* LEGAL: MCP Stage 2 — pending review */
     name: "Anthropic, PBC",
-    purpose: "AI provider for daily briefings, weekly insights, home-screen Next Step suggestions, Word & Sound Journal speech insights, pediatrician visit-prep question suggestions, and Speech Class practice plans. Also receives child data through the optional \"Connect to Claude\" (MCP) integration when a parent connects their own Claude product and explicitly grants read-only access.",
-    dataCategories: `Depends on feature. Briefings / weekly insights / Next Steps: child first name, age, and the relevant logged activity. Word & Sound Journal insights: child first name, age, and up to 30 recently logged words or sounds. Visit Prep: child first name, age and prematurity status, visit date and type, 30-day sleep/feeding/diaper summaries, recent temperature, illness, and growth records, open milestone topics, existing reminder-list text, and saved child notes. Speech Class: child first name, age (corrected if premature), and up to 30 recent Word & Sound Journal entries. Connect to Claude (MCP): the child's tracked logs (${MCP_CATEGORY_LIST}) that the parent's own Claude reads over the authenticated connection. Not used to train models. Data processed for Grace Flare is retained by Anthropic for a limited period of safety/abuse review per its Usage Policy, then deleted; data accessed via a parent's own Claude is additionally governed by that parent's separate agreement with Anthropic.`,
+    purpose: "AI provider for daily briefings, weekly insights, home-screen Next Step suggestions, Word Journal speech insights, pediatrician visit-prep question suggestions, and Speech Class practice plans. Also receives child data through the optional \"Connect to Claude\" (MCP) integration when a parent connects their own Claude product and explicitly grants read-only access.",
+    dataCategories: `Depends on feature. Briefings / weekly insights / Next Steps: child first name, age, and the relevant logged activity. Word Journal insights: child first name, age, and up to 30 recently logged words. Visit Prep: child first name, age and prematurity status, visit date and type, 30-day sleep/feeding/diaper summaries, recent temperature, illness, and growth records, open milestone topics, existing reminder-list text, and saved child notes. Speech Class: child first name, age (corrected if premature), and up to 30 recent Word Journal entries. Connect to Claude (MCP): the child's tracked logs (${MCP_CATEGORY_LIST}) that the parent's own Claude reads over the authenticated connection. Not used to train models. Data processed for Grace Flare is retained by Anthropic for a limited period of safety/abuse review per its Usage Policy, then deleted; data accessed via a parent's own Claude is additionally governed by that parent's separate agreement with Anthropic.`,
     location: "United States",
     transferMechanism: "Direct U.S.-based processing under a Data Processing Addendum accepted May 8, 2026. SCCs Module Two and Module Three (Decision 2021/914) plus UK and Swiss addenda are incorporated for any future cross-border transfer — see Privacy Policy § 4.",
     website: "https://www.anthropic.com",
@@ -60,7 +60,7 @@ export default function SubprocessorsPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Subprocessors</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: May 8, 2026 · Last reviewed: July 2, 2026
+          Effective: May 8, 2026 · Last reviewed: August 29, 2026
         </p>
       </div>
 

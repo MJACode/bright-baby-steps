@@ -2136,3 +2136,93 @@ merge). `CLAUDE.md` gained a standing "no conversational AI" convention.
    all three carry prompt changes in this commit.
 3. Confirm no out-of-repo surface (App Store / Play listing, marketing site,
    screenshots, onboarding upsell) still advertises an AI chat or "ask the AI anything".
+
+---
+
+## 2026-08-29 — Word & Sound Journal renamed "Word Journal"; journal entries added to the pediatrician PDF
+
+**Reviewer:** in-house (Claude pass).
+**Risk: LOW.**
+
+**What changed:**
+- **Product rename, not a data change.** The "Word & Sound Journal" is now the
+  "Word Journal". The feature drops its babble/sound framing and tracks words
+  only. The underlying table (`public.speech_journal`) and its
+  `word_or_sound` column are **unchanged** — no migration, no data loss, no
+  RLS change, and every existing row (including any babble a parent logged
+  under the old framing) stays readable, editable, exportable, and covered by
+  `delete_user_account()` / `_purge_user_data()` exactly as before.
+- **PrivacyPage § 4** re-worded in three places: the AI-feature enumeration now
+  says "speech-development insights in the Word Journal", and the two
+  data-transmitted clauses (Word Journal insights, Speech Class) now say "up to
+  30 of the most recently logged words" instead of "words or sounds". The
+  bound (30 entries) and the recipient (Anthropic) are unchanged — this narrows
+  the described payload to match the feature, it does not widen it.
+- **`/subprocessors`** (Anthropic row, purpose + dataCategories) re-worded to
+  match § 4 verbatim. Same three substitutions; no subprocessor added, removed,
+  or re-scoped, so **no 30-day advance notice under Privacy § 5 is triggered**.
+- **Pediatrician PDF gains a "Word Journal" section.** `fetchReportData` now
+  reads `speech_journal` rows inside the selected date range plus an all-time
+  distinct-word count; `pdfReportBuilder` renders the counts, the age benchmark
+  (labelled as corrected age for a premature child), and up to the 50 most
+  recent words with their dates and parent-written context. The section is
+  **included by default with its own checkbox to exclude it** — opt-out, seeded
+  on like the seven existing sections in `PediatricianExport.tsx` — and is
+  omitted entirely when the child has no entries.
+- **RLS fix — `public.speech_journal` moved onto the `child_id` access pivot**
+  (`20260829000000_speech_journal_child_pivot_rls.sql`). This table was the last
+  one still running the original 2026-03 `FOR ALL` policy pivoted on the
+  client-supplied `parent_id`; it was omitted from all 17 tables covered by
+  `20260820000000_child_pivot_log_rls.sql`. Two consequences, both documented in
+  that migration's own header: (a) words logged by a co-parent were invisible to
+  the child's owner, because `has_partner_access` is directional and resolves
+  owner→partner only; and (b) a read-only viewer could write, because a FOR ALL
+  policy with no WITH CHECK reuses USING, and the client stamps its own uid into
+  `parent_id`. Now four per-verb policies on `can_access_child` /
+  `can_write_child`, matching the other 17 tables.
+
+**Correction (same-day, pre-merge):** an earlier draft of this entry described
+the report section as "opt-in per export". It is opt-**out** — the checkbox is
+seeded on, like the other seven. Corrected above. No user-facing text relied on
+the wrong wording; the error was confined to this log, but it is noted here
+because this log is the paper trail and a silent edit would defeat that.
+
+**Analysis:** No new subprocessor, no new egress, and no new data category.
+The PDF is generated **client-side** (jsPDF) from data the parent already
+owns and can already download in full from Profile → Export My Data, and it
+goes only where the parent chooses to send it — so surfacing journal entries
+in it creates no third-party disclosure and no new § 4 or § 5 obligation.
+`pediatrician_exports` continues to log only the export event and date range,
+never the content.
+
+The RLS fix is **not** a breach or an over-disclosure event: the broken policy
+was too *narrow* on reads (an owner could not see a co-parent's rows) and never
+exposed one family's data to another — `has_partner_access` still required an
+active `partner_access` row. The write hole let a read-only *viewer* already
+inside the child's circle write journal rows; it is closed now. No notification
+obligation is triggered. The accuracy motive is the point worth recording: a
+report that silently undercounts vocabulary beside a screening benchmark is a
+misleading clinical artifact, which is a § 5 deceptive-practice concern in a
+way that a merely incomplete UI list is not. The new PDF copy carries a non-diagnostic qualifier
+("Parent-logged vocabulary. Counts reflect what the parent recorded, not a
+formal language assessment.") under the report's existing disclaimer block,
+consistent with the 2026-06-19 act-early milestone entry's framing rule: the
+report presents observations for a clinician to interpret, it does not screen.
+Non-material change — no renewed VPC required.
+
+**Code refs:** branch `claude/word-journal-pediatrician-report-ssq6hn`.
+`src/components/WordSoundJournal.tsx` → `src/components/WordJournal.tsx`;
+`src/lib/vocabBenchmarks.ts` (new, extracted from `SpeechInsightsPanel` so the
+in-app panel and the PDF quote the same benchmark table);
+`src/services/reportDataService.ts`; `src/services/pdfReportBuilder.ts`;
+`src/components/PediatricianExport.tsx`; `PrivacyPage.tsx`;
+`SubprocessorsPage.tsx`.
+
+**Outstanding:** the migration must be applied to live (Supabase MCP
+`apply_migration`) — it is written but **not yet applied**; until it is, the
+co-parent visibility gap above is still open in production. The
+`word_or_sound` column name is now a legacy
+mismatch with the feature name; it is internal-only (never user-visible) and
+renaming it would require a live migration plus redeploys of `weekly-insights`
+and `generate-speech-class` for no user-facing benefit. Code comments at each
+call site record the reason.

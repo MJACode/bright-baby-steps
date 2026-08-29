@@ -159,7 +159,7 @@ export default function SignsPage() {
             toast({
               title: `🎉 ${firstName} signs ${sign.label.toUpperCase()}!`,
               description:
-                "A sign used on its own counts as a word — add it to the Word & Sound Journal too.",
+                "A sign used on its own counts as a word — add it to the Word Journal too.",
             });
           }
         },

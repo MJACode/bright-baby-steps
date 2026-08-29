@@ -8,20 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { BookHeart, Plus, Sparkles, Pencil } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { SpeechInsightsPanel } from "@/components/SpeechInsightsPanel";
 
-interface WordSoundJournalProps {
+interface WordJournalProps {
   childId: string;
   childName?: string;
   ageMonths?: number;
 }
 
-export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }: WordSoundJournalProps) {
+export function WordJournal({ childId, childName = "Baby", ageMonths = 0 }: WordJournalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [wordOrSound, setWordOrSound] = useState("");
+  const [word, setWord] = useState("");
   const [context, setContext] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -56,10 +56,13 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
 
   const addEntry = useMutation({
     mutationFn: async () => {
+      // `word_or_sound` is the original column name from the 2026-03 migration.
+      // The journal tracks words only as of 2026-08-29; the column keeps its name
+      // so existing rows, the weekly-insights function, and Speech Class stay intact.
       const { error } = await supabase.from("speech_journal" as any).insert({
         child_id: childId,
         parent_id: user!.id,
-        word_or_sound: wordOrSound.trim(),
+        word_or_sound: word.trim(),
         context: context.trim() || null,
       });
       if (error) throw error;
@@ -67,7 +70,7 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["speech-journal", childId] });
       queryClient.invalidateQueries({ queryKey: ["speech-journal-count", childId] });
-      setWordOrSound("");
+      setWord("");
       setContext("");
       setShowForm(false);
       toast({ title: "🎉 New word logged! How exciting!" });
@@ -108,7 +111,7 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-display font-bold text-lg flex items-center gap-2">
-          <BookHeart className="w-5 h-5 text-milestones" /> Word & Sound Journal
+          <BookHeart className="w-5 h-5 text-milestones" /> Word Journal
         </h2>
         <div className="flex items-center gap-2">
           {totalCount != null && totalCount > 0 && (
@@ -132,9 +135,9 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
         <Card className="border-0 bg-milestones-bg">
           <CardContent className="p-4 space-y-3">
             <Input
-              placeholder="Word or sound (e.g. 'mama', 'babababa')"
-              value={wordOrSound}
-              onChange={(e) => setWordOrSound(e.target.value)}
+              placeholder="Word (e.g. 'mama', 'more', 'doggy')"
+              value={word}
+              onChange={(e) => setWord(e.target.value)}
               maxLength={100}
             />
             <Textarea
@@ -148,14 +151,14 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
               <Button
                 size="sm"
                 onClick={() => addEntry.mutate()}
-                disabled={!wordOrSound.trim() || addEntry.isPending}
+                disabled={!word.trim() || addEntry.isPending}
               >
                 {addEntry.isPending ? "Saving..." : "Save 🌟"}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => { setShowForm(false); setWordOrSound(""); setContext(""); }}
+                onClick={() => { setShowForm(false); setWord(""); setContext(""); }}
               >
                 Cancel
               </Button>
@@ -218,7 +221,7 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {format(new Date(entry.entry_date), "MMM d")}
+                        {format(parseISO(entry.entry_date), "MMM d")}
                       </span>
                       <Button
                         variant="ghost"
@@ -240,7 +243,7 @@ export function WordSoundJournal({ childId, childName = "Baby", ageMonths = 0 }:
         <Card className="border-0 bg-secondary">
           <CardContent className="p-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Every little sound is a big moment! Tap "Log" to capture your baby's first words 💛
+              Every new word is a big moment! Tap "Log" to capture your baby's first words 💛
             </p>
           </CardContent>
         </Card>

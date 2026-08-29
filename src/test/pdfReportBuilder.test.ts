@@ -22,7 +22,10 @@ const mockDoc = {
 };
 
 vi.mock("jspdf", () => ({ jsPDF: vi.fn(() => mockDoc) }));
-vi.mock("@/hooks/useChildren", () => ({ getAge: vi.fn(() => "6mo") }));
+vi.mock("@/hooks/useChildren", () => ({
+  getAge: vi.fn(() => "6mo"),
+  getAgeInMonths: vi.fn(() => 18),
+}));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,8 @@ const baseData: ReportData = {
   dateTo: new Date("2024-06-30"),
   milestones: [],
   categories: [],
+  words: [],
+  wordsDistinctAllTime: 0,
   lastExportDate: null,
   feedings: [],
   supplements: [],
@@ -92,6 +97,99 @@ describe("generatePediatricianReport", () => {
     generatePediatricianReport(baseData, new Set(["speech"]));
     const textCalls = mockDoc.text.mock.calls.map((c) => c[0]);
     expect(textCalls.some((t) => typeof t === "string" && t === "MILESTONES")).toBe(true);
+  });
+
+  it("renders the word journal with counts, benchmark, and the logged words", () => {
+    const words = [
+      { word_or_sound: "ball", entry_date: "2024-06-11", context: null },
+      { word_or_sound: "mama", entry_date: "2024-06-04", context: "at breakfast" },
+    ];
+    generatePediatricianReport(
+      { ...baseData, words, wordsDistinctAllTime: 12 },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("WORD JOURNAL");
+    expect(flat).toContain("Distinct words logged (all time): 12");
+    expect(flat).toContain("Entries logged in this period: 2");
+    expect(flat).toContain("Age benchmark at 18 months: 10–20 words typical");
+    expect(flat).toContain('"mama" — Jun 4, 2024 (at breakfast)');
+    expect(flat).toContain('"ball" — Jun 11, 2024');
+  });
+
+  it("prints the word list oldest-first so language emergence reads in order", () => {
+    const words = [
+      { word_or_sound: "ball", entry_date: "2024-06-11", context: null },
+      { word_or_sound: "mama", entry_date: "2024-06-04", context: null },
+    ];
+    generatePediatricianReport(
+      { ...baseData, words, wordsDistinctAllTime: 2 },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat.indexOf('"mama" — Jun 4, 2024')).toBeLessThan(flat.indexOf('"ball" — Jun 11, 2024'));
+  });
+
+  it("caps the word list at 50 and says how many were logged", () => {
+    const words = Array.from({ length: 60 }, (_, i) => ({
+      word_or_sound: `word${i}`,
+      entry_date: "2024-06-10",
+      context: null,
+    }));
+    generatePediatricianReport(
+      { ...baseData, words, wordsDistinctAllTime: 60 },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("Showing the 50 most recent of 60 entries.");
+    // words arrives newest-first, so the cap keeps word0..word49 and drops the tail
+    expect(flat.filter((t) => typeof t === "string" && t.startsWith('"word'))).toHaveLength(50);
+    expect(flat).not.toContain('"word55" — Jun 10, 2024');
+  });
+
+  it("marks the benchmark age as corrected for a premature child", () => {
+    generatePediatricianReport(
+      {
+        ...baseData,
+        child: { ...baseChild, is_premature: true, due_date: "2024-04-01" },
+        words: [{ word_or_sound: "mama", entry_date: "2024-06-04", context: null }],
+        wordsDistinctAllTime: 1,
+      },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("Age benchmark (corrected age) at 18 months: 10–20 words typical");
+  });
+
+  it("omits the all-time line when the count query failed rather than printing 0", () => {
+    generatePediatricianReport(
+      {
+        ...baseData,
+        words: [{ word_or_sound: "mama", entry_date: "2024-06-04", context: null }],
+        wordsDistinctAllTime: null,
+      },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("WORD JOURNAL");
+    expect(flat).toContain("Entries logged in this period: 1");
+    expect(flat.some((t) => typeof t === "string" && t.startsWith("Distinct words logged"))).toBe(false);
+  });
+
+  it("still renders the word journal header when the period is empty but words exist", () => {
+    generatePediatricianReport(
+      { ...baseData, words: [], wordsDistinctAllTime: 5 },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("WORD JOURNAL");
+    expect(flat).toContain("No new words logged in this period.");
+  });
+
+  it("omits the word journal entirely when nothing has ever been logged", () => {
+    generatePediatricianReport(baseData, new Set(["words"]));
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).not.toContain("WORD JOURNAL");
   });
 
   it("renders the diapers section when 'diapers' is in sections and data exists", () => {
