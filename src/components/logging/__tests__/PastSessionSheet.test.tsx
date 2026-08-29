@@ -1,7 +1,10 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
 
-const setup = (onSave: (v: PastSessionValue) => Promise<void> = async () => {}) =>
+const setup = (
+  onSave: (v: PastSessionValue) => Promise<void> = async () => {},
+  overrides: Partial<React.ComponentProps<typeof PastSessionSheet>> = {},
+) =>
   render(
     <PastSessionSheet
       open
@@ -14,36 +17,58 @@ const setup = (onSave: (v: PastSessionValue) => Promise<void> = async () => {}) 
       softMaxMin={14 * 60}
       hardMaxMin={24 * 60}
       onSave={onSave}
+      {...overrides}
     />,
   );
 
-// `min={0}` stops the steppers but not the keyboard. Typing "-5" into Hours
-// used to make the duration negative, which derived a start hours in the
-// future and blamed the end time for something typed into Hours.
+// The wheels are the only way to author a custom length, so pick off them the
+// way a parent does rather than typing.
+const spinTo = (wheel: "Hours" | "Minutes", label: string) =>
+  fireEvent.click(
+    within(screen.getByRole("spinbutton", { name: wheel })).getByRole("button", { name: label }),
+  );
+
+// The custom length used to be a pair of <input type="number">. Focusing one
+// inside the drawer raises the iOS keypad, and nothing lifts a `position: fixed`
+// sheet out from under it — the parent was left staring at a keypad with the
+// sheet, Save included, hidden behind it. Wheels mean the length is picked, not
+// typed, so the keyboard never opens on the path to Save.
 describe("PastSessionSheet custom duration", () => {
-  it("ignores a typed negative hour instead of deriving a start in the future", async () => {
+  it("takes a custom length off wheels, with nothing to type on the way to Save", async () => {
     const onSave = vi.fn<(v: PastSessionValue) => Promise<void>>(async () => {});
-    setup(onSave);
+    const { baseElement } = setup(onSave);
     fireEvent.click(screen.getByRole("radio", { name: "Other" }));
 
-    // "Other" seeds from the live duration, so this leaves 0h 45m.
-    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "-5" } });
+    expect(baseElement.querySelector("input, textarea")).toBeNull();
+
+    // "Other" opens on the live duration (0h 45m), so this leaves 1h 15m.
+    spinTo("Hours", "1");
+    spinTo("Minutes", "15");
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save nap" }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     const { startAt, durationMin } = onSave.mock.calls[0][0];
-    expect(durationMin).toBe(45);
+    expect(durationMin).toBe(75);
     expect(startAt.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
-  it("asks for a length when every custom field is negative", () => {
+  it("opens the wheels on the length already chosen", () => {
+    setup();
+    fireEvent.click(screen.getByRole("radio", { name: "1h 30m" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+
+    expect(screen.getByRole("spinbutton", { name: "Hours" })).toHaveAttribute("aria-valuetext", "1");
+    expect(screen.getByRole("spinbutton", { name: "Minutes" })).toHaveAttribute("aria-valuetext", "30");
+  });
+
+  it("asks for a length when both wheels sit at zero", () => {
     setup();
     fireEvent.click(screen.getByRole("radio", { name: "Other" }));
 
-    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "-5" } });
-    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "-30" } });
+    spinTo("Hours", "0");
+    spinTo("Minutes", "00");
 
     expect(screen.getByText("Pick how long it lasted.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save nap" })).toBeDisabled();
@@ -157,12 +182,12 @@ describe("PastSessionSheet without the in-progress option", () => {
 // reason for it — which reads as "Save does nothing".
 describe("PastSessionSheet validation visibility", () => {
   it("keeps the reason Save is disabled in the same container as Save", () => {
-    setup();
+    setup(async () => {}, { hardMaxMin: 2 * 60 });
     fireEvent.click(screen.getByRole("radio", { name: "Other" }));
-    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "25" } });
+    spinTo("Hours", "3");
 
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent("That's longer than a day. Check the times.");
+    expect(alert).toHaveTextContent("That's longer than 2 hours. Check the times.");
 
     const save = screen.getByRole("button", { name: "Save nap" });
     expect(save).toBeDisabled();
@@ -172,8 +197,8 @@ describe("PastSessionSheet validation visibility", () => {
   it("keeps the length helper with Save too", () => {
     setup();
     fireEvent.click(screen.getByRole("radio", { name: "Other" }));
-    fireEvent.change(screen.getByLabelText("Hours"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "0" } });
+    spinTo("Hours", "0");
+    spinTo("Minutes", "00");
 
     const helper = screen.getByText("Pick how long it lasted.");
     const save = screen.getByRole("button", { name: "Save nap" });

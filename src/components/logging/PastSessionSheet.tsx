@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
+import { MobileDateTimePicker, WheelColumn } from "@/components/MobileDateTimePicker";
 import { useSessionAnchor } from "@/hooks/useSessionAnchor";
 import {
   customDurationMin,
@@ -18,6 +17,21 @@ import {
 } from "@/lib/sessionAnchor";
 import { getErrorMessage } from "@/lib/handleRlsError";
 import { cn } from "@/lib/utils";
+
+// A custom length is picked on wheels, not typed. A focused <input> inside a
+// bottom drawer is unreachable on iOS: the app disables WKWebView's automatic
+// content inset (capacitor.config.ts `contentInset: 'never'`) and locks the
+// document against scrolling (index.css html/body `overflow: hidden`), so
+// nothing lifts a `position: fixed` sheet when the keyboard slides up — the
+// software keyboard simply covers the whole sheet, Save included.
+const CUSTOM_HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  value: String(i),
+  label: String(i),
+}));
+const CUSTOM_MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
+  value: String(i).padStart(2, "0"),
+  label: String(i).padStart(2, "0"),
+}));
 
 export type PastSessionValue = {
   startAt: Date;
@@ -91,8 +105,6 @@ export function PastSessionSheet({
   const modeRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [endMode, setEndMode] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
-  const [customHours, setCustomHours] = useState("");
-  const [customMinutes, setCustomMinutes] = useState("");
   const [mode, setMode] = useState<"ended" | "in_progress">("ended");
   const [now, setNow] = useState(() => new Date());
   const [notesOpen, setNotesOpen] = useState(false);
@@ -100,15 +112,11 @@ export function PastSessionSheet({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const wasOpen = useRef(open);
-  const wasOther = useRef(false);
   useEffect(() => {
     if (open && !wasOpen.current) {
       setEndMode(false);
       setMode("ended");
       setCustomOpen(false);
-      setCustomHours("");
-      setCustomMinutes("");
-      wasOther.current = false;
       setNotesOpen(false);
       setNotes("");
       setSaveError(null);
@@ -125,16 +133,14 @@ export function PastSessionSheet({
   const isOther = customOpen || presetIndex === -1;
   const selectedIndex = isOther ? durationPresets.length : presetIndex;
 
-  // An end-time edit can land on a non-preset duration, which flips Other on
-  // without anyone touching the chip. Seed the fields on the transition, or the
-  // first keystroke in Hours reads an empty Minutes and wipes it.
-  useEffect(() => {
-    if (isOther && !wasOther.current) {
-      setCustomHours(String(Math.floor(Math.max(0, durationMin) / 60)));
-      setCustomMinutes(String(Math.max(0, durationMin) % 60));
-    }
-    wasOther.current = isOther;
-  }, [isOther, durationMin]);
+  // The wheels read straight off the canonical duration, so an end-time edit
+  // that lands on a non-preset length shows up on them with no seeding step.
+  // Only the display clamps to the wheels' 0h00m-23h59m range: a longer
+  // duration authored from the end time keeps its real value so validation can
+  // still call it out.
+  const customTotalMin = Math.min(Math.max(0, durationMin), 24 * 60 - 1);
+  const customHours = String(Math.floor(customTotalMin / 60));
+  const customMinutes = String(customTotalMin % 60).padStart(2, "0");
 
   const inProgressMode = !!inProgress && mode === "in_progress";
 
@@ -224,8 +230,6 @@ export function PastSessionSheet({
   };
 
   const applyCustom = (hours: string, minutes: string) => {
-    setCustomHours(hours);
-    setCustomMinutes(minutes);
     setDurationMin(customDurationMin(hours, minutes));
   };
 
@@ -381,35 +385,27 @@ export function PastSessionSheet({
                 </div>
 
                 {isOther && (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-2 gap-3 pt-1">
                     <div className="space-y-1">
-                      <Label htmlFor="past-session-hours" className="text-xs font-semibold">
+                      <p className="text-center text-xs font-semibold text-muted-foreground">
                         Hours
-                      </Label>
-                      <Input
-                        id="past-session-hours"
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
+                      </p>
+                      <WheelColumn
+                        ariaLabel="Hours"
                         value={customHours}
-                        onChange={(e) => applyCustom(e.target.value, customMinutes)}
-                        placeholder="0"
-                        className="h-12 text-base md:text-sm"
+                        options={CUSTOM_HOUR_OPTIONS}
+                        onChange={(v) => applyCustom(v, customMinutes)}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="past-session-minutes" className="text-xs font-semibold">
+                      <p className="text-center text-xs font-semibold text-muted-foreground">
                         Minutes
-                      </Label>
-                      <Input
-                        id="past-session-minutes"
-                        type="number"
-                        inputMode="numeric"
-                        min={0}
+                      </p>
+                      <WheelColumn
+                        ariaLabel="Minutes"
                         value={customMinutes}
-                        onChange={(e) => applyCustom(customHours, e.target.value)}
-                        placeholder="0"
-                        className="h-12 text-base md:text-sm"
+                        options={CUSTOM_MINUTE_OPTIONS}
+                        onChange={(v) => applyCustom(customHours, v)}
                       />
                     </div>
                   </div>
