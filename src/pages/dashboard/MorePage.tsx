@@ -1,7 +1,7 @@
 // "More" — secondary navigation surfaced from the bottom tab bar.
-// Lists everything that doesn't have a dedicated bar tab. The four record
-// surfaces (New Baby, Medical, Financial, Early Intervention) each get their
-// own line item here rather than sitting behind a tab bar inside Records.
+// Lists everything that doesn't have a dedicated bar tab. The record surfaces
+// (Medical, Financial, Early Intervention) each get their own line item here
+// rather than sitting behind a tab bar inside Records.
 
 import { Link } from "react-router-dom";
 import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Stethoscope, TrendingUp, User } from "lucide-react";
@@ -26,14 +26,6 @@ const tools: ToolItem[] = [
     description: "What Grace Flare knows, and how it's used",
     icon: Sparkles,
     path: "/dashboard/child-context",
-    colorClass: "bg-primary/10",
-    iconClass: "text-primary",
-  },
-  {
-    label: "New Baby",
-    description: "First-weeks checklist with deadlines",
-    icon: FileText,
-    path: "/dashboard/new-baby",
     colorClass: "bg-primary/10",
     iconClass: "text-primary",
   },
