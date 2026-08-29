@@ -59,3 +59,21 @@ describe("GroupedLogList footer", () => {
     expect(screen.queryByText(/Showing your most recent/)).not.toBeInTheDocument();
   });
 });
+
+describe("GroupedLogList default expansion", () => {
+  it("opens Today and leaves every past day collapsed", () => {
+    setup({ logs: [at(0, 8), at(1, 9), at(2, 9)] });
+
+    // Radix keeps closed content out of the tree, so a row that renders at all
+    // belongs to an open day.
+    expect(screen.getByText(at(0, 8).id)).toBeInTheDocument();
+    expect(screen.queryByText(at(1, 9).id)).not.toBeInTheDocument();
+    expect(screen.queryByText(at(2, 9).id)).not.toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /Today/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /Yesterday/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+});
