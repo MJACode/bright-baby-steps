@@ -38,6 +38,8 @@ export type ActiveFeedRow = {
   duration_minutes: number | null;
   duration_minutes_left: number | null;
   duration_minutes_right: number | null;
+  duration_seconds_left: number | null;
+  duration_seconds_right: number | null;
   side: string | null;
   active_side: string | null;
   side_started_at: string | null;
@@ -148,7 +150,7 @@ export function useActiveFeed(childId: string | undefined) {
 
   // Switch which side is currently running for nursing/pump. Flushes the
   // server-tracked elapsed of the CURRENT side (now - side_started_at) to
-  // duration_minutes_left / duration_minutes_right before moving on.
+  // duration_seconds_left / duration_seconds_right before moving on.
   const setSide = useMutation({
     mutationFn: async (input: { nextSide: FeedingSide | null }) => {
       if (!active) return;
@@ -162,29 +164,38 @@ export function useActiveFeed(childId: string | undefined) {
           0,
           Math.floor((Date.now() - new Date(active.side_started_at).getTime()) / 1000),
         );
-        const flushMin = Math.round(elapsedSec / 60);
+        // Accumulate the segment in SECONDS. Rounding it to whole minutes here
+        // is what made a pause at 12:16 resume from 12:00 — the display reads
+        // back from these accumulators, so anything the flush drops is gone.
+        // duration_minutes_* is written alongside, derived from the exact
+        // seconds, so every reader that predates second precision still sees a
+        // sane value.
         // "both" double-pumps in parallel — the same segment counts toward
         // both per-side accumulators.
         if (currentSide === "left" || currentSide === "both") {
-          updates.duration_minutes_left = (active.duration_minutes_left ?? 0) + flushMin;
+          const total = storedSecondsForSide(active, "left") + elapsedSec;
+          updates.duration_seconds_left = total;
+          updates.duration_minutes_left = Math.round(total / 60);
         }
         if (currentSide === "right" || currentSide === "both") {
-          updates.duration_minutes_right = (active.duration_minutes_right ?? 0) + flushMin;
+          const total = storedSecondsForSide(active, "right") + elapsedSec;
+          updates.duration_seconds_right = total;
+          updates.duration_minutes_right = Math.round(total / 60);
         }
       }
       const { error } = await supabase.from("feeding_logs").update(updates).eq("id", active.id);
       if (error) throw error;
-      // Sync the lock-screen timer to the post-switch accumulators — the same
-      // rounded minutes the in-app display restarts from. While "both" runs,
-      // the in-app total (left + right − both) also ticks 1s/s, matching the
-      // lock screen; the double-counted flush lands on both surfaces at once
-      // at the next switch/stop.
-      const newLeftMin =
-        (updates.duration_minutes_left as number | undefined) ?? active.duration_minutes_left ?? 0;
-      const newRightMin =
-        (updates.duration_minutes_right as number | undefined) ?? active.duration_minutes_right ?? 0;
+      // Sync the lock-screen timer to the post-switch accumulators — the exact
+      // seconds the in-app display restarts from. While "both" runs, the in-app
+      // total (left + right − both) also ticks 1s/s, matching the lock screen;
+      // the double-counted flush lands on both surfaces at once at the next
+      // switch/stop.
+      const newLeftSec =
+        (updates.duration_seconds_left as number | undefined) ?? storedSecondsForSide(active, "left");
+      const newRightSec =
+        (updates.duration_seconds_right as number | undefined) ?? storedSecondsForSide(active, "right");
       const elapsedSeconds =
-        active.feeding_type === "bottle" ? newLeftMin * 60 : (newLeftMin + newRightMin) * 60;
+        active.feeding_type === "bottle" ? newLeftSec : newLeftSec + newRightSec;
       void updateTimerLiveActivity({
         sessionId: active.id,
         running: !!input.nextSide,
@@ -214,6 +225,12 @@ export function useActiveFeed(childId: string | undefined) {
         duration_minutes: Math.max(1, input.totalDurationMinutes),
         duration_minutes_left: input.leftMinutes ?? active.duration_minutes_left,
         duration_minutes_right: input.rightMinutes ?? active.duration_minutes_right,
+        // The seconds columns exist to carry precision *between* segments of a
+        // running session. Once the row is finished the caller's minutes are
+        // the record, so clear them rather than leave the last mid-session
+        // accumulator behind to contradict the recorded total.
+        duration_seconds_left: null,
+        duration_seconds_right: null,
         active_side: null,
         side_started_at: null,
         amount_oz: input.amount_oz ?? null,
@@ -253,13 +270,26 @@ export function useSecondTicker(enabled: boolean): void {
   }, [enabled]);
 }
 
-// Per-side seconds derived from the row: stored minutes + the in-progress
+// Seconds already banked on a side by earlier segments, exclusive of any
+// segment running right now. duration_seconds_* is the exact value; rows
+// written before second precision (and rows a pre-update client flushed) only
+// have the rounded minutes, so fall back to those.
+export function storedSecondsForSide(
+  row: Pick<ActiveFeedRow, "duration_minutes_left" | "duration_minutes_right" | "duration_seconds_left" | "duration_seconds_right">,
+  side: "left" | "right",
+): number {
+  const storedSec = side === "left" ? row.duration_seconds_left : row.duration_seconds_right;
+  if (storedSec != null) return Math.max(0, storedSec);
+  const storedMin = side === "left" ? row.duration_minutes_left : row.duration_minutes_right;
+  return Math.max(0, storedMin ?? 0) * 60;
+}
+
+// Per-side seconds derived from the row: banked seconds + the in-progress
 // segment since side_started_at (if this side OR "both" is currently active —
 // "both" ticks both sides in parallel).
 export function elapsedSecondsForSide(row: ActiveFeedRow | null, side: "left" | "right"): number {
   if (!row) return 0;
-  const storedMin = side === "left" ? row.duration_minutes_left : row.duration_minutes_right;
-  let total = (storedMin ?? 0) * 60;
+  let total = storedSecondsForSide(row, side);
   if ((row.active_side === side || row.active_side === "both") && row.side_started_at) {
     const segSec = Math.max(0, Math.floor((Date.now() - new Date(row.side_started_at).getTime()) / 1000));
     total += segSec;
@@ -282,8 +312,7 @@ export function elapsedSecondsBoth(row: ActiveFeedRow | null): number {
 // "minutes" reflects time that has already elapsed.
 export function elapsedSecondsBottle(row: ActiveFeedRow | null): number {
   if (!row) return 0;
-  const storedMin = row.duration_minutes_left ?? 0;
-  let total = storedMin * 60;
+  let total = storedSecondsForSide(row, "left");
   if (row.active_side && row.side_started_at) {
     const segSec = Math.max(0, Math.floor((Date.now() - new Date(row.side_started_at).getTime()) / 1000));
     total += segSec;

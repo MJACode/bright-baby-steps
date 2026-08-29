@@ -362,6 +362,10 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
             duration_minutes: payload.duration_minutes ?? 1,
             active_side: null,
             side_started_at: null,
+            // Mid-session precision carriers — see useActiveFeed's stop(). The
+            // recorded minutes are the record once the row is finished.
+            duration_seconds_left: null,
+            duration_seconds_right: null,
           })
           .eq("id", activeRow.id);
         if (error) throw error;

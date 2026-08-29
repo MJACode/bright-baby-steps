@@ -1352,6 +1352,8 @@ export type Database = {
           duration_minutes: number | null
           duration_minutes_left: number | null
           duration_minutes_right: number | null
+          duration_seconds_left: number | null
+          duration_seconds_right: number | null
           feeding_type: string
           food_category: string | null
           food_description: string | null
@@ -1375,6 +1377,8 @@ export type Database = {
           duration_minutes?: number | null
           duration_minutes_left?: number | null
           duration_minutes_right?: number | null
+          duration_seconds_left?: number | null
+          duration_seconds_right?: number | null
           feeding_type: string
           food_category?: string | null
           food_description?: string | null
@@ -1398,6 +1402,8 @@ export type Database = {
           duration_minutes?: number | null
           duration_minutes_left?: number | null
           duration_minutes_right?: number | null
+          duration_seconds_left?: number | null
+          duration_seconds_right?: number | null
           feeding_type?: string
           food_category?: string | null
           food_description?: string | null
@@ -3295,6 +3301,8 @@ export type Database = {
           duration_minutes: number | null
           duration_minutes_left: number | null
           duration_minutes_right: number | null
+          duration_seconds_left: number | null
+          duration_seconds_right: number | null
           feeding_type: string
           food_category: string | null
           food_description: string | null
