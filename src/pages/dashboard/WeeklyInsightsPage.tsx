@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
@@ -201,7 +202,10 @@ export default function WeeklyInsightsPage() {
       {digest && (
         <div className="space-y-3">
           <p className="text-[11px] text-muted-foreground">
-            AI-generated summary — for informational purposes only. Not a substitute for professional advice.
+            AI-generated summary — for informational purposes only. Not a substitute for professional advice.{" "}
+            <Link to="/dashboard/child-context" className="underline underline-offset-2">
+              What Grace Flare remembers
+            </Link>
           </p>
           {sections.map(({ key, label, icon: Icon, color }) => (
             <Card key={key} className="border-0 bg-secondary">

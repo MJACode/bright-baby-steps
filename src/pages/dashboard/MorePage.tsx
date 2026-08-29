@@ -2,13 +2,15 @@
 // Lists everything that doesn't have a dedicated bar tab. The record surfaces
 // (Medical, Financial, Early Intervention) each get their own line item here
 // rather than sitting behind a tab bar inside Records.
+//
+// "What Grace Flare remembers" is deliberately NOT here — it's a settings
+// surface, reached from Profile and from the AI surfaces that use it.
 
 import { Link } from "react-router-dom";
 import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Stethoscope, TrendingUp, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
-import { useChildren } from "@/hooks/useChildren";
 
 interface ToolItem {
   label: string;
@@ -21,14 +23,6 @@ interface ToolItem {
 }
 
 const tools: ToolItem[] = [
-  {
-    label: "About your baby",
-    description: "What Grace Flare knows, and how it's used",
-    icon: Sparkles,
-    path: "/dashboard/child-context",
-    colorClass: "bg-primary/10",
-    iconClass: "text-primary",
-  },
   {
     label: "Medical",
     description: "Visits, vaccines, meds, temperature",
@@ -98,8 +92,6 @@ const tools: ToolItem[] = [
 
 export default function MorePage() {
   const { isPremium } = usePremium();
-  const { activeChild } = useChildren();
-  const firstName = activeChild?.name.split(" ")[0];
 
   return (
     <div className="space-y-5 pb-24">
@@ -111,10 +103,6 @@ export default function MorePage() {
       <div className="space-y-2">
         {tools.map((tool) => {
           const Icon = tool.icon;
-          const label =
-            tool.path === "/dashboard/child-context" && firstName
-              ? `About ${firstName}`
-              : tool.label;
           return (
             <Card key={tool.path} className="border-0 bg-card">
               <CardContent className="p-0">
@@ -127,7 +115,7 @@ export default function MorePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm flex items-center gap-2">
-                      {label}
+                      {tool.label}
                       {tool.premium && !isPremium && (
                         <span className="inline-flex items-center gap-1 text-xs font-bold tracking-wider px-1.5 py-0.5 rounded bg-accent text-accent-foreground uppercase">
                           <Sparkles className="w-2.5 h-2.5" strokeWidth={2.5} />
