@@ -31,7 +31,6 @@ import RecordsPage, { RecordsRedirect } from "./pages/dashboard/RecordsPage";
 import CalendarPage from "./pages/dashboard/CalendarPage";
 import CryAnalyzerPage from "./pages/dashboard/CryAnalyzerPage";
 import MorePage from "./pages/dashboard/MorePage";
-import FindSlpPage from "./pages/dashboard/FindSlpPage";
 import Upgrade from "@/pages/Upgrade";
 import PrivacyPage from "./pages/PrivacyPage";
 import TermsPage from "./pages/TermsPage";
@@ -83,7 +82,6 @@ const App = () => (
                 <Route path="calendar" element={<CalendarPage />} />
                 <Route path="cry-analyzer" element={<CryAnalyzerPage />} />
                 <Route path="more" element={<MorePage />} />
-                <Route path="find-slp" element={<FindSlpPage />} />
               </Route>
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/terms" element={<TermsPage />} />
