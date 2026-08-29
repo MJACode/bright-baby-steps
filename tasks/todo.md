@@ -68,3 +68,49 @@ can't open — DRM'd media, something exotic, a silent video — surfaces the
 "couldn't read any audio" error. The realtime-capture fallback (media element +
 `captureStream`) needs a user gesture and doesn't work uniformly across Safari,
 so it wasn't worth the complexity for v1.
+
+---
+
+# Feed timer: last side + second-accurate pause (2026-08-29)
+
+## Plan
+- [x] Show which side the previous feed was on, above the Left/Right buttons
+- [x] Stop pause/resume rounding the running segment to whole minutes
+- [x] Regression tests for both
+- [x] Migration for the second-precision accumulators
+
+## Review
+
+**Two source files carry the fix**, plus one migration, one type-file update,
+one new test file and five cases added to the NursingTimer suite.
+Full suite green: 28 files, 394 tests. Typecheck and production build clean.
+
+**The rounding bug was in the flush, not the display.** `useActiveFeed.setSide`
+banked the running segment as `Math.round(elapsedSec / 60)` into
+`duration_minutes_left / _right`, and the face reads straight back off those
+accumulators. Pausing at 12:16 stored 12 and resumed from 12:00. It cut both
+ways — a pause at 12:45 banked 13 and *invented* 15 seconds — and a feed with
+several switches drifted by minutes. Migration
+`20260829000000_feed_timer_second_precision.sql` adds
+`duration_seconds_left / _right`; the flush writes exact seconds and keeps the
+minute columns in sync as a derived value. `storedSecondsForSide()` is the one
+reader, falling back to `minutes * 60` for rows that predate the columns, so
+sessions already running when the app updates keep working.
+
+**Sleep was already correct** — `paused_accumulated_seconds` has always been in
+seconds, so `SleepTimer` needed no change. Feeds now match it.
+
+**Finished rows keep minutes as the record.** The seconds columns exist to carry
+precision *between* segments of a running session; both finalize paths
+(`useActiveFeed.stop()` and `FeedingLog`'s save) null them out so a stale
+mid-session accumulator can't contradict the recorded total.
+
+**The last-side hint reuses the query that was already there.** `last-nursing-side`
+existed to default the past-feed sheet; it now also returns `logged_at` and
+admits `both`, and renders as one line above the side buttons. The
+"start on the left" nudge only shows while the feed is still at 00:00 — mid-feed
+it would be telling a parent to undo the side they're on — and a `both` feed
+gets the fact with no suggestion, since there's nothing to alternate from.
+
+**Deploy note.** The migration must be applied before the frontend ships; the
+timer writes the new columns on every pause.

@@ -18,12 +18,16 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: toastSpy, dismiss: vi.fn(), toasts: [] }),
 }));
 
+// The only row this component reads through supabase directly is the previous
+// feed behind the last-side hint.
+let lastFeedRow: { side: string; logged_at: string } | null = null;
+
 vi.mock("@/integrations/supabase/client", () => {
   const chain: Record<string, unknown> = new Proxy(
     {},
     {
       get: (_t, prop) => {
-        if (prop === "maybeSingle") return async () => ({ data: null, error: null });
+        if (prop === "maybeSingle") return async () => ({ data: lastFeedRow, error: null });
         if (prop === "then") return undefined;
         return () => chain;
       },
@@ -141,6 +145,7 @@ const remountTimer = () => {
 
 beforeEach(() => {
   activeRow = null;
+  lastFeedRow = null;
   startFeed.mockClear();
   setActiveSide.mockClear();
   cancelFeed.mockClear();
@@ -310,5 +315,60 @@ describe("NursingTimer when a feed starts on another device", () => {
 
     await waitFor(() => expect(screen.getByTestId("bound")).toHaveTextContent("partner-row"));
     expect(screen.getByText("Nursing on left...")).toBeInTheDocument();
+  });
+});
+
+describe("NursingTimer last-side hint", () => {
+  const hint = () => screen.queryByText(/^Last feed:/);
+
+  it("says which side the previous feed was on and which to start", async () => {
+    lastFeedRow = { side: "right", logged_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() };
+    renderHarness();
+
+    await waitFor(() => expect(hint()).toBeInTheDocument());
+    expect(hint()).toHaveTextContent("Last feed: right side");
+    expect(hint()).toHaveTextContent("2 hours ago");
+    expect(hint()).toHaveTextContent("start on the left");
+  });
+
+  it("states the fact without a next side after a both-sides feed", async () => {
+    lastFeedRow = { side: "both", logged_at: new Date(Date.now() - 40 * 60 * 1000).toISOString() };
+    renderHarness();
+
+    await waitFor(() => expect(hint()).toBeInTheDocument());
+    expect(hint()).toHaveTextContent("Last feed: both sides");
+    expect(hint()).not.toHaveTextContent("start on the");
+  });
+
+  it("drops the suggestion once this feed has time on it", async () => {
+    lastFeedRow = { side: "right", logged_at: new Date(Date.now() - 90 * 60 * 1000).toISOString() };
+    renderHarness();
+    await waitFor(() => expect(hint()).toHaveTextContent("start on the left"));
+
+    await applyPastFeed("30m");
+
+    // Telling a parent 30 minutes in to "start on the left" would be asking
+    // them to undo the side they just logged.
+    expect(hint()).toHaveTextContent("Last feed: right side");
+    expect(hint()).not.toHaveTextContent("start on the");
+  });
+
+  it("stays hidden for a child with no nursing history", async () => {
+    renderHarness();
+
+    await waitFor(() => expect(screen.getByText("Tap a side to start")).toBeInTheDocument());
+    expect(hint()).not.toBeInTheDocument();
+  });
+
+  it("defaults the past-feed sheet to the opposite side", async () => {
+    lastFeedRow = { side: "left", logged_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString() };
+    renderHarness();
+    await waitFor(() => expect(hint()).toHaveTextContent("start on the right"));
+
+    await openPastSheet();
+
+    // Selected side carries the feeding accent; the others render as outlines.
+    expect(screen.getByRole("button", { name: "right" })).toHaveClass("bg-feeding");
+    expect(screen.getByRole("button", { name: "left" })).not.toHaveClass("bg-feeding");
   });
 });

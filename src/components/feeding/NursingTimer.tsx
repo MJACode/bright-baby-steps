@@ -13,6 +13,7 @@ import {
 import { getErrorMessage } from "@/lib/handleRlsError";
 import { supabase } from "@/integrations/supabase/client";
 import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+import { formatDistanceToNowStrict } from "date-fns";
 
 const NURSING_PRESETS = [5, 10, 15, 20, 25, 30];
 const PAST_FEED_TITLE = "Add past feed";
@@ -140,25 +141,34 @@ export default function NursingTimer({
   const [pastOpen, setPastOpen] = useState(false);
   const [pastSide, setPastSide] = useState<"left" | "right" | "both">("left");
 
-  // Babies alternate sides, so the most useful default is the opposite of the
-  // last side on record. This key is already in the canonical invalidation list.
-  const { data: lastSide } = useQuery({
+  // Which side the previous feed finished on — shown above the side buttons so
+  // the parent doesn't have to remember, and used as the past-feed default
+  // since babies alternate. In-progress timer rows never have `side` set (only
+  // Save writes it), so the `side` filter also keeps a running session out.
+  // This key is already in the canonical invalidation list.
+  const { data: lastFeed } = useQuery({
     queryKey: ["last-nursing-side", childId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("feeding_logs")
-        .select("side")
+        .select("side, logged_at")
         .eq("child_id", childId!)
         .eq("feeding_type", "breast")
-        .in("side", ["left", "right"])
+        .in("side", ["left", "right", "both"])
         .order("logged_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return (data?.side as "left" | "right" | null) ?? null;
+      if (!data?.side) return null;
+      return { side: data.side as "left" | "right" | "both", loggedAt: data.logged_at as string };
     },
     enabled: !!childId,
   });
+
+  const lastSide = lastFeed?.side ?? null;
+  // Only a one-sided feed implies a next side. After "both" there's nothing to
+  // alternate from, so the hint states the fact and stops there.
+  const suggestedSide = lastSide === "left" ? "right" : lastSide === "right" ? "left" : null;
 
   const toggleSide = async (next: "left" | "right") => {
     if (editMode) {
@@ -231,7 +241,7 @@ export default function NursingTimer({
   };
 
   const openPastSheet = () => {
-    setPastSide(lastSide === "left" ? "right" : lastSide === "right" ? "left" : "left");
+    setPastSide(suggestedSide ?? "left");
     setPastOpen(true);
   };
 
@@ -293,6 +303,27 @@ export default function NursingTimer({
           {!activeSide && totalSeconds === 0 && "Tap a side to start"}
         </span>
       </div>
+
+      {/* Where the last feed left off. The whole reason a parent hesitates over
+          these two buttons, so it sits directly above them. The "start on the
+          other side" nudge only makes sense before this feed has any time on
+          it — mid-feed it would be telling them to undo the side they're on. */}
+      {!editMode && lastFeed && (
+        <p className="text-center text-xs text-muted-foreground">
+          Last feed:{" "}
+          <span className="font-semibold text-foreground">
+            {lastSide === "both" ? "both sides" : `${lastSide} side`}
+          </span>
+          {" · "}
+          {formatDistanceToNowStrict(new Date(lastFeed.loggedAt), { addSuffix: true })}
+          {suggestedSide && totalSeconds === 0 && (
+            <>
+              {" · start on the "}
+              <span className="font-semibold text-feeding">{suggestedSide}</span>
+            </>
+          )}
+        </p>
+      )}
 
       {/* Per-side controls */}
       <div className="grid grid-cols-2 gap-2">
