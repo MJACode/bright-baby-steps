@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,25 +6,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useLeaps } from "@/hooks/useLeaps";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { badgeVariants } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Moon, Sun, Play, Square, Clock, Pencil, Info, Plus, CloudMoon, Sparkles, Sparkle, Sunrise, ChevronDown, CheckCircle2, Trash2, CalendarCheck, History } from "lucide-react";
+import { Moon, Sun, Clock, Pencil, Info, Plus, CloudMoon, Sparkle, Sunrise, CheckCircle2, Trash2, CalendarCheck, History } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { format, differenceInMinutes, startOfWeek, addDays, isWithinInterval, subDays, startOfDay, differenceInDays, formatDistanceToNow } from "date-fns";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { SevenDayChart } from "@/components/charts/SevenDayChart";
+import { format, subDays, startOfDay, formatDistanceToNow } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
-import { useMemo } from "react";
 import SleepTimer from "@/components/sleep/SleepTimer";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
@@ -32,7 +25,6 @@ import { SleepTodoCard } from "@/components/sleep/SleepTodoCard";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { detectTriageReasons } from "@/lib/sleepTriage";
-import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
@@ -49,74 +41,6 @@ import type { Tables } from "@/integrations/supabase/types";
 
 type SleepLogRow = Tables<"sleep_logs">;
 
-function SleepTrendsChart({ childId, onAddEntry }: { childId: string; onAddEntry?: () => void }) {
-  const { data: trendLogs } = useQuery({
-    queryKey: ["sleep-trends-7d", childId],
-    queryFn: async () => {
-      const sevenAgo = subDays(startOfDay(new Date()), 6).toISOString();
-      const { data, error } = await supabase
-        .from("sleep_logs")
-        .select("started_at, duration_minutes")
-        .eq("child_id", childId)
-        .gte("started_at", sevenAgo)
-        .order("started_at");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const chartData = useMemo(() => {
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = subDays(startOfDay(new Date()), 6 - i);
-      return { date: d, day: format(d, "EEE"), value: 0 };
-    });
-    trendLogs?.forEach((log) => {
-      const key = format(new Date(log.started_at), "yyyy-MM-dd");
-      const entry = days.find((d) => format(d.date, "yyyy-MM-dd") === key);
-      if (entry) entry.value += (log.duration_minutes || 0) / 60;
-    });
-    return days.map((d) => ({ day: d.day, value: Math.round(d.value * 10) / 10 }));
-  }, [trendLogs]);
-
-  const hasData = chartData.some(d => d.value > 0);
-
-  if (!hasData) {
-    return (
-      <Card className="border-0 bg-card/60">
-        <CardHeader className="pb-1 pt-3 px-4">
-          <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            7-Day Sleep Trends
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 flex flex-col items-center justify-center py-8 gap-3">
-          <CloudMoon className="w-10 h-10 text-sleep/40" />
-          <p className="text-sm text-muted-foreground text-center">No sleep logged this week</p>
-          {onAddEntry && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onAddEntry}
-              className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg"
-            >
-              <Plus className="w-4 h-4" /> Add your first entry
-            </Button>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <SevenDayChart
-      title="7-Day Sleep Trends"
-      data={chartData}
-      color="hsl(var(--sleep))"
-      yLabel="Hours"
-      formatValue={(v) => `${v.toFixed(1)}h`}
-    />
-  );
-}
-
 // Age-appropriate minimum total sleep hours per day
 const ageMinSleepHours: Record<string, number> = {
   newborn: 14,
@@ -126,65 +50,35 @@ const ageMinSleepHours: Record<string, number> = {
   "12mo+": 11,
 };
 
-const sleepTips = [
-  { title: "Create a calming bedtime routine", content: "A warm bath, gentle massage, soft lullaby, or a short book can signal to your baby that it's time to wind down. Consistency is key — try to follow the same steps each night." },
-  { title: "Watch for sleepy cues", content: "Yawning, rubbing eyes, fussiness, and looking away are signs your baby is ready for sleep. Putting them down when drowsy but still awake helps them learn to self-soothe." },
-  { title: "Keep the sleep environment consistent", content: "A dark, cool room with white noise can help your baby sleep more soundly. Blackout curtains and a sound machine are simple tools that many parents find helpful." },
-  { title: "Daytime naps support nighttime sleep", content: "It might seem counterintuitive, but well-rested babies often sleep better at night. Skipping naps can lead to overtiredness and more night wakings." },
-];
-
 type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
 
+// A short list of nudges — always actionable, and only the ones that aren't
+// already on screen somewhere else on the tab.
 function SleepInsights({
   logs,
   ageMonths,
-  calmMode,
-  onToggleCalm,
   nightWakingReassurance,
 }: {
   logs: SleepLogEntry[];
   ageMonths: number;
-  calmMode: boolean;
-  onToggleCalm: (next: boolean) => void;
   nightWakingReassurance: string | null;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const { prefs } = usePreferences();
+  const calmMode = prefs.calmMode;
 
-  const ageGroup = getAgeGroup(ageMonths);
-  const rec = sleepRecommendations[ageGroup];
-
-  const { insights, napBreakdown } = useMemo(() => {
+  const insights = useMemo(() => {
     const result: { icon: React.ReactNode; text: string }[] = [];
     const sevenAgo = subDays(startOfDay(new Date()), 6);
     const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenAgo);
+    if (recentLogs.length === 0) return result;
 
-    // Nap vs night breakdown
-    const napLogs = recentLogs.filter(l => l.sleep_type === "nap");
-    const nightLogs = recentLogs.filter(l => l.sleep_type === "night");
-    const byDay = new Map<string, { napMin: number; nightMin: number; napCount: number }>();
+    const byDay = new Map<string, number>();
     recentLogs.forEach(l => {
       const key = format(new Date(l.started_at), "yyyy-MM-dd");
-      const entry = byDay.get(key) || { napMin: 0, nightMin: 0, napCount: 0 };
-      if (l.sleep_type === "nap") {
-        entry.napMin += l.duration_minutes || 0;
-        entry.napCount += 1;
-      } else {
-        entry.nightMin += l.duration_minutes || 0;
-      }
-      byDay.set(key, entry);
+      byDay.set(key, (byDay.get(key) ?? 0) + (l.duration_minutes || 0));
     });
     const daysWithData = byDay.size || 1;
-    const totalNapMin = Array.from(byDay.values()).reduce((s, d) => s + d.napMin, 0);
-    const totalNightMin = Array.from(byDay.values()).reduce((s, d) => s + d.nightMin, 0);
-    const totalNapCount = Array.from(byDay.values()).reduce((s, d) => s + d.napCount, 0);
-
-    const napBreakdownData = recentLogs.length > 0 ? {
-      avgNapHours: Math.round(totalNapMin / daysWithData / 6) / 10,
-      avgNightHours: Math.round(totalNightMin / daysWithData / 6) / 10,
-      avgNapsPerDay: Math.round(totalNapCount / daysWithData * 10) / 10,
-    } : null;
-
-    if (recentLogs.length === 0) return { insights: result, napBreakdown: napBreakdownData };
+    const totalMin = Array.from(byDay.values()).reduce((s, m) => s + m, 0);
 
     // 1. Average daily sleep below age minimum. Calm mode hides the mild
     // comparison — it's the most anxiety-inducing aggregate on the page — but a
@@ -192,8 +86,8 @@ function SleepInsights({
     // non-numeric, pediatrician-soft-out heads-up even in calm mode, so the one
     // signal that could matter can't be toggled into silence. (Sleep-advisor
     // review, 2026-06-19.)
-    const avgDailyHours = (totalNapMin + totalNightMin) / daysWithData / 60;
-    const minHours = ageMinSleepHours[ageGroup] ?? 11;
+    const avgDailyHours = totalMin / daysWithData / 60;
+    const minHours = ageMinSleepHours[getAgeGroup(ageMonths)] ?? 11;
     if (avgDailyHours < minHours) {
       if (!calmMode) {
         result.push({
@@ -208,17 +102,7 @@ function SleepInsights({
       }
     }
 
-    // 2. No naps in last 2 days
-    const twoDaysAgo = subDays(startOfDay(new Date()), 1);
-    const recentNaps = recentLogs.filter(l => l.sleep_type === "nap" && new Date(l.started_at) >= twoDaysAgo);
-    if (recentNaps.length === 0 && recentLogs.length > 0) {
-      result.push({
-        icon: <Sparkles className="w-5 h-5 text-sleep shrink-0" />,
-        text: "Tap to log a nap when one happens — even short ones count.",
-      });
-    }
-
-    // 3. Early waking pattern — uses the shared triage rule so Insights stays
+    // 2. Early waking pattern — uses the shared triage rule so Insights stays
     // consistent with the rest of the app on what counts as "early waking."
     if (detectTriageReasons(logs, ageMonths).includes("early_waking")) {
       result.push({
@@ -227,127 +111,41 @@ function SleepInsights({
       });
     }
 
-    return { insights: result.slice(0, 3), napBreakdown: napBreakdownData };
+    return result;
   }, [logs, ageMonths, calmMode]);
 
-  if (insights.length === 0 && !napBreakdown && !nightWakingReassurance) return null;
+  if (insights.length === 0 && !nightWakingReassurance) return null;
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-sleep-bg hover:bg-sleep-bg/80 border-0">
-          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Sparkles className="w-4 h-4 text-sleep" /> Sleep Insights
-          </span>
-          <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")} />
-        </Button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-2 space-y-3">
-        {/* Calm mode toggle — hides the numeric averages and age comparisons */}
-        <div className="flex items-center justify-between rounded-xl bg-sleep-bg/60 px-4 py-3 min-h-[48px]">
-          <div className="flex items-center gap-2 min-w-0">
-            <CloudMoon className="w-4 h-4 text-sleep shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight">Calm mode — hide the numbers</p>
-              <p className="text-xs text-muted-foreground leading-snug">Swap the averages for reassurance.</p>
-            </div>
-          </div>
-          <Switch
-            checked={calmMode}
-            onCheckedChange={onToggleCalm}
-            aria-label="Calm mode — hide the numbers"
-          />
-        </div>
+    <div className="space-y-2">
+      {/* Night-waking reassurance — only when a regression window or leap applies */}
+      {nightWakingReassurance && (
+        <Card className="border-0 bg-sleep-bg/60">
+          <CardContent className="p-3 flex items-start gap-3">
+            <Moon className="w-5 h-5 text-sleep shrink-0" />
+            <p className="text-sm text-foreground/80 leading-relaxed">{nightWakingReassurance}</p>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Night-waking reassurance — only when a regression window or leap applies */}
-        {nightWakingReassurance && (
-          <Card className="border-0 bg-sleep-bg/60">
-            <CardContent className="p-3 flex items-start gap-3">
-              <Moon className="w-5 h-5 text-sleep shrink-0" />
-              <p className="text-sm text-foreground/80 leading-relaxed">{nightWakingReassurance}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Nap vs Night Breakdown — numeric averages, hidden in calm mode */}
-        {napBreakdown && !calmMode && (
-          <Card className="border-0 bg-sleep-bg/60">
-            <CardContent className="p-4 space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                <Moon className="w-3.5 h-3.5 text-sleep" /> Nap vs. Night Breakdown
-              </p>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <p className="text-lg font-bold text-sleep">{napBreakdown.avgNightHours}h</p>
-                  <p className="text-[10px] text-muted-foreground">Night sleep/day</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-sleep">{napBreakdown.avgNapHours}h</p>
-                  <p className="text-[10px] text-muted-foreground">Nap sleep/day</p>
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-sleep">{napBreakdown.avgNapsPerDay}</p>
-                  <p className="text-[10px] text-muted-foreground">Naps/day</p>
-                </div>
-              </div>
-              <div className="rounded-lg bg-background/50 p-2.5">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  <span className="font-medium text-foreground/80">Age-typical benchmarks:</span>{" "}
-                  Babies this age typically need {rec.naps} totaling {rec.napHours}, plus {rec.nightHours} overnight.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Calm-mode replacement for the numeric breakdown */}
-        {napBreakdown && calmMode && (
-          <Card className="border-0 bg-sleep-bg/60">
-            <CardContent className="p-4 flex items-start gap-3">
-              <Moon className="w-5 h-5 text-sleep shrink-0" />
-              <p className="text-sm text-foreground/80 leading-relaxed">
-                The numbers are tucked away. Your baby's sleep is finding its own rhythm — your logs are still here whenever you want them.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {insights.map((insight, i) => (
-          <Card key={i} className="border-0 bg-sleep-bg/60">
-            <CardContent className="p-3 flex items-start gap-3">
-              {insight.icon}
-              <p className="text-sm text-foreground/80 leading-relaxed">{insight.text}</p>
-            </CardContent>
-          </Card>
-        ))}
-
-        <Accordion type="single" collapsible className="w-full">
-          <AccordionItem value="tips" className="border-0">
-            <AccordionTrigger className="py-2 px-3 text-xs font-medium text-sleep hover:no-underline">
-              See sleep tips
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-2 px-1">
-                {sleepTips.map((tip, i) => (
-                  <div key={i} className="rounded-lg bg-background/50 p-3">
-                    <p className="text-xs font-semibold text-foreground mb-1">{tip.title}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{tip.content}</p>
-                  </div>
-                ))}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </CollapsibleContent>
-    </Collapsible>
+      {insights.map((insight, i) => (
+        <Card key={i} className="border-0 bg-sleep-bg/60">
+          <CardContent className="p-3 flex items-start gap-3">
+            {insight.icon}
+            <p className="text-sm text-foreground/80 leading-relaxed">{insight.text}</p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
-const sleepRecommendations: Record<string, { total: string; naps: string; napHours: string; nightHours: string }> = {
-  newborn: { total: "14–17 hrs", naps: "4–5 naps/day", napHours: "6–8h", nightHours: "8–9h" },
-  "3mo": { total: "14–16 hrs", naps: "3–4 naps/day", napHours: "4–6h", nightHours: "9–11h" },
-  "6mo": { total: "12–15 hrs", naps: "2–3 naps/day", napHours: "3–4h", nightHours: "10–12h" },
-  "9mo": { total: "12–15 hrs", naps: "2 naps/day", napHours: "2–3h", nightHours: "10–12h" },
-  "12mo+": { total: "11–14 hrs", naps: "1–2 naps/day", napHours: "2–3h", nightHours: "10–12h" },
+
+const sleepRecommendations: Record<string, { total: string; naps: string }> = {
+  newborn: { total: "14–17 hrs", naps: "4–5 naps/day" },
+  "3mo": { total: "14–16 hrs", naps: "3–4 naps/day" },
+  "6mo": { total: "12–15 hrs", naps: "2–3 naps/day" },
+  "9mo": { total: "12–15 hrs", naps: "2 naps/day" },
+  "12mo+": { total: "11–14 hrs", naps: "1–2 naps/day" },
 };
 
 function getAgeGroup(ageMonths: number): string {
@@ -361,7 +159,6 @@ function getAgeGroup(ageMonths: number): string {
 export default function SleepPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
-  const { prefs, setPrefs } = usePreferences();
   const queryClient = useQueryClient();
   const { data: coach } = useSleepCoach(activeChild ?? null);
   const { data: savedPlan, isLoading: isLoadingPlan } = useSleepPlan(activeChild?.id ?? null);
@@ -490,7 +287,7 @@ export default function SleepPage() {
 
   const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
     table: "sleep_logs",
-    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["sleep-trends-7d"], ["activity-feed"]],
+    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["activity-feed"]],
   });
 
   const handleDelete = () => {
@@ -553,104 +350,6 @@ export default function SleepPage() {
     const m = mins % 60;
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
-
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const weekData = weekDays.map((day) => {
-    const dayEnd = addDays(day, 1);
-    const dayLogs = logs?.filter((l) => {
-      const start = new Date(l.started_at);
-      return isWithinInterval(start, { start: day, end: dayEnd });
-    }) ?? [];
-    const totalMin = dayLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
-    return { day: format(day, "EEE"), total: totalMin, naps: dayLogs.filter(l => l.sleep_type === "nap").length };
-  });
-
-  // Compute sleep analytics
-  const computeStats = () => {
-    if (!logs || logs.length === 0) return null;
-
-    const nightLogs = logs.filter(l => l.sleep_type === "night");
-    const napLogs = logs.filter(l => l.sleep_type === "nap");
-
-    // Group logs by day
-    const logsByDay = new Map<string, typeof logs>();
-    logs.forEach(l => {
-      const dayKey = format(new Date(l.started_at), "yyyy-MM-dd");
-      if (!logsByDay.has(dayKey)) logsByDay.set(dayKey, []);
-      logsByDay.get(dayKey)!.push(l);
-    });
-
-    const daysWithData = logsByDay.size || 1;
-
-    // Overnight stats
-    const avgBedtime = nightLogs.length > 0
-      ? (() => {
-          const totalMins = nightLogs.reduce((s, l) => {
-            const d = new Date(l.started_at);
-            let mins = d.getHours() * 60 + d.getMinutes();
-            if (mins < 720) mins += 1440; // after midnight → treat as late evening
-            return s + mins;
-          }, 0);
-          let avgMins = Math.round(totalMins / nightLogs.length) % 1440;
-          const h = Math.floor(avgMins / 60) % 24;
-          const m = avgMins % 60;
-          return format(new Date(2000, 0, 1, h, m), "h:mm a");
-        })()
-      : "—";
-
-    const avgWakeTime = nightLogs.filter(l => l.ended_at).length > 0
-      ? (() => {
-          const ended = nightLogs.filter(l => l.ended_at);
-          const totalMins = ended.reduce((s, l) => {
-            const d = new Date(l.ended_at!);
-            return s + d.getHours() * 60 + d.getMinutes();
-          }, 0);
-          const avgMins = Math.round(totalMins / ended.length);
-          const h = Math.floor(avgMins / 60) % 24;
-          const m = avgMins % 60;
-          return format(new Date(2000, 0, 1, h, m), "h:mm a");
-        })()
-      : "—";
-
-    const avgOvernightMin = nightLogs.length > 0
-      ? Math.round(nightLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0) / nightLogs.length)
-      : 0;
-
-    // Nap stats
-    const avgNapsPerDay = daysWithData > 0
-      ? (napLogs.length / daysWithData).toFixed(1)
-      : "0";
-
-    const avgNapDurationMin = napLogs.length > 0
-      ? Math.round(napLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0) / daysWithData)
-      : 0;
-
-    // Total sleep per day
-    const totalSleepMin = logs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
-    const avgTotalPerDay = Math.round(totalSleepMin / daysWithData);
-
-    // Last 7 days comparison
-    const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
-    const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenDaysAgo);
-    const recentDays = new Set(recentLogs.map(l => format(new Date(l.started_at), "yyyy-MM-dd"))).size || 1;
-    const recentTotalMin = recentLogs.reduce((s, l) => s + (l.duration_minutes || 0), 0);
-    const recentAvgPerDay = Math.round(recentTotalMin / recentDays);
-
-    return {
-      avgBedtime,
-      avgWakeTime,
-      avgOvernightMin,
-      avgNapsPerDay,
-      avgNapDurationMin,
-      avgTotalPerDay,
-      recentAvgPerDay,
-    };
-  };
-
-  const stats = computeStats();
-  const todayTotal = weekData[weekDays.findIndex(d => format(d, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd"))]?.total ?? 0;
-  const lastSleep = logs?.[0];
 
   if (!activeChild) {
     return (
@@ -723,8 +422,7 @@ export default function SleepPage() {
               <div>
                 <p className="font-bold text-xs mb-1.5">How to use this page</p>
                 <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <p>Tap <strong>Start Nap</strong> or <strong>Start Sleep</strong> — the timer keeps running even if you close the app. Reopen any time and it picks up where you left off.</p>
-                  <p>Forgot to start the timer? Tap <strong>Log earlier nap</strong> — set when it started, then say whether they're still asleep or already up.</p>
+                  <p>The timer keeps running even if you close the app — reopen any time and it picks up where you left off.</p>
                   <p>Tap any row under <strong>History</strong> to edit or delete it.</p>
                 </div>
               </div>
@@ -904,51 +602,22 @@ export default function SleepPage() {
             </CardContent>
           </Card>
 
-          {savedPlan && !isLoadingPlan && (
-            <Card className="border bg-sleep/5 border-sleep/20">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-sleep" />
-                  <p className="text-xs font-semibold uppercase tracking-wide text-foreground/70">
-                    {getSleepMethodMeta(savedPlan.method as SleepMethod).name} tonight
-                  </p>
-                </div>
-                <ol className="space-y-2 text-sm text-foreground/85">
-                  {getSleepMethodMeta(savedPlan.method as SleepMethod).guide.tonightSteps.map((step, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className="mt-0.5 w-5 h-5 rounded-full bg-sleep/15 text-sleep text-xs font-semibold flex items-center justify-center shrink-0">
-                        {i + 1}
-                      </span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
-              </CardContent>
-            </Card>
-          )}
-
           <SleepTodoCard
             childId={activeChild.id}
             ageMonths={ageMonths}
             childName={activeChild.name ?? "your baby"}
-            calmMode={prefs.calmMode}
           />
 
           <SleepPlanReminderBanner
             childId={activeChild.id}
             childName={activeChild.name ?? "your baby"}
-            calmMode={prefs.calmMode}
           />
 
-          {activeChild && (
-            <SleepInsights
-              logs={logs ?? []}
-              ageMonths={ageMonths}
-              calmMode={prefs.calmMode}
-              onToggleCalm={(next) => setPrefs({ calmMode: next })}
-              nightWakingReassurance={nightWakingReassurance}
-            />
-          )}
+          <SleepInsights
+            logs={logs ?? []}
+            ageMonths={ageMonths}
+            nightWakingReassurance={nightWakingReassurance}
+          />
         </TabsContent>
       </Tabs>
 

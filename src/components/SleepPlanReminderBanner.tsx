@@ -6,7 +6,8 @@ import { startOfDay, differenceInMinutes } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
-import { parseHHmm, formatHHmm } from "@/lib/sleepPlan";
+import { usePreferences } from "@/hooks/usePreferences";
+import { parseHHmm } from "@/lib/sleepPlan";
 import { formatApproxClock } from "@/lib/gentleTime";
 import { cn } from "@/lib/utils";
 import { getSleepMethodMeta, type SleepMethod } from "@/lib/sleepMethods";
@@ -20,10 +21,6 @@ import { SleepAlertPopup } from "@/components/SleepAlertPopup";
 interface SleepPlanReminderBannerProps {
   childId: string;
   childName: string;
-  // Passed from SleepPage's usePreferences instance so the inline calm toggle
-  // on the same page updates this banner live — separate hook instances don't
-  // cross-sync.
-  calmMode: boolean;
 }
 
 type RecentLog = {
@@ -43,8 +40,7 @@ type BannerState =
   | { kind: "window-15min"; title: string; body: string }
   | { kind: "window-exceeded"; title: string; body: string }
   | { kind: "off-plan"; subkind: OffPlanState["kind"]; title: string; body: string }
-  | { kind: "on-track"; title: string; body: string }
-  | { kind: "preview"; title: string; body: string | null };
+  | { kind: "on-track"; title: string; body: string };
 
 function nowMinutesSinceMidnight(now: Date): number {
   return now.getHours() * 60 + now.getMinutes();
@@ -246,45 +242,7 @@ function deriveState(args: {
     }
   }
 
-  // 9. Quiet preview: next nap or next bedtime, lower visual weight.
-  if (!hasNightTonight && bedtimeEarliest) {
-    const bedEarliestMin = parseHHmm(bedtimeEarliest);
-    if (nowMin < bedEarliestMin) {
-      if (
-        lastSleep?.ended_at &&
-        wakeWindowLowMin !== null &&
-        napCount !== null &&
-        napCount > 0
-      ) {
-        const predictedNapMs =
-          new Date(lastSleep.ended_at).getTime() + wakeWindowLowMin * 60_000;
-        const predictedMin = nowMinutesSinceMidnight(new Date(predictedNapMs));
-        if (predictedNapMs > now.getTime() && predictedMin < bedEarliestMin) {
-          return {
-            kind: "preview",
-            title: `Next nap around ${formatClock(formatHHmm(predictedMin))}`,
-            body: null,
-          };
-        }
-      }
-      return {
-        kind: "preview",
-        title: `Next bedtime at ${formatClock(bedtimeEarliest)}`,
-        body: null,
-      };
-    }
-  }
-
   return null;
-}
-
-function formatClock(hhmm: string): string {
-  const mins = parseHHmm(hhmm);
-  const h24 = Math.floor(mins / 60) % 24;
-  const m = mins % 60;
-  const period = h24 >= 12 ? "PM" : "AM";
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
-  return `${h12}:${m.toString().padStart(2, "0")} ${period}`;
 }
 
 function pickMethod(value: unknown): SleepMethod {
@@ -321,8 +279,9 @@ function bannerToAlertKind(state: BannerState): SleepAlertKind | null {
 export function SleepPlanReminderBanner({
   childId,
   childName,
-  calmMode,
 }: SleepPlanReminderBannerProps) {
+  const { prefs } = usePreferences();
+  const calmMode = prefs.calmMode;
   const { data: savedPlan } = useSleepPlan(childId);
 
   const { data: recentLogs } = useQuery<RecentLog[]>({
@@ -390,7 +349,7 @@ export function SleepPlanReminderBanner({
 
   // Calm mode keeps the inline banner but never interrupts with the popup.
   const alertKind = state && !calmMode ? bannerToAlertKind(state) : null;
-  const alertBody = state && "body" in state ? (state.body ?? null) : null;
+  const alertBody = state?.body ?? null;
   const popup = useSleepAlertPopup({
     childId,
     kind: alertKind,
@@ -410,44 +369,27 @@ export function SleepPlanReminderBanner({
           ? Clock
           : Moon;
 
-  const isPreview = state.kind === "preview";
   const isEmpathy = state.kind === "empathy" || state.kind === "on-track";
 
   return (
     <>
     <Card
       className={cn(
-        "border",
-        isPreview
-          ? "bg-sleep/5 border-sleep/15"
-          : isEmpathy
-            ? "bg-sleep/10 border-sleep/20"
-            : "bg-sleep/10 border-sleep/25",
+        "border bg-sleep/10",
+        isEmpathy ? "border-sleep/20" : "border-sleep/25",
       )}
     >
-      <CardContent className={cn("p-4 flex items-start gap-3", isPreview && "py-3")}>
-        <div
-          className={cn(
-            "rounded-full bg-sleep/15 flex items-center justify-center shrink-0",
-            isPreview ? "w-8 h-8" : "w-10 h-10",
-          )}
-        >
-          <Icon className={cn("text-sleep", isPreview ? "w-4 h-4" : "w-5 h-5")} />
+      <CardContent className="p-4 flex items-start gap-3">
+        <div className="rounded-full bg-sleep/15 flex items-center justify-center shrink-0 w-10 h-10">
+          <Icon className="text-sleep w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p
-            className={cn(
-              "font-display font-bold leading-tight",
-              isPreview ? "text-sm" : "text-base",
-            )}
-          >
+          <p className="font-display font-bold leading-tight text-base">
             {state.title}
           </p>
-          {"body" in state && state.body && (
-            <p className="text-sm text-foreground/85 leading-snug mt-1">
-              {state.body}
-            </p>
-          )}
+          <p className="text-sm text-foreground/85 leading-snug mt-1">
+            {state.body}
+          </p>
         </div>
       </CardContent>
     </Card>

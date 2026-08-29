@@ -31,10 +31,6 @@ interface SleepTodoCardProps {
   childId: string;
   ageMonths: number;
   childName: string;
-  // Passed from SleepPage's usePreferences instance so the inline calm toggle
-  // on the same page updates this card live — separate hook instances don't
-  // cross-sync.
-  calmMode: boolean;
 }
 
 function clockLabel(d: Date): string {
@@ -336,7 +332,7 @@ function collapsedSummary(items: SleepTodoItem[], allDone: boolean): string {
   return "";
 }
 
-export function SleepTodoCard({ childId, ageMonths, childName, calmMode }: SleepTodoCardProps) {
+export function SleepTodoCard({ childId, ageMonths, childName }: SleepTodoCardProps) {
   const {
     items,
     allDone,
@@ -357,6 +353,7 @@ export function SleepTodoCard({ childId, ageMonths, childName, calmMode }: Sleep
   const { prefs, setPrefs } = usePreferences();
   const { toast } = useToast();
 
+  const calmMode = prefs.calmMode;
   const isNewborn = ageMonths < 3;
   const collapsed = prefs.sleepPlanCollapsed;
 
