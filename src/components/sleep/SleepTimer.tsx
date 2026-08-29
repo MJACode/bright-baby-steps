@@ -295,14 +295,6 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual, ch
         </div>
       )}
 
-      {/* Hint */}
-      {!timerActive && (
-        <p className="text-xs text-center text-muted-foreground">
-          Start now, or log one that began earlier — still going or already over. The timer keeps
-          running if you close the app.
-        </p>
-      )}
-
       <PastSessionSheet
         open={pastOpen}
         onOpenChange={setPastOpen}
