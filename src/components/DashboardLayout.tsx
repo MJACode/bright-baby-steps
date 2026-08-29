@@ -23,7 +23,6 @@ const backTargets: Record<string, { to: string; label: string }> = {
   "/dashboard/early-intervention": { to: "/dashboard/more", label: "More" },
   "/dashboard/growth": { to: "/dashboard/more", label: "More" },
   "/dashboard/leaps": { to: "/dashboard/more", label: "More" },
-  "/dashboard/find-slp": { to: "/dashboard/more", label: "More" },
   "/dashboard/cry-analyzer": { to: "/dashboard/more", label: "More" },
   "/dashboard/weekly": { to: "/dashboard/more", label: "More" },
   "/dashboard/analytics": { to: "/dashboard/more", label: "More" },

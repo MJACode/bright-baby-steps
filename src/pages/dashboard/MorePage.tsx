@@ -4,7 +4,7 @@
 // own line item here rather than sitting behind a tab bar inside Records.
 
 import { Link } from "react-router-dom";
-import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Speech, Stethoscope, TrendingUp, User } from "lucide-react";
+import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Stethoscope, TrendingUp, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -74,14 +74,6 @@ const tools: ToolItem[] = [
     description: "Understand your baby's growth spurts",
     icon: Brain,
     path: "/dashboard/leaps",
-    colorClass: "bg-milestones/10",
-    iconClass: "text-milestones",
-  },
-  {
-    label: "Find a speech therapist",
-    description: "Search ASHA's certified SLP directory by ZIP",
-    icon: Speech,
-    path: "/dashboard/find-slp",
     colorClass: "bg-milestones/10",
     iconClass: "text-milestones",
   },
