@@ -3,16 +3,21 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
+import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
   ShieldAlert, AlertTriangle, Check, Clock, Play, ArrowLeft,
-  ChevronRight, Info, AlertCircle, Timer, Stethoscope,
+  ChevronRight, Info, AlertCircle, Timer, Stethoscope, Trash2, Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -21,6 +26,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import {
   allergenEmoji, getAllergenStatus, getStatusConfig,
   getDaysSinceLastExposure, canLogNextExposure, getNextExposureDate,
+  introStateAfterExposureRemoval,
   severityConfig, symptomOptions, type Severity, type AllergenStatus,
 } from "@/services/allergenService";
 
@@ -28,6 +34,8 @@ export default function AllergenTracker() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  const canWrite = roleResolved && role !== "viewer";
 
   // Detail view state
   const [selectedAllergenId, setSelectedAllergenId] = useState<string | null>(null);
@@ -38,6 +46,10 @@ export default function AllergenTracker() {
   const [severity, setSeverity] = useState<Severity>("none");
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [reactionNotes, setReactionNotes] = useState("");
+
+  // Removal confirmations
+  const [undoExposureOpen, setUndoExposureOpen] = useState(false);
+  const [removeEntryOpen, setRemoveEntryOpen] = useState(false);
 
   // Queries
   const { data: allergens, isLoading: allergensLoading } = useQuery({
@@ -160,6 +172,89 @@ export default function AllergenTracker() {
     },
   });
 
+  // Reactions hang off exposure logs, exposure logs off the introduction, so
+  // removal always walks child → parent. Explicit deletes rather than relying on
+  // FK cascades, which aren't guaranteed on these tables.
+  const removeExposure = useMutation({
+    mutationFn: async ({
+      introId, exposureId, remaining,
+    }: {
+      introId: string;
+      exposureId: string;
+      remaining: { logged_at: string; reaction_observed: boolean | null }[];
+    }) => {
+      assertCanWrite(roleResolved, role);
+
+      const { error: rxError } = await supabase.from("allergen_reactions").delete().eq("exposure_log_id", exposureId);
+      if (rxError) throw rxError;
+      // An RLS-blocked DELETE returns zero rows and no error — check the
+      // returned rows so a blocked delete can't toast success.
+      const { data: deletedLogs, error: logError } = await supabase
+        .from("allergen_exposure_logs").delete().eq("id", exposureId).select("id");
+      if (logError) throw logError;
+      if (!deletedLogs?.length) throw new Error("That exposure is no longer yours to remove.");
+
+      const next = introStateAfterExposureRemoval(remaining);
+      const { error: introError } = await supabase.from("allergen_introductions").update({
+        status: next.status,
+        completed_at: next.completed_at,
+      }).eq("id", introId);
+      if (introError) throw introError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
+      queryClient.invalidateQueries({ queryKey: ["allergen-reactions"] });
+      setUndoExposureOpen(false);
+      toast({ title: "Exposure removed", description: "The rest of this protocol is unchanged." });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't remove that exposure",
+        description: err instanceof Error ? err.message : "Check your connection and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const removeIntroduction = useMutation({
+    mutationFn: async (introId: string) => {
+      assertCanWrite(roleResolved, role);
+
+      const { data: logs, error: fetchError } = await supabase
+        .from("allergen_exposure_logs")
+        .select("id")
+        .eq("allergen_introduction_id", introId);
+      if (fetchError) throw fetchError;
+
+      const logIds = (logs ?? []).map((l) => l.id);
+      if (logIds.length > 0) {
+        const { error: rxError } = await supabase.from("allergen_reactions").delete().in("exposure_log_id", logIds);
+        if (rxError) throw rxError;
+        const { error: logError } = await supabase.from("allergen_exposure_logs").delete().in("id", logIds);
+        if (logError) throw logError;
+      }
+
+      const { data: deletedIntro, error } = await supabase
+        .from("allergen_introductions").delete().eq("id", introId).select("id");
+      if (error) throw error;
+      if (!deletedIntro?.length) throw new Error("This entry is no longer yours to remove.");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
+      queryClient.invalidateQueries({ queryKey: ["allergen-reactions"] });
+      setRemoveEntryOpen(false);
+      setSelectedAllergenId(null);
+      toast({ title: "Tracking removed", description: "You can start this allergen again whenever you're ready." });
+    },
+    onError: (err) => {
+      toast({
+        title: "Couldn't remove this entry",
+        description: err instanceof Error ? err.message : "Check your connection and try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const resetReactionForm = () => {
     setSeverity("none");
     setSymptoms([]);
@@ -216,6 +311,7 @@ export default function AllergenTracker() {
     const statusCfg = getStatusConfig(status);
     const exposures = intro?.allergen_exposure_logs ?? [];
     const sortedExposures = [...exposures].sort((a, b) => a.exposure_number - b.exposure_number);
+    const lastExposure = sortedExposures[sortedExposures.length - 1];
     const canLogNext = canLogNextExposure(exposures);
     const nextDate = getNextExposureDate(exposures);
     const daysSince = getDaysSinceLastExposure(exposures);
@@ -486,6 +582,94 @@ export default function AllergenTracker() {
             ))}
           </div>
         )}
+
+        {/* ─── UNDO / REMOVE ─── */}
+        {intro && canWrite && (
+          <div className="space-y-2 pt-3 border-t border-border">
+            <p className="text-xs text-muted-foreground">Logged this by mistake? You can take it back.</p>
+
+            {sortedExposures.length >= 2 && (
+              <Button
+                variant="outline"
+                className="w-full touch-target h-12 gap-2 font-semibold"
+                onClick={() => setUndoExposureOpen(true)}
+              >
+                <Undo2 className="w-4 h-4" /> Undo exposure #{lastExposure?.exposure_number}
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              className="w-full touch-target h-12 gap-2 font-semibold text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setRemoveEntryOpen(true)}
+            >
+              <Trash2 className="w-4 h-4" /> Remove {selectedAllergen.name} tracking
+            </Button>
+          </div>
+        )}
+
+        {/* Undo the most recent exposure, keeping the rest of the protocol */}
+        <AlertDialog open={undoExposureOpen} onOpenChange={setUndoExposureOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">
+                Undo exposure #{lastExposure?.exposure_number}?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This deletes the exposure logged{" "}
+                {lastExposure && format(new Date(lastExposure.logged_at), "MMM d, yyyy 'at' h:mm a")}
+                {" "}and any reaction notes saved with it. Earlier exposures stay as they are. This can't be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="touch-target">Keep it</AlertDialogCancel>
+              <AlertDialogAction
+                className="touch-target bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={removeExposure.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!intro || !lastExposure) return;
+                  removeExposure.mutate({
+                    introId: intro.id,
+                    exposureId: lastExposure.id,
+                    remaining: sortedExposures.filter((ex) => ex.id !== lastExposure.id),
+                  });
+                }}
+              >
+                {removeExposure.isPending ? "Removing..." : "Undo exposure"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Remove the whole introduction — back to Not Started */}
+        <AlertDialog open={removeEntryOpen} onOpenChange={setRemoveEntryOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">
+                Remove {selectedAllergen.name} tracking?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This deletes {sortedExposures.length === 1 ? "the 1 logged exposure" : `all ${sortedExposures.length} logged exposures`}
+                {allergenReactions.length > 0 && " and the reaction notes saved with them"} for {activeChild.name}.
+                {" "}{selectedAllergen.name} goes back to Not Started and you can begin the protocol again anytime. This can't be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="touch-target">Keep tracking</AlertDialogCancel>
+              <AlertDialogAction
+                className="touch-target bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={removeIntroduction.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (intro) removeIntroduction.mutate(intro.id);
+                }}
+              >
+                {removeIntroduction.isPending ? "Removing..." : "Remove entry"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
       </div>
     );

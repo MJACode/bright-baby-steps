@@ -3,6 +3,7 @@ import {
   getDaysSinceLastExposure,
   canLogNextExposure,
   getNextExposureDate,
+  introStateAfterExposureRemoval,
 } from "@/services/allergenService";
 
 // Mock supabase to prevent real network initialisation
@@ -169,5 +170,46 @@ describe("getNextExposureDate", () => {
     const copy = [...logs];
     getNextExposureDate(logs);
     expect(logs).toEqual(copy);
+  });
+});
+
+// ── introStateAfterExposureRemoval ────────────────────────────────────────────
+
+describe("introStateAfterExposureRemoval", () => {
+  it("returns 'not_started' when nothing is left", () => {
+    expect(introStateAfterExposureRemoval([])).toEqual({ status: "not_started", completed_at: null });
+  });
+
+  it("returns 'in_progress' when a single clean exposure remains", () => {
+    expect(
+      introStateAfterExposureRemoval([{ logged_at: "2024-06-10T08:00:00Z", reaction_observed: false }])
+    ).toEqual({ status: "in_progress", completed_at: null });
+  });
+
+  it("returns 'completed' with the latest remaining log time when 2+ clean exposures remain", () => {
+    expect(
+      introStateAfterExposureRemoval([
+        { logged_at: "2024-06-10T08:00:00Z", reaction_observed: false },
+        { logged_at: "2024-06-14T08:00:00Z", reaction_observed: null },
+      ])
+    ).toEqual({ status: "completed", completed_at: "2024-06-14T08:00:00Z" });
+  });
+
+  it("returns 'reaction_observed' when any remaining exposure had a reaction", () => {
+    expect(
+      introStateAfterExposureRemoval([
+        { logged_at: "2024-06-10T08:00:00Z", reaction_observed: true },
+        { logged_at: "2024-06-14T08:00:00Z", reaction_observed: false },
+      ])
+    ).toEqual({ status: "reaction_observed", completed_at: null });
+  });
+
+  it("agrees with getAllergenStatus on the resulting row", () => {
+    const remaining = [
+      { logged_at: "2024-06-10T08:00:00Z", reaction_observed: false },
+      { logged_at: "2024-06-14T08:00:00Z", reaction_observed: false },
+    ];
+    const next = introStateAfterExposureRemoval(remaining);
+    expect(getAllergenStatus({ status: next.status, allergen_exposure_logs: remaining })).toBe("introduced");
   });
 });

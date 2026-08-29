@@ -73,6 +73,25 @@ export function getNextExposureDate(exposureLogs: { logged_at: string }[]): Date
   return nextDate;
 }
 
+// Where an introduction lands after one of its exposures is removed.
+// Mirrors getAllergenStatus so the stored row and the derived UI status agree —
+// the stored status is what the pediatrician export reads.
+export function introStateAfterExposureRemoval(
+  remaining: { logged_at: string; reaction_observed: boolean | null }[]
+): { status: string; completed_at: string | null } {
+  if (remaining.length === 0) return { status: "not_started", completed_at: null };
+  if (remaining.some((e) => e.reaction_observed === true)) {
+    return { status: "reaction_observed", completed_at: null };
+  }
+  if (remaining.length >= 2) {
+    const latest = remaining.reduce((a, b) =>
+      new Date(b.logged_at).getTime() > new Date(a.logged_at).getTime() ? b : a
+    );
+    return { status: "completed", completed_at: latest.logged_at };
+  }
+  return { status: "in_progress", completed_at: null };
+}
+
 // CLINICAL REVIEW NEEDED: severity requires medical validation
 export const severityConfig = {
   none: { label: "None", emoji: "✅", color: "bg-success/15 text-success border-success/30 hover:bg-success/25", activeColor: "bg-success text-success-foreground" },
