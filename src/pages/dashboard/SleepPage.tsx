@@ -52,12 +52,8 @@ const ageMinSleepHours: Record<string, number> = {
 
 type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
 
-// A short list of nudges — at most two, always actionable. The 7-day nap-vs-night
-// averages that used to sit here duplicated the Analytics tab's "7-Day Sleep
-// (Nap vs Night)" chart, the age benchmarks repeat the sleep guide in the header
-// popover, and the static tips list restated the method guidance already inside
-// the sleep-plan dialog. All three were dropped in the 2026-08-29 simplification;
-// the coaching that only lives here stayed.
+// A short list of nudges — always actionable, and only the ones that aren't
+// already on screen somewhere else on the tab.
 function SleepInsights({
   logs,
   ageMonths,
@@ -115,7 +111,7 @@ function SleepInsights({
       });
     }
 
-    return result.slice(0, 2);
+    return result;
   }, [logs, ageMonths, calmMode]);
 
   if (insights.length === 0 && !nightWakingReassurance) return null;
@@ -291,7 +287,7 @@ export default function SleepPage() {
 
   const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
     table: "sleep_logs",
-    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["sleep-trends-7d"], ["activity-feed"]],
+    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["activity-feed"]],
   });
 
   const handleDelete = () => {
