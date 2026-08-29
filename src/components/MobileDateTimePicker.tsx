@@ -25,8 +25,12 @@ const PAD = (COLUMN_HEIGHT - ITEM_HEIGHT) / 2; // spacer so first/last item can 
  * arrow-key, or tap a visible value to change the selection — no more tapping
  * a chevron once per minute. Scroll-snap keeps the selection locked to a value;
  * the debounced scroll handler commits the settled value to the parent.
+ *
+ * Exported because every bounded number a parent picks in a bottom sheet has to
+ * come from a wheel rather than a keyboard — see PastSessionSheet's custom
+ * duration for why a focused <input> is unusable inside a drawer on iOS.
  */
-function WheelColumn({
+export function WheelColumn({
   value,
   options,
   onChange,

@@ -68,3 +68,66 @@ can't open — DRM'd media, something exotic, a silent video — surfaces the
 "couldn't read any audio" error. The realtime-capture fallback (media element +
 `captureStream`) needs a user gesture and doesn't work uniformly across Safari,
 so it wasn't worth the complexity for v1.
+
+---
+
+# Past-sleep sheet: iOS keypad covered the whole drawer
+
+## Bug
+
+Tapping **Other** in "Log earlier nap" → tapping Hours or Minutes raised the iOS
+number keypad, and the sheet vanished: dimmed page behind, keypad in front, no
+title, no wheels, no Save. The parent had no way to finish or cancel the entry.
+
+## Root cause
+
+`PastSessionSheet`'s custom length was a pair of `<input type="number">` living
+inside a vaul `Drawer`, which is `position: fixed; bottom: 0`. Nothing in this
+app moves a fixed element out from under the iOS keyboard:
+
+- `capacitor.config.ts` sets `contentInset: 'never'`, which turns off
+  WKWebView's automatic content-inset adjustment (deliberately — `'automatic'`
+  double-counted the safe-area insets).
+- `index.css` locks `html, body { overflow: hidden }` so the document itself
+  can't scroll a focused field into view; `#root` is the only scroller and the
+  drawer isn't inside it.
+- `plugins.Keyboard.resize: 'body'` in `capacitor.config.ts` is **inert** —
+  `@capacitor/keyboard` isn't a dependency, so nothing implements it. The
+  comment above it refers to the chat widget's input bar, removed 2026-08-28.
+- vaul 0.9 only lifts the drawer when `window.visualViewport` fires a resize.
+  With WKWebView's own inset handling disabled it doesn't, so vaul's handler
+  never runs and the sheet stays pinned behind the keyboard.
+
+## Fix
+
+- [x] Export `WheelColumn` from `MobileDateTimePicker.tsx` (reuse, not a new
+      component — same wheel the Started/Ended times already use)
+- [x] Replace the Hours/Minutes number inputs with two wheels (0–23 / 00–59)
+- [x] Drop `customHours` / `customMinutes` state and the seeding effect — the
+      wheels derive from the canonical `durationMin`
+- [x] Rewrite the three tests that typed into the inputs; add a regression guard
+      asserting the sheet renders no `input`/`textarea` on the path to Save
+- [x] `npx tsc --noEmit`, `npx eslint`, `npx vite build`, `npx vitest run` (381
+      passed / 27 files)
+
+## Review
+
+**Why wheels and not a keyboard fix.** The only reliable keyboard signal a web
+app gets on iOS is `visualViewport`, and this app's native config is exactly the
+one where WebKit stops sending it. Making the drawer keyboard-aware would mean
+adding `@capacitor/keyboard` plus a native rebuild. Removing the keyboard from
+the flow fixes it on every platform with no native change, and matches what the
+sheet already does for time — the file's own comment ("autofocusing an input
+pops the iOS keyboard over the wheels the parent came here to use") shows the
+keyboard was already understood to be hostile here.
+
+**Two behaviours changed on purpose.** The wheels cap at 23h 59m, so a custom
+length can no longer exceed a day — the >24h validation is still reachable from
+the end-time picker, which is the only way to author one. And a negative length
+is now unrepresentable, which is what the two deleted tests were guarding.
+
+**Still open — Notes.** The optional Notes textarea in the same sheet is genuine
+free text and will hit the same wall. Fixing it properly needs
+`@capacitor/keyboard` + `keyboardWillShow` offsets on `DrawerContent`, or
+dropping `contentInset: 'never'` and re-solving the safe-area double-count.
+Tracked here rather than fixed blind — it can't be verified without a device.
