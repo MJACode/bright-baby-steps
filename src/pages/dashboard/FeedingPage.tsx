@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { UtensilsCrossed, ShieldAlert, Pill, Baby, ArrowLeft } from "lucide-react";
+import { UtensilsCrossed, ShieldAlert, Pill, ArrowLeft } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
@@ -10,7 +10,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import FeedingLog, { type SolidFeedDraft } from "@/components/feeding/FeedingLog";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 import SupplementTracker from "@/components/feeding/SupplementTracker";
-import PumpingSchedule from "@/components/feeding/PumpingSchedule";
 import { PageInstructions } from "@/components/PageInstructions";
 
 export default function FeedingPage() {
@@ -61,11 +60,10 @@ export default function FeedingPage() {
       <PageInstructions tint="feeding">
         <p><strong>Feeding</strong> logs nursing, bottle, and solids. Nursing and bottle have live timers that keep running if you close the app.</p>
         <p><strong>Vitamins</strong> tracks vitamin D and other supplements.</p>
-        <p><strong>Pump</strong> sets reminders and logs pumping sessions.</p>
         <p><strong>Allergens</strong> walks through the 9 common allergen introductions safely.</p>
       </PageInstructions>
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 h-14 p-1 bg-muted/60">
+        <TabsList className="grid w-full grid-cols-3 h-14 p-1 bg-muted/60">
           <TabsTrigger
             value="feeding"
             className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
@@ -77,12 +75,6 @@ export default function FeedingPage() {
             className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
           >
             <Pill className="w-4 h-4" /> Vitamins
-          </TabsTrigger>
-          <TabsTrigger
-            value="pumping"
-            className="touch-target gap-1 font-bold data-[state=active]:bg-feeding/15 data-[state=active]:text-feeding data-[state=active]:shadow-sm rounded-lg h-full"
-          >
-            <Baby className="w-4 h-4" /> Pump
           </TabsTrigger>
           <TabsTrigger
             value="allergens"
@@ -105,9 +97,6 @@ export default function FeedingPage() {
             pendingResume={pendingResume}
             onConsumeResume={() => setPendingResume(null)}
           />
-        </TabsContent>
-        <TabsContent value="pumping" className="mt-4">
-          <PumpingSchedule onNavigateToLog={() => setTab("feeding")} />
         </TabsContent>
         <TabsContent value="supplements" className="mt-4">
           <SupplementTracker />
