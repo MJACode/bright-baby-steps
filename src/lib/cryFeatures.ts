@@ -1,7 +1,8 @@
 // src/lib/cryFeatures.ts
 //
 // Rule-based cry classifier. Uses Web Audio AnalyserNode features only —
-// no ML, no upload. Runs entirely on-device.
+// no ML, no network. Runs entirely on-device, whether the samples came from
+// the mic or from a file the parent picked.
 //
 // Output bucket is one of:
 //   "hunger"     — rhythmic, low-pitch, short bursts with pauses
@@ -34,6 +35,9 @@ export type CryBucket =
   | "pain"
   | "gas"
   | "unknown";
+
+/** Longest slice we analyze, in seconds. The live recorder caps at this too. */
+export const ANALYSIS_WINDOW_S = 8;
 
 export interface CryResult {
   bucket: CryBucket;
@@ -213,6 +217,50 @@ export function extractFeatures(samples: Float32Array, sampleRate: number): CryF
     burst_count,
     silence_ratio,
   };
+}
+
+/**
+ * Uploaded clips can run minutes long — a whole nap video where baby cries for
+ * six seconds. Scan the buffer for its loudest ANALYSIS_WINDOW_S slice and hand
+ * only that to extractFeatures, so ambient silence doesn't wash out the
+ * features. Buffers already at or under the window come back untouched.
+ */
+export function pickLoudestWindow(
+  samples: Float32Array,
+  sampleRate: number,
+  windowS = ANALYSIS_WINDOW_S
+): Float32Array {
+  const windowLen = Math.floor(windowS * sampleRate);
+  if (!Number.isFinite(windowLen) || windowLen <= 0) return samples;
+  if (samples.length <= windowLen) return samples;
+
+  // Coarse energy envelope at 100ms resolution, then a sliding sum across the
+  // window — O(n) rather than O(n * windowLen).
+  const stepLen = Math.max(1, Math.floor(sampleRate / 10));
+  const stepCount = Math.floor(samples.length / stepLen);
+  const energy = new Float64Array(stepCount);
+  for (let s = 0; s < stepCount; s++) {
+    const start = s * stepLen;
+    let sum = 0;
+    for (let i = start; i < start + stepLen; i++) sum += samples[i] * samples[i];
+    energy[s] = sum;
+  }
+
+  const windowSteps = Math.max(1, Math.min(stepCount, Math.round(windowLen / stepLen)));
+  let running = 0;
+  for (let s = 0; s < windowSteps; s++) running += energy[s];
+  let bestEnergy = running;
+  let bestStep = 0;
+  for (let s = windowSteps; s < stepCount; s++) {
+    running += energy[s] - energy[s - windowSteps];
+    if (running > bestEnergy) {
+      bestEnergy = running;
+      bestStep = s - windowSteps + 1;
+    }
+  }
+
+  const start = Math.min(bestStep * stepLen, samples.length - windowLen);
+  return samples.subarray(start, start + windowLen);
 }
 
 /* -------------------------------------------------------------------------- */

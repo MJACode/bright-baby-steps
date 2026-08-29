@@ -1,16 +1,26 @@
-// Page-level component: hold-to-record UI, live waveform, then a result card
-// with the suggestion bucket, confidence, tips, and "log this" CTAs.
+// Page-level component: record from the mic (live waveform) or pick an audio
+// or video file off the device, then a result card with the suggestion bucket,
+// confidence, tips, and "log this" CTAs.
 //
 // Premium-gated at the route level (CryAnalyzerPage wraps with PremiumGate).
 //
 // Adapted from the handoff to use this repo's `useChildren()` hook and to
 // write `parent_id` instead of `logged_by`.
 
-import { useEffect, useState } from "react";
-import { Mic, Square, RotateCcw, Info, Loader2, AlertCircle, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Mic,
+  Square,
+  RotateCcw,
+  Info,
+  Loader2,
+  AlertCircle,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useCryAnalyzer } from "@/hooks/useCryAnalyzer";
+import { FILE_ACCEPT, useCryAnalyzer } from "@/hooks/useCryAnalyzer";
 import { BUCKET_LABELS, type CryBucket } from "@/lib/cryFeatures";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
@@ -23,11 +33,31 @@ import { useQueryClient } from "@tanstack/react-query";
 const MAX_MS = 8000;
 
 export function CryAnalyzer() {
-  const { state, result, error, level, elapsedMs, start, stop, reset } =
-    useCryAnalyzer({ maxDurationMs: MAX_MS });
+  const {
+    state,
+    result,
+    error,
+    level,
+    elapsedMs,
+    source,
+    fileName,
+    capturedAt,
+    start,
+    stop,
+    analyzeFile,
+    reset,
+  } = useCryAnalyzer({ maxDurationMs: MAX_MS });
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const [logged, setLogged] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Clear the input either way, so picking the same file twice re-runs it.
+    e.target.value = "";
+    if (file) void analyzeFile(file);
+  };
 
   useEffect(() => {
     if (state !== "result") setLogged(false);
@@ -44,7 +74,7 @@ export function CryAnalyzer() {
       bucket: result.bucket,
       confidence: result.confidence,
       features: result.features as unknown as Json,
-      occurred_at: new Date().toISOString(),
+      occurred_at: capturedAt.toISOString(),
     });
     if (insErr) {
       toast({ title: "Couldn't save", description: insErr.message, variant: "destructive" });
@@ -60,7 +90,7 @@ export function CryAnalyzer() {
       <div>
         <h1 className="font-display text-2xl">Listen</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Hold the mic and let baby do the talking. We'll suggest what might be going on. Logged cries appear in the list below.
+          Record baby live, or pick an audio or video clip you already have. We'll suggest what might be going on. Logged cries appear in the list below.
         </p>
       </div>
 
@@ -68,6 +98,7 @@ export function CryAnalyzer() {
         <Info className="w-4 h-4 shrink-0 mt-0.5" />
         <p>
           Not a medical tool. Trust your instincts — when in doubt, call your pediatrician.
+          Recordings and clips are analyzed on your device and never uploaded.
         </p>
       </div>
 
@@ -79,13 +110,16 @@ export function CryAnalyzer() {
           maxMs={MAX_MS}
           onStart={start}
           onStop={stop}
+          onPickFile={() => fileInputRef.current?.click()}
         />
       )}
 
       {state === "analyzing" && (
         <div className="rounded-3xl border border-border bg-card p-8 flex flex-col items-center gap-3">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Analyzing…</p>
+          <p className="text-sm text-muted-foreground">
+            {source === "file" && fileName ? `Analyzing ${fileName}…` : "Analyzing…"}
+          </p>
         </div>
       )}
 
@@ -94,6 +128,7 @@ export function CryAnalyzer() {
           bucket={result.bucket}
           confidence={result.confidence}
           alternates={result.alternates}
+          sourceLabel={source === "file" ? fileName : null}
           onRedo={reset}
           onLog={logResult}
           logged={logged}
@@ -109,6 +144,14 @@ export function CryAnalyzer() {
           </Button>
         </div>
       )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={FILE_ACCEPT}
+        className="hidden"
+        onChange={handleFilePick}
+      />
 
       <CryHistoryList childId={activeChild?.id} />
     </div>
@@ -186,6 +229,7 @@ function RecorderView({
   maxMs,
   onStart,
   onStop,
+  onPickFile,
 }: {
   state: "idle" | "recording";
   level: number;
@@ -193,6 +237,7 @@ function RecorderView({
   maxMs: number;
   onStart: () => void;
   onStop: () => void;
+  onPickFile: () => void;
 }) {
   const isRec = state === "recording";
   const remaining = Math.max(0, maxMs - elapsedMs) / 1000;
@@ -229,9 +274,30 @@ function RecorderView({
           </p>
         </>
       ) : (
-        <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Tap to record up to 8 seconds. Closer to baby = better.
-        </p>
+        <>
+          <p className="text-sm text-muted-foreground text-center max-w-xs">
+            Tap to record up to 8 seconds. Closer to baby = better.
+          </p>
+          <div className="w-full flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />
+            or
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="touch-target"
+              onClick={onPickFile}
+            >
+              <Upload className="w-4 h-4 mr-1.5" />
+              Upload audio or video
+            </Button>
+            <p className="text-xs text-muted-foreground text-center max-w-xs">
+              We'll pull the sound out of a video and analyze its loudest 8 seconds.
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
@@ -260,6 +326,7 @@ function ResultView({
   bucket,
   confidence,
   alternates,
+  sourceLabel,
   onRedo,
   onLog,
   logged,
@@ -267,6 +334,7 @@ function ResultView({
   bucket: CryBucket;
   confidence: number;
   alternates: { bucket: CryBucket; confidence: number }[];
+  sourceLabel: string | null;
   onRedo: () => void;
   onLog: () => void;
   logged: boolean;
@@ -314,6 +382,12 @@ function ResultView({
           </div>
         </div>
 
+        {sourceLabel && (
+          <p className="text-xs text-muted-foreground mt-4 truncate">
+            From {sourceLabel}
+          </p>
+        )}
+
         <ul className="mt-5 space-y-2">
           {meta.tips.map((tip, i) => (
             <li key={i} className="flex gap-2 text-sm">
@@ -325,11 +399,11 @@ function ResultView({
       </div>
 
       <div className="flex gap-2">
-        <Button variant="outline" className="flex-1" onClick={onRedo}>
+        <Button variant="outline" className="flex-1 touch-target" onClick={onRedo}>
           <RotateCcw className="w-4 h-4 mr-1.5" />
           Listen again
         </Button>
-        <Button className="flex-1" onClick={onLog} disabled={logged}>
+        <Button className="flex-1 touch-target" onClick={onLog} disabled={logged}>
           {logged ? "Logged ✓" : "Log this"}
         </Button>
       </div>
