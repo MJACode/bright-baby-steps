@@ -1,70 +1,70 @@
-# Task — Gate additional users behind Flare+ (+ owner shut-off)
+# Task — Cry analyzer: analyze an uploaded audio or video clip
 
-## Decisions (confirmed with founder, 2026-08-28)
-- **Seats:** free = 0 additional users. Flare+ = up to **2** additional users (2nd + 3rd person on the account).
-- **On lapse:** DB-enforced auto-suspend. Partners keep their rows but lose all read/write until the owner resubscribes. Nothing is deleted.
-- **Shut-off:** reversible per-partner **pause** toggle *plus* the existing permanent **remove**. A paused seat still occupies a seat; a removed one frees it.
+The analyzer only listened through the mic, so a parent had to catch the cry
+live. Add a second way in: pick an audio or video file off the device.
 
-## Backend — `supabase/migrations/20260828100000_partner_seats_flare_plus.sql`
-- [x] `owner_has_plus(uuid)` — mirrors `usePremium` (`tier='plus'` AND status in active/trialing)
-- [x] `partner_seat_limit(uuid)` → 2 when plus, else 0
-- [x] `partner_seats_used(uuid)` → active + paused access rows + pending non-expired invites
-- [x] `partner_access.paused_at` column + `'paused'` status
-- [x] `has_partner_access` / `partner_can_write` / `can_access_child` require `owner_has_plus` and `status='active'`
-- [x] BEFORE INSERT/UPDATE trigger on `partner_access` — seat limit + plus check
-- [x] BEFORE INSERT trigger on `partner_invitations` — seat limit + plus check
-- [x] `accept_partner_invitation` marks the invite accepted *before* inserting access (so the invite doesn't double-count its own seat) + friendly error messages
-- [x] index on `partner_access(owner_id, status)`
+## Decisions
+- **On-device, still.** Decode with the browser's `decodeAudioData` — no upload,
+  no edge function, no new bucket. `cry_analyses` keeps storing only the derived
+  numeric features, exactly as before.
+- **Video works for free.** The browser's decoder demuxes the audio track out of
+  an `.mp4` / `.mov` container, so video needs no extra machinery.
+- **No schema change.** A `source` column ('mic' | 'upload') would be nice for
+  future insights, but it isn't needed for the feature and would break logging
+  until the migration landed. Skipped — the ask was the upload path.
+- **Trim long clips.** A two-minute nap video is mostly silence; feeding the
+  whole thing to `extractFeatures` washes the loudness features out.
 
-## Frontend
-- [x] `src/lib/partnerInvite.ts` — `MAX_ADDITIONAL_USERS`, `seatSummary()`, `describePartnerError()`
-- [x] `src/hooks/usePremium.tsx` + `UpgradeSheet.tsx` — retune `multi-caregiver` copy to the 2-seat offer
-- [x] `src/components/PartnerManagement.tsx` — seat counter, pause/resume switch, remove, free-tier teaser, lapsed banner
-- [x] `src/components/OnboardingWizard.tsx` step 7 — invite card opens UpgradeSheet on free tier
-- [x] `src/pages/AcceptInvite.tsx` — surface the real RPC error
-- [x] `src/hooks/useCurrentRole.tsx` — filter `status='active'`
-- [x] `src/integrations/supabase/types.ts` — hand-add `paused_at` + new fn signatures
+## Lib — `src/lib/cryFeatures.ts`
+- [x] Export `ANALYSIS_WINDOW_S = 8` (the cap the live recorder already used)
+- [x] `pickLoudestWindow()` — sliding sum over a 100ms energy envelope, O(n),
+      returns the buffer untouched when it already fits the window
+
+## Hook — `src/hooks/useCryAnalyzer.tsx`
+- [x] Extract `analyzeArrayBuffer()` — decode → mono → loudest window →
+      features → classify, shared by the mic and file paths
+- [x] `analyzeFile(file)` with `audio/*` + `video/*` MIME check, extension
+      fallback for blank MIME types, and a 100 MB cap
+- [x] `fileCapturedAt()` — log against the clip's own `lastModified`, clamped to
+      reject future or >1yr-old stamps
+- [x] Expose `source`, `fileName`, `capturedAt`; reset them in `reset()`
+
+## Frontend — `src/components/CryAnalyzer.tsx`
+- [x] Hidden `<input type="file">` + "Upload audio or video" button under an
+      `or` divider on the idle recorder card
+- [x] Analyzing state names the file; result card shows "From <filename>"
+- [x] `occurred_at` uses `capturedAt` instead of `new Date()`
+- [x] Intro copy covers both paths; on-device disclosure next to the medical one
+- [x] `touch-target` on the result-card buttons
 
 ## Verify
-- [x] `npx tsc --noEmit`, `npm run lint`, `npx vitest run`
-- [x] new unit test for the seat math
+- [x] `npx tsc -p tsconfig.app.json --noEmit`, `npx eslint`, `npm run build`
+- [x] `npm test` — 379 passed / 27 files
+- [x] New `src/lib/__tests__/cryFeatures.test.ts` — 6 cases
 
 ## Review
 
-**Shipped.** One migration + eight touched source files.
+**Shipped** as PR #210 (draft). Three source files touched, one test file added.
+No migration, no edge function, no legal-doc change.
 
-**How the gate works.** Three layers, all reading the same rule:
-1. `owner_has_plus()` mirrors `usePremium.isPremium` (tier `plus`, status `active`/`trialing`).
-2. `has_partner_access` / `partner_can_write` / `can_access_child` require it, so a lapsed
-   subscription auto-suspends every additional user at the RLS layer — nothing is deleted,
-   and access returns the instant the owner resubscribes.
-3. Two BEFORE triggers (`partner_access`, `partner_invitations`) enforce the 2-seat cap on
-   the invite, accept, and un-pause paths from one definition of "out of seats".
+**One analysis path, two front doors.** The mic recorder's `onstop` and the new
+`analyzeFile()` both call `analyzeArrayBuffer()`, so the classifier can't drift
+between them. That refactor is why the diff to the mic path is small.
 
-**Seat accounting.** A seat is held by an active partner, a paused partner, *or* an
-outstanding invite. Pausing does not free a seat; Remove and Cancel-invite do.
+**Why `pickLoudestWindow` and not "decode the first 8 seconds".** Uploads are
+found footage — the cry is somewhere in the middle of a clip that starts with
+silence. Taking the head would have handed the classifier ambient room tone and
+returned `unknown` almost every time. The sliding-sum implementation is O(n) over
+a 100ms envelope rather than the naive O(n · windowLen) scan, so a five-minute
+clip costs a few ms.
 
-**One reorder worth knowing about.** `accept_partner_invitation` now marks the invitation
-accepted *before* inserting `partner_access`, so the invite's own pending seat isn't counted
-twice against the cap. Same transaction — a rejected insert rolls the invitation back to
-pending. The consent stamp is untouched.
+**Timestamps.** An uploaded cry that logged as "just now" would quietly corrupt
+the history list the weekly insights are meant to read later. Using the file's
+`lastModified` fixes the common case (phone recording), and the clamp keeps a
+picker that rewrites mtime on copy from stamping a nonsense date.
 
-**Bug found and fixed on the way through.** `useCurrentRole` read `partner_access.role`
-without filtering on status, so a revoked (and now paused) partner still resolved as a
-co-parent in the UI. RLS blocked their data, but the UI handed them controls that would
-silently fail. Now filters `status = 'active'`.
-
-**Also tightened.** `owner_has_plus` / `partner_seat_limit` / `partner_seats_used` take an
-arbitrary owner id and Postgres grants EXECUTE to PUBLIC by default — left open, any signed-in
-user could probe a stranger's subscription state or caregiver count. Revoked from PUBLIC;
-they're only reached from inside SECURITY DEFINER bodies (plus one explicit service_role grant
-for `check-notifications`).
-
-**Behaviour change to flag before deploy.** Free-tier accounts that already have an active
-partner lose that partner's access on deploy — that's what "DB-enforced auto-suspend" means.
-Nothing is deleted, and `PartnerManagement` shows a "Shared access is on hold" banner
-explaining it. Worth an out-of-band note to any such owners in production.
-
-**Verification:** `npx tsc --noEmit` clean · `npx vitest run` 373/373 (26 files, 8 new)
-· `npm run build` clean · `npm run lint` unchanged at 131 problems, and per-file lint on
-every touched file is identical to the pre-change baseline.
+**Known limitation, called out in the PR.** A container or codec the browser
+can't open — DRM'd media, something exotic, a silent video — surfaces the
+"couldn't read any audio" error. The realtime-capture fallback (media element +
+`captureStream`) needs a user gesture and doesn't work uniformly across Safari,
+so it wasn't worth the complexity for v1.
