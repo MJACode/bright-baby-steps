@@ -29,3 +29,11 @@ export function getVocabBenchmark(ageMonths: number): VocabBenchmark {
   }
   return best;
 }
+
+/** How to label the age a benchmark applies to. The table stops at 36 months,
+ *  so past that the band is quoted as "36+ months" rather than asserting the
+ *  36-month norm as a 48-month one. */
+export function benchmarkAgeLabel(ageMonths: number): string {
+  const last = VOCAB_BENCHMARKS[VOCAB_BENCHMARKS.length - 1];
+  return ageMonths > last.months ? `${last.months}+ months` : `${ageMonths} months`;
+}

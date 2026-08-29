@@ -71,7 +71,36 @@ didn't before — the report's "speech" section was the milestone catalog
       period, empty period with history, never-logged)
 - [x] `npm run lint` — 126 problems, identical to the pre-change baseline
 - [x] `npm run build` — succeeds
-- [x] QA agent pass
+- [x] QA agent pass — returned **Fix-required**; findings below
+
+## QA round 2 — findings addressed
+- [x] **Blocking: `speech_journal` RLS.** Confirmed against the live DB — it was
+      the one child-scoped table omitted from all 17 in
+      `20260820000000_child_pivot_log_rls.sql`, still on the 2026-03 `FOR ALL`
+      policy pivoted on `parent_id`. Owner couldn't see a co-parent's words, so
+      the report would print an undercounted vocabulary figure beside a
+      screening benchmark; and a read-only viewer could write.
+      `20260829000000_speech_journal_child_pivot_rls.sql` moves it onto
+      `can_access_child` / `can_write_child` with the same four-policy shape and
+      a leftover-FOR-ALL assertion. **Not yet applied to live** — see below.
+- [x] Count is now DISTINCT words, case-insensitive, not row count
+- [x] All-time count is `null` on query error, and the line is omitted rather
+      than printing a contradictory "0 all time / 5 this period"
+- [x] Benchmark age labelled "(corrected age)" for a premature child
+- [x] Benchmark age clamps to "36+ months" past the end of the table
+- [x] "Age benchmark at 18 months: 10–20 words typical" — no longer doubled
+- [x] Word list capped at 50 with "Showing the 50 most recent of N entries.",
+      fetched DESC so the cap keeps the newest, rendered ASC so it reads
+      chronologically
+- [x] Legal-log "opt-in per export" corrected to opt-out, with a correction note
+      (the log is the paper trail; a silent edit would defeat it)
+- [x] 9 new tests total (20 in `pdfReportBuilder`, 5 in `vocabBenchmarks`)
+
+## Deploy step still required
+`supabase/migrations/20260829000000_speech_journal_child_pivot_rls.sql` is
+written and committed but **not applied to live**. Until it is, a co-parent's
+logged words stay invisible to the child's owner in the app and in the report.
+Left for a human call — changing production RLS wasn't part of the ask.
 
 ## Review
 The report gap was the real work here — the rename is copy. Worth noting for

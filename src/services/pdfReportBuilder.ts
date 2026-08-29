@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { format, parseISO } from "date-fns";
 import { getAge, getAgeInMonths } from "@/hooks/useChildren";
-import { getVocabBenchmark } from "@/lib/vocabBenchmarks";
+import { getVocabBenchmark, benchmarkAgeLabel } from "@/lib/vocabBenchmarks";
 
 /** A Word Journal row. `word_or_sound` is the original column name from the
  *  2026-03 migration; the journal tracks words only as of 2026-08-29. */
@@ -18,7 +18,8 @@ export interface ReportData {
   milestones: any[];
   categories: any[];
   words: WordJournalEntry[];
-  wordsTotalAllTime: number;
+  /** null when the all-time query failed — the line is omitted rather than shown as 0. */
+  wordsDistinctAllTime: number | null;
   lastExportDate: string | null;
   feedings: any[];
   supplements: any[];
@@ -184,23 +185,35 @@ function renderMilestones(h: PdfHelpers, data: ReportData) {
 // Vocabulary the parent logged in the Word Journal. Pediatricians screen
 // expressive language by word count, so the section leads with the counts and
 // the age benchmark, then lists the actual words for the visit conversation.
+
+/** Longest word list we print. A diligent parent over a 12-month range can log
+ *  hundreds of entries, each of which can wrap to several lines once the
+ *  500-char context is filled — uncapped, that is a 15-page appendix stapled to
+ *  a clinical summary. Same treatment as "Last 10 Dirty Diapers". */
+const WORD_LIST_CAP = 50;
+
 function renderWordJournal(h: PdfHelpers, data: ReportData) {
   const words = data.words ?? [];
-  const totalAllTime = data.wordsTotalAllTime ?? 0;
-  if (!words.length && !totalAllTime) return;
+  const distinctAllTime = data.wordsDistinctAllTime;
+  if (!words.length && !distinctAllTime) return;
 
   h.heading("Word Journal");
 
+  // getAgeInMonths corrects for prematurity, so say so when it did — an
+  // unlabelled number read against a benchmark is the thing to avoid.
   const ageMonths = getAgeInMonths(
     data.child.date_of_birth,
     data.child.is_premature ?? false,
     data.child.due_date,
   );
   const benchmark = getVocabBenchmark(ageMonths);
+  const ageNote = data.child.is_premature ? " (corrected age)" : "";
 
-  h.bodyText(`Total words logged (all time): ${totalAllTime}`);
-  h.bodyText(`New words in this period: ${words.length}`);
-  h.bodyText(`Typical at ${ageMonths} months: ${benchmark.label}`);
+  if (distinctAllTime !== null) {
+    h.bodyText(`Distinct words logged (all time): ${distinctAllTime}`);
+  }
+  h.bodyText(`Entries logged in this period: ${words.length}`);
+  h.bodyText(`Age benchmark${ageNote} at ${benchmarkAgeLabel(ageMonths)}: ${benchmark.label}`);
   h.bodyText(
     "Parent-logged vocabulary. Counts reflect what the parent recorded, not a formal language assessment.",
   );
@@ -212,9 +225,16 @@ function renderWordJournal(h: PdfHelpers, data: ReportData) {
     return;
   }
 
+  // `words` arrives newest-first so the cap keeps the most recent entries;
+  // printed oldest-first so the section reads as language emerging.
+  const shown = words.slice(0, WORD_LIST_CAP).reverse();
+
   h.spacer(2);
-  h.subheading("New Words in This Period");
-  words.forEach((w) => {
+  h.subheading("Words Logged in This Period");
+  if (words.length > WORD_LIST_CAP) {
+    h.bodyText(`Showing the ${WORD_LIST_CAP} most recent of ${words.length} entries.`, 4);
+  }
+  shown.forEach((w) => {
     const date = format(parseISO(w.entry_date), "MMM d, yyyy");
     h.bodyText(`"${w.word_or_sound}" — ${date}${w.context ? ` (${w.context})` : ""}`, 4);
   });

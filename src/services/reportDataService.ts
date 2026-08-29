@@ -9,6 +9,12 @@ const ALL_SECTIONS = new Set(["speech", "words", "allergens", "feeding", "diaper
 
 type SectionKey = "speech" | "words" | "allergens" | "feeding" | "diapers" | "sleep" | "illness" | "temperature";
 
+/** Distinct words, compared case- and whitespace-insensitively so "Mama" and
+ *  "mama " count once. */
+function distinctWordCount(rows: { word_or_sound: string }[]): number {
+  return new Set(rows.map((r) => r.word_or_sound.trim().toLowerCase())).size;
+}
+
 export async function fetchReportData(
   childId: string,
   dateFrom: Date,
@@ -58,11 +64,14 @@ export async function fetchReportData(
       sections.has("words")
         ? supabase.from("speech_journal").select("*").eq("child_id", childId).gte("entry_date", fromDate).lte("entry_date", toDate).order("entry_date", { ascending: false })
         : Promise.resolve({ data: [] }),
-      // All-time vocabulary total, so the pediatrician sees the running count and
-      // not just what landed in the selected window.
+      // All-time vocabulary, so the pediatrician sees the running total and not
+      // just what landed in the selected window. Fetches the words themselves
+      // rather than a row count: the clinical metric is *distinct* expressive
+      // vocabulary, and nothing stops a parent logging "dada" twice (the seed
+      // data itself does).
       sections.has("words")
-        ? supabase.from("speech_journal").select("*", { count: "exact", head: true }).eq("child_id", childId)
-        : Promise.resolve({ count: 0 }),
+        ? supabase.from("speech_journal").select("word_or_sound").eq("child_id", childId)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
   return {
@@ -78,7 +87,11 @@ export async function fetchReportData(
     medications: (medicationRes.data as any[]) ?? [],
     temperatures: (temperatureRes.data as any[]) ?? [],
     words: (wordRes.data as WordJournalEntry[] | null) ?? [],
-    wordsTotalAllTime: wordTotalRes.count ?? 0,
+    // null (not 0) when the query failed, so the PDF omits the all-time line
+    // rather than printing a self-contradictory "0 all time / 5 this period".
+    wordsDistinctAllTime: wordTotalRes.error
+      ? null
+      : distinctWordCount((wordTotalRes.data as { word_or_sound: string }[] | null) ?? []),
   };
 }
 
