@@ -1,13 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfDay, endOfDay } from "date-fns";
-import { generatePediatricianReport, ReportData } from "@/services/pdfReportBuilder";
+import { generatePediatricianReport, ReportData, WordJournalEntry } from "@/services/pdfReportBuilder";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 
-const ALL_SECTIONS = new Set(["speech", "allergens", "feeding", "diapers", "sleep", "illness", "temperature"] as const);
+const ALL_SECTIONS = new Set(["speech", "words", "allergens", "feeding", "diapers", "sleep", "illness", "temperature"] as const);
 
-type SectionKey = "speech" | "allergens" | "feeding" | "diapers" | "sleep" | "illness" | "temperature";
+type SectionKey = "speech" | "words" | "allergens" | "feeding" | "diapers" | "sleep" | "illness" | "temperature";
 
 export async function fetchReportData(
   childId: string,
@@ -20,7 +20,7 @@ export async function fetchReportData(
   const fromDate = format(dateFrom, "yyyy-MM-dd");
   const toDate = format(dateTo, "yyyy-MM-dd");
 
-  const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes, temperatureRes] =
+  const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes, temperatureRes, wordRes, wordTotalRes] =
     await Promise.all([
       sections.has("feeding")
         ? supabase.from("feeding_logs").select("*").eq("child_id", childId).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false })
@@ -53,6 +53,16 @@ export async function fetchReportData(
       sections.has("temperature")
         ? supabase.from("temperature_logs").select("*").eq("child_id", childId).gte("taken_at", from).lte("taken_at", to).order("taken_at", { ascending: false })
         : Promise.resolve({ data: [] }),
+      // Word Journal entries inside the reporting window. `word_or_sound` is the
+      // legacy column name — the journal tracks words only.
+      sections.has("words")
+        ? supabase.from("speech_journal").select("*").eq("child_id", childId).gte("entry_date", fromDate).lte("entry_date", toDate).order("entry_date", { ascending: false })
+        : Promise.resolve({ data: [] }),
+      // All-time vocabulary total, so the pediatrician sees the running count and
+      // not just what landed in the selected window.
+      sections.has("words")
+        ? supabase.from("speech_journal").select("*", { count: "exact", head: true }).eq("child_id", childId)
+        : Promise.resolve({ count: 0 }),
     ]);
 
   return {
@@ -67,6 +77,8 @@ export async function fetchReportData(
     illnesses: (illnessRes.data as any[]) ?? [],
     medications: (medicationRes.data as any[]) ?? [],
     temperatures: (temperatureRes.data as any[]) ?? [],
+    words: (wordRes.data as WordJournalEntry[] | null) ?? [],
+    wordsTotalAllTime: wordTotalRes.count ?? 0,
   };
 }
 

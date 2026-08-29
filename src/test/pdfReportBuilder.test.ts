@@ -22,7 +22,10 @@ const mockDoc = {
 };
 
 vi.mock("jspdf", () => ({ jsPDF: vi.fn(() => mockDoc) }));
-vi.mock("@/hooks/useChildren", () => ({ getAge: vi.fn(() => "6mo") }));
+vi.mock("@/hooks/useChildren", () => ({
+  getAge: vi.fn(() => "6mo"),
+  getAgeInMonths: vi.fn(() => 18),
+}));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -39,6 +42,8 @@ const baseData: ReportData = {
   dateTo: new Date("2024-06-30"),
   milestones: [],
   categories: [],
+  words: [],
+  wordsTotalAllTime: 0,
   lastExportDate: null,
   feedings: [],
   supplements: [],
@@ -92,6 +97,40 @@ describe("generatePediatricianReport", () => {
     generatePediatricianReport(baseData, new Set(["speech"]));
     const textCalls = mockDoc.text.mock.calls.map((c) => c[0]);
     expect(textCalls.some((t) => typeof t === "string" && t === "MILESTONES")).toBe(true);
+  });
+
+  it("renders the word journal with counts, benchmark, and the logged words", () => {
+    const words = [
+      { word_or_sound: "mama", entry_date: "2024-06-04", context: "at breakfast" },
+      { word_or_sound: "ball", entry_date: "2024-06-11", context: null },
+    ];
+    generatePediatricianReport(
+      { ...baseData, words, wordsTotalAllTime: 12 },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("WORD JOURNAL");
+    expect(flat).toContain("Total words logged (all time): 12");
+    expect(flat).toContain("New words in this period: 2");
+    expect(flat).toContain("Typical at 18 months: 10–20 words typical");
+    expect(flat).toContain('"mama" — Jun 4, 2024 (at breakfast)');
+    expect(flat).toContain('"ball" — Jun 11, 2024');
+  });
+
+  it("still renders the word journal header when the period is empty but words exist", () => {
+    generatePediatricianReport(
+      { ...baseData, words: [], wordsTotalAllTime: 5 },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("WORD JOURNAL");
+    expect(flat).toContain("No new words logged in this period.");
+  });
+
+  it("omits the word journal entirely when nothing has ever been logged", () => {
+    generatePediatricianReport(baseData, new Set(["words"]));
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).not.toContain("WORD JOURNAL");
   });
 
   it("renders the diapers section when 'diapers' is in sections and data exists", () => {

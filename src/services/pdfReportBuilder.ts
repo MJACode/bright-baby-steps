@@ -1,6 +1,15 @@
 import { jsPDF } from "jspdf";
-import { format } from "date-fns";
-import { getAge } from "@/hooks/useChildren";
+import { format, parseISO } from "date-fns";
+import { getAge, getAgeInMonths } from "@/hooks/useChildren";
+import { getVocabBenchmark } from "@/lib/vocabBenchmarks";
+
+/** A Word Journal row. `word_or_sound` is the original column name from the
+ *  2026-03 migration; the journal tracks words only as of 2026-08-29. */
+export interface WordJournalEntry {
+  word_or_sound: string;
+  entry_date: string;
+  context: string | null;
+}
 
 export interface ReportData {
   child: { name: string; date_of_birth: string; is_premature: boolean | null; due_date: string | null };
@@ -8,6 +17,8 @@ export interface ReportData {
   dateTo: Date;
   milestones: any[];
   categories: any[];
+  words: WordJournalEntry[];
+  wordsTotalAllTime: number;
   lastExportDate: string | null;
   feedings: any[];
   supplements: any[];
@@ -166,6 +177,47 @@ function renderMilestones(h: PdfHelpers, data: ReportData) {
       h.bodyText(`${domain}: ${groups[domain].map((m: any) => m.speech?.name ?? "Unknown").join(", ")}`, 4);
     });
   }
+  h.spacer();
+}
+
+// ── Word Journal ──
+// Vocabulary the parent logged in the Word Journal. Pediatricians screen
+// expressive language by word count, so the section leads with the counts and
+// the age benchmark, then lists the actual words for the visit conversation.
+function renderWordJournal(h: PdfHelpers, data: ReportData) {
+  const words = data.words ?? [];
+  const totalAllTime = data.wordsTotalAllTime ?? 0;
+  if (!words.length && !totalAllTime) return;
+
+  h.heading("Word Journal");
+
+  const ageMonths = getAgeInMonths(
+    data.child.date_of_birth,
+    data.child.is_premature ?? false,
+    data.child.due_date,
+  );
+  const benchmark = getVocabBenchmark(ageMonths);
+
+  h.bodyText(`Total words logged (all time): ${totalAllTime}`);
+  h.bodyText(`New words in this period: ${words.length}`);
+  h.bodyText(`Typical at ${ageMonths} months: ${benchmark.label}`);
+  h.bodyText(
+    "Parent-logged vocabulary. Counts reflect what the parent recorded, not a formal language assessment.",
+  );
+
+  if (!words.length) {
+    h.spacer(2);
+    h.bodyText("No new words logged in this period.", 4);
+    h.spacer();
+    return;
+  }
+
+  h.spacer(2);
+  h.subheading("New Words in This Period");
+  words.forEach((w) => {
+    const date = format(parseISO(w.entry_date), "MMM d, yyyy");
+    h.bodyText(`"${w.word_or_sound}" — ${date}${w.context ? ` (${w.context})` : ""}`, 4);
+  });
   h.spacer();
 }
 
@@ -489,6 +541,7 @@ export function generatePediatricianReport(data: ReportData, sections: Set<strin
   renderTitleAndDisclaimer(h, data);
   renderChildInfo(h, data);
   if (sections.has("speech")) renderMilestones(h, data);
+  if (sections.has("words")) renderWordJournal(h, data);
   if (sections.has("feeding")) renderFeeding(h, data);
   if (sections.has("diapers")) renderDiapers(h, data);
   if (sections.has("sleep")) renderSleep(h, data);

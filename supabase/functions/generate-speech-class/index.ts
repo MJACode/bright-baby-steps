@@ -51,7 +51,7 @@ Return ONLY this JSON object — no prose, no code fences:
 
 Rules:
 - dailyPlan: 3-5 items. weekProgression: exactly the 3 buckets above. escalation: 2-3 items.
-- Tailor the activity to the child's recent logged words/sounds when provided.
+- Tailor the activity to the child's recent logged words when provided.
 - Never diagnose, dose, or imply a delay. If too early, offer a gentler precursor activity in oneRep and set verdict "too_early".
 - Never state or imply that the child is delayed, behind, at risk, or that earlier use of this feature would have changed an outcome. "past_window" means only "past the typical age range" — frame it as a neutral prompt to check in with an expert, never as a concern about this child specifically.
 - This plan is general educational information, not a diagnosis, screening result, treatment, or medical advice, and is not a substitute for evaluation by a licensed speech-language pathologist. Always return the "disclaimer" field exactly as shown above.`;
@@ -134,7 +134,7 @@ serve(async (req) => {
       isPremature && typeof correctedAgeMonths === "number"
         ? `Premature — corrected age ${correctedAgeMonths} months; use the corrected age for the age check.`
         : "",
-      `Recent words/sounds logged: ${wordList}.`,
+      `Recent words logged: ${wordList}.`,
       targetMilestone
         ? `Focus the plan on: ${targetMilestone}.`
         : "Choose the most age-appropriate communication skill to target.",

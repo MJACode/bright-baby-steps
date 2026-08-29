@@ -2136,3 +2136,62 @@ merge). `CLAUDE.md` gained a standing "no conversational AI" convention.
    all three carry prompt changes in this commit.
 3. Confirm no out-of-repo surface (App Store / Play listing, marketing site,
    screenshots, onboarding upsell) still advertises an AI chat or "ask the AI anything".
+
+---
+
+## 2026-08-29 — Word & Sound Journal renamed "Word Journal"; journal entries added to the pediatrician PDF
+
+**Reviewer:** in-house (Claude pass).
+**Risk: LOW.**
+
+**What changed:**
+- **Product rename, not a data change.** The "Word & Sound Journal" is now the
+  "Word Journal". The feature drops its babble/sound framing and tracks words
+  only. The underlying table (`public.speech_journal`) and its
+  `word_or_sound` column are **unchanged** — no migration, no data loss, no
+  RLS change, and every existing row (including any babble a parent logged
+  under the old framing) stays readable, editable, exportable, and covered by
+  `delete_user_account()` / `_purge_user_data()` exactly as before.
+- **PrivacyPage § 4** re-worded in three places: the AI-feature enumeration now
+  says "speech-development insights in the Word Journal", and the two
+  data-transmitted clauses (Word Journal insights, Speech Class) now say "up to
+  30 of the most recently logged words" instead of "words or sounds". The
+  bound (30 entries) and the recipient (Anthropic) are unchanged — this narrows
+  the described payload to match the feature, it does not widen it.
+- **`/subprocessors`** (Anthropic row, purpose + dataCategories) re-worded to
+  match § 4 verbatim. Same three substitutions; no subprocessor added, removed,
+  or re-scoped, so **no 30-day advance notice under Privacy § 5 is triggered**.
+- **Pediatrician PDF gains a "Word Journal" section.** `fetchReportData` now
+  reads `speech_journal` rows inside the selected date range plus an all-time
+  count; `pdfReportBuilder` renders the counts, the age benchmark, and the
+  logged words with their dates and parent-written context. The section is
+  **opt-in per export** — its own checkbox in `PediatricianExport.tsx`,
+  alongside the seven existing ones — and is omitted entirely when the child
+  has no entries.
+
+**Analysis:** No new subprocessor, no new egress, and no new data category.
+The PDF is generated **client-side** (jsPDF) from data the parent already
+owns and can already download in full from Profile → Export My Data, and it
+goes only where the parent chooses to send it — so surfacing journal entries
+in it creates no third-party disclosure and no new § 4 or § 5 obligation.
+`pediatrician_exports` continues to log only the export event and date range,
+never the content. The new PDF copy carries a non-diagnostic qualifier
+("Parent-logged vocabulary. Counts reflect what the parent recorded, not a
+formal language assessment.") under the report's existing disclaimer block,
+consistent with the 2026-06-19 act-early milestone entry's framing rule: the
+report presents observations for a clinician to interpret, it does not screen.
+Non-material change — no renewed VPC required.
+
+**Code refs:** branch `claude/word-journal-pediatrician-report-ssq6hn`.
+`src/components/WordSoundJournal.tsx` → `src/components/WordJournal.tsx`;
+`src/lib/vocabBenchmarks.ts` (new, extracted from `SpeechInsightsPanel` so the
+in-app panel and the PDF quote the same benchmark table);
+`src/services/reportDataService.ts`; `src/services/pdfReportBuilder.ts`;
+`src/components/PediatricianExport.tsx`; `PrivacyPage.tsx`;
+`SubprocessorsPage.tsx`.
+
+**Outstanding:** none. The `word_or_sound` column name is now a legacy
+mismatch with the feature name; it is internal-only (never user-visible) and
+renaming it would require a live migration plus redeploys of `weekly-insights`
+and `generate-speech-class` for no user-facing benefit. Code comments at each
+call site record the reason.

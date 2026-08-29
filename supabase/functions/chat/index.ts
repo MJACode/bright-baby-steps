@@ -1,8 +1,8 @@
 // NOTE (2026-08-28): the in-app AI chat was removed — there is no conversational
 // UI left in the client. This function stays deployed because it is the backend
 // for a one-shot AI *insight*: SpeechInsightsPanel posts a single prompt with
-// skill "slp" and renders the streamed answer inline in the Word & Sound
-// Journal. It still accepts a free-form `messages[]` array, so it remains a
+// skill "slp" and renders the streamed answer inline in the Word Journal. It
+// still accepts a free-form `messages[]` array, so it remains a
 // general-purpose endpoint for any authenticated caller; narrowing it to the
 // insight shape is a tracked follow-up. Do not wire new conversational UI to it.
 
@@ -160,7 +160,7 @@ declare const EdgeRuntime: { waitUntil: (p: Promise<any>) => void } | undefined;
 
 // Free tier: 10 requests / UTC day. Flare+ (subscriptions.tier='plus',
 // status in ('active','trialing')) is unlimited. Since the chat UI was removed
-// on 2026-08-28 this quota gates one surface only — the Word & Sound Journal
+// on 2026-08-28 this quota gates one surface only — the Word Journal
 // insight — so the 429 body is worded for that caller. There is no longer a
 // client-side mirror of this constant; SpeechInsightsPanel renders the
 // `message` field below verbatim.

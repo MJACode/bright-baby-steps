@@ -16,6 +16,7 @@ import { generateAndDownloadReport } from "@/services/reportDataService";
 
 const SECTIONS = [
   { key: "speech", label: "Milestones" },
+  { key: "words", label: "Word Journal" },
   { key: "allergens", label: "Allergens" },
   { key: "feeding", label: "Feeding & Supplements" },
   { key: "diapers", label: "Diapers" },

@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PartyPopper, ChevronDown, ChevronRight, Hand, Plus, Star, Trash2, Sparkles, ToyBrick } from "lucide-react";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
-import { WordSoundJournal } from "@/components/WordSoundJournal";
+import { WordJournal } from "@/components/WordJournal";
 import { SpeechClass } from "@/components/SpeechClass";
 import { MilestonesPremiumCard } from "@/components/MilestonesPremiumCard";
 import { PremiumGate } from "@/components/PremiumGate";
@@ -467,7 +467,7 @@ export default function MilestonesPage() {
                 </DialogContent>
               </Dialog>
 
-              <WordSoundJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
+              <WordJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
 
               <Link to="/dashboard/signs" className="block touch-target">
                 <Card className="border-0 bg-milestones-bg active:scale-[0.99] transition-transform">

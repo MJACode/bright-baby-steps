@@ -47,7 +47,7 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature }: Spee
   const generate = useGenerateSpeechClass();
   const toggleDay = useToggleSpeechClassDay();
 
-  // Recent logged words/sounds tailor the plan (same source as WordSoundJournal).
+  // Recent logged words tailor the plan (same source as WordJournal).
   const { data: recentWords } = useQuery({
     queryKey: ["speech-class-words", childId],
     queryFn: async () => {
