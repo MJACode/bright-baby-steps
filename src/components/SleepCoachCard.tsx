@@ -8,6 +8,7 @@ import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { useToast } from "@/hooks/use-toast";
 import { formatApproxClock } from "@/lib/gentleTime";
 import { getAgeBucket } from "@/lib/sleepTriage";
@@ -95,6 +96,7 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
   const { active: activeSleep, start } = useActiveSleep(activeChild?.id);
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
+  const schedule = useTrackingSchedule();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -161,6 +163,7 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
       const nightStartMin = resolveNightStartMin(
         plan ?? null,
         getAgeBucket(data?.ageMonths ?? 0),
+        schedule.nightStartMin,
       );
       const sleepType = isNightClockMinutes(clockMinutes(new Date()), nightStartMin)
         ? "night"

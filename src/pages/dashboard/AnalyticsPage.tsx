@@ -26,6 +26,13 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren, getAge } from "@/hooks/useChildren";
+import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
+import {
+  trackingDayDate,
+  trackingDayKey,
+  trackingWindowStart,
+  type TrackingSchedule,
+} from "@/lib/trackingDay";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -63,10 +70,16 @@ type AnalyticsData = {
   diapers: DiaperRow[];
 };
 
-const dayKey = (d: Date | string) => format(typeof d === "string" ? new Date(d) : d, "yyyy-MM-dd");
+// Two keying functions, one key space. A calendar cell or a bucket already IS
+// a day, so it keys by its own date; a log keys by the tracking day that
+// contains its timestamp, which under a 07:00 day start files a 3 AM feed
+// under the previous date. Both land on "the date the tracking day started".
+const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
+const logDayKey = (at: string, schedule: TrackingSchedule) => trackingDayKey(at, schedule);
 
 export default function AnalyticsPage() {
   const { activeChild } = useChildren();
+  const schedule = useTrackingSchedule();
   const navigate = useNavigate();
   const [visibleMonth, setVisibleMonth] = useState<Date>(() => startOfMonth(new Date()));
 
@@ -115,16 +128,18 @@ export default function AnalyticsPage() {
 
   const dotsByDay = useMemo(() => {
     const map = new Map<string, Set<Category>>();
-    const add = (key: string, cat: Category) => {
+    const add = (at: string, cat: Category) => {
+      const key = logDayKey(at, schedule);
+      if (!key) return;
       const set = map.get(key) ?? new Set<Category>();
       set.add(cat);
       map.set(key, set);
     };
-    data?.sleep.forEach((l) => add(dayKey(l.started_at), "sleep"));
-    data?.feeding.forEach((l) => add(dayKey(l.logged_at), "feeding"));
-    data?.diapers.forEach((l) => add(dayKey(l.logged_at), "diapers"));
+    data?.sleep.forEach((l) => add(l.started_at, "sleep"));
+    data?.feeding.forEach((l) => add(l.logged_at, "feeding"));
+    data?.diapers.forEach((l) => add(l.logged_at, "diapers"));
     return map;
-  }, [data]);
+  }, [data, schedule]);
 
   if (!activeChild) {
     return (
@@ -237,9 +252,13 @@ export default function AnalyticsPage() {
   );
 }
 
-function lastSevenDayBuckets() {
+// The seven tracking days ending with the one we're inside right now. Under a
+// 07:00 day start at 3 AM that's still yesterday's date — the bar a parent
+// is adding to, not an empty one for a day that hasn't begun.
+function lastSevenDayBuckets(schedule: TrackingSchedule) {
+  const today = trackingDayDate(new Date(), schedule) ?? startOfDay(new Date());
   return Array.from({ length: 7 }, (_, i) => {
-    const d = subDays(startOfDay(new Date()), 6 - i);
+    const d = subDays(today, 6 - i);
     return { date: d, key: dayKey(d), day: format(d, "EEE") };
   });
 }
@@ -271,13 +290,14 @@ function EmptyChartCard({
 }
 
 function SleepNapNightChart({ sleep }: { sleep: SleepRow[] }) {
+  const schedule = useTrackingSchedule();
   const chartData = useMemo(() => {
-    const buckets = lastSevenDayBuckets().map((b) => ({ ...b, nap: 0, night: 0 }));
-    const sevenAgo = subDays(startOfDay(new Date()), 6);
+    const buckets = lastSevenDayBuckets(schedule).map((b) => ({ ...b, nap: 0, night: 0 }));
+    const sevenAgo = trackingWindowStart(7, schedule);
     sleep
       .filter((l) => new Date(l.started_at) >= sevenAgo)
       .forEach((l) => {
-        const entry = buckets.find((b) => b.key === dayKey(l.started_at));
+        const entry = buckets.find((b) => b.key === logDayKey(l.started_at, schedule));
         if (!entry) return;
         const hours = (l.duration_minutes ?? 0) / 60;
         if (l.sleep_type === "nap") entry.nap += hours;
@@ -288,7 +308,7 @@ function SleepNapNightChart({ sleep }: { sleep: SleepRow[] }) {
       nap: Math.round(b.nap * 10) / 10,
       night: Math.round(b.night * 10) / 10,
     }));
-  }, [sleep]);
+  }, [sleep, schedule]);
 
   const hasData = chartData.some((d) => d.nap > 0 || d.night > 0);
   if (!hasData) {
@@ -356,17 +376,18 @@ function SleepNapNightChart({ sleep }: { sleep: SleepRow[] }) {
 }
 
 function FeedingFrequencyChart({ feeding }: { feeding: FeedingRow[] }) {
+  const schedule = useTrackingSchedule();
   const data = useMemo(() => {
-    const buckets = lastSevenDayBuckets().map((b) => ({ ...b, value: 0 }));
-    const sevenAgo = subDays(startOfDay(new Date()), 6);
+    const buckets = lastSevenDayBuckets(schedule).map((b) => ({ ...b, value: 0 }));
+    const sevenAgo = trackingWindowStart(7, schedule);
     feeding
       .filter((l) => new Date(l.logged_at) >= sevenAgo)
       .forEach((l) => {
-        const entry = buckets.find((b) => b.key === dayKey(l.logged_at));
+        const entry = buckets.find((b) => b.key === logDayKey(l.logged_at, schedule));
         if (entry) entry.value += 1;
       });
     return buckets.map((b) => ({ day: b.day, value: b.value }));
-  }, [feeding]);
+  }, [feeding, schedule]);
 
   if (!data.some((d) => d.value > 0)) {
     return (
@@ -390,17 +411,18 @@ function FeedingFrequencyChart({ feeding }: { feeding: FeedingRow[] }) {
 }
 
 function FeedingVolumeChart({ feeding }: { feeding: FeedingRow[] }) {
+  const schedule = useTrackingSchedule();
   const data = useMemo(() => {
-    const buckets = lastSevenDayBuckets().map((b) => ({ ...b, value: 0 }));
-    const sevenAgo = subDays(startOfDay(new Date()), 6);
+    const buckets = lastSevenDayBuckets(schedule).map((b) => ({ ...b, value: 0 }));
+    const sevenAgo = trackingWindowStart(7, schedule);
     feeding
       .filter((l) => new Date(l.logged_at) >= sevenAgo)
       .forEach((l) => {
-        const entry = buckets.find((b) => b.key === dayKey(l.logged_at));
+        const entry = buckets.find((b) => b.key === logDayKey(l.logged_at, schedule));
         if (entry) entry.value += l.amount_oz ?? 0;
       });
     return buckets.map((b) => ({ day: b.day, value: Math.round(b.value * 10) / 10 }));
-  }, [feeding]);
+  }, [feeding, schedule]);
 
   if (!data.some((d) => d.value > 0)) {
     return (
@@ -425,17 +447,18 @@ function FeedingVolumeChart({ feeding }: { feeding: FeedingRow[] }) {
 }
 
 function DiaperCountChart({ diapers }: { diapers: DiaperRow[] }) {
-  const sevenAgo = subDays(startOfDay(new Date()), 6);
+  const schedule = useTrackingSchedule();
+  const sevenAgo = trackingWindowStart(7, schedule);
   const recent = diapers.filter((l) => new Date(l.logged_at) >= sevenAgo);
 
   const data = useMemo(() => {
-    const buckets = lastSevenDayBuckets().map((b) => ({ ...b, value: 0 }));
+    const buckets = lastSevenDayBuckets(schedule).map((b) => ({ ...b, value: 0 }));
     recent.forEach((l) => {
-      const entry = buckets.find((b) => b.key === dayKey(l.logged_at));
+      const entry = buckets.find((b) => b.key === logDayKey(l.logged_at, schedule));
       if (entry) entry.value += 1;
     });
     return buckets.map((b) => ({ day: b.day, value: b.value }));
-  }, [recent]);
+  }, [recent, schedule]);
 
   const flagged = recent.filter((l) => l.flag_for_attention).length;
 

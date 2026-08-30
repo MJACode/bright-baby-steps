@@ -61,4 +61,26 @@ describe("groupLogsByDay", () => {
   it("returns an empty array for no logs", () => {
     expect(groupLogsByDay([] as Row[], (r) => r.at)).toEqual([]);
   });
+
+  describe("with a custom day start", () => {
+    const sevenAm = { dayStartMin: 7 * 60, nightStartMin: null };
+
+    it("files pre-dawn logs with the evening they follow", () => {
+      const rows: Row[] = [
+        { id: "bedtime", at: localIso(2026, 8, 22, 20) },
+        { id: "night-feed", at: localIso(2026, 8, 23, 3) },
+        { id: "breakfast", at: localIso(2026, 8, 23, 8) },
+      ];
+      const groups = groupLogsByDay(rows, (r) => r.at, sevenAm);
+      expect(groups.map((g) => g.key)).toEqual(["2026-08-23", "2026-08-22"]);
+      expect(groups[0].logs.map((r) => r.id)).toEqual(["breakfast"]);
+      expect(groups[1].logs.map((r) => r.id)).toEqual(["bedtime", "night-feed"]);
+    });
+
+    it("dates the group by the day it STARTED, not the calendar day of each log", () => {
+      const rows: Row[] = [{ id: "a", at: localIso(2026, 8, 23, 3) }];
+      const [group] = groupLogsByDay(rows, (r) => r.at, sevenAm);
+      expect(group.date).toEqual(new Date(2026, 7, 22));
+    });
+  });
 });

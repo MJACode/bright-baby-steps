@@ -73,10 +73,15 @@ export const EARLY_MORNING = "06:00";
 // safe failure mode — a 9 PM "Nap 1" anchoring a fresh day is not.
 export const NIGHT_START_FALLBACK = "20:00";
 
+// Priority: the family's own night boundary (Profile → Tracking day) beats the
+// saved plan's bedtime, which beats the age-bracket default. A parent who says
+// "our night starts at 18:30" has told us something no bracket table knows.
 export function resolveNightStartMin(
   plan: Pick<SleepTodoPlanLike, "bedtime_earliest"> | null,
   bucket: AgeBucket,
+  familyNightStartMin?: number | null,
 ): number {
+  if (familyNightStartMin != null) return familyNightStartMin;
   return parseHHmm(
     plan?.bedtime_earliest ??
       BEDTIME_RANGE_BY_BRACKET[bucket].earliest ??
@@ -108,6 +113,9 @@ export function buildSleepTodo(opts: {
   todayLogs: SleepTodoLog[];
   completedItems: string[];
   overrides?: Record<string, string>;
+  // The family's own night boundary, when they've set one. Minutes since
+  // midnight; null/undefined falls back to plan → age bracket.
+  familyNightStartMin?: number | null;
 }): { items: SleepTodoItem[]; wakeAnchor: Date; allDone: boolean } {
   const { now, ageMonths, plan, todayLogs, completedItems } = opts;
   const overrides = opts.overrides ?? {};
@@ -123,7 +131,7 @@ export function buildSleepTodo(opts: {
   const wakeClock = plan?.wake_time ?? "07:00";
   const napDur = typicalNapDuration(bucket);
 
-  const nightStartMin = resolveNightStartMin(plan, bucket);
+  const nightStartMin = resolveNightStartMin(plan, bucket, opts.familyNightStartMin);
   const dayStart = startOfDay(now);
   const dayCutoff = applyClockToDay(now, DAY_CUTOFF);
 

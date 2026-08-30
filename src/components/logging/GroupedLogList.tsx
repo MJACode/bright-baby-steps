@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { format } from "date-fns";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +7,12 @@ import { cn } from "@/lib/utils";
 import { dayLabel } from "@/lib/dayLabel";
 import { groupLogsByDay } from "@/lib/groupLogsByDay";
 import { spokenSummary } from "@/lib/logDaySummary";
+import {
+  DEFAULT_TRACKING_SCHEDULE,
+  trackingDayDate,
+  trackingDayKey,
+  type TrackingSchedule,
+} from "@/lib/trackingDay";
 
 interface GroupedLogListProps<T> {
   logs: T[];
@@ -21,6 +26,9 @@ interface GroupedLogListProps<T> {
   hasEarlier: boolean;
   // The window hit the row cap, so there's nothing further back to offer.
   truncated?: boolean;
+  // The family's day boundary. Defaults to midnight — the page owns the child
+  // lookup (useTrackingSchedule), this list stays presentational.
+  schedule?: TrackingSchedule;
   onShowEarlier: () => void;
   onRetry: () => void;
 }
@@ -36,22 +44,25 @@ export function GroupedLogList<T>({
   emptyState,
   hasEarlier,
   truncated = false,
+  schedule = DEFAULT_TRACKING_SCHEDULE,
   onShowEarlier,
   onRetry,
 }: GroupedLogListProps<T>) {
-  const todayKey = format(new Date(), "yyyy-MM-dd");
+  // "Today" is the tracking day we're inside right now, which with a 07:00 day
+  // start is still yesterday's date at 3 AM — the hour a parent is most likely
+  // to be looking at this list.
+  const todayKey = trackingDayKey(new Date(), schedule) as string;
 
   // Deterministic on every mount — deliberately not persisted. Today open,
   // every past day closed.
   const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set([todayKey]));
 
   const groups = useMemo(() => {
-    const grouped = groupLogsByDay(logs, getDate);
+    const grouped = groupLogsByDay(logs, getDate, schedule);
     if (!grouped.some((g) => g.key === todayKey)) {
-      const now = new Date();
       grouped.push({
         key: todayKey,
-        date: new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+        date: trackingDayDate(new Date(), schedule) as Date,
         logs: [],
       });
       // The date picker allows a future timestamp, so Today isn't always the
@@ -60,7 +71,7 @@ export function GroupedLogList<T>({
     }
     return grouped;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logs, todayKey]);
+  }, [logs, todayKey, schedule]);
 
   // Appending days silently is invisible to assistive tech — move focus to the
   // first header that wasn't there before.
@@ -145,7 +156,11 @@ export function GroupedLogList<T>({
                 >
                   <span className="flex w-full items-center justify-between gap-2">
                     <span className="font-display text-sm font-bold text-foreground">
-                      {dayLabel(group.date)}
+                      {/* Anchored to the CURRENT tracking day, not the wall
+                          clock: at 3 AM under a 07:00 day start, today's group
+                          is filed under yesterday's date and a bare
+                          dayLabel() would call it "Yesterday". */}
+                      {dayLabel(group.date, trackingDayDate(new Date(), schedule) as Date)}
                     </span>
                     <ChevronDown
                       aria-hidden

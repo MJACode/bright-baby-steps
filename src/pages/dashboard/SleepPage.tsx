@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Moon, Sun, Clock, Pencil, Info, Plus, CloudMoon, Sparkle, Sunrise, CheckCircle2, Trash2, CalendarCheck, History } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { format, subDays, startOfDay, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { toast } from "@/hooks/use-toast";
 import SleepTimer from "@/components/sleep/SleepTimer";
@@ -36,7 +36,9 @@ import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { useLogHistory } from "@/hooks/useLogHistory";
+import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { summarizeSleepDay } from "@/lib/logDaySummary";
+import { trackingDayKey, trackingWindowStart } from "@/lib/trackingDay";
 import type { Tables } from "@/integrations/supabase/types";
 
 type SleepLogRow = Tables<"sleep_logs">;
@@ -65,16 +67,20 @@ function SleepInsights({
 }) {
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
+  const schedule = useTrackingSchedule();
 
   const insights = useMemo(() => {
     const result: { icon: React.ReactNode; text: string }[] = [];
-    const sevenAgo = subDays(startOfDay(new Date()), 6);
+    const sevenAgo = trackingWindowStart(7, schedule);
     const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenAgo);
     if (recentLogs.length === 0) return result;
 
+    // Bucketed by the family's tracking day, so an 11pm–7am night counts once
+    // against the day it started rather than splitting the average in two.
     const byDay = new Map<string, number>();
     recentLogs.forEach(l => {
-      const key = format(new Date(l.started_at), "yyyy-MM-dd");
+      const key = trackingDayKey(l.started_at, schedule);
+      if (!key) return;
       byDay.set(key, (byDay.get(key) ?? 0) + (l.duration_minutes || 0));
     });
     const daysWithData = byDay.size || 1;
@@ -112,7 +118,7 @@ function SleepInsights({
     }
 
     return result;
-  }, [logs, ageMonths, calmMode]);
+  }, [logs, ageMonths, calmMode, schedule]);
 
   if (insights.length === 0 && !nightWakingReassurance) return null;
 
@@ -492,6 +498,7 @@ export default function SleepPage() {
               onShowEarlier={history.showEarlier}
               onRetry={history.refetch}
               getDate={(log) => log.started_at}
+              schedule={history.schedule}
               summarize={summarizeSleepDay}
               labels={{ unit: "sleep", unitPlural: "sleeps" }}
               renderRow={(log) => {
