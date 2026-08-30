@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { parseSleepPlanOverrides, useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { useSleepDayTodo } from "@/hooks/useSleepDayTodo";
+import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import {
   buildSleepTodo,
@@ -20,6 +21,7 @@ import {
 export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const schedule = useTrackingSchedule();
   const { data: plan, isLoading: planLoading } = useSleepPlan(childId ?? null);
   const { active, start, stop, editStart } = useActiveSleep(childId);
   const {
@@ -61,7 +63,11 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
   const planLike = plan
     ? { ...plan, overrides: parseSleepPlanOverrides(plan.overrides) }
     : null;
-  const nightStartMin = resolveNightStartMin(planLike, getAgeBucket(ageMonths));
+  const nightStartMin = resolveNightStartMin(
+    planLike,
+    getAgeBucket(ageMonths),
+    schedule.nightStartMin,
+  );
 
   const built = buildSleepTodo({
     now: new Date(),
@@ -71,6 +77,7 @@ export function useSleepTodo(childId: string | undefined, ageMonths: number) {
     todayLogs: todayLogs ?? [],
     completedItems: row?.completed_items ?? [],
     overrides,
+    familyNightStartMin: schedule.nightStartMin,
   });
 
   const onMutationError = (err: unknown) =>

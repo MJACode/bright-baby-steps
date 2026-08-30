@@ -25,6 +25,7 @@ import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
 import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
+import { TrackingScheduleSettings } from "@/components/TrackingScheduleSettings";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -227,6 +228,9 @@ export default function ProfilePage() {
 
       {/* Connect to Claude (MCP) */}
       <ConnectClaudeSettings />
+
+      {/* Tracking day — the per-child day / night boundary */}
+      <TrackingScheduleSettings />
 
       {/* Preferences */}
       <Card className="border-0 bg-muted/50">

@@ -625,6 +625,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
           onShowEarlier={history.showEarlier}
           onRetry={history.refetch}
           getDate={(log) => log.logged_at}
+          schedule={history.schedule}
           summarize={summarizeFeedingDay}
           labels={{ unit: "feed", unitPlural: "feeds" }}
           renderRow={(log) => {

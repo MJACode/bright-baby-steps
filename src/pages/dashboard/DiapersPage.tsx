@@ -500,6 +500,7 @@ export default function DiapersPage() {
           onShowEarlier={history.showEarlier}
           onRetry={history.refetch}
           getDate={(log) => log.logged_at}
+          schedule={history.schedule}
           summarize={summarizeDiaperDay}
           labels={{ unit: "change", unitPlural: "changes" }}
           renderRow={(log) => {

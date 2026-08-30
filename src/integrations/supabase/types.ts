@@ -835,6 +835,7 @@ export type Database = {
           birth_weight_oz: number | null
           created_at: string
           date_of_birth: string
+          day_start_time: string | null
           discharge_weight_oz: number | null
           due_date: string | null
           gender: string | null
@@ -844,6 +845,7 @@ export type Database = {
           is_premature: boolean | null
           name: string
           next_appointment: string | null
+          night_start_time: string | null
           parent_id: string
           photo_url: string | null
           retroactive_setup_completed_at: string | null
@@ -855,6 +857,7 @@ export type Database = {
           birth_weight_oz?: number | null
           created_at?: string
           date_of_birth: string
+          day_start_time?: string | null
           discharge_weight_oz?: number | null
           due_date?: string | null
           gender?: string | null
@@ -864,6 +867,7 @@ export type Database = {
           is_premature?: boolean | null
           name: string
           next_appointment?: string | null
+          night_start_time?: string | null
           parent_id: string
           photo_url?: string | null
           retroactive_setup_completed_at?: string | null
@@ -875,6 +879,7 @@ export type Database = {
           birth_weight_oz?: number | null
           created_at?: string
           date_of_birth?: string
+          day_start_time?: string | null
           discharge_weight_oz?: number | null
           due_date?: string | null
           gender?: string | null
@@ -884,6 +889,7 @@ export type Database = {
           is_premature?: boolean | null
           name?: string
           next_appointment?: string | null
+          night_start_time?: string | null
           parent_id?: string
           photo_url?: string | null
           retroactive_setup_completed_at?: string | null

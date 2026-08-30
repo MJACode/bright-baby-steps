@@ -1,7 +1,14 @@
 import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { differenceInCalendarDays, format, startOfDay, subDays } from "date-fns";
+import { differenceInCalendarDays, startOfDay } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
+import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
+import {
+  DEFAULT_TRACKING_SCHEDULE,
+  trackingDayKey,
+  trackingWindowStart,
+  type TrackingSchedule,
+} from "@/lib/trackingDay";
 
 export type LogHistoryTable = "sleep_logs" | "feeding_logs" | "diaper_logs";
 
@@ -22,8 +29,12 @@ export function logHistoryQueryKey(
   table: LogHistoryTable,
   childId: string | undefined,
   days: number,
+  // The day boundary is part of what the window MEANS — changing it moves the
+  // window's lower bound, so it has to key the cache or the list would keep
+  // rendering the old span until something else invalidated it.
+  dayStartMin = 0,
 ) {
-  return [HISTORY_KEY_ROOT[table], "history", childId, days];
+  return [HISTORY_KEY_ROOT[table], "history", childId, days, dayStartMin];
 }
 
 const CHILD_ID_INDEX = 2;
@@ -43,10 +54,12 @@ export function nextWindowDays(
   return Math.max(currentDays + DAYS_PER_PAGE, spanToNextOlder);
 }
 
-function dayKeyOf(row: unknown, dateColumn: string): string | null {
-  const raw = (row as Record<string, unknown>)[dateColumn];
-  const parsed = new Date(raw as string);
-  return Number.isNaN(parsed.getTime()) ? null : format(parsed, "yyyy-MM-dd");
+function dayKeyOf(
+  row: unknown,
+  dateColumn: string,
+  schedule: TrackingSchedule,
+): string | null {
+  return trackingDayKey((row as Record<string, unknown>)[dateColumn] as string, schedule);
 }
 
 interface CapHistoryWindowInput<TRow> {
@@ -58,6 +71,9 @@ interface CapHistoryWindowInput<TRow> {
   count: number | null | undefined;
   dateColumn: string;
   maxRows?: number;
+  // Which day a row belongs to depends on the family's day boundary, so the
+  // partial-day trim below has to bucket rows the same way the list will.
+  schedule?: TrackingSchedule;
 }
 
 export function capHistoryWindow<TRow>({
@@ -65,15 +81,16 @@ export function capHistoryWindow<TRow>({
   count,
   dateColumn,
   maxRows = MAX_ROWS,
+  schedule = DEFAULT_TRACKING_SCHEDULE,
 }: CapHistoryWindowInput<TRow>): { logs: TRow[]; truncated: boolean } {
   const truncated = count === null || count === undefined ? rows.length > maxRows : count > rows.length;
   if (!truncated || rows.length === 0) return { logs: rows, truncated };
 
   // The oldest day we received is partial by definition, and a partial day
   // renders an undercounted total in its summary header. Drop it whole.
-  const oldestKey = dayKeyOf(rows[rows.length - 1], dateColumn);
+  const oldestKey = dayKeyOf(rows[rows.length - 1], dateColumn, schedule);
   if (!oldestKey) return { logs: rows, truncated };
-  const kept = rows.filter((row) => dayKeyOf(row, dateColumn) !== oldestKey);
+  const kept = rows.filter((row) => dayKeyOf(row, dateColumn, schedule) !== oldestKey);
 
   // One day holding the entire cap can't be trimmed without emptying the list.
   return { logs: kept.length > 0 ? kept : rows, truncated };
@@ -89,11 +106,15 @@ interface UseLogHistoryOptions {
 
 export function useLogHistory<TRow>({ table, childId, dateColumn }: UseLogHistoryOptions) {
   const [days, setDays] = useState(DAYS_PER_PAGE);
+  const schedule = useTrackingSchedule();
 
   const query = useQuery({
-    queryKey: logHistoryQueryKey(table, childId, days),
+    queryKey: logHistoryQueryKey(table, childId, days, schedule.dayStartMin),
     queryFn: async () => {
-      const windowStart = subDays(startOfDay(new Date()), days - 1).toISOString();
+      // Starts at the family's day boundary, not local midnight — otherwise a
+      // 07:00 day start would leave the oldest day in the window missing its
+      // 00:00–07:00 rows and showing an undercounted total.
+      const windowStart = trackingWindowStart(days, schedule).toISOString();
 
       const { data, error, count } = await supabase
         .from(table)
@@ -108,6 +129,7 @@ export function useLogHistory<TRow>({ table, childId, dateColumn }: UseLogHistor
         rows: (data ?? []) as TRow[],
         count,
         dateColumn,
+        schedule,
       });
 
       // A window we couldn't fetch whole has no honest "earlier" affordance —
@@ -150,6 +172,9 @@ export function useLogHistory<TRow>({ table, childId, dateColumn }: UseLogHistor
 
   return {
     logs: query.data?.logs ?? (NO_LOGS as TRow[]),
+    // Handed back so the list groups by the same boundary this window was
+    // fetched on — one source of truth per render.
+    schedule,
     hasEarlier: nextOlderDate !== null,
     truncated: query.data?.truncated ?? false,
     showEarlier,
