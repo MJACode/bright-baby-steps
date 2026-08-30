@@ -4,110 +4,76 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { PremiumGate } from "@/components/PremiumGate";
+import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { usePreferences } from "@/hooks/usePreferences";
+import { formatApproxClock } from "@/lib/gentleTime";
+import { predictNextFeed, pickNextEvent } from "@/lib/nextEvent";
+
+interface ChildLite {
+  id: string;
+  date_of_birth: string;
+  is_premature?: boolean | null;
+  due_date?: string | null;
+}
 
 interface NextEventBandProps {
-  childId: string | null | undefined;
+  activeChild: ChildLite | null;
 }
 
 /**
- * Predicts the next likely event (nap or feed) from the trailing 14 days of
- * logs. Pure local math — no LLM call. Wrapped in PremiumGate("predictions").
+ * Predicts the next likely event (nap or feed) and shows whichever lands
+ * sooner. Pure local math — no LLM call. Wrapped in PremiumGate("predictions").
  *
- * Heuristic: average wake-window since last sleep end + average feed interval
- * since last feed. Whichever is sooner = the prediction.
+ * The nap side comes from `useSleepCoach` — the same prediction SleepCoachCard
+ * and the Next steps feed render — so the three surfaces on the Home screen can
+ * never quote different nap times. The feed side is this band's own average
+ * feed interval over the trailing 14 days.
  */
-export function NextEventBand({ childId }: NextEventBandProps) {
-  const since = subDays(new Date(), 14).toISOString();
+export function NextEventBand({ activeChild }: NextEventBandProps) {
+  const childId = activeChild?.id;
+  const { data: coach } = useSleepCoach(activeChild);
+  const { prefs } = usePreferences();
+  const calmMode = prefs.calmMode;
 
-  const { data } = useQuery({
-    queryKey: ["next-event", childId],
+  const { data: feed } = useQuery({
+    queryKey: ["next-event", "feed", childId],
     queryFn: async () => {
-      const [
-        { data: sleeps, error: sleepError },
-        { data: feeds, error: feedError },
-      ] = await Promise.all([
-        supabase
-          .from("sleep_logs")
-          .select("started_at, ended_at")
-          .eq("child_id", childId!)
-          .gte("started_at", since)
-          .order("started_at", { ascending: false })
-          .limit(40),
-        supabase
-          .from("feeding_logs")
-          .select("logged_at")
-          .eq("child_id", childId!)
-          .gte("logged_at", since)
-          .order("logged_at", { ascending: false })
-          .limit(40),
-      ]);
-      if (sleepError) throw sleepError;
-      if (feedError) throw feedError;
-
-      const now = Date.now();
-
-      // Average wake window (gap between waking and next sleep start)
-      const windows: number[] = [];
-      const ordered = [...(sleeps ?? [])].reverse();
-      for (let i = 1; i < ordered.length; i++) {
-        const prev = ordered[i - 1];
-        const curr = ordered[i];
-        if (!prev.ended_at) continue;
-        windows.push(new Date(curr.started_at).getTime() - new Date(prev.ended_at).getTime());
-      }
-      const avgWindow = windows.length
-        ? windows.reduce((a, b) => a + b, 0) / windows.length
-        : 2 * 60 * 60 * 1000;
-
-      const lastSleepEnd = [...ordered].reverse().find((s) => s.ended_at)?.ended_at;
-      const predictedNap = lastSleepEnd
-        ? new Date(new Date(lastSleepEnd).getTime() + avgWindow)
-        : null;
-
-      // Average feed interval
-      const feedTimes = (feeds ?? []).map((f) => new Date(f.logged_at).getTime()).sort();
-      const intervals: number[] = [];
-      for (let i = 1; i < feedTimes.length; i++) intervals.push(feedTimes[i] - feedTimes[i - 1]);
-      const avgInterval = intervals.length
-        ? intervals.reduce((a, b) => a + b, 0) / intervals.length
-        : 3 * 60 * 60 * 1000;
-      const lastFeed = feedTimes[feedTimes.length - 1];
-      const predictedFeed = lastFeed ? new Date(lastFeed + avgInterval) : null;
-
-      // Pick the sooner one
-      let pick: { type: "nap" | "feed"; at: Date } | null = null;
-      if (predictedNap && predictedFeed) {
-        pick = predictedNap < predictedFeed
-          ? { type: "nap", at: predictedNap }
-          : { type: "feed", at: predictedFeed };
-      } else if (predictedNap) pick = { type: "nap", at: predictedNap };
-      else if (predictedFeed) pick = { type: "feed", at: predictedFeed };
-
-      if (!pick) return null;
-      const minutesAway = Math.round((pick.at.getTime() - now) / 60000);
-
-      return {
-        type: pick.type,
-        atLabel: format(pick.at, "h:mm a"),
-        minutesAway,
-        windows: windows.length,
-      };
+      const since = subDays(new Date(), 14).toISOString();
+      const { data, error } = await supabase
+        .from("feeding_logs")
+        .select("logged_at")
+        .eq("child_id", childId!)
+        .gte("logged_at", since)
+        .order("logged_at", { ascending: false })
+        .limit(40);
+      if (error) throw error;
+      return predictNextFeed((data ?? []).map((f) => new Date(f.logged_at).getTime()));
     },
     enabled: !!childId,
     staleTime: 5 * 60 * 1000,
   });
 
-  if (!data) return null;
+  const nap = coach?.prediction ?? null;
+  const pick = pickNextEvent(nap?.windowStart ?? null, feed?.at ?? null);
+  if (!pick) return null;
 
-  const minutesText =
-    data.minutesAway < 0
+  const minutesAway = Math.round((pick.at.getTime() - Date.now()) / 60000);
+  const whenText =
+    minutesAway < 0
       ? "anytime now"
-      : data.minutesAway < 60
-      ? `in ~${data.minutesAway} min`
-      : `around ${data.atLabel}`;
+      : calmMode
+      ? `around ${formatApproxClock(pick.at)}`
+      : minutesAway < 60
+      ? `in ~${minutesAway} min`
+      : `around ${format(pick.at, "h:mm a")}`;
 
-  const verb = data.type === "nap" ? "sleepy" : "hungry";
-  const sample = data.windows > 0 ? `Based on ${data.windows} recent wake windows.` : "";
+  const verb = pick.type === "nap" ? "sleepy" : "hungry";
+  const sample =
+    pick.type === "nap"
+      ? nap!.reason
+      : feed!.samples > 0
+      ? `Based on ${feed!.samples} recent feeds.`
+      : "";
 
   return (
     <PremiumGate feature="predictions" variant="blur">
@@ -120,7 +86,7 @@ export function NextEventBand({ childId }: NextEventBandProps) {
             </span>
           </div>
           <p className="text-sm text-foreground leading-snug">
-            Likely <strong>{verb}</strong> {minutesText}.
+            Likely <strong>{verb}</strong> {whenText}.
           </p>
           {sample && (
             <p className="text-[11px] text-muted-foreground mt-1">{sample}</p>
