@@ -24,6 +24,7 @@ export const LOG_WRITE_QUERY_KEYS = [
   "last-nursing-side",
   "last-logged",
   "next-event",
+  "sleep-coach",
   "day-events",
   "week-events",
   "child-context",
