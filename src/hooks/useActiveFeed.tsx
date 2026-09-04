@@ -53,7 +53,7 @@ export type ActiveFeedRow = {
 // Sessions older than this are considered stale — the user almost certainly
 // forgot to stop them. We still surface them so the user can discard, but the
 // query window itself ignores anything older to keep banners / dialogs sane.
-const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
+export const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 
 // An active feed has source='timer' AND duration_minutes still NULL AND was
 // started within the last 12 hours. The `source='timer'` filter is critical:
@@ -206,6 +206,57 @@ export function useActiveFeed(childId: string | undefined) {
     onSuccess: invalidateActive,
   });
 
+  // Correct the times of a session that's still in progress — an overnight
+  // runaway timer, typically. duration_minutes stays NULL so the row remains
+  // the active one and Save still finalizes it; only the start and the per-side
+  // accumulators the display reads back from move.
+  const adjust = useMutation({
+    mutationFn: async (input: {
+      // The row the sheet was opened against, not whichever row is active by
+      // the time Save lands — the session underneath can be finalized on
+      // another device and replaced while the parent is still on the wheels.
+      rowId: string;
+      startAt: Date;
+      leftSeconds: number;
+      rightSeconds: number;
+    }) => {
+      const left = Math.max(0, Math.round(input.leftSeconds));
+      const right = Math.max(0, Math.round(input.rightSeconds));
+      const { data, error } = await supabase
+        .from("feeding_logs")
+        .update({
+          logged_at: input.startAt.toISOString(),
+          active_side: null,
+          side_started_at: null,
+          duration_seconds_left: left,
+          duration_seconds_right: right,
+          duration_minutes_left: Math.round(left / 60),
+          duration_minutes_right: Math.round(right / 60),
+        })
+        .eq("id", input.rowId)
+        .select("id");
+      if (error) throw error;
+      // Zero rows and no error covers both an UPDATE the write policy rejected
+      // and a row that's already gone — without this the caller is told the
+      // times changed while the face still reads the runaway total.
+      if (!data?.length) {
+        throw new Error(
+          "Couldn't update this feed — it may have been finished or removed on another device.",
+        );
+      }
+      void updateTimerLiveActivity({
+        sessionId: input.rowId,
+        running: false,
+        elapsedSeconds: left + right,
+        label: "",
+      });
+    },
+    // logged_at moved, so the page's feeding-logs list and the activity feed —
+    // both of which select in-progress rows — are stale too, not just the
+    // active-session query.
+    onSuccess: invalidate,
+  });
+
   const stop = useMutation({
     mutationFn: async (input: {
       // Pass the totals from the client display so we record the user-visible
@@ -256,7 +307,7 @@ export function useActiveFeed(childId: string | undefined) {
     onSuccess: invalidate,
   });
 
-  return { active, isLoading, start, setSide, stop, cancel };
+  return { active, isLoading, start, setSide, adjust, stop, cancel };
 }
 
 // Live "tick" hook — forces a re-render once per second while `enabled` so
