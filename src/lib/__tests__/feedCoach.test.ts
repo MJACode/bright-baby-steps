@@ -608,6 +608,62 @@ describe("deriveFeedCoachState — first feed of the day", () => {
   });
 });
 
+describe("a boundary that moves mid-timeline", () => {
+  // Every sweep on this feature holds the configuration fixed and advances the
+  // clock. A whole class of defect needs the opposite: an INPUT changing while
+  // the gap grows. `morningEndsAt` is resolved from the last logged night
+  // sleep, so it jumps forward the moment a parent stops a sleep timer later
+  // than their plan's wake time — and any hold measured from it re-arms.
+  //
+  // This replays a timeline twice, with the boundary moving partway through,
+  // and asserts the one thing that must survive it: the card may not be muted
+  // at or past the bracket's own ceiling, whichever boundary is in force.
+  const CEILING_CASES = [
+    { ageMonths: 0, lastFeed: [15, 3, 0], planWake: [15, 5, 30], loggedWake: [15, 6, 15] },
+    { ageMonths: 1, lastFeed: [15, 3, 30], planWake: [15, 5, 30], loggedWake: [15, 9, 30] },
+    { ageMonths: 2, lastFeed: [15, 2, 0], planWake: [15, 6, 0], loggedWake: [15, 8, 0] },
+    { ageMonths: 4, lastFeed: [14, 19, 0], planWake: [15, 6, 0], loggedWake: [15, 9, 0] },
+    { ageMonths: 8, lastFeed: [14, 19, 0], planWake: [15, 6, 30], loggedWake: [15, 10, 0] },
+  ] as const;
+
+  it("never mutes the ceiling, on either side of the jump", () => {
+    for (const c of CEILING_CASES) {
+      const g = feedGuidanceForAge(c.ageMonths);
+      const ceiling = g.wakeToFeedOvernight
+        ? OVERNIGHT_WAKE_THRESHOLD_HOURS
+        : g.longNightGapHours;
+      const lastFeedAt = new Date(2024, 6, c.lastFeed[0], c.lastFeed[1], c.lastFeed[2]);
+      const planWake = new Date(2024, 6, c.planWake[0], c.planWake[1], c.planWake[2]);
+      const loggedWake = new Date(2024, 6, c.loggedWake[0], c.loggedWake[1], c.loggedWake[2]);
+
+      for (let t = lastFeedAt.getTime(); t <= loggedWake.getTime() + 8 * 3_600_000; t += 5 * 60_000) {
+        const now = new Date(t);
+        // Before the sleep is logged the plan's wake time is in force; after
+        // it, the logged one. That switch is the input change.
+        const morningEndsAt = now >= loggedWake ? loggedWake : planWake;
+        const state = deriveFeedCoachState({
+          ageMonths: c.ageMonths,
+          lastFeedAt,
+          now,
+          night: {
+            isNightNow: now < morningEndsAt,
+            nightSleepInProgress: false,
+            nightStartsAt: new Date(2024, 6, 14, 20, 0),
+            nightOpensAt: new Date(2024, 6, 14, 21, 0),
+            morningEndsAt,
+          },
+        });
+        const { tone } = feedCoachCopy(state, "Lulu").pill;
+        const hoursSince = (now.getTime() - lastFeedAt.getTime()) / 3_600_000;
+        if (hoursSince >= ceiling) {
+          const stamp = `${c.ageMonths}mo at ${hoursSince.toFixed(2)}h (ceiling ${ceiling}h, ${state.kind})`;
+          expect(`${stamp}: ${tone}`).toBe(`${stamp}: solid`);
+        }
+      }
+    }
+  });
+});
+
 describe("first-feed-of-day — the bracket ceiling is never muted", () => {
   // A logged night sleep that ends later than the plan's wake time moves
   // `morningEndsAt` forward, which re-arms the morning greeting's hold. The
