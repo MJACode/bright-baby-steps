@@ -672,15 +672,15 @@ describe("first-feed-of-day — the bracket ceiling is never muted", () => {
   // that bracket's limit. For a newborn that limit is the AAP four hours, so a
   // muted "First feed of the day" at 4h 00m would be muting the one clinical
   // ceiling this feature carries.
-  const movedMorning = (morningEndsAt: Date): FeedNightWindow => ({
+  const movedMorning = (morningEndsAt: Date, nightOpensAt?: Date): FeedNightWindow => ({
     isNightNow: false,
     nightSleepInProgress: false,
     nightStartsAt: new Date(2024, 6, 14, 20, 0),
-    nightOpensAt: new Date(2024, 6, 14, 21, 0),
+    nightOpensAt: nightOpensAt ?? new Date(2024, 6, 14, 21, 0),
     morningEndsAt,
   });
 
-  it("stands down at the ceiling exactly, not a quarter-hour past it", () => {
+  it("stands down at the ceiling exactly, not a tick past it", () => {
     const lastFeedAt = new Date(2024, 6, 15, 3, 0);
     const night = movedMorning(new Date(2024, 6, 15, 6, 15));
     const at = (h: number, m: number) =>
@@ -697,21 +697,63 @@ describe("first-feed-of-day — the bracket ceiling is never muted", () => {
   });
 
   it("holds for every bracket, at its own bound", () => {
+    // Asserting only the solid side lets a bracket pass vacuously: if some
+    // earlier guard rejects the fixture outright, the state is `due` for a
+    // reason that has nothing to do with the ceiling and the iteration proves
+    // nothing. Pinning the muted side too means a bracket that never reaches
+    // the greeting fails loudly instead of passing quietly.
     for (const ageMonths of [0, 2, 4, 8, 14]) {
       const g = feedGuidanceForAge(ageMonths);
       const bound = g.wakeToFeedOvernight ? OVERNIGHT_WAKE_THRESHOLD_HOURS : g.longNightGapHours;
       const morningEnd = new Date(2024, 6, 15, 7, 0);
-      // A feed placed so the gap is exactly the bound at `now`.
       const now = new Date(morningEnd.getTime() + 30 * 60_000);
-      const lastFeedAt = new Date(now.getTime() - bound * 3_600_000);
-      const state = deriveFeedCoachState({
-        ageMonths,
-        lastFeedAt,
-        now,
-        night: movedMorning(morningEnd),
-      });
-      expect(`${ageMonths}mo at ${bound}h: ${feedCoachCopy(state, "Lulu").pill.tone}`).toBe(
+      const toneAtGap = (gapHours: number) =>
+        feedCoachCopy(
+          deriveFeedCoachState({
+            ageMonths,
+            lastFeedAt: new Date(now.getTime() - gapHours * 3_600_000),
+            now,
+            // The night has to open early enough that a gap of `bound` still
+            // attributes to it, or the lead-in guard rejects before the
+            // ceiling guard is ever consulted — which is how the 12mo+ case
+            // passed this test while asserting nothing.
+            night: movedMorning(morningEnd, new Date(now.getTime() - (bound + 1) * 3_600_000)),
+          }),
+          "Lulu",
+        ).pill.tone;
+
+      expect(`${ageMonths}mo just under ${bound}h: ${toneAtGap(bound - 0.25)}`).toBe(
+        `${ageMonths}mo just under ${bound}h: muted`,
+      );
+      expect(`${ageMonths}mo at ${bound}h: ${toneAtGap(bound)}`).toBe(
         `${ageMonths}mo at ${bound}h: solid`,
+      );
+    }
+  });
+
+  it("gives a premature baby no greeting at all, and says so on purpose", () => {
+    // At 1-2 months corrected, `wakeToFeedOvernight` caps the morning bound at
+    // the 4-hour wake threshold, which is also this bracket's `thresholdHours`
+    // — so the admissible window is a single point and the greeting is
+    // unreachable. Those babies fall through to "Consider a feed" with the cue
+    // list, which is the safer state for a cohort that may still be under
+    // instructions to wake. Recorded as intended rather than left silent.
+    for (const ageMonths of [1, 2]) {
+      const morningEnd = new Date(2024, 6, 15, 7, 0);
+      const now = new Date(morningEnd.getTime() + 30 * 60_000);
+      let greeted = 0;
+      for (let gap = 0.25; gap <= 12; gap += 0.25) {
+        const state = deriveFeedCoachState({
+          ageMonths,
+          isPremature: true,
+          lastFeedAt: new Date(now.getTime() - gap * 3_600_000),
+          now,
+          night: movedMorning(morningEnd, new Date(2024, 6, 14, 18, 0)),
+        });
+        if (state.kind === "first-feed-of-day") greeted += 1;
+      }
+      expect(`${ageMonths}mo preemie greetings: ${greeted}`).toBe(
+        `${ageMonths}mo preemie greetings: 0`,
       );
     }
   });
