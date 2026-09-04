@@ -75,9 +75,13 @@ export interface NightWindow {
   nightStartMin: number;
   /** Minutes since local midnight the night ends. */
   morningEndMin: number;
-  /** The instant the current — or most recently finished — night began. */
+  /**
+   * The instant the current — or most recently finished — night began: the
+   * clock boundary, or a running night timer's start when the timer opened the
+   * night ahead of the clock.
+   */
   nightStartsAt: Date;
-  /** `nightStartsAt` plus the clock lead-in: when the clock alone calls it night. */
+  /** When the night actually opened: the clock lead-in, or the timer's start. */
   nightOpensAt: Date;
   /** The instant that night ends (in the future while the night is running). */
   morningEndsAt: Date;
@@ -108,6 +112,13 @@ export function resolveNightWindow(opts: {
   logs?: SleepTodoLog[] | null;
   /** Sleep type of a running, non-stale timer, or null when nothing is running. */
   activeSleepType?: string | null;
+  /**
+   * When that timer started, ISO. A night the timer opens can start before the
+   * clock boundary, and then the boundary has to come from the timer — see
+   * `nightStartsAt` below. Callers must leave this null for a stale timer, the
+   * same way they do for `activeSleepType`.
+   */
+  activeSleepStartedAt?: string | null;
 }): NightWindow {
   const { now, ageMonths } = opts;
   const activeSleepType = opts.activeSleepType ?? null;
@@ -163,20 +174,42 @@ export function resolveNightWindow(opts: {
 
   const isNightNow = coherent && clockIsNight;
 
+  const nightSleepInProgress = activeSleepType === "night";
+
   // Same DST caveat as the day boundaries above.
-  const nightStartsAt = addMinutes(
+  const clockNightStartsAt = addMinutes(
     nowMin >= nightStartMin ? dayStart : startOfDay(subDays(now, 1)),
     nightStartMin,
   );
+
+  // A night the timer opened before the clock would have has to be anchored to
+  // the timer. The clock's own answer in that window is yesterday's boundary —
+  // nearly a day in the past — which would attribute every feed logged today to
+  // this night and make a gap that started at lunchtime read as an overnight
+  // stretch. The timer only ever moves the boundary later, so it can't widen
+  // the window either.
+  const timerStart = opts.activeSleepStartedAt ? new Date(opts.activeSleepStartedAt) : null;
+  const timerAnchor =
+    nightSleepInProgress &&
+    !isNightNow &&
+    timerStart != null &&
+    timerStart > clockNightStartsAt &&
+    timerStart <= now
+      ? timerStart
+      : null;
+  const nightStartsAt = timerAnchor ?? clockNightStartsAt;
 
   return {
     nightStartMin,
     morningEndMin,
     nightStartsAt,
-    nightOpensAt: addMinutes(nightStartsAt, clockStartMin - nightStartMin),
+    // A running night timer opens the night with no lead-in — the baby is
+    // already down, so there is nothing left to hold off for.
+    nightOpensAt:
+      timerAnchor ?? addMinutes(nightStartsAt, clockStartMin - nightStartMin),
     morningEndsAt,
     isNightNow,
     asleepNow: activeSleepType !== null,
-    nightSleepInProgress: activeSleepType === "night",
+    nightSleepInProgress,
   };
 }

@@ -42,7 +42,11 @@ export function useNightWindow(opts: {
   const logs = coach?.logs;
   const nowMs = now.getTime();
 
-  const activeSleepType = active && !isStale ? active.sleep_type : null;
+  // A stale timer (>12h) is a forgotten one — it must not anchor the night to
+  // an ancient start, so both fields drop together.
+  const timerIsLive = !!active && !isStale;
+  const activeSleepType = timerIsLive ? active.sleep_type : null;
+  const activeSleepStartedAt = timerIsLive ? active.started_at : null;
 
   return useMemo(
     () =>
@@ -55,6 +59,7 @@ export function useNightWindow(opts: {
         wakeTime,
         logs,
         activeSleepType,
+        activeSleepStartedAt,
       }),
     // `now` ticks once a minute in the consumer; keying on its timestamp keeps
     // the window fresh without re-deriving on every unrelated render.
@@ -67,6 +72,7 @@ export function useNightWindow(opts: {
       ageMonths,
       logs,
       activeSleepType,
+      activeSleepStartedAt,
       nowMs,
     ],
   );

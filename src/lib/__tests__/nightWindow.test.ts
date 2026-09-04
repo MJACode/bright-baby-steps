@@ -145,6 +145,49 @@ describe("resolveNightWindow", () => {
     expect(w.asleepNow).toBe(true);
   });
 
+  it("anchors the night to the timer when the timer opened it before the clock", () => {
+    // 18:30 with the baby down, an hour before the bracket's boundary: the
+    // clock's own answer is *yesterday's* 19:00, nearly a day in the past,
+    // which would attribute every feed logged today to this night.
+    const w = resolveNightWindow({
+      now: at(18, 30),
+      ageMonths: 4,
+      activeSleepType: "night",
+      activeSleepStartedAt: at(18, 30).toISOString(),
+    });
+    expect(w.nightStartsAt.getTime()).toBe(at(18, 30).getTime());
+    // A baby already down has nothing left to hold off for.
+    expect(w.nightOpensAt.getTime()).toBe(at(18, 30).getTime());
+  });
+
+  it("leaves the clock boundary alone once the clock itself says night", () => {
+    const w = resolveNightWindow({
+      now: at(22, 0),
+      ageMonths: 4,
+      activeSleepType: "night",
+      activeSleepStartedAt: at(21, 0).toISOString(),
+    });
+    expect(w.nightStartsAt.getTime()).toBe(at(19, 0).getTime());
+    expect(w.nightOpensAt.getTime()).toBe(at(20, 0).getTime());
+  });
+
+  it("never lets the timer move the boundary earlier than the clock's", () => {
+    // A forgotten timer still running at 08:00 — the night it belongs to is
+    // yesterday's, and the timer start only ever moves the anchor later.
+    const w = resolveNightWindow({
+      now: at(8, 0),
+      ageMonths: 4,
+      activeSleepType: "night",
+      activeSleepStartedAt: at(18, 0, 14).toISOString(),
+    });
+    expect(w.nightStartsAt.getTime()).toBe(at(19, 0, 14).getTime());
+  });
+
+  it("falls back to the clock when the caller has no timer start to give", () => {
+    const w = resolveNightWindow({ now: at(18, 30), ageMonths: 4, activeSleepType: "night" });
+    expect(w.nightStartsAt.getTime()).toBe(at(19, 0, 14).getTime());
+  });
+
   it("does not call a running nap a night sleep", () => {
     const w = resolveNightWindow({ now: at(10, 0), ageMonths: 4, activeSleepType: "nap" });
     expect(w.asleepNow).toBe(true);

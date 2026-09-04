@@ -178,13 +178,14 @@ export interface FeedNightWindow {
   /** Start of the current — or most recently finished — night. */
   nightStartsAt: Date;
   /**
-   * The instant the night actually opened for the clock: `nightStartsAt` plus
-   * the lead-in the sleep side holds off for. Attribution is measured from
-   * here, so a gap that had already earned a daytime nudge during the lead-in
-   * can't be muted by the boundary arriving a few minutes later. Surfaces with
-   * no lead-in of their own fall back to `nightStartsAt`.
+   * The instant the night actually opened: `nightStartsAt` plus the lead-in the
+   * sleep side holds off for, or the moment a running night timer opened it.
+   * Attribution is measured from here, so a gap that had already earned a
+   * daytime nudge during the lead-in can't be muted by the boundary arriving a
+   * few minutes later. Required — a fallback to `nightStartsAt` would let a
+   * caller silently run the night guards against a zero-length lead-in.
    */
-  nightOpensAt?: Date;
+  nightOpensAt: Date;
   /** End of that night. */
   morningEndsAt: Date;
 }
@@ -245,12 +246,16 @@ function morningStretchBound(g: FeedGuidance): number {
  * The gap is bounded at both ends: it has to clear the age threshold (a 06:50
  * feed before a 07:00 wake is not an overnight gap) and stay inside
  * `morningStretchBound`, so a gap that started before yesterday's bedtime
- * doesn't get greeted as the morning after a normal night. The morning state
- * also stands down once the baby has been up for longer than that same
- * threshold — by then a feed genuinely is due and saying so is the safe
- * direction to be wrong in. Every stand-down falls through to the daytime
- * `due` state, which is the escalation the parent needs once the day is under
- * way and the baby is awake.
+ * doesn't get greeted as the morning after a normal night. That bound applies
+ * to the live gap as well as to the overnight one: the number the card prints
+ * is deliberately frozen at the end of the night so the title doesn't grow all
+ * day, so without the second check the greeting would hold — showing a stale
+ * figure — while the real gap ran past the very ceiling the note underneath it
+ * prints. The morning state also stands down once the baby has been up for
+ * longer than the age threshold — by then a feed genuinely is due and saying so
+ * is the safe direction to be wrong in. Every stand-down falls through to the
+ * daytime `due` state, which is the escalation the parent needs once the day is
+ * under way and the baby is awake.
  */
 function isFirstFeedOfDay(
   now: Date,
@@ -264,9 +269,11 @@ function isFirstFeedOfDay(
   if (lastFeedAt.getTime() < night.nightStartsAt.getTime() - EVENING_LEAD_IN_HOURS * HOUR_MS) {
     return false;
   }
+  const bound = morningStretchBound(guidance);
   const stretchHours = (morningEnd - lastFeedAt.getTime()) / HOUR_MS;
   if (stretchHours < guidance.thresholdHours) return false;
-  if (stretchHours > morningStretchBound(guidance)) return false;
+  if (stretchHours > bound) return false;
+  if ((now.getTime() - lastFeedAt.getTime()) / HOUR_MS > bound) return false;
   return (now.getTime() - morningEnd) / HOUR_MS < guidance.thresholdHours;
 }
 
@@ -296,10 +303,7 @@ export function deriveFeedCoachState(opts: {
     if (guidance.wakeToFeedOvernight) {
       // When the night opened for this card: the clock boundary, or now if a
       // running night timer opened it sooner.
-      const nightOpenedAt = Math.min(
-        (night.nightOpensAt ?? night.nightStartsAt).getTime(),
-        now.getTime(),
-      );
+      const nightOpenedAt = Math.min(night.nightOpensAt.getTime(), now.getTime());
       // Overnight the ceiling is more lenient than the daytime interval — a
       // newborn three hours into a night stretch doesn't need waking yet — but
       // it can only ever hold a nudge, never take one back. If the gap had
@@ -321,9 +325,13 @@ export function deriveFeedCoachState(opts: {
     // retracted by the boundary arriving.
     const ledIntoTheNight =
       opts.lastFeedAt.getTime() >=
-      (night.nightOpensAt ?? night.nightStartsAt).getTime() -
-        EVENING_LEAD_IN_HOURS * HOUR_MS;
-    if (!ledIntoTheNight) {
+      night.nightOpensAt.getTime() - EVENING_LEAD_IN_HOURS * HOUR_MS;
+    // Only once the gap has cleared the age threshold: below it there is
+    // nothing to flag, and the copy for this reason ("covers more than the
+    // night") would assert something the number doesn't support. A short gap
+    // stays in the quiet night — the baby is down, so the cue list stays
+    // hidden — and escalates on its own the moment the threshold passes.
+    if (!ledIntoTheNight && hoursSince >= guidance.thresholdHours) {
       return {
         kind: "night-long-gap",
         guidance,
