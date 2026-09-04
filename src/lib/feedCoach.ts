@@ -278,7 +278,11 @@ function isFirstFeedOfDay(
   const stretchHours = (morningEnd - lastFeedAt.getTime()) / HOUR_MS;
   if (stretchHours < guidance.thresholdHours) return false;
   if (stretchHours > bound) return false;
-  if ((now.getTime() - lastFeedAt.getTime()) / HOUR_MS > bound) return false;
+  // Inclusive: at the bound exactly, the card must already be asking. For a
+  // wake-to-feed bracket this bound IS the AAP ceiling the card prints two
+  // lines below, so a greeting still showing at 4h 00m would be muting the
+  // one clinical limit this feature carries.
+  if ((now.getTime() - lastFeedAt.getTime()) / HOUR_MS >= bound) return false;
   return (now.getTime() - morningEnd) / HOUR_MS < guidance.thresholdHours;
 }
 

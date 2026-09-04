@@ -608,6 +608,59 @@ describe("deriveFeedCoachState — first feed of the day", () => {
   });
 });
 
+describe("first-feed-of-day — the bracket ceiling is never muted", () => {
+  // A logged night sleep that ends later than the plan's wake time moves
+  // `morningEndsAt` forward, which re-arms the morning greeting's hold. The
+  // greeting itself is legitimate — the baby has just woken — but it must not
+  // be the thing showing when the gap reaches the number the card prints as
+  // that bracket's limit. For a newborn that limit is the AAP four hours, so a
+  // muted "First feed of the day" at 4h 00m would be muting the one clinical
+  // ceiling this feature carries.
+  const movedMorning = (morningEndsAt: Date): FeedNightWindow => ({
+    isNightNow: false,
+    nightSleepInProgress: false,
+    nightStartsAt: new Date(2024, 6, 14, 20, 0),
+    nightOpensAt: new Date(2024, 6, 14, 21, 0),
+    morningEndsAt,
+  });
+
+  it("stands down at the ceiling exactly, not a quarter-hour past it", () => {
+    const lastFeedAt = new Date(2024, 6, 15, 3, 0);
+    const night = movedMorning(new Date(2024, 6, 15, 6, 15));
+    const at = (h: number, m: number) =>
+      feedCoachCopy(
+        deriveFeedCoachState({ ageMonths: 0, lastFeedAt, now: new Date(2024, 6, 15, h, m), night }),
+        "Lulu",
+      ).pill.tone;
+
+    // 3h 15m — the greeting is fine here, the baby has just woken.
+    expect(at(6, 15)).toBe("muted");
+    // 4h 00m — the ceiling. Asking, not greeting.
+    expect(at(7, 0)).toBe("solid");
+    expect(at(7, 15)).toBe("solid");
+  });
+
+  it("holds for every bracket, at its own bound", () => {
+    for (const ageMonths of [0, 2, 4, 8, 14]) {
+      const g = feedGuidanceForAge(ageMonths);
+      const bound = g.wakeToFeedOvernight ? OVERNIGHT_WAKE_THRESHOLD_HOURS : g.longNightGapHours;
+      const morningEnd = new Date(2024, 6, 15, 7, 0);
+      // A feed placed so the gap is exactly the bound at `now`.
+      const now = new Date(morningEnd.getTime() + 30 * 60_000);
+      const lastFeedAt = new Date(now.getTime() - bound * 3_600_000);
+      const state = deriveFeedCoachState({
+        ageMonths,
+        lastFeedAt,
+        now,
+        night: movedMorning(morningEnd),
+      });
+      expect(`${ageMonths}mo at ${bound}h: ${feedCoachCopy(state, "Lulu").pill.tone}`).toBe(
+        `${ageMonths}mo at ${bound}h: solid`,
+      );
+    }
+  });
+});
+
 describe("feedCoachCopy", () => {
   const nightState = deriveFeedCoachState({
     ageMonths: 4,
