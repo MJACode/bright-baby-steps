@@ -186,8 +186,11 @@ export function resolveNightWindow(opts: {
   // the timer. The clock's own answer in that window is yesterday's boundary —
   // nearly a day in the past — which would attribute every feed logged today to
   // this night and make a gap that started at lunchtime read as an overnight
-  // stretch. The timer only ever moves the boundary later, so it can't widen
-  // the window either.
+  // stretch. The timer only ever moves the NOMINAL start later, so it can't
+  // widen that. It is not by itself a guard on the opening: the clock's
+  // opening sits a lead-in past its start, so a timer between the two would
+  // move the opening EARLIER and widen the attribution cutoff. The opening is
+  // clamped separately below.
   const timerStart = opts.activeSleepStartedAt ? new Date(opts.activeSleepStartedAt) : null;
   const timerAnchor =
     nightSleepInProgress &&
@@ -204,9 +207,18 @@ export function resolveNightWindow(opts: {
     morningEndMin,
     nightStartsAt,
     // A running night timer opens the night with no lead-in — the baby is
-    // already down, so there is nothing left to hold off for.
-    nightOpensAt:
-      timerAnchor ?? addMinutes(nightStartsAt, clockStartMin - nightStartMin),
+    // already down, so there is nothing left to hold off for. Clamped to the
+    // clock's own opening so the timer can only ever open the night LATER: a
+    // timer started inside the lead-in would otherwise pull the opening back
+    // and widen which feeds attribute to this night, and because the anchor
+    // disengages once the clock agrees, that widening would come and go across
+    // one night and retract the nudge at the wake boundary.
+    nightOpensAt: new Date(
+      Math.max(
+        (timerAnchor ?? clockNightStartsAt).getTime(),
+        addMinutes(clockNightStartsAt, clockStartMin - nightStartMin).getTime(),
+      ),
+    ),
     morningEndsAt,
     isNightNow,
     asleepNow: activeSleepType !== null,

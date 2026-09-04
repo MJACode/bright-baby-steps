@@ -266,7 +266,12 @@ function isFirstFeedOfDay(
   const morningEnd = night.morningEndsAt.getTime();
   if (morningEnd > now.getTime()) return false;
   if (lastFeedAt.getTime() >= morningEnd) return false;
-  if (lastFeedAt.getTime() < night.nightStartsAt.getTime() - EVENING_LEAD_IN_HOURS * HOUR_MS) {
+  // Measured from when the night OPENED, matching `ledIntoTheNight` in the
+  // night branch. Against the nominal start instead, a feed landing between
+  // the two anchors is "before the night" all night — a solid nudge — and then
+  // "the night's own gap" the moment the morning arrives, so the wake boundary
+  // would retract a nudge that had stood since the evening.
+  if (lastFeedAt.getTime() < night.nightOpensAt.getTime() - EVENING_LEAD_IN_HOURS * HOUR_MS) {
     return false;
   }
   const bound = morningStretchBound(guidance);
