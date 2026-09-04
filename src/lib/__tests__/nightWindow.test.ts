@@ -79,17 +79,31 @@ describe("resolveNightWindow", () => {
     expect(resolveNightWindow({ now: at(20, 0), ...opts }).isNightNow).toBe(true);
   });
 
-  it("gives the 0-3mo bracket no clock-only night at all", () => {
+  it("holds the 0-3mo clock night off through the cluster-feed evening", () => {
     // No fixed bedtime exists at this age — circadian rhythm consolidates
-    // around 10-12 weeks — and these are the cluster-feed weeks, so a clock
-    // with nothing behind it must not open a night here.
-    for (const hour of [20, 21, 23, 3, 5]) {
-      const w = resolveNightWindow({ now: at(hour, 0, hour < 12 ? 15 : 14), ageMonths: 2 });
-      expect(`${hour}:00 — ${w.isNightNow}`).toBe(`${hour}:00 — false`);
+    // around 10-12 weeks — so the start is a nominal fallback hour rather than
+    // a bedtime. The clock waits two hours past it before acting on it, which
+    // leaves the peak evening cluster-feed hours to the daytime coaching.
+    for (const [hour, min, night] of [
+      [20, 0, false],
+      [21, 59, false],
+      [22, 0, true],
+      [23, 0, true],
+    ] as const) {
+      const w = resolveNightWindow({ now: at(hour, min, 14), ageMonths: 2 });
+      expect(`${hour}:${min} — ${w.isNightNow}`).toBe(`${hour}:${min} — ${night}`);
     }
   });
 
-  it("opens the 0-3mo night on evidence: a declared boundary, a saved bedtime, or a timer", () => {
+  it("still runs the 0-3mo night through to the morning", () => {
+    for (const hour of [3, 5]) {
+      const w = resolveNightWindow({ now: at(hour, 0, 15), ageMonths: 2 });
+      expect(`${hour}:00 — ${w.isNightNow}`).toBe(`${hour}:00 — true`);
+    }
+    expect(resolveNightWindow({ now: at(7, 30, 15), ageMonths: 2 }).isNightNow).toBe(false);
+  });
+
+  it("opens the 0-3mo night ahead of that on evidence: a boundary, a bedtime, or a timer", () => {
     const opts = { now: at(21, 0, 14), ageMonths: 2 } as const;
     expect(resolveNightWindow({ ...opts, familyNightStartMin: 20 * 60 }).isNightNow).toBe(true);
     expect(resolveNightWindow({ ...opts, bedtimeEarliest: "19:30" }).isNightNow).toBe(true);
@@ -101,7 +115,10 @@ describe("resolveNightWindow", () => {
   it("still resolves the morning for a 0-3mo, so the first feed of the day survives", () => {
     const w = resolveNightWindow({ now: at(7, 30), ageMonths: 2 });
     expect(w.morningEndMin).toBe(7 * 60);
+    // The nominal start stays at the fallback — it is what classifies a sleep
+    // log as night — while the clock only acts on it two hours later.
     expect(w.nightStartsAt.getTime()).toBe(at(20, 0, 14).getTime());
+    expect(w.nightOpensAt.getTime()).toBe(at(22, 0, 14).getTime());
   });
 
   it("reports when the clock actually opened the night, lead-in included", () => {

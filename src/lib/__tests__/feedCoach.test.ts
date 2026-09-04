@@ -850,62 +850,177 @@ describe("feedCoachCopy", () => {
 describe("feedCoach + resolveNightWindow — the evening never de-escalates", () => {
   // Local-time constructors: the night resolver reads wall-clock minutes.
   const at = (day: number, h: number, m = 0) => new Date(2024, 6, day, h, m);
-  const TONE_RANK = { muted: 0, soft: 1, solid: 2 } as const;
+
+  // Ranks what the card *asks of the parent*, not how loudly it says it.
+  // `solid` asks for a feed; `soft` and `muted` both ask for nothing — the
+  // evening "Watch for cues" and the overnight "Overnight" differ in framing,
+  // not in demand, so crossing between them as the baby goes down is a
+  // reframing. Once the card has asked for a feed, a longer gap can never
+  // unask, and that retraction is what this sweep exists to catch.
+  const DEMAND = { muted: 0, soft: 0, solid: 1 } as const;
+
+  // The same rule stated on the state machine rather than on the copy, so a
+  // future edit that keeps the pill but swaps the state still trips it.
+  const ASKS_FOR_A_FEED: ReadonlySet<string> = new Set(["due", "night-long-gap"]);
+
+  const SWEEP_BRACKETS = [
+    { label: "newborn", ageMonths: 0, isPremature: false },
+    { label: "1mo", ageMonths: 1, isPremature: false },
+    { label: "premature 2mo", ageMonths: 2, isPremature: true },
+    { label: "2mo", ageMonths: 2, isPremature: false },
+    { label: "4mo", ageMonths: 4, isPremature: false },
+    { label: "8mo", ageMonths: 8, isPremature: false },
+    { label: "14mo", ageMonths: 14, isPremature: false },
+  ] as const;
+
+  // Afternoon through the small hours: every last-feed time whose gap can
+  // still be growing when a boundary — the clock night at 20:00 or 22:00, or
+  // the 07:00 morning — arrives on top of it.
+  const LAST_FEEDS = [
+    ...Array.from({ length: 24 }, (_, i) => at(14, 12 + Math.floor(i / 2), (i % 2) * 30)),
+    ...Array.from({ length: 12 }, (_, i) => at(15, Math.floor(i / 2), (i % 2) * 30)),
+  ];
 
   it("never takes back a nudge while the gap is still growing, in any bracket", () => {
-    for (const ageMonths of [0, 2, 4, 8, 14]) {
-      for (let lastHour = 12; lastHour <= 20; lastHour += 1) {
-        const lastFeedAt = at(14, lastHour);
-        let peak = 0;
-        let peakAt = "";
-        for (let t = lastFeedAt.getTime(); t <= at(15, 6).getTime(); t += 15 * 60_000) {
+    for (const { label, ageMonths, isPremature } of SWEEP_BRACKETS) {
+      for (const lastFeedAt of LAST_FEEDS) {
+        let asked = "";
+        for (let t = lastFeedAt.getTime(); t <= at(15, 10).getTime(); t += 15 * 60_000) {
           const now = new Date(t);
           const state = deriveFeedCoachState({
             ageMonths,
             lastFeedAt,
             now,
+            isPremature,
             night: resolveNightWindow({ now, ageMonths }),
           });
           const { tone } = feedCoachCopy(state, "Lulu").pill;
-          const stamp = `${ageMonths}mo, last feed ${lastHour}:00, ${now.getHours()}:${String(
-            now.getMinutes(),
-          ).padStart(2, "0")} (${state.kind})`;
+          const clock = (d: Date) =>
+            `${d.getDate() === 14 ? "" : "+"}${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+          const stamp = `${label}, last feed ${clock(lastFeedAt)}, at ${clock(now)} (${state.kind}/${tone})`;
+
+          // The two readings of "the card is asking" have to agree, or the
+          // tone rule and the state rule would be protecting different things.
+          expect(`${stamp}: asks=${ASKS_FOR_A_FEED.has(state.kind)}`).toBe(
+            `${stamp}: asks=${DEMAND[tone] === 1}`,
+          );
+
           // A growing gap may firm up and it may hold, but the card must never
           // walk an escalation back: a parent told "Consider a feed" at 19:45
           // cannot be told "Overnight" at 20:00 on a longer gap.
-          if (peak === TONE_RANK.solid) {
-            expect(`${stamp}: ${tone}, escalated at ${peakAt}`).toBe(
-              `${stamp}: solid, escalated at ${peakAt}`,
+          const asking = DEMAND[tone] === 1 ? "asks for a feed" : "asks for nothing";
+          if (asked) {
+            expect(`${stamp} ${asking}, first asked at ${asked}`).toBe(
+              `${stamp} asks for a feed, first asked at ${asked}`,
             );
           }
-          if (TONE_RANK[tone] > peak) {
-            peak = TONE_RANK[tone];
-            peakAt = stamp;
-          }
+          if (asking === "asks for a feed") asked ||= stamp;
         }
       }
     }
   });
 
-  it("leaves the 0-3mo evening alone — there is no consolidated night to protect", () => {
-    // Cluster-feed hours in the youngest bracket. The clock has no bedtime to
-    // work from at this age, so the nudge holds all evening.
+  // The card a 0-3mo family sees, with no plan and no timer: the clock alone
+  // decides, and it holds the evening open before switching to the night
+  // coaching each bracket actually needs.
+  const youngCard = (ageMonths: number, lastFeedAt: Date, now: Date) => {
+    const state = deriveFeedCoachState({
+      ageMonths,
+      lastFeedAt,
+      now,
+      night: resolveNightWindow({ now, ageMonths }),
+    });
+    return { state, copy: feedCoachCopy(state, "Lulu") };
+  };
+
+  it("keeps coaching the 0-3mo evening through the cluster-feed hours", () => {
+    // There is no bedtime to derive from at this age, so the clock waits the
+    // evening out: at 20:00 and 21:00 a four-hour gap still gets the daytime
+    // nudge and the cue list, in both brackets.
     for (const ageMonths of [0, 2]) {
-      for (const hour of [20, 21, 23]) {
-        const state = deriveFeedCoachState({
-          ageMonths,
-          lastFeedAt: at(14, 16),
-          now: at(14, hour),
-          night: resolveNightWindow({ now: at(14, hour), ageMonths }),
-        });
-        const c = feedCoachCopy(state, "Lulu");
+      for (const hour of [20, 21]) {
+        const { state, copy } = youngCard(ageMonths, at(14, 16), at(14, hour));
         expect(`${ageMonths}mo at ${hour}:00 — ${state.kind}`).toBe(
           `${ageMonths}mo at ${hour}:00 — due`,
         );
-        expect(c.pill.tone).toBe("solid");
-        expect(c.showCues).toBe(true);
+        expect(copy.pill.tone).toBe("solid");
+        expect(copy.showCues).toBe(true);
       }
     }
+  });
+
+  it("gives a newborn night the wake-to-feed coaching, never a quiet state", () => {
+    // Under the overnight ceiling: the population fact plus the 4-hour line,
+    // with the cue checklist hidden as on every other night state.
+    const early = youngCard(0, at(15, 3), at(15, 4, 30));
+    expect(early.state.kind).toBe("watch");
+    expect(early.copy.pill.tone).toBe("soft");
+    expect(early.copy.showCues).toBe(false);
+    expect(early.copy.body).toMatch(/wake to feed around the clock/);
+    expect(early.copy.notes).toEqual([
+      "Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.",
+    ]);
+
+    // Past it: the wake-to-feed guidance, not a bare daytime imperative.
+    const past = youngCard(0, at(15, 0), at(15, 5));
+    expect(past.state.kind).toBe("due");
+    expect(past.copy.pill.label).toBe("Time for a feed");
+    expect(past.copy.title).toMatch(/newborns feed overnight too/);
+    expect(past.copy.body).toMatch(/wake them gently/);
+    expect(past.copy.showCues).toBe(false);
+  });
+
+  it("never mutes a newborn overnight, at any gap", () => {
+    // The muted reassurance state is what would let a growing gap walk the
+    // wake-to-feed nudge back, so this bracket must never reach it.
+    for (let hour = 22; hour <= 30; hour += 1) {
+      for (const gap of [1, 2, 3, 3.5, 4, 6, 10]) {
+        const now = at(hour < 24 ? 14 : 15, hour % 24);
+        const { state, copy } = youngCard(0, new Date(now.getTime() - gap * 3_600_000), now);
+        expect(`${hour % 24}:00 +${gap}h — ${state.kind}/${copy.pill.tone}`).not.toMatch(
+          /muted/,
+        );
+      }
+    }
+  });
+
+  it("gives the 1-3mo bracket the quiet night — a 6-hour stretch is normal here", () => {
+    // The reported bug in the bracket it was still live for: a 6-hour
+    // overnight stretch at two months is inside the guidance, so the card
+    // states it rather than nudging all night.
+    for (const [lastFeed, now, label] of [
+      [at(14, 23), at(15, 5), "6h"],
+      [at(15, 0, 51), at(15, 6, 32), "5h 41m"],
+    ] as const) {
+      const { state, copy } = youngCard(2, lastFeed, now);
+      expect(state.kind).toBe("night-stretch");
+      expect(copy.pill.label).toBe("Overnight");
+      expect(copy.pill.tone).toBe("muted");
+      expect(copy.title).toBe(`Overnight: ${label} since the last feed`);
+      expect(copy.showCues).toBe(false);
+      expect(copy.notes.some((n) => /pediatrician asked you to wake Lulu/.test(n))).toBe(true);
+    }
+  });
+
+  it("keeps a 1-3mo evening nudge standing when the night opens on top of it", () => {
+    // 2mo, last feed 15:00: the daytime card fires at 19:00 and the clock
+    // night opens at 22:00 on top of it. The gap belongs to the afternoon, so
+    // the quiet night must not take it.
+    expect(youngCard(2, at(14, 15), at(14, 19)).copy.pill.tone).toBe("solid");
+    const after = youngCard(2, at(14, 15), at(14, 22));
+    expect(after.state.kind).toBe("night-long-gap");
+    expect(after.copy.pill.tone).toBe("solid");
+  });
+
+  it("keeps a newborn evening nudge standing when the night opens on top of it", () => {
+    // Last feed 17:00: the daytime nudge fires at the 3-hour threshold, before
+    // the more lenient overnight ceiling would. A parent already told "time for
+    // a feed" can't be stood down by the boundary arriving at 22:00.
+    expect(youngCard(0, at(14, 17), at(14, 20)).copy.pill.tone).toBe("solid");
+    const after = youngCard(0, at(14, 17), at(14, 22));
+    expect(after.state.kind).toBe("due");
+    expect(after.copy.pill.tone).toBe("solid");
+    expect(after.copy.body).toMatch(/wake them gently/);
   });
 
   it("still stands the 4-month-old down overnight at 06:32 with nothing logged", () => {

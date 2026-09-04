@@ -224,13 +224,28 @@ export const EVENING_LEAD_IN_HOURS = 4;
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
+ * The longest gap the muted morning greeting may cover.
+ *
+ * While the wake-to-feed ceiling still applies it IS that ceiling: a gap that
+ * ran past the one clinical limit this card carries is not a night to greet,
+ * and letting the reassurance state take it would walk back the overnight nudge
+ * the parent had already been given. Past that bracket the bound is the night's
+ * own feed-gap allowance.
+ */
+function morningStretchBound(g: FeedGuidance): number {
+  return g.wakeToFeedOvernight
+    ? Math.min(g.longNightGapHours, OVERNIGHT_WAKE_THRESHOLD_HOURS)
+    : g.longNightGapHours;
+}
+
+/**
  * True while the day's first feed is still ahead: the night has ended, nothing
  * has been logged since it did, and the gap really is the overnight one.
  *
  * The gap is bounded at both ends: it has to clear the age threshold (a 06:50
  * feed before a 07:00 wake is not an overnight gap) and stay inside
- * `longNightGapHours`, so a gap that started before yesterday's bedtime doesn't
- * get greeted as the morning after a normal night. The morning state
+ * `morningStretchBound`, so a gap that started before yesterday's bedtime
+ * doesn't get greeted as the morning after a normal night. The morning state
  * also stands down once the baby has been up for longer than that same
  * threshold — by then a feed genuinely is due and saying so is the safe
  * direction to be wrong in. Every stand-down falls through to the daytime
@@ -251,7 +266,7 @@ function isFirstFeedOfDay(
   }
   const stretchHours = (morningEnd - lastFeedAt.getTime()) / HOUR_MS;
   if (stretchHours < guidance.thresholdHours) return false;
-  if (stretchHours > guidance.longNightGapHours) return false;
+  if (stretchHours > morningStretchBound(guidance)) return false;
   return (now.getTime() - morningEnd) / HOUR_MS < guidance.thresholdHours;
 }
 
@@ -279,7 +294,21 @@ export function deriveFeedCoachState(opts: {
   // baby is down, so the daytime imperative doesn't apply.
   if (night && (night.isNightNow || night.nightSleepInProgress)) {
     if (guidance.wakeToFeedOvernight) {
-      return hoursSince >= OVERNIGHT_WAKE_THRESHOLD_HOURS
+      // When the night opened for this card: the clock boundary, or now if a
+      // running night timer opened it sooner.
+      const nightOpenedAt = Math.min(
+        (night.nightOpensAt ?? night.nightStartsAt).getTime(),
+        now.getTime(),
+      );
+      // Overnight the ceiling is more lenient than the daytime interval — a
+      // newborn three hours into a night stretch doesn't need waking yet — but
+      // it can only ever hold a nudge, never take one back. If the gap had
+      // already earned the daytime nudge by the time the night opened, the
+      // parent has seen "time for a feed" and a longer gap cannot stand that
+      // down, so the night keeps it standing.
+      const nudgeEarnedBeforeTheNight =
+        (nightOpenedAt - opts.lastFeedAt.getTime()) / HOUR_MS >= guidance.thresholdHours;
+      return hoursSince >= OVERNIGHT_WAKE_THRESHOLD_HOURS || nudgeEarnedBeforeTheNight
         ? { kind: "due", guidance, hoursSince, overnight: true }
         : { kind: "watch", guidance, hoursSince, overnight: true };
     }

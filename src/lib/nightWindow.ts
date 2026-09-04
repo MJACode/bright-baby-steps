@@ -32,22 +32,37 @@ export const WAKE_TIME_FALLBACK = "07:00";
 // (see `clockNightStartMin`).
 export const MAX_NIGHT_CLOCK_LEAD_IN_MIN = 60;
 
+// The 0-3mo bracket has no bedtime range to derive from — circadian rhythm
+// doesn't consolidate until 10-12 weeks — so its night start is the generic
+// `NIGHT_START_FALLBACK`, a nominal hour rather than a bedtime. With nothing
+// behind it the clock has to be slower to trust it, and these are the peak
+// evening cluster-feed weeks, when a card that stops coaching is wrong in the
+// direction that matters. Two hours past the fallback puts the boundary at
+// 22:00: late enough to leave the whole evening to the daytime coaching, early
+// enough that the overnight states cover the hours a young baby's long gaps
+// actually land in. A declared `night_start_time`, a saved plan bedtime, or a
+// running night sleep timer all still open the night ahead of it.
+export const UNCONSOLIDATED_NIGHT_LEAD_IN_MIN = 2 * 60;
+
 const MINUTES_PER_DAY = 24 * 60;
 
 /**
  * The clock minute the night opens when nothing else says the baby is down.
  *
  * A `night_start_time` the family typed is a declaration, not a guess, so it is
- * honoured exactly. A derived start gets a lead-in that runs to the latest
- * bedtime the family's plan — or, failing that, the age bracket — calls normal,
- * capped at `MAX_NIGHT_CLOCK_LEAD_IN_MIN`.
+ * honoured exactly. A start derived from a bedtime gets a lead-in that runs to
+ * the latest bedtime the family's plan — or, failing that, the age bracket —
+ * calls normal, capped at `MAX_NIGHT_CLOCK_LEAD_IN_MIN`. A start with no
+ * bedtime behind it at all takes the longer `UNCONSOLIDATED_NIGHT_LEAD_IN_MIN`.
  */
 function clockNightStartMin(
   nightStartMin: number,
   familyNightStartMin: number | null | undefined,
   bedtimeLatestMin: number | null,
+  hasBedtime: boolean,
 ): number {
   if (familyNightStartMin != null) return nightStartMin;
+  if (!hasBedtime) return nightStartMin + UNCONSOLIDATED_NIGHT_LEAD_IN_MIN;
   const planned =
     bedtimeLatestMin != null && bedtimeLatestMin > nightStartMin
       ? bedtimeLatestMin - nightStartMin
@@ -105,16 +120,12 @@ export function resolveNightWindow(opts: {
     opts.familyNightStartMin,
   );
 
-  // The 0-3mo bracket has no bedtime range at all — circadian rhythm doesn't
-  // consolidate until 10-12 weeks, so there is no night there for a clock to
-  // protect, and those are the cluster-feed weeks where muting the feeding
-  // nudge is the wrong direction to be wrong in. At that age the night has to
-  // be evidenced: a running night sleep, a family `night_start_time`, or a
-  // bedtime the family saved in their plan.
-  const clockNightApplies =
-    opts.familyNightStartMin != null ||
-    opts.bedtimeEarliest != null ||
-    bracketBedtime.earliest != null;
+  // Whether a bedtime — the family's own or the age bracket's — is what the
+  // night start was derived from. The 0-3mo bracket has none (circadian rhythm
+  // doesn't consolidate until 10-12 weeks), so its start is a nominal fallback
+  // hour and the clock waits `UNCONSOLIDATED_NIGHT_LEAD_IN_MIN` before acting
+  // on it.
+  const hasBedtime = opts.bedtimeEarliest != null || bracketBedtime.earliest != null;
 
   // Clock-to-instant conversions skew on the two DST days: spring-forward runs
   // the night an hour long (a 07:00 wake lands at what feels like 08:00) and
@@ -143,13 +154,14 @@ export function resolveNightWindow(opts: {
     nightStartMin,
     opts.familyNightStartMin,
     parseClock(opts.bedtimeLatest) ?? parseClock(bracketBedtime.latest),
+    hasBedtime,
   );
   const clockIsNight =
     clockStartMin >= MINUTES_PER_DAY
       ? nowMin >= clockStartMin - MINUTES_PER_DAY && nowMin < morningEndMin
       : nowMin >= clockStartMin || nowMin < morningEndMin;
 
-  const isNightNow = coherent && clockNightApplies && clockIsNight;
+  const isNightNow = coherent && clockIsNight;
 
   // Same DST caveat as the day boundaries above.
   const nightStartsAt = addMinutes(
