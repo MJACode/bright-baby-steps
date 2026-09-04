@@ -1,22 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, History } from "lucide-react";
+import { Play, Pause, RotateCcw, History, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import {
   useActiveFeed,
   useSecondTicker,
   elapsedSecondsForSide,
+  STALE_AFTER_MS,
   type ActiveFeedRow,
 } from "@/hooks/useActiveFeed";
 import { getErrorMessage } from "@/lib/handleRlsError";
 import { supabase } from "@/integrations/supabase/client";
 import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+import { formatDurationShort } from "@/lib/sessionAnchor";
 import { formatDistanceToNowStrict } from "date-fns";
 
 const NURSING_PRESETS = [5, 10, 15, 20, 25, 30];
 const PAST_FEED_TITLE = "Add past feed";
+const ADJUST_TITLE = "Adjust this feed";
+const ADJUST_LABEL = "Adjust times";
+// Past this, a running session is far more likely to be a timer left going than
+// a feed still happening, so the face offers a way out.
+const RUNAWAY_AFTER_SEC = 60 * 60;
 
 interface NursingTimerProps {
   childId: string | undefined;
@@ -67,7 +74,7 @@ export default function NursingTimer({
   initialMinutes,
   editMode,
 }: NursingTimerProps) {
-  const { active, start, setSide, cancel } = useActiveFeed(childId);
+  const { active, start, setSide, adjust, cancel } = useActiveFeed(childId);
 
   // In-memory counters: the ticker when editing a completed log, and the times
   // handed back by "Add past feed" when no live row exists.
@@ -130,16 +137,35 @@ export default function NursingTimer({
     onDurationChange(Math.round(totalSeconds / 60));
   }, [totalSeconds, onDurationChange]);
 
+  const derivedSide: "left" | "right" | "both" | null =
+    leftSeconds > 0 && rightSeconds > 0
+      ? "both"
+      : leftSeconds > 0
+        ? "left"
+        : rightSeconds > 0
+          ? "right"
+          : null;
+
   useEffect(() => {
-    let derived = "";
-    if (leftSeconds > 0 && rightSeconds > 0) derived = "both";
-    else if (leftSeconds > 0) derived = "left";
-    else if (rightSeconds > 0) derived = "right";
-    if (derived && derived !== side) onSideChange(derived);
-  }, [leftSeconds, rightSeconds, side, onSideChange]);
+    if (derivedSide && derivedSide !== side) onSideChange(derivedSide);
+  }, [derivedSide, side, onSideChange]);
 
   const [pastOpen, setPastOpen] = useState(false);
   const [pastSide, setPastSide] = useState<"left" | "right" | "both">("left");
+  // The same sheet corrects a live session instead of adding a finished one.
+  // Set at open time, never on close, so the title doesn't swap mid-exit.
+  const [adjustMode, setAdjustMode] = useState(false);
+  // Everything the correction is measured against, snapshotted when the sheet
+  // opens: which row it belongs to, the split already on it, and the seed the
+  // sheet prefills from. A ref, not state — the seed object has to keep one
+  // identity while the timer re-renders every second underneath the sheet.
+  const adjustSeed = useRef<{
+    rowId: string;
+    side: "left" | "right" | "both";
+    left: number;
+    right: number;
+    seed: { startAt: Date; durationMin: number };
+  } | null>(null);
 
   // Which side the previous feed finished on — shown above the side buttons so
   // the parent doesn't have to remember, and used as the past-feed default
@@ -242,6 +268,22 @@ export default function NursingTimer({
 
   const openPastSheet = () => {
     setPastSide(suggestedSide ?? "left");
+    setAdjustMode(false);
+    setPastOpen(true);
+  };
+
+  const openAdjustSheet = () => {
+    if (!liveRow) return;
+    const currentSide = derivedSide ?? "left";
+    adjustSeed.current = {
+      rowId: liveRow.id,
+      side: currentSide,
+      left: leftSeconds,
+      right: rightSeconds,
+      seed: { startAt: new Date(liveRow.logged_at), durationMin: Math.round(totalSeconds / 60) },
+    };
+    setPastSide(currentSide);
+    setAdjustMode(true);
     setPastOpen(true);
   };
 
@@ -265,17 +307,69 @@ export default function NursingTimer({
     });
   };
 
-  // A feed started on another device while this sheet was open would be bound
-  // as the row Save overwrites. The trigger hides itself, but an already-open
-  // sheet has to go too.
+  // The corrected times land on the row itself, so the session stays bound and
+  // Save still finalizes it — nothing here may unbind it or mark past times as
+  // applied. Throwing leaves the sheet open with the reason next to the button
+  // they'll press again, which is the only place it needs to appear.
+  const handleAdjustApply = async ({ startAt, durationMin }: PastSessionValue) => {
+    const captured = adjustSeed.current;
+    if (!captured) return;
+    // The active-session query only looks back STALE_AFTER_MS, so a start
+    // beyond it would drop the row out of the active set the moment it saved:
+    // the form unbinds, Save inserts a duplicate, and the session is left
+    // running forever with no way to reach it. The margin covers the gap
+    // between this check and the query re-deriving its own cutoff on refetch.
+    if (Date.now() - startAt.getTime() >= STALE_AFTER_MS - 60_000) {
+      throw new Error(
+        "A running feed can only be moved back 12 hours. For one that started earlier, tap Reset and then Add past feed.",
+      );
+    }
+    // Only re-split when the length or the side actually changed. Flattening a
+    // real 9-minute / 63-minute session into an even half each way would throw
+    // away the very thing a parent opened this sheet to keep.
+    const untouched = pastSide === captured.side && durationMin === captured.seed.durationMin;
+    const { left, right } = untouched
+      ? { left: captured.left, right: captured.right }
+      : sideSeconds(durationMin, pastSide);
+    await adjust.mutateAsync({ rowId: captured.rowId, startAt, leftSeconds: left, rightSeconds: right });
+    // Held in memory too: if the row does leave the active set, the face and
+    // the parent form still describe the feed they just corrected.
+    setEditActive(null);
+    setEditLeft(left);
+    setEditRight(right);
+    onDurationChange(durationMin);
+    onSideChange(pastSide);
+    onPastStartApplied?.(startAt);
+    toast({
+      title: "Times updated",
+      description: "Timer paused — tap a side to keep going, or Save Feed to finish logging it.",
+    });
+  };
+
+  // An open sheet has to close whenever the row underneath it stops being the
+  // row it describes. Adding a past feed, that means a session appearing — it
+  // would be bound as the row Save overwrites. Correcting one, it means the
+  // session leaving: finalized or reset on another device, replaced by a
+  // different one, or both. Either way the times have nowhere to land, and
+  // writing them onto whatever row is there now corrupts it.
   useEffect(() => {
-    if (editMode || !breastRowExists || !pastOpen) return;
+    if (editMode || !pastOpen) return;
+    if (adjustMode) {
+      if (liveRow?.id === adjustSeed.current?.rowId) return;
+      setPastOpen(false);
+      toast({
+        title: "That feed already finished",
+        description: "It ended on another device, so the correction closed. Add it as a past feed if it still needs logging.",
+      });
+      return;
+    }
+    if (!breastRowExists) return;
     setPastOpen(false);
     toast({
       title: "Nursing started",
       description: "A feed is running now, so the past-feed form closed. Add it again once it ends.",
     });
-  }, [editMode, breastRowExists, pastOpen]);
+  }, [editMode, adjustMode, liveRow, breastRowExists, pastOpen]);
 
   return (
     <div className="space-y-3">
@@ -302,6 +396,13 @@ export default function NursingTimer({
           {!activeSide && totalSeconds > 0 && "Paused"}
           {!activeSide && totalSeconds === 0 && "Tap a side to start"}
         </span>
+        {!!liveRow && totalSeconds >= RUNAWAY_AFTER_SEC && (
+          <span className="text-xs text-muted-foreground font-semibold">
+            {activeSide
+              ? `Still nursing? It's been ${formatDurationShort(Math.round(totalSeconds / 60))} — adjust the times or save the feed.`
+              : `Paused at ${formatDurationShort(Math.round(totalSeconds / 60))} — adjust the times or save the feed.`}
+          </span>
+        )}
       </div>
 
       {/* Where the last feed left off. The whole reason a parent hesitates over
@@ -362,31 +463,34 @@ export default function NursingTimer({
         </div>
       )}
 
-      {/* Past entry — hidden whenever a breast row is live, paused included:
-          the parent form binds that row and would save over it. */}
-      {(editMode ? !activeSide : !breastRowExists) && (
+      {/* Past entry, or — once this form owns the running row — a correction to
+          it. Still hidden while a breast row this form doesn't own is live: the
+          parent form binds that row and would save over it. */}
+      {(editMode ? !activeSide : !breastRowExists || !!liveRow) && (
         <Button
           type="button"
           variant="outline"
           className="touch-target w-full h-14 gap-2 font-bold text-base border-feeding/40 text-feeding hover:bg-feeding-bg"
-          onClick={openPastSheet}
+          onClick={liveRow ? openAdjustSheet : openPastSheet}
         >
-          <History className="w-5 h-5" />
-          {PAST_FEED_TITLE}
+          {liveRow ? <Pencil className="w-5 h-5" /> : <History className="w-5 h-5" />}
+          {liveRow ? ADJUST_LABEL : PAST_FEED_TITLE}
         </Button>
       )}
 
       <PastSessionSheet
         open={pastOpen}
         onOpenChange={setPastOpen}
-        title={PAST_FEED_TITLE}
-        saveLabel="Use these times"
+        title={adjustMode ? ADJUST_TITLE : PAST_FEED_TITLE}
+        saveLabel={adjustMode ? "Update times" : "Use these times"}
+        seed={adjustMode ? adjustSeed.current?.seed : undefined}
         accentClass="bg-feeding"
         durationPresets={NURSING_PRESETS}
         defaultDurationMin={15}
         softMaxMin={60}
         hardMaxMin={480}
-        onSave={handlePastApply}
+        onSave={adjustMode ? handleAdjustApply : handlePastApply}
+        isSaving={adjust.isPending}
         showNotes={false}
         detail={
           <div className="space-y-1">

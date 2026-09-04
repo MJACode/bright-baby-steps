@@ -73,6 +73,9 @@ type PastSessionSheetProps = {
   onSave: (v: PastSessionValue) => Promise<void>;
   inProgress?: InProgressOption;
   isSaving?: boolean;
+  // Prefills the times of a session that already exists instead of guessing at
+  // a fresh one, for consumers that correct a running log rather than add one.
+  seed?: { startAt: Date; durationMin: number };
   // Off when the consuming form already owns a Notes field — two of them in one
   // flow leaves the parent guessing which one gets saved.
   showNotes?: boolean;
@@ -93,11 +96,13 @@ export function PastSessionSheet({
   onSave,
   inProgress,
   isSaving,
+  seed,
   showNotes = true,
 }: PastSessionSheetProps) {
   const { startAt, durationMin, endAt, setStartAt, setDurationMin, setEndAt } = useSessionAnchor({
     open,
     defaultDurationMin,
+    seed,
   });
 
   const titleRef = useRef<HTMLHeadingElement>(null);

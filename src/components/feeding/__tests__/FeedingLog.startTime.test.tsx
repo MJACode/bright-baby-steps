@@ -100,6 +100,7 @@ vi.mock("@/hooks/useActiveFeed", async (importOriginal) => {
       active: activeRow,
       start: { mutateAsync: vi.fn(async () => activeRow) },
       setSide: { mutateAsync: vi.fn(async () => {}) },
+      adjust: { mutateAsync: vi.fn(async () => {}), isPending: false },
       cancel: { mutateAsync: vi.fn(async () => {}) },
     }),
   };
