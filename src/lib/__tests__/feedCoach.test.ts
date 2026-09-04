@@ -942,6 +942,31 @@ describe("feedCoach + resolveNightWindow — the evening never de-escalates", ()
     { label: "night timer 21:00", startedAt: at(14, 21), endsAt: at(15, 10) },
   ] as const;
 
+  // What the family has told us about their own day. Both of the defects this
+  // dimension was added for — the morning branch attributing against a
+  // different anchor than the night branch, and a timer inside the lead-in
+  // pulling the opening earlier — are invisible on the default schedule,
+  // because the two anchors only separate once a saved bedtime or a wake time
+  // other than the fallback moves one of them. Sweeping one configuration was
+  // the blind spot; these are the inputs `resolveNightWindow` actually branches
+  // on.
+  const SCHEDULES = [
+    { label: "no plan", wakeTime: null, bedtimeEarliest: null, bedtimeLatest: null },
+    { label: "wake 05:30", wakeTime: "05:30", bedtimeEarliest: null, bedtimeLatest: null },
+    {
+      label: "wake 06:00, bed 20:00-21:30",
+      wakeTime: "06:00",
+      bedtimeEarliest: "20:00",
+      bedtimeLatest: "21:30",
+    },
+    {
+      label: "wake 07:00, bed 19:00-20:00",
+      wakeTime: "07:00",
+      bedtimeEarliest: "19:00",
+      bedtimeLatest: "20:00",
+    },
+  ] as const;
+
   const timerAt = (
     timer: (typeof TIMERS)[number],
     now: Date,
@@ -966,6 +991,7 @@ describe("feedCoach + resolveNightWindow — the evening never de-escalates", ()
         ? OVERNIGHT_WAKE_THRESHOLD_HOURS
         : guidance.longNightGapHours;
       for (const timer of TIMERS) {
+       for (const schedule of SCHEDULES) {
         for (const lastFeedAt of LAST_FEEDS) {
           let asked = "";
           for (let t = lastFeedAt.getTime(); t <= at(15, 10).getTime(); t += 15 * 60_000) {
@@ -975,12 +1001,19 @@ describe("feedCoach + resolveNightWindow — the evening never de-escalates", ()
               lastFeedAt,
               now,
               isPremature,
-              night: resolveNightWindow({ now, ageMonths, ...timerAt(timer, now) }),
+              night: resolveNightWindow({
+                now,
+                ageMonths,
+                wakeTime: schedule.wakeTime,
+                bedtimeEarliest: schedule.bedtimeEarliest,
+                bedtimeLatest: schedule.bedtimeLatest,
+                ...timerAt(timer, now),
+              }),
             });
             const { tone } = feedCoachCopy(state, "Lulu").pill;
             const clock = (d: Date) =>
               `${d.getDate() === 14 ? "" : "+"}${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
-            const stamp = `${label}, ${timer.label}, last feed ${clock(lastFeedAt)}, at ${clock(now)} (${state.kind}/${tone})`;
+            const stamp = `${label}, ${timer.label}, ${schedule.label}, last feed ${clock(lastFeedAt)}, at ${clock(now)} (${state.kind}/${tone})`;
 
             // The two readings of "the card is asking" have to agree, or the
             // tone rule and the state rule would be protecting different things.
@@ -1011,9 +1044,14 @@ describe("feedCoach + resolveNightWindow — the evening never de-escalates", ()
             if (asking === "asks for a feed") asked ||= stamp;
           }
         }
+       }
       }
     }
-  });
+    // Brackets x timers x schedules x last-feed times x quarter-hours: a few
+    // hundred thousand derivations, well past the default per-test budget.
+    // Worth the seconds — every defect this sweep has caught was invisible to
+    // the scenario tests above it.
+  }, 120_000);
 
   // The card a 0-3mo family sees, with no plan and no timer: the clock alone
   // decides, and it holds the evening open before switching to the night
