@@ -1,6 +1,6 @@
 import { addMinutes, startOfDay, subDays } from "date-fns";
 
-import { parseHHmm } from "@/lib/sleepPlan";
+import { BEDTIME_RANGE_BY_BRACKET, parseHHmm } from "@/lib/sleepPlan";
 import {
   DAY_CUTOFF,
   clockMinutes,
@@ -24,10 +24,12 @@ export const WAKE_TIME_FALLBACK = "07:00";
 // How long AFTER a *derived* night start the clock alone stays daytime. A
 // derived start is the earliest plausible bedtime (19:00 for most brackets, or
 // the plan's `bedtime_earliest`), and that hour is prime cluster-feeding time —
-// silencing the daytime nudge there is the wrong direction to be wrong in. One
-// hour covers the bedtime routine and nothing more; a longer delay swallows the
-// evening. A running night sleep timer opens the night with no delay at all,
-// and so does a family's own `night_start_time` (see `clockNightStartMin`).
+// silencing the daytime nudge there is the wrong direction to be wrong in. The
+// lead-in runs to the latest bedtime the bracket (or the family's plan) calls
+// normal, capped at an hour: that covers the bedtime routine and nothing more,
+// while a longer delay swallows the evening. A running night sleep timer opens
+// the night with no delay at all, and so does a family's own `night_start_time`
+// (see `clockNightStartMin`).
 export const MAX_NIGHT_CLOCK_LEAD_IN_MIN = 60;
 
 const MINUTES_PER_DAY = 24 * 60;
@@ -36,8 +38,9 @@ const MINUTES_PER_DAY = 24 * 60;
  * The clock minute the night opens when nothing else says the baby is down.
  *
  * A `night_start_time` the family typed is a declaration, not a guess, so it is
- * honoured exactly. A derived start gets a lead-in: the plan's own latest
- * bedtime when it lands within the hour, otherwise the full hour.
+ * honoured exactly. A derived start gets a lead-in that runs to the latest
+ * bedtime the family's plan — or, failing that, the age bracket — calls normal,
+ * capped at `MAX_NIGHT_CLOCK_LEAD_IN_MIN`.
  */
 function clockNightStartMin(
   nightStartMin: number,
@@ -59,6 +62,8 @@ export interface NightWindow {
   morningEndMin: number;
   /** The instant the current — or most recently finished — night began. */
   nightStartsAt: Date;
+  /** `nightStartsAt` plus the clock lead-in: when the clock alone calls it night. */
+  nightOpensAt: Date;
   /** The instant that night ends (in the future while the night is running). */
   morningEndsAt: Date;
   isNightNow: boolean;
@@ -91,12 +96,25 @@ export function resolveNightWindow(opts: {
 }): NightWindow {
   const { now, ageMonths } = opts;
   const activeSleepType = opts.activeSleepType ?? null;
+  const bucket = getAgeBucket(ageMonths);
+  const bracketBedtime = BEDTIME_RANGE_BY_BRACKET[bucket];
 
   const nightStartMin = resolveNightStartMin(
     { bedtime_earliest: opts.bedtimeEarliest ?? null },
-    getAgeBucket(ageMonths),
+    bucket,
     opts.familyNightStartMin,
   );
+
+  // The 0-3mo bracket has no bedtime range at all — circadian rhythm doesn't
+  // consolidate until 10-12 weeks, so there is no night there for a clock to
+  // protect, and those are the cluster-feed weeks where muting the feeding
+  // nudge is the wrong direction to be wrong in. At that age the night has to
+  // be evidenced: a running night sleep, a family `night_start_time`, or a
+  // bedtime the family saved in their plan.
+  const clockNightApplies =
+    opts.familyNightStartMin != null ||
+    opts.bedtimeEarliest != null ||
+    bracketBedtime.earliest != null;
 
   // Clock-to-instant conversions skew on the two DST days: spring-forward runs
   // the night an hour long (a 07:00 wake lands at what feels like 08:00) and
@@ -124,14 +142,14 @@ export function resolveNightWindow(opts: {
   const clockStartMin = clockNightStartMin(
     nightStartMin,
     opts.familyNightStartMin,
-    parseClock(opts.bedtimeLatest),
+    parseClock(opts.bedtimeLatest) ?? parseClock(bracketBedtime.latest),
   );
   const clockIsNight =
     clockStartMin >= MINUTES_PER_DAY
       ? nowMin >= clockStartMin - MINUTES_PER_DAY && nowMin < morningEndMin
       : nowMin >= clockStartMin || nowMin < morningEndMin;
 
-  const isNightNow = coherent && clockIsNight;
+  const isNightNow = coherent && clockNightApplies && clockIsNight;
 
   // Same DST caveat as the day boundaries above.
   const nightStartsAt = addMinutes(
@@ -143,6 +161,7 @@ export function resolveNightWindow(opts: {
     nightStartMin,
     morningEndMin,
     nightStartsAt,
+    nightOpensAt: addMinutes(nightStartsAt, clockStartMin - nightStartMin),
     morningEndsAt,
     isNightNow,
     asleepNow: activeSleepType !== null,

@@ -79,6 +79,45 @@ describe("resolveNightWindow", () => {
     expect(resolveNightWindow({ now: at(20, 0), ...opts }).isNightNow).toBe(true);
   });
 
+  it("gives the 0-3mo bracket no clock-only night at all", () => {
+    // No fixed bedtime exists at this age — circadian rhythm consolidates
+    // around 10-12 weeks — and these are the cluster-feed weeks, so a clock
+    // with nothing behind it must not open a night here.
+    for (const hour of [20, 21, 23, 3, 5]) {
+      const w = resolveNightWindow({ now: at(hour, 0, hour < 12 ? 15 : 14), ageMonths: 2 });
+      expect(`${hour}:00 — ${w.isNightNow}`).toBe(`${hour}:00 — false`);
+    }
+  });
+
+  it("opens the 0-3mo night on evidence: a declared boundary, a saved bedtime, or a timer", () => {
+    const opts = { now: at(21, 0, 14), ageMonths: 2 } as const;
+    expect(resolveNightWindow({ ...opts, familyNightStartMin: 20 * 60 }).isNightNow).toBe(true);
+    expect(resolveNightWindow({ ...opts, bedtimeEarliest: "19:30" }).isNightNow).toBe(true);
+    expect(
+      resolveNightWindow({ ...opts, activeSleepType: "night" }).nightSleepInProgress,
+    ).toBe(true);
+  });
+
+  it("still resolves the morning for a 0-3mo, so the first feed of the day survives", () => {
+    const w = resolveNightWindow({ now: at(7, 30), ageMonths: 2 });
+    expect(w.morningEndMin).toBe(7 * 60);
+    expect(w.nightStartsAt.getTime()).toBe(at(20, 0, 14).getTime());
+  });
+
+  it("reports when the clock actually opened the night, lead-in included", () => {
+    const derived = resolveNightWindow({ now: at(6, 32), ageMonths: 4 });
+    expect(derived.nightStartsAt.getTime()).toBe(at(19, 0, 14).getTime());
+    expect(derived.nightOpensAt.getTime()).toBe(at(20, 0, 14).getTime());
+
+    // A declared boundary has no lead-in, so the two instants coincide.
+    const declared = resolveNightWindow({
+      now: at(6, 32),
+      ageMonths: 4,
+      familyNightStartMin: 18 * 60,
+    });
+    expect(declared.nightOpensAt.getTime()).toBe(declared.nightStartsAt.getTime());
+  });
+
   it("opens the night immediately when a night sleep timer is running", () => {
     const w = resolveNightWindow({
       now: at(19, 30),

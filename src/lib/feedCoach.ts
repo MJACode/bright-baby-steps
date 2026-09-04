@@ -36,6 +36,14 @@ export interface FeedGuidance {
   /** Population fact: how long a normal night stretch runs at this age. */
   longestNormalNightStretch: string;
   /**
+   * What `longestNormalNightStretch` actually measures, which flips with the
+   * bracket. While overnight feeds are still expected it is the longest gap
+   * BETWEEN FEEDS — for newborns that number is the AAP 4-hour ceiling itself,
+   * so it must never be printed as a sleep band a feed gap may exceed. Past
+   * that it is a SLEEP band, which a feed gap legitimately runs beyond.
+   */
+  nightStretchUnit: "feed-gap" | "sleep";
+  /**
    * Upper end of `longestNormalNightStretch`, in hours. A machine-readable
    * mirror of the band the card prints, so copy and data can't drift apart.
    * It describes SLEEP — never compare it to a feed gap; use
@@ -94,6 +102,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "2–3 feeds overnight",
       longestNormalNightStretch: "about 4 hours",
+      nightStretchUnit: "feed-gap",
       maxNormalNightStretchHours: 4,
       longNightGapHours: 6,
       nightNote:
@@ -110,6 +119,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "1–3 feeds overnight",
       longestNormalNightStretch: "4–6 hours",
+      nightStretchUnit: "feed-gap",
       maxNormalNightStretchHours: 6,
       longNightGapHours: 8,
       nightNote:
@@ -125,6 +135,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "0–2 feeds overnight",
       longestNormalNightStretch: "6–8 hours",
+      nightStretchUnit: "sleep",
       maxNormalNightStretchHours: 8,
       longNightGapHours: 14,
     };
@@ -139,6 +150,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "0–1 feeds overnight",
       longestNormalNightStretch: "8–11 hours",
+      nightStretchUnit: "sleep",
       maxNormalNightStretchHours: 11,
       longNightGapHours: 14,
     };
@@ -152,6 +164,7 @@ export function feedGuidanceForAge(
     wakeToFeedOvernight,
     typicalNightFeeds: "usually no feeds overnight",
     longestNormalNightStretch: "10–12 hours",
+    nightStretchUnit: "sleep",
     maxNormalNightStretchHours: 12,
     longNightGapHours: 15,
   };
@@ -164,6 +177,14 @@ export interface FeedNightWindow {
   nightSleepInProgress: boolean;
   /** Start of the current — or most recently finished — night. */
   nightStartsAt: Date;
+  /**
+   * The instant the night actually opened for the clock: `nightStartsAt` plus
+   * the lead-in the sleep side holds off for. Attribution is measured from
+   * here, so a gap that had already earned a daytime nudge during the lead-in
+   * can't be muted by the boundary arriving a few minutes later. Surfaces with
+   * no lead-in of their own fall back to `nightStartsAt`.
+   */
+  nightOpensAt?: Date;
   /** End of that night. */
   morningEndsAt: Date;
 }
@@ -177,9 +198,16 @@ export type FeedCoachState =
   | { kind: "due"; guidance: FeedGuidance; hoursSince: number; overnight: boolean }
   // Night, past the wake-to-feed weeks — a long gap is the goal, not a deficit.
   | { kind: "night-stretch"; guidance: FeedGuidance; hoursSince: number }
-  // Night, but past the longest feed-to-feed gap that's typical for the age —
-  // stated plainly rather than celebrated, without any wake-the-baby imperative.
-  | { kind: "night-long-gap"; guidance: FeedGuidance; hoursSince: number }
+  // Night, but the reassurance doesn't hold — stated plainly rather than
+  // celebrated, without any wake-the-baby imperative. Either the gap has run
+  // past the longest feed-to-feed span that's typical for the age, or it began
+  // too far before the night to be the night's gap at all.
+  | {
+      kind: "night-long-gap";
+      guidance: FeedGuidance;
+      hoursSince: number;
+      reason: "past-typical-span" | "started-before-the-night";
+    }
   // Morning, nothing logged since the night ended.
   | {
       kind: "first-feed-of-day";
@@ -255,8 +283,27 @@ export function deriveFeedCoachState(opts: {
         ? { kind: "due", guidance, hoursSince, overnight: true }
         : { kind: "watch", guidance, hoursSince, overnight: true };
     }
+    // The night states only describe the night's own gap. A feed logged well
+    // before the evening isn't the one that led into it, so a gap that started
+    // at lunchtime can't be framed as an overnight stretch — that would mute
+    // the card and hide the cue list on the longest gap of the day. Measured
+    // from the moment the night opened rather than from the nominal night
+    // start, so a nudge that has already fired during the lead-in is never
+    // retracted by the boundary arriving.
+    const ledIntoTheNight =
+      opts.lastFeedAt.getTime() >=
+      (night.nightOpensAt ?? night.nightStartsAt).getTime() -
+        EVENING_LEAD_IN_HOURS * HOUR_MS;
+    if (!ledIntoTheNight) {
+      return {
+        kind: "night-long-gap",
+        guidance,
+        hoursSince,
+        reason: "started-before-the-night",
+      };
+    }
     return hoursSince > guidance.longNightGapHours
-      ? { kind: "night-long-gap", guidance, hoursSince }
+      ? { kind: "night-long-gap", guidance, hoursSince, reason: "past-typical-span" }
       : { kind: "night-stretch", guidance, hoursSince };
   }
 
@@ -323,12 +370,26 @@ const MORNING_COPY: Record<
   }),
 };
 
-// The number the card prints is a feed-to-feed gap; the band below it is a
-// sleep duration. Naming both units keeps a normal night from reading as if it
-// had blown past the band — the bedtime feed lands before sleep onset and the
-// morning feed after waking, so the gap always measures longer.
+// Population facts, labelled in the unit the bracket's own number is stated
+// in. In the brackets that still feed overnight that number is a feed interval
+// — for a newborn it IS the 4-hour ceiling — so calling it a sleep band would
+// invert the one clinical limit this card carries.
 function nightFactsLine(g: FeedGuidance): string {
-  return `Typical at this age: ${g.typicalNightFeeds}. Longest normal sleep stretch: ${g.longestNormalNightStretch} — the gap between feeds spans more than that.`;
+  const label =
+    g.nightStretchUnit === "feed-gap" ? "gap between feeds" : "sleep stretch";
+  return `Typical at this age: ${g.typicalNightFeeds}. Longest normal ${label}: ${g.longestNormalNightStretch}.`;
+}
+
+// The reassurance states print a feed-to-feed number above a sleep band, and a
+// normal night always measures longer in feeds than in sleep — the bedtime feed
+// lands before sleep onset, the morning feed after waking. Naming that
+// bracketing keeps a routine night from reading as if it had blown past the
+// band, and bounding it at an hour or two keeps it from excusing any excess at
+// all. Never used where the number is itself a feed interval, and never on
+// `night-long-gap`, where the whole point is that the gap has outrun the band.
+function nightStretchFactsLine(g: FeedGuidance): string {
+  if (g.nightStretchUnit === "feed-gap") return nightFactsLine(g);
+  return `${nightFactsLine(g)} Measured feed to feed, a night usually runs an hour or two past that.`;
 }
 
 // Required on every overnight state where the wake-to-feed rule has lapsed —
@@ -358,7 +419,7 @@ export function feedCoachCopy(state: FeedCoachState, firstName: string): FeedCoa
         pill: { label: "Overnight", tone: "muted" },
         title: `Overnight: ${stretch} since the last feed`,
         body: NIGHT_STRETCH_BODY[g.bracket](firstName),
-        notes: [g.nightNote ?? nightFactsLine(g), pediatricianHedge(firstName)],
+        notes: [g.nightNote ?? nightStretchFactsLine(g), pediatricianHedge(firstName)],
         showCues: false,
       };
     }
@@ -368,7 +429,10 @@ export function feedCoachCopy(state: FeedCoachState, firstName: string): FeedCoa
       return {
         pill: { label: "Consider a feed", tone: "solid" },
         title: `It's been ${elapsed} since ${firstName}'s last feed`,
-        body: `That's a longer gap between feeds than most babies this age go overnight. Feeds are on demand — offering one whenever ${firstName} stirs is always fine.`,
+        body:
+          state.reason === "started-before-the-night"
+            ? `The last feed on record is from before the evening, so this gap covers more than the night. Feeds are on demand — offering one whenever ${firstName} stirs is always fine.`
+            : `That's a longer gap between feeds than most babies this age go overnight. Feeds are on demand — offering one whenever ${firstName} stirs is always fine.`,
         notes: [nightFactsLine(g), pediatricianHedge(firstName)],
         showCues: false,
       };
@@ -381,7 +445,7 @@ export function feedCoachCopy(state: FeedCoachState, firstName: string): FeedCoa
         pill: { label: "First feed of the day", tone: "muted" },
         title,
         body,
-        notes: [nightFactsLine(g)],
+        notes: [nightStretchFactsLine(g)],
         showCues: true,
       };
     }
@@ -417,7 +481,8 @@ export function feedCoachCopy(state: FeedCoachState, firstName: string): FeedCoa
       const elapsed = formatHoursSince(state.hoursSince);
       if (state.overnight) {
         return {
-          pill: { label: "Watch for cues", tone: "soft" },
+          // The cue list is hidden overnight, so the pill can't name it.
+          pill: { label: "Feeds continue overnight", tone: "soft" },
           title: `Last feed was ${elapsed} ago`,
           body:
             g.bracket === "newborn"
