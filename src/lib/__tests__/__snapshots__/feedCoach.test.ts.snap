@@ -1,0 +1,227 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`feedCoachCopy > holds every reachable string to the approved snapshot 1`] = `
+"no-data 0mo (no-data)
+  pill: Watch for cues (soft), cues: true
+  title: Watch for Lulu's hunger cues
+  body: Babies this age usually feed every 2–3 hours (8–12 feeds a day). Log a feed to start tracking the rhythm.
+  note: Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.
+
+day watch 0mo (watch)
+  pill: Watch for cues (soft), cues: true
+  title: Last feed was 1h ago
+  body: Watch for Lulu's hunger cues — feeds are on demand, so offer whenever the cues show up.
+  note: Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.
+
+day due 0mo (due)
+  pill: Consider a feed (solid), cues: true
+  title: It's been 6h since Lulu's last feed
+  body: Babies this age usually feed every 2–3 hours (8–12 feeds a day). If you spot hunger cues, it's a good time to offer a feed.
+  note: Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.
+
+no-data 2mo (no-data)
+  pill: Watch for cues (soft), cues: true
+  title: Watch for Lulu's hunger cues
+  body: Babies this age usually feed every 3–4 hours (about 5–7 feeds a day). Log a feed to start tracking the rhythm.
+  note: Most babies this age still feed every 3–4 hours, including overnight. Longer stretches are fine once your pediatrician is happy with weight gain.
+
+day watch 2mo (watch)
+  pill: Watch for cues (soft), cues: true
+  title: Last feed was 1h ago
+  body: Watch for Lulu's hunger cues — feeds are on demand, so offer whenever the cues show up.
+  note: Most babies this age still feed every 3–4 hours, including overnight. Longer stretches are fine once your pediatrician is happy with weight gain.
+
+day due 2mo (due)
+  pill: Consider a feed (solid), cues: true
+  title: It's been 6h since Lulu's last feed
+  body: Babies this age usually feed every 3–4 hours (about 5–7 feeds a day). If you spot hunger cues, it's a good time to offer a feed.
+  note: Most babies this age still feed every 3–4 hours, including overnight. Longer stretches are fine once your pediatrician is happy with weight gain.
+
+no-data 4mo (no-data)
+  pill: Watch for cues (soft), cues: true
+  title: Watch for Lulu's hunger cues
+  body: Babies this age usually feed every 3–4 hours (about 5–7 feeds a day). Log a feed to start tracking the rhythm.
+
+day watch 4mo (watch)
+  pill: Watch for cues (soft), cues: true
+  title: Last feed was 1h ago
+  body: Watch for Lulu's hunger cues — feeds are on demand, so offer whenever the cues show up.
+
+day due 4mo (due)
+  pill: Consider a feed (solid), cues: true
+  title: It's been 6h since Lulu's last feed
+  body: Babies this age usually feed every 3–4 hours (about 5–7 feeds a day). If you spot hunger cues, it's a good time to offer a feed.
+
+no-data 8mo (no-data)
+  pill: Watch for cues (soft), cues: true
+  title: Watch for Lulu's hunger cues
+  body: Babies this age usually feed every 4–5 hours, alongside solids (about 4–5 milk feeds a day). Log a feed to start tracking the rhythm.
+  note: Around this age, breast milk or formula stays the main source of nutrition while solids are introduced.
+
+day watch 8mo (watch)
+  pill: Watch for cues (soft), cues: true
+  title: Last feed was 1h ago
+  body: Watch for Lulu's hunger cues — feeds are on demand, so offer whenever the cues show up.
+  note: Around this age, breast milk or formula stays the main source of nutrition while solids are introduced.
+
+day due 8mo (due)
+  pill: Consider a feed (solid), cues: true
+  title: It's been 6h since Lulu's last feed
+  body: Babies this age usually feed every 4–5 hours, alongside solids (about 4–5 milk feeds a day). If you spot hunger cues, it's a good time to offer a feed.
+  note: Around this age, breast milk or formula stays the main source of nutrition while solids are introduced.
+
+no-data 14mo (no-data)
+  pill: Watch for cues (soft), cues: true
+  title: Watch for Lulu's hunger cues
+  body: Babies this age usually feed 3 meals and 2 snacks a day, alongside about 2–3 milk feeds. Log a feed to start tracking the rhythm.
+  note: Around this age, milk sits alongside meals and snacks rather than leading them.
+
+day watch 14mo (watch)
+  pill: Watch for cues (soft), cues: true
+  title: Last feed was 1h ago
+  body: Watch for Lulu's hunger cues — feeds are on demand, so offer whenever the cues show up.
+  note: Around this age, milk sits alongside meals and snacks rather than leading them.
+
+day due 14mo (due)
+  pill: Consider a feed (solid), cues: true
+  title: It's been 6h since Lulu's last feed
+  body: Babies this age usually feed 3 meals and 2 snacks a day, alongside about 2–3 milk feeds. If you spot hunger cues, it's a good time to offer a feed.
+  note: Around this age, milk sits alongside meals and snacks rather than leading them.
+
+overnight watch newborn (watch)
+  pill: Feeds continue overnight (soft), cues: false
+  title: Last feed was 2h ago
+  body: Newborns wake to feed around the clock. When Lulu stirs, roots, or brings hands to mouth, that's your cue.
+  note: Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.
+
+overnight due newborn (due)
+  pill: Time for a feed (solid), cues: false
+  title: It's been 5h — newborns feed overnight too
+  body: At this age, feeds every 2–3 hours around the clock are how Lulu grows. It's fine to wake them gently for this one — unswaddling, skin-to-skin, or a diaper change usually does it.
+  note: Once Lulu is back to birth weight and gaining well, your pediatrician may say longer stretches are fine.
+
+overnight watch premature 2mo (watch)
+  pill: Feeds continue overnight (soft), cues: false
+  title: Last feed was 2h ago
+  body: Babies born early often feed around the clock for longer. When Lulu stirs, roots, or brings hands to mouth, that's your cue.
+
+overnight due premature 2mo (due)
+  pill: Time for a feed (solid), cues: false
+  title: It's been 5h — time for a feed
+  body: Babies born early often stay on around-the-clock feeds for longer. It's fine to wake Lulu gently for this one — unswaddling, skin-to-skin, or a diaper change usually does it.
+  note: Once Lulu is back to birth weight and gaining well, your pediatrician may say longer stretches are fine.
+
+night-stretch 2mo (night-stretch)
+  pill: Overnight (muted), cues: false
+  title: Overnight: 5h since the last feed
+  body: Longer stretches start showing up around now. Most babies this age wake on their own when they're ready to feed.
+  note: Many babies this age still take a feed or two overnight, and many don't — both are normal.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap 2mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 17h since Lulu's last feed
+  body: That's a longer gap between feeds than most babies this age go overnight. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: 1–3 feeds overnight. Longest normal gap between feeds: 4–6 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-stretch 4mo (night-stretch)
+  pill: Overnight (muted), cues: false
+  title: Overnight: 5h since the last feed
+  body: By around three months, many babies sleep six to eight hours at a stretch, and most wake on their own when they're ready to feed.
+  note: Typical at this age: 0–2 feeds overnight. Longest normal sleep stretch: 6–8 hours. Measured feed to feed, a night usually runs an hour or two past that.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap 4mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 17h since Lulu's last feed
+  body: That's a longer gap between feeds than most babies this age go overnight. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: 0–2 feeds overnight. Longest normal sleep stretch: 6–8 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-stretch 8mo (night-stretch)
+  pill: Overnight (muted), cues: false
+  title: Overnight: 5h since the last feed
+  body: Most babies this age go the night without a feed. Breast milk or formula usually stays the main source of nutrition at this age, with solids alongside.
+  note: Typical at this age: 0–1 feeds overnight. Longest normal sleep stretch: 8–11 hours. Measured feed to feed, a night usually runs an hour or two past that.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap 8mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 17h since Lulu's last feed
+  body: That's a longer gap between feeds than most babies this age go overnight. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: 0–1 feeds overnight. Longest normal sleep stretch: 8–11 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-stretch 14mo (night-stretch)
+  pill: Overnight (muted), cues: false
+  title: Overnight: 5h since the last feed
+  body: Most children this age go the night without a feed. Milk and meals during the day usually cover the day's nutrition.
+  note: Typical at this age: usually no feeds overnight. Longest normal sleep stretch: 10–12 hours. Measured feed to feed, a night usually runs an hour or two past that.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap 14mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 17h since Lulu's last feed
+  body: That's a longer gap between feeds than most babies this age go overnight. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: usually no feeds overnight. Longest normal sleep stretch: 10–12 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap unattributed 2mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 15h since Lulu's last feed
+  body: The last feed on record is from before the evening, so this gap covers more than the night. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: 1–3 feeds overnight. Longest normal gap between feeds: 4–6 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap unattributed 4mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 15h since Lulu's last feed
+  body: The last feed on record is from before the evening, so this gap covers more than the night. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: 0–2 feeds overnight. Longest normal sleep stretch: 6–8 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap unattributed 8mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 15h since Lulu's last feed
+  body: The last feed on record is from before the evening, so this gap covers more than the night. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: 0–1 feeds overnight. Longest normal sleep stretch: 8–11 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+night-long-gap unattributed 14mo (night-long-gap)
+  pill: Consider a feed (solid), cues: false
+  title: It's been 15h since Lulu's last feed
+  body: The last feed on record is from before the evening, so this gap covers more than the night. Feeds are on demand — offering one whenever Lulu stirs is always fine.
+  note: Typical at this age: usually no feeds overnight. Longest normal sleep stretch: 10–12 hours.
+  note: If your pediatrician asked you to wake Lulu for feeds, keep following that.
+
+morning 0mo (first-feed-of-day)
+  pill: First feed of the day (muted), cues: true
+  title: 3h 15m between Lulu's last feed and this morning
+  body: A good moment for the first feed of the day. Newborns usually land 8–12 feeds across 24 hours, so there's room to catch up. If long stretches become the pattern this month, it's worth a mention at your next visit.
+  note: Typical at this age: 2–3 feeds overnight. Longest normal gap between feeds: about 4 hours.
+
+morning 2mo (first-feed-of-day)
+  pill: First feed of the day (muted), cues: true
+  title: 7h between Lulu's last feed and this morning
+  body: Babies this age often take a bigger feed after the overnight gap. Offer the first one whenever Lulu stirs.
+  note: Typical at this age: 1–3 feeds overnight. Longest normal gap between feeds: 4–6 hours.
+
+morning 4mo (first-feed-of-day)
+  pill: First feed of the day (muted), cues: true
+  title: 11h between Lulu's last feed and this morning
+  body: Offer the first feed whenever they stir. The overnight gap usually evens out across the day.
+  note: Typical at this age: 0–2 feeds overnight. Longest normal sleep stretch: 6–8 hours. Measured feed to feed, a night usually runs an hour or two past that.
+
+morning 8mo (first-feed-of-day)
+  pill: First feed of the day (muted), cues: true
+  title: 12h between Lulu's last feed and this morning
+  body: Good morning. Milk or formula first; solids come alongside. After the overnight gap, the morning feed is usually the biggest one.
+  note: Typical at this age: 0–1 feeds overnight. Longest normal sleep stretch: 8–11 hours. Measured feed to feed, a night usually runs an hour or two past that.
+
+morning 14mo (first-feed-of-day)
+  pill: First feed of the day (muted), cues: true
+  title: 12h 30m between Lulu's last feed and this morning
+  body: Good morning. Milk or breakfast whenever they're ready. After the overnight gap, the first feed is usually the biggest one.
+  note: Typical at this age: usually no feeds overnight. Longest normal sleep stretch: 10–12 hours. Measured feed to feed, a night usually runs an hour or two past that."
+`;

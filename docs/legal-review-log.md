@@ -2226,3 +2226,129 @@ mismatch with the feature name; it is internal-only (never user-visible) and
 renaming it would require a live migration plus redeploys of `weekly-insights`
 and `generate-speech-class` for no user-facing benefit. Code comments at each
 call site record the reason.
+
+## 2026-09-04 — Feed Coach night-awareness: overnight feeding-frequency claims
+
+**Trigger:** a parent reported the Feed Coach card showing "It's been 5h 41m
+since Lulu's last feed — Consider a feed" at 06:32, and saying so all night.
+The card compared elapsed time against a flat age threshold with no concept of
+night. The fix (PR #222, branch `claude/night-feed-recommendations-ycy52v`)
+adds night-aware states, and with them a batch of new in-product clinical
+numbers about *overnight* feeding that did not previously exist anywhere in
+the product.
+
+**Why this is logged.** Feeding guidance is not in CLAUDE.md's enumerated
+log-required list (Privacy / Terms / FAQ / consent / retention / deletion /
+subprocessor / geo-block), and the pre-existing `feedCoach.ts` carries no
+entry. It is logged anyway on the founder's decision, following the precedent
+set by the 2026-06-19 sleep-guidance entry: in-product clinical numbers get a
+verbatim-cited evidence base. The FTC § 5 exposure here is a card that tells a
+parent a long overnight gap is normal — going quiet is an implicit claim, and
+an implicit claim is still a claim.
+
+**Claims now rendered in product** (`src/lib/feedCoach.ts`,
+`feedGuidanceForAge`). Per corrected-age bracket: typical night feeds, longest
+normal night stretch, and a `maxNormalNightStretchHours` ceiling above which
+the card re-escalates rather than reassuring.
+
+| Bracket | Typical night feeds | Longest normal stretch | Ceiling |
+|---|---|---|---|
+| newborn (<1 mo) | 2–3 | about 4 hours | 4h |
+| 1–3 mo | 1–3 | 4–6 hours | 6h |
+| 3–6 mo | 0–2 | 6–8 hours | 8h |
+| 6–12 mo | 0–1 | 8–11 hours | 11h |
+| 12 mo+ | usually none | 10–12 hours | 12h |
+
+Plus `OVERNIGHT_WAKE_THRESHOLD_HOURS = 4` (the overnight wake-to-feed nudge)
+and a preemie rule: `wakeToFeedOvernight` stays on for `is_premature` children
+through 3 months **corrected**, not 1.
+
+**Evidence base (cited verbatim alongside each clinical number):**
+
+- **Newborn 8–12 feeds/24h and the wake-a-newborn-past-~4-hours rule** —
+  *Technical Report: Breastfeeding and the Use of Human Milk*, Meek JY,
+  Noble L, Pediatrics 2022;150(1):e2022057989
+  (https://doi.org/10.1542/peds.2022-057989), with the accompanying
+  *Policy Statement*, Pediatrics 2022;150(1):e2022057988
+  (https://doi.org/10.1542/peds.2022-057988). **Attribution note:** the
+  feed-frequency and 4-hour figures sit in the Technical Report and the
+  AAP consumer guidance at healthychildren.org ("How Often and How Much
+  Should Your Baby Eat?"), **not** in the Policy Statement, whose scope is
+  the exclusive-breastfeeding recommendation. Cite the Technical Report.
+- **Exit criterion for the wake-to-feed rule** — birth-weight regain (AAP
+  expects by ~10–14 days) plus adequate ongoing gain plus pediatrician
+  sign-off. This is the criterion AAP actually states; the product
+  approximates it with corrected age because the app cannot know weight
+  status. The approximation is disclosed in-product only indirectly, via
+  the standing hedge below. **Recorded as a known gap** — see Outstanding.
+- **Frequent feeding in jaundiced newborns (a population that will sleep
+  through and should not)** — *Clinical Practice Guideline Revision:
+  Management of Hyperbilirubinemia in the Newborn Infant 35 or More Weeks
+  of Gestation*, Kemper AR et al., Pediatrics 2022;150(3):e2022058859
+  (https://doi.org/10.1542/peds.2022-058859).
+- **Absence of an infant sleep-duration recommendation under 4 months** —
+  *Recommended Amount of Sleep for Pediatric Populations: A Consensus
+  Statement of the American Academy of Sleep Medicine*, Paruthi S et al.,
+  J Clin Sleep Med 2016;12(6):785-786
+  (https://doi.org/10.5664/jcsm.5866). AASM declined to recommend for
+  under-4-months because normal variation is too wide. This is why the
+  1–3 mo copy is the softest of the five brackets.
+
+All four references were verified against PubMed on 2026-09-04 (authors,
+journal, volume/issue, DOI). See Outstanding for what that verification does
+and does not cover.
+
+**Disclaimer posture:** no new in-product disclaimer. The existing "General
+guidance — not medical advice" footer on the card is retained unconditionally
+and is covered by `TermsPage.tsx` § 4 ("Service Is Not Medical Advice").
+Three copy rules were adopted as hard constraints and are enforced by unit
+test, not convention:
+
+1. **No wellness assertion about an individual child.** Population facts only
+   ("long night stretches are normal at this age"), never "{Name} is doing
+   great" or "that's right in range for this age". The deceptive-practice
+   risk of a silent card is that silence reads as affirmative reassurance in
+   the rare case where a long stretch is illness, dehydration or undiagnosed
+   slow gain. An earlier draft of this change asserted the baby "slept" a
+   duration that was actually a feed gap, inferred with no sleep data at all;
+   it was caught in review and removed.
+2. **No nudge away from feeding.** Dropping the "Consider a feed" pill is
+   permitted; "there's no need to wake {Name}" is not — it is a directive
+   against feeding aimed at a parent whose child may be in the wake-to-feed
+   population. Also removed in review.
+3. **No "should sleep through by X" claim.** Night feeds past 6 months are
+   normal and are a clinician conversation.
+
+Every overnight state where the wake-to-feed rule has lapsed carries a
+standing deferral: "If your pediatrician asked you to wake {Name} for feeds,
+keep following that." This is the primary mitigation for the corrected-age
+approximation above.
+
+**Data flow:** none. Deterministic client-side logic, no Anthropic egress, no
+new tables, no migration, no new personal-data categories. Reads existing
+`children` columns (`date_of_birth`, `due_date`, `is_premature`,
+`night_start_time`) and existing feeding/sleep logs. No renewed VPC required;
+no direct-notice enumeration change.
+
+**Code refs:** `src/lib/feedCoach.ts`, `src/lib/nightWindow.ts` (new),
+`src/hooks/useNightWindow.ts` (new),
+`src/components/feeding/FeedCoachCard.tsx`.
+
+**Outstanding:**
+- **PubMed verification covered provenance, not content.** It confirms the
+  four papers exist, are correctly attributed, and that the DOIs resolve. It
+  does **not** confirm the specific hour figures above appear in those
+  documents — the bracket numbers were drafted from an advisor's paraphrase
+  from memory. Someone must diff each figure against the current AAP text at
+  healthychildren.org and the Technical Report. AAP periodically re-words the
+  newborn wake-to-feed line. **This check was explicitly deferred past merge**
+  on the founder's decision of 2026-09-04, having been raised and declined
+  twice — the numbers are live in production unverified against source, and
+  this line is the record of that. It is the first thing to close if a
+  regulator or a clinician ever questions the figures.
+- **The corrected-age proxy is a known approximation.** AAP's wake-to-feed
+  rule exits on weight regain, not a birthday. `children.birth_weight_oz` and
+  the `weight_logs` table already exist, so a criteria-based exit is
+  computable without a migration. Until then a 5-week-old who has not
+  regained birth weight sees the 1–3 mo framing, mitigated only by the
+  pediatrician hedge. Tracked as a product follow-up.
