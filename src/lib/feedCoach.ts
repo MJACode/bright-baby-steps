@@ -35,6 +35,12 @@ export interface FeedGuidance {
   typicalNightFeeds: string;
   /** Population fact: how long a normal night stretch runs at this age. */
   longestNormalNightStretch: string;
+  /**
+   * Upper end of `longestNormalNightStretch`, in hours. Past this the night
+   * states stand down — a gap the card's own facts line calls longer than
+   * normal must not be framed as a night stretch.
+   */
+  maxNormalNightStretchHours: number;
   /** Optional caveat shown only in the overnight states. */
   nightNote?: string;
 }
@@ -75,6 +81,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "2–3 feeds overnight",
       longestNormalNightStretch: "about 4 hours",
+      maxNormalNightStretchHours: 4,
       nightNote:
         "Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.",
     };
@@ -89,6 +96,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "1–3 feeds overnight",
       longestNormalNightStretch: "4–6 hours",
+      maxNormalNightStretchHours: 6,
       nightNote:
         "Many babies this age still take a feed or two overnight, and many don't — both are normal.",
     };
@@ -102,6 +110,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "0–2 feeds overnight",
       longestNormalNightStretch: "6–8 hours",
+      maxNormalNightStretchHours: 8,
     };
   }
   if (ageMonths < 12) {
@@ -114,6 +123,7 @@ export function feedGuidanceForAge(
       wakeToFeedOvernight,
       typicalNightFeeds: "0–1 feeds overnight",
       longestNormalNightStretch: "8–11 hours",
+      maxNormalNightStretchHours: 11,
     };
   }
   return {
@@ -125,6 +135,7 @@ export function feedGuidanceForAge(
     wakeToFeedOvernight,
     typicalNightFeeds: "usually no feeds overnight",
     longestNormalNightStretch: "10–12 hours",
+    maxNormalNightStretchHours: 12,
   };
 }
 
@@ -148,6 +159,9 @@ export type FeedCoachState =
   | { kind: "due"; guidance: FeedGuidance; hoursSince: number; overnight: boolean }
   // Night, past the wake-to-feed weeks — a long gap is the goal, not a deficit.
   | { kind: "night-stretch"; guidance: FeedGuidance; hoursSince: number }
+  // Night, but past the upper end of what's typical for the age — the gap gets
+  // stated plainly rather than celebrated, without any wake-the-baby imperative.
+  | { kind: "night-long-gap"; guidance: FeedGuidance; hoursSince: number }
   // Morning, nothing logged since the night ended.
   | {
       kind: "first-feed-of-day";
@@ -159,7 +173,7 @@ export type FeedCoachState =
 
 // A feed logged this far ahead of the night boundary still counts as the one
 // that led into the night — bedtime feeds land before the clock says "night".
-const EVENING_LEAD_IN_HOURS = 4;
+export const EVENING_LEAD_IN_HOURS = 4;
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -167,10 +181,15 @@ const HOUR_MS = 60 * 60 * 1000;
  * True while the day's first feed is still ahead: the night has ended, nothing
  * has been logged since it did, and the gap really is the overnight one.
  *
- * The stretch has to clear the age threshold (a 06:50 feed before a 07:00 wake
- * is not a night stretch) and the morning state stands down once the baby has
- * been up for longer than that same threshold — by then a feed genuinely is
- * due and saying so is the safe direction to be wrong in.
+ * The stretch is bounded at both ends: it has to clear the age threshold (a
+ * 06:50 feed before a 07:00 wake is not a night stretch) and stay inside the
+ * upper end of what's typical for the age, so a gap that started before
+ * yesterday's bedtime doesn't get greeted as a night's rest. The morning state
+ * also stands down once the baby has been up for longer than that same
+ * threshold — by then a feed genuinely is due and saying so is the safe
+ * direction to be wrong in. Every stand-down falls through to the daytime
+ * `due` state, which is the escalation the parent needs once the day is under
+ * way and the baby is awake.
  */
 function isFirstFeedOfDay(
   now: Date,
@@ -186,6 +205,7 @@ function isFirstFeedOfDay(
   }
   const stretchHours = (morningEnd - lastFeedAt.getTime()) / HOUR_MS;
   if (stretchHours < guidance.thresholdHours) return false;
+  if (stretchHours > guidance.maxNormalNightStretchHours) return false;
   return (now.getTime() - morningEnd) / HOUR_MS < guidance.thresholdHours;
 }
 
@@ -217,7 +237,9 @@ export function deriveFeedCoachState(opts: {
         ? { kind: "due", guidance, hoursSince, overnight: true }
         : { kind: "watch", guidance, hoursSince, overnight: true };
     }
-    return { kind: "night-stretch", guidance, hoursSince };
+    return hoursSince > guidance.maxNormalNightStretchHours
+      ? { kind: "night-long-gap", guidance, hoursSince }
+      : { kind: "night-stretch", guidance, hoursSince };
   }
 
   // Keyed on nothing having been logged since the night ended, not on the
@@ -236,42 +258,50 @@ export function deriveFeedCoachState(opts: {
   return { kind: "watch", guidance, hoursSince, overnight: false };
 }
 
+// Population facts only — nothing here may tell a parent what to do with this
+// particular baby overnight. The wake-to-feed rule exits on weight regain and
+// good gain, not on a birthday, so even a "no need to wake" aside can land on a
+// family whose pediatrician has asked for the opposite.
 const NIGHT_STRETCH_BODY: Record<FeedBracket, (name: string) => string> = {
   newborn: (n) =>
     `Newborns wake to feed around the clock. When ${n} stirs, roots, or brings hands to mouth, that's your cue.`,
-  "1-3mo": (n) =>
-    `Longer stretches start showing up around now. Most babies this age wake on their own when they're ready to feed, so there's no need to wake ${n}.`,
-  "3-6mo": (n) =>
-    `By around three months, many babies sleep six to eight hours at a stretch. ${n} will let you know when they're ready.`,
+  "1-3mo": () =>
+    `Longer stretches start showing up around now. Most babies this age wake on their own when they're ready to feed.`,
+  "3-6mo": () =>
+    `By around three months, many babies sleep six to eight hours at a stretch, and most wake on their own when they're ready to feed.`,
   "6-12mo": (n) =>
     `Most babies this age go the night without a feed. Breast milk or formula is still ${n}'s main nutrition — the daytime feeds carry it.`,
-  "12mo+": (n) =>
-    `Most children this age go the night without a feed. Milk and meals during the day cover what ${n} needs.`,
+  "12mo+": () =>
+    `Most children this age go the night without a feed. Milk and meals during the day usually cover the day's nutrition.`,
 };
 
+// `stretch` is the gap between the last logged feed and the end of the night —
+// a feed gap, not a sleep duration. We have no evidence the baby slept through
+// it (there may be no sleep logs at all, and a bedtime feed lands hours before
+// sleep onset), so no title here may claim sleep.
 const MORNING_COPY: Record<
   FeedBracket,
   (name: string, stretch: string) => { title: string; body: string }
 > = {
   newborn: (n, s) => ({
-    title: `${n} went ${s} overnight`,
+    title: `${s} between ${n}'s last feed and this morning`,
     body: `A good moment for the first feed of the day. Newborns usually land 8–12 feeds across 24 hours, so there's room to catch up. If long stretches become the pattern this month, it's worth a mention at your next visit.`,
   }),
   "1-3mo": (n, s) => ({
-    title: `${n} slept a ${s} stretch`,
-    body: `That's right in range for this age. Offer the first feed whenever ${n} stirs — babies often take a bigger morning feed after a long night.`,
+    title: `${s} between ${n}'s last feed and this morning`,
+    body: `Babies this age often take a bigger feed after the overnight gap. Offer the first one whenever ${n} stirs.`,
   }),
   "3-6mo": (n, s) => ({
-    title: `${n} slept ${s} — a full night stretch for this age`,
+    title: `${s} between ${n}'s last feed and this morning`,
     body: `Offer the first feed whenever they stir. The overnight gap usually evens out across the day.`,
   }),
   "6-12mo": (n, s) => ({
-    title: `Good morning — ${n} slept ${s}`,
-    body: `Milk or formula first; solids come alongside. After a long night, the morning feed is usually the biggest one.`,
+    title: `${s} between ${n}'s last feed and this morning`,
+    body: `Good morning. Milk or formula first; solids come alongside. After the overnight gap, the morning feed is usually the biggest one.`,
   }),
   "12mo+": (n, s) => ({
-    title: `Good morning — ${n} slept ${s}`,
-    body: `Milk or breakfast whenever they're ready. After a long night, the first feed is usually the biggest one.`,
+    title: `${s} between ${n}'s last feed and this morning`,
+    body: `Good morning. Milk or breakfast whenever they're ready. After the overnight gap, the first feed is usually the biggest one.`,
   }),
 };
 
@@ -307,6 +337,17 @@ export function feedCoachCopy(state: FeedCoachState, firstName: string): FeedCoa
         title: `Night stretch: ${stretch}`,
         body: NIGHT_STRETCH_BODY[g.bracket](firstName),
         notes: [g.nightNote ?? nightFactsLine(g), pediatricianHedge(firstName)],
+        showCues: false,
+      };
+    }
+
+    case "night-long-gap": {
+      const elapsed = formatHoursSince(state.hoursSince);
+      return {
+        pill: { label: "Consider a feed", tone: "solid" },
+        title: `It's been ${elapsed} since ${firstName}'s last feed`,
+        body: `That's longer than the stretch most babies this age go overnight. Feeds are on demand — offering one whenever ${firstName} stirs is always fine.`,
+        notes: [nightFactsLine(g), pediatricianHedge(firstName)],
         showCues: false,
       };
     }
@@ -360,7 +401,15 @@ export function feedCoachCopy(state: FeedCoachState, firstName: string): FeedCoa
             g.bracket === "newborn"
               ? `Newborns wake to feed around the clock. When ${firstName} stirs, roots, or brings hands to mouth, that's your cue.`
               : `Babies born early often feed around the clock for longer. When ${firstName} stirs, roots, or brings hands to mouth, that's your cue.`,
-          notes: g.nightNote ? [g.nightNote] : [],
+          // A preemie under the wake-to-feed rule reads their corrected-age
+          // bracket's note ("many do, and many don't"), which argues with the
+          // body above it. The newborn bracket's own note IS the wake-to-feed
+          // rule, so it reinforces the body and must survive — dropping it
+          // would take the 4-hour line off the one state that most needs it.
+          notes:
+            g.nightNote && (!g.wakeToFeedOvernight || g.bracket === "newborn")
+              ? [g.nightNote]
+              : [],
           showCues: false,
         };
       }

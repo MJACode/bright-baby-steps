@@ -106,6 +106,27 @@ function nightWindow(opts: {
   };
 }
 
+// [age in months, overnight feed gap] — each gap sits inside its bracket's own
+// normal range, so every entry lands in the first-feed-of-day state.
+const MORNING_CASES = [
+  [0, 3.5],
+  [2, 5],
+  [4, 5],
+  [8, 6],
+  [14, 6],
+] as const;
+
+const MORNING_END = new Date("2024-07-15T07:00:00Z");
+
+function morningState(ageMonths: number, gapHours: number) {
+  return deriveFeedCoachState({
+    ageMonths,
+    lastFeedAt: new Date(MORNING_END.getTime() - gapHours * 60 * 60 * 1000),
+    now: new Date("2024-07-15T07:30:00Z"),
+    night: nightWindow({ isNightNow: false }),
+  });
+}
+
 describe("feedGuidanceForAge — overnight fields", () => {
   it("puts newborns in the wake-to-feed bracket", () => {
     expect(feedGuidanceForAge(0).wakeToFeedOvernight).toBe(true);
@@ -119,6 +140,18 @@ describe("feedGuidanceForAge — overnight fields", () => {
 
   it("carries an overnight-interval note through the first three months", () => {
     expect(feedGuidanceForAge(2).note).toMatch(/overnight/i);
+  });
+
+  it("bounds every bracket at the top of its own stated night range", () => {
+    for (const [age, max] of [
+      [0, 4],
+      [2, 6],
+      [4, 8],
+      [8, 11],
+      [14, 12],
+    ] as const) {
+      expect(feedGuidanceForAge(age).maxNormalNightStretchHours).toBe(max);
+    }
   });
 
   it("gives every bracket night facts, including 12 months and up", () => {
@@ -189,6 +222,108 @@ describe("deriveFeedCoachState — overnight", () => {
       night: nightWindow({ isNightNow: true }),
     });
     expect(s.kind).toBe("due");
+  });
+
+  it("drops the contradicting night note on the wake-to-feed watch state", () => {
+    // The bracket note ("many do, and many don't") is written for babies past
+    // the wake-to-feed rule and reads as an argument with the body above it.
+    const s = deriveFeedCoachState({
+      ageMonths: 2,
+      lastFeedAt: new Date(NOW.getTime() - 2 * 60 * 60 * 1000),
+      now: NOW,
+      isPremature: true,
+      night: nightWindow({ isNightNow: true }),
+    });
+    expect(s.kind).toBe("watch");
+    expect(feedCoachCopy(s, "Lulu").notes).toEqual([]);
+  });
+
+  it("keeps the four-hour line on the newborn overnight watch state", () => {
+    // The newborn note is the wake-to-feed rule itself, not an argument with
+    // it — this is the state where a parent most needs to read it.
+    const s = deriveFeedCoachState({
+      ageMonths: 0,
+      lastFeedAt: new Date(NOW.getTime() - 2 * 60 * 60 * 1000),
+      now: NOW,
+      night: nightWindow({ isNightNow: true }),
+    });
+    expect(s.kind).toBe("watch");
+    expect(feedCoachCopy(s, "Lulu").notes).toEqual([
+      "Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.",
+    ]);
+  });
+});
+
+describe("deriveFeedCoachState — gaps past the normal night stretch", () => {
+  it("stops calling a 14-hour gap a night stretch", () => {
+    // 4-month-old, last logged feed 16:00 yesterday, checked at 06:32.
+    const s = deriveFeedCoachState({
+      ageMonths: 4,
+      lastFeedAt: new Date("2024-07-14T16:00:00Z"),
+      now: new Date("2024-07-15T06:32:00Z"),
+      night: nightWindow({ isNightNow: true }),
+    });
+    expect(s.kind).toBe("night-long-gap");
+  });
+
+  it("holds the night stretch right up to the top of the normal range", () => {
+    const now = new Date("2024-07-15T06:00:00Z");
+    const atMax = deriveFeedCoachState({
+      ageMonths: 4,
+      lastFeedAt: new Date(now.getTime() - 8 * 60 * 60 * 1000),
+      now,
+      night: nightWindow({ isNightNow: true }),
+    });
+    expect(atMax.kind).toBe("night-stretch");
+
+    const pastMax = deriveFeedCoachState({
+      ageMonths: 4,
+      lastFeedAt: new Date(now.getTime() - 8.5 * 60 * 60 * 1000),
+      now,
+      night: nightWindow({ isNightNow: true }),
+    });
+    expect(pastMax.kind).toBe("night-long-gap");
+  });
+
+  it("scales the upper bound with the age bracket", () => {
+    const now = new Date("2024-07-15T06:00:00Z");
+    const state = (ageMonths: number, gapHours: number) =>
+      deriveFeedCoachState({
+        ageMonths,
+        lastFeedAt: new Date(now.getTime() - gapHours * 60 * 60 * 1000),
+        now,
+        night: nightWindow({ isNightNow: true }),
+      }).kind;
+    expect(state(2, 7)).toBe("night-long-gap");
+    expect(state(2, 5)).toBe("night-stretch");
+    expect(state(8, 10)).toBe("night-stretch");
+    expect(state(8, 12)).toBe("night-long-gap");
+  });
+
+  it("does not greet a gap that started before yesterday's bedtime as a morning stretch", () => {
+    const s = deriveFeedCoachState({
+      ageMonths: 4,
+      lastFeedAt: new Date("2024-07-14T16:00:00Z"),
+      now: new Date("2024-07-15T07:30:00Z"),
+      night: nightWindow({ isNightNow: false }),
+    });
+    expect(s.kind).toBe("due");
+    const c = feedCoachCopy(s, "Lulu");
+    expect(c.title).toMatch(/since Lulu's last feed/);
+  });
+
+  it("states the long gap plainly, with no wake imperative and no alarm", () => {
+    const s = deriveFeedCoachState({
+      ageMonths: 4,
+      lastFeedAt: new Date("2024-07-14T16:00:00Z"),
+      now: new Date("2024-07-15T06:32:00Z"),
+      night: nightWindow({ isNightNow: true }),
+    });
+    const c = feedCoachCopy(s, "Lulu");
+    expect(c.title).toBe("It's been 14h 32m since Lulu's last feed");
+    expect(c.body).not.toMatch(/wake|urgent|worry|concern|right away|immediately/i);
+    expect(c.showCues).toBe(false);
+    expect(c.notes.some((n) => /pediatrician asked you to wake Lulu/.test(n))).toBe(true);
   });
 });
 
@@ -271,12 +406,54 @@ describe("feedCoachCopy", () => {
     night: nightWindow({ isNightNow: true }),
   });
 
+  // A directive tells this parent what to do with this baby overnight. The
+  // wake-to-feed rule exits on weight regain, not on a birthday, so the card
+  // can only ever state population facts — "no need to wake Lulu" lands wrong
+  // on the 5-week-old who hasn't regained birth weight yet.
+  const PER_BABY_DIRECTIVE =
+    /no need to wake|don'?t (need to )?wake|needn'?t wake|leave .{1,20} to sleep|will let you know|settle|not due/i;
+
   it("frames a night stretch with a muted pill and no imperative", () => {
     const c = feedCoachCopy(nightState, "Lulu");
     expect(c.pill.label).toBe("Night stretch");
     expect(c.pill.tone).toBe("muted");
     expect(c.title).not.toMatch(/since Lulu's last feed/);
-    expect(c.body).not.toMatch(/settle|not due/i);
+    expect(c.body).not.toMatch(PER_BABY_DIRECTIVE);
+  });
+
+  it("keeps every bracket's night copy to population facts, never a per-baby directive", () => {
+    // Gaps chosen to sit inside each bracket's normal night range.
+    for (const [age, gapHours] of [
+      [2, 5],
+      [4, 5],
+      [8, 9],
+      [14, 9],
+    ] as const) {
+      const now = new Date("2024-07-15T06:00:00Z");
+      const s = deriveFeedCoachState({
+        ageMonths: age,
+        lastFeedAt: new Date(now.getTime() - gapHours * 60 * 60 * 1000),
+        now,
+        night: nightWindow({ isNightNow: true }),
+      });
+      expect(s.kind).toBe("night-stretch");
+      const c = feedCoachCopy(s, "Lulu");
+      expect(c.title).not.toMatch(PER_BABY_DIRECTIVE);
+      expect(c.body).not.toMatch(PER_BABY_DIRECTIVE);
+      for (const n of c.notes) expect(n).not.toMatch(PER_BABY_DIRECTIVE);
+    }
+  });
+
+  it("never claims the baby slept — the overnight number is a feed gap", () => {
+    for (const [age, gapHours] of MORNING_CASES) {
+      const s = morningState(age, gapHours);
+      expect(s.kind).toBe("first-feed-of-day");
+      const c = feedCoachCopy(s, "Lulu");
+      expect(c.title).not.toMatch(/slept|sleep/i);
+      expect(c.body).not.toMatch(/slept|sleep/i);
+      expect(c.title).not.toMatch(PER_BABY_DIRECTIVE);
+      expect(c.body).not.toMatch(PER_BABY_DIRECTIVE);
+    }
   });
 
   it("carries the pediatrician hedge on every non-wake-to-feed night state", () => {
@@ -311,14 +488,8 @@ describe("feedCoachCopy", () => {
   });
 
   it("has morning copy for every bracket", () => {
-    for (const age of [0, 2, 4, 8, 14]) {
-      const s = deriveFeedCoachState({
-        ageMonths: age,
-        lastFeedAt: new Date("2024-07-15T01:00:00Z"),
-        now: new Date("2024-07-15T07:30:00Z"),
-        night: nightWindow({ isNightNow: false }),
-      });
-      const c = feedCoachCopy(s, "Lulu");
+    for (const [age, gapHours] of MORNING_CASES) {
+      const c = feedCoachCopy(morningState(age, gapHours), "Lulu");
       expect(c.pill.label).toBe("First feed of the day");
       expect(c.title).toBeTruthy();
       expect(c.body).toBeTruthy();
