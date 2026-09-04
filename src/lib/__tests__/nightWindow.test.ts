@@ -35,6 +35,15 @@ describe("resolveNightWindow", () => {
     expect(w.isNightNow).toBe(true);
   });
 
+  it("opens the night at the minute the family declared, with no lead-in", () => {
+    // A night_start_time the family typed is a declaration, not a guess — an
+    // 18:00 boundary means 19:30 is night, however early that reads.
+    const opts = { ageMonths: 4, familyNightStartMin: 18 * 60 } as const;
+    expect(resolveNightWindow({ now: at(17, 59), ...opts }).isNightNow).toBe(false);
+    expect(resolveNightWindow({ now: at(18, 0), ...opts }).isNightNow).toBe(true);
+    expect(resolveNightWindow({ now: at(19, 30), ...opts }).isNightNow).toBe(true);
+  });
+
   it("uses the saved plan bedtime when the family has set no boundary", () => {
     const w = resolveNightWindow({ now: at(6, 32), ageMonths: 4, bedtimeEarliest: "20:30" });
     expect(w.nightStartMin).toBe(20 * 60 + 30);
@@ -50,12 +59,24 @@ describe("resolveNightWindow", () => {
     expect(w.isNightNow).toBe(false);
   });
 
-  it("does not open the night on the clock alone during the bedtime hour", () => {
-    // 19:00–20:00 is cluster-feed time; silencing the daytime nudge there is the
-    // wrong direction to be wrong in.
+  it("holds the derived night off through the bedtime hour, and no longer", () => {
+    // 19:00 is the *earliest* plausible bedtime and prime cluster-feed time, so
+    // the clock alone waits it out — but only for that hour. Anything longer
+    // leaves the evening nudging a baby who is already down.
     expect(resolveNightWindow({ now: at(19, 30), ageMonths: 4 }).isNightNow).toBe(false);
-    expect(resolveNightWindow({ now: at(21, 0), ageMonths: 4 }).isNightNow).toBe(false);
-    expect(resolveNightWindow({ now: at(23, 30), ageMonths: 4 }).isNightNow).toBe(true);
+    expect(resolveNightWindow({ now: at(20, 0), ageMonths: 4 }).isNightNow).toBe(true);
+    expect(resolveNightWindow({ now: at(23, 0), ageMonths: 4 }).isNightNow).toBe(true);
+  });
+
+  it("uses the plan's latest bedtime as the lead-in when it lands sooner", () => {
+    const opts = { ageMonths: 4, bedtimeEarliest: "19:00", bedtimeLatest: "19:30" } as const;
+    expect(resolveNightWindow({ now: at(19, 15), ...opts }).isNightNow).toBe(false);
+    expect(resolveNightWindow({ now: at(19, 30), ...opts }).isNightNow).toBe(true);
+  });
+
+  it("caps the lead-in at an hour when the plan's bedtime range is wider", () => {
+    const opts = { ageMonths: 4, bedtimeEarliest: "19:00", bedtimeLatest: "21:00" } as const;
+    expect(resolveNightWindow({ now: at(20, 0), ...opts }).isNightNow).toBe(true);
   });
 
   it("opens the night immediately when a night sleep timer is running", () => {
@@ -74,13 +95,12 @@ describe("resolveNightWindow", () => {
     expect(w.nightSleepInProgress).toBe(false);
   });
 
-  it("keeps the lead-in inside the same night for a late bedtime", () => {
-    const w = resolveNightWindow({ now: at(1, 0), ageMonths: 4, familyNightStartMin: 22 * 60 });
-    expect(w.isNightNow).toBe(false);
-    expect(
-      resolveNightWindow({ now: at(2, 30), ageMonths: 4, familyNightStartMin: 22 * 60 })
-        .isNightNow,
-    ).toBe(true);
+  it("keeps a lead-in that crosses midnight inside the same night", () => {
+    const opts = { ageMonths: 4, bedtimeEarliest: "23:30" } as const;
+    expect(resolveNightWindow({ now: at(23, 45), ...opts }).isNightNow).toBe(false);
+    expect(resolveNightWindow({ now: at(0, 15), ...opts }).isNightNow).toBe(false);
+    expect(resolveNightWindow({ now: at(1, 0), ...opts }).isNightNow).toBe(true);
+    expect(resolveNightWindow({ now: at(7, 30), ...opts }).isNightNow).toBe(false);
   });
 
   it("ends the night at the last night sleep that ended this morning", () => {

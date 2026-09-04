@@ -37,6 +37,7 @@ export function useNightWindow(opts: {
 
   const familyNightStartMin = schedule.nightStartMin;
   const bedtimeEarliest = plan?.bedtime_earliest ?? null;
+  const bedtimeLatest = plan?.bedtime_latest ?? null;
   const wakeTime = plan?.wake_time ?? null;
   const logs = coach?.logs;
   const nowMs = now.getTime();
@@ -50,6 +51,7 @@ export function useNightWindow(opts: {
         ageMonths,
         familyNightStartMin,
         bedtimeEarliest,
+        bedtimeLatest,
         wakeTime,
         logs,
         activeSleepType,
@@ -57,6 +59,15 @@ export function useNightWindow(opts: {
     // `now` ticks once a minute in the consumer; keying on its timestamp keeps
     // the window fresh without re-deriving on every unrelated render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [bedtimeEarliest, wakeTime, familyNightStartMin, ageMonths, logs, activeSleepType, nowMs],
+    [
+      bedtimeEarliest,
+      bedtimeLatest,
+      wakeTime,
+      familyNightStartMin,
+      ageMonths,
+      logs,
+      activeSleepType,
+      nowMs,
+    ],
   );
 }

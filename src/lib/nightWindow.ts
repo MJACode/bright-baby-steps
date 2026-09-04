@@ -1,6 +1,5 @@
 import { addMinutes, startOfDay, subDays } from "date-fns";
 
-import { EVENING_LEAD_IN_HOURS } from "@/lib/feedCoach";
 import { parseHHmm } from "@/lib/sleepPlan";
 import {
   DAY_CUTOFF,
@@ -10,6 +9,7 @@ import {
   type SleepTodoLog,
 } from "@/lib/sleepTodo";
 import { getAgeBucket } from "@/lib/sleepTriage";
+import { parseClock } from "@/lib/trackingDay";
 
 // The night's end is resolved from the last night sleep that ended this
 // morning. Below this floor an ended night sleep is a night waking, not the
@@ -21,15 +21,36 @@ export const EARLIEST_MORNING_MIN = 4 * 60;
 // Same fallback buildSleepTodo uses when no plan wake time is saved.
 export const WAKE_TIME_FALLBACK = "07:00";
 
-// The clock alone must not open the night at the bedtime hour. Night start is
-// the *earliest* plausible bedtime (19:00 for most brackets), and 19:00–20:00
-// is prime cluster-feeding time — silencing the daytime nudge there is the
-// wrong direction to be wrong in. A running night sleep timer still opens the
-// night immediately; without one we wait out the same lead-in the feed side
-// uses to attribute a bedtime feed to the night.
-export const NIGHT_CLOCK_LEAD_IN_MIN = EVENING_LEAD_IN_HOURS * 60;
+// How long AFTER a *derived* night start the clock alone stays daytime. A
+// derived start is the earliest plausible bedtime (19:00 for most brackets, or
+// the plan's `bedtime_earliest`), and that hour is prime cluster-feeding time —
+// silencing the daytime nudge there is the wrong direction to be wrong in. One
+// hour covers the bedtime routine and nothing more; a longer delay swallows the
+// evening. A running night sleep timer opens the night with no delay at all,
+// and so does a family's own `night_start_time` (see `clockNightStartMin`).
+export const MAX_NIGHT_CLOCK_LEAD_IN_MIN = 60;
 
 const MINUTES_PER_DAY = 24 * 60;
+
+/**
+ * The clock minute the night opens when nothing else says the baby is down.
+ *
+ * A `night_start_time` the family typed is a declaration, not a guess, so it is
+ * honoured exactly. A derived start gets a lead-in: the plan's own latest
+ * bedtime when it lands within the hour, otherwise the full hour.
+ */
+function clockNightStartMin(
+  nightStartMin: number,
+  familyNightStartMin: number | null | undefined,
+  bedtimeLatestMin: number | null,
+): number {
+  if (familyNightStartMin != null) return nightStartMin;
+  const planned =
+    bedtimeLatestMin != null && bedtimeLatestMin > nightStartMin
+      ? bedtimeLatestMin - nightStartMin
+      : MAX_NIGHT_CLOCK_LEAD_IN_MIN;
+  return nightStartMin + Math.min(planned, MAX_NIGHT_CLOCK_LEAD_IN_MIN);
+}
 
 export interface NightWindow {
   /** Minutes since local midnight the night begins. */
@@ -62,6 +83,7 @@ export function resolveNightWindow(opts: {
   ageMonths: number;
   familyNightStartMin?: number | null;
   bedtimeEarliest?: string | null;
+  bedtimeLatest?: string | null;
   wakeTime?: string | null;
   logs?: SleepTodoLog[] | null;
   /** Sleep type of a running, non-stale timer, or null when nothing is running. */
@@ -99,11 +121,15 @@ export function resolveNightWindow(opts: {
   // family clock set to something we can't reconcile) — read it as day and
   // let the age-threshold coaching stand rather than trap the card in night.
   const coherent = morningEndMin < nightStartMin;
-  const leadInEndMin = nightStartMin + NIGHT_CLOCK_LEAD_IN_MIN;
+  const clockStartMin = clockNightStartMin(
+    nightStartMin,
+    opts.familyNightStartMin,
+    parseClock(opts.bedtimeLatest),
+  );
   const clockIsNight =
-    leadInEndMin >= MINUTES_PER_DAY
-      ? nowMin >= leadInEndMin - MINUTES_PER_DAY && nowMin < morningEndMin
-      : nowMin >= leadInEndMin || nowMin < morningEndMin;
+    clockStartMin >= MINUTES_PER_DAY
+      ? nowMin >= clockStartMin - MINUTES_PER_DAY && nowMin < morningEndMin
+      : nowMin >= clockStartMin || nowMin < morningEndMin;
 
   const isNightNow = coherent && clockIsNight;
 
