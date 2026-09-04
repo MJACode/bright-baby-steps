@@ -14,7 +14,10 @@
       "Bash(npm run lint:*)",
       "Bash(npm run typecheck:*)",
       "Bash(npm test:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "mcp__Mobbin__search_screens",
+      "mcp__Mobbin__search_flows",
+      "mcp__Mobbin__search_sections"
     ]
   },
   "statusLine": {
@@ -25,7 +28,10 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": ".claude/hooks/SessionStart.sh" }
+          {
+            "type": "command",
+            "command": ".claude/hooks/SessionStart.sh"
+          }
         ]
       }
     ],
@@ -33,14 +39,20 @@
       {
         "matcher": "Edit|Write|NotebookEdit",
         "hooks": [
-          { "type": "command", "command": ".claude/hooks/PostToolUse.sh" }
+          {
+            "type": "command",
+            "command": ".claude/hooks/PostToolUse.sh"
+          }
         ]
       }
     ],
     "PreCompact": [
       {
         "hooks": [
-          { "type": "command", "command": ".claude/hooks/PreCompact.sh" }
+          {
+            "type": "command",
+            "command": ".claude/hooks/PreCompact.sh"
+          }
         ]
       }
     ]
