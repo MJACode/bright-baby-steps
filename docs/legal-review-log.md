@@ -2340,8 +2340,12 @@ no direct-notice enumeration change.
   does **not** confirm the specific hour figures above appear in those
   documents — the bracket numbers were drafted from an advisor's paraphrase
   from memory. Someone must diff each figure against the current AAP text at
-  healthychildren.org and the Technical Report before this leaves draft. AAP
-  periodically re-words the newborn wake-to-feed line.
+  healthychildren.org and the Technical Report. AAP periodically re-words the
+  newborn wake-to-feed line. **This check was explicitly deferred past merge**
+  on the founder's decision of 2026-09-04, having been raised and declined
+  twice — the numbers are live in production unverified against source, and
+  this line is the record of that. It is the first thing to close if a
+  regulator or a clinician ever questions the figures.
 - **The corrected-age proxy is a known approximation.** AAP's wake-to-feed
   rule exits on weight regain, not a birthday. `children.birth_weight_oz` and
   the `weight_logs` table already exist, so a criteria-based exit is
