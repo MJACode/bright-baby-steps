@@ -9,6 +9,7 @@ type AnchorMode = "none" | "start" | "end";
 type UseSessionAnchorArgs = {
   open: boolean;
   defaultDurationMin: number;
+  seed?: { startAt: Date; durationMin: number };
 };
 
 /**
@@ -23,8 +24,12 @@ type UseSessionAnchorArgs = {
  *   end never moves into the future.
  * - `start` — they told us when it began, so the start is frozen and the end
  *   moves. A resulting future end is a real mistake and validation says so.
+ *
+ * `seed` prefills an existing session's times instead of guessing. That start
+ * is already the parent's, so it opens anchored on `start` — a duration chip
+ * moves the end rather than dragging the start backwards from now.
  */
-export function useSessionAnchor({ open, defaultDurationMin }: UseSessionAnchorArgs) {
+export function useSessionAnchor({ open, defaultDurationMin, seed }: UseSessionAnchorArgs) {
   const [startAt, setStartAtState] = useState(() => defaultStartAt(defaultDurationMin));
   const [durationMin, setDurationMinState] = useState(defaultDurationMin);
   const [anchor, setAnchor] = useState<AnchorMode>("none");
@@ -34,12 +39,12 @@ export function useSessionAnchor({ open, defaultDurationMin }: UseSessionAnchorA
   const wasOpen = useRef(open);
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setStartAtState(defaultStartAt(defaultDurationMin));
-      setDurationMinState(defaultDurationMin);
-      setAnchor("none");
+      setStartAtState(seed ? seed.startAt : defaultStartAt(defaultDurationMin));
+      setDurationMinState(seed ? seed.durationMin : defaultDurationMin);
+      setAnchor(seed ? "start" : "none");
     }
     wasOpen.current = open;
-  }, [open, defaultDurationMin]);
+  }, [open, defaultDurationMin, seed]);
 
   const endAt = deriveEnd(startAt, durationMin);
 

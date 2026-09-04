@@ -10,6 +10,21 @@ const startFeed = vi.fn(async () => ({ ...liveRow(), id: "my-row", logged_at: ST
 // Module-level so assertions see the same spy the component called — building
 // these inside useActiveFeed() hands every render a fresh vi.fn().
 const setActiveSide = vi.fn(async () => {});
+// Applies the correction to the row the way the server does, so the refetch the
+// component reads back afterwards isn't still describing the runaway session.
+const adjustFeed = vi.fn(
+  async (input: { rowId: string; startAt: Date; leftSeconds: number; rightSeconds: number }) => {
+    if (!activeRow || activeRow.id !== input.rowId) return;
+    activeRow = {
+      ...activeRow,
+      logged_at: input.startAt.toISOString(),
+      active_side: null,
+      side_started_at: null,
+      duration_seconds_left: input.leftSeconds,
+      duration_seconds_right: input.rightSeconds,
+    };
+  },
+);
 const cancelFeed = vi.fn(async () => {});
 const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
 
@@ -44,21 +59,34 @@ vi.mock("@/hooks/useActiveFeed", async (importOriginal) => {
       active: activeRow,
       start: { mutateAsync: startFeed },
       setSide: { mutateAsync: setActiveSide },
+      adjust: { mutateAsync: adjustFeed, isPending: false },
       cancel: { mutateAsync: cancelFeed },
     }),
   };
 });
 
-const liveRow = (): ActiveFeedRow =>
+const liveRow = (overrides: Partial<ActiveFeedRow> = {}): ActiveFeedRow =>
   ({
     id: "partner-row",
     feeding_type: "breast",
+    logged_at: new Date(Date.now() - 72 * 60 * 1000).toISOString(),
     side: "left",
     active_side: "left",
     side_started_at: new Date().toISOString(),
     duration_minutes_left: 0,
     duration_minutes_right: 0,
+    ...overrides,
   }) as unknown as ActiveFeedRow;
+
+// The overnight runaway from the bug report: Left 09:03 / Right 62:49, paused.
+const runawayRow = (overrides: Partial<ActiveFeedRow> = {}): ActiveFeedRow =>
+  liveRow({
+    active_side: null,
+    side_started_at: null,
+    duration_seconds_left: 543,
+    duration_seconds_right: 3769,
+    ...overrides,
+  });
 
 // Mirrors how FeedingLog drives the timer: it owns side/duration/loggedAt and
 // re-mounts the timer whenever the feed type changes (Breast → Bottle → Breast).
@@ -126,6 +154,11 @@ const openPastSheet = async () => {
   await waitFor(() => expect(sheetState()).toBe("open"));
 };
 
+const openAdjustSheet = async () => {
+  fireEvent.click(screen.getByText("Adjust times"));
+  await waitFor(() => expect(sheetState()).toBe("open"));
+};
+
 const applyPastFeed = async (minutesLabel: string) => {
   await openPastSheet();
   fireEvent.click(screen.getByRole("radio", { name: minutesLabel }));
@@ -148,6 +181,7 @@ beforeEach(() => {
   lastFeedRow = null;
   startFeed.mockClear();
   setActiveSide.mockClear();
+  adjustFeed.mockClear();
   cancelFeed.mockClear();
   toastSpy.mockClear();
 });
@@ -370,5 +404,233 @@ describe("NursingTimer last-side hint", () => {
     // Selected side carries the feeding accent; the others render as outlines.
     expect(screen.getByRole("button", { name: "right" })).toHaveClass("bg-feeding");
     expect(screen.getByRole("button", { name: "left" })).not.toHaveClass("bg-feeding");
+  });
+});
+
+describe("NursingTimer correcting a session that's still running", () => {
+  const nudge = () => screen.queryByText(/^Still nursing\?/);
+  const pausedNudge = () => screen.queryByText(/^Paused at /);
+
+  it("offers the adjustment in place of the past-feed entry while a session is bound", async () => {
+    const { rerender } = renderHarness();
+    expect(screen.getByText("Add past feed")).toBeInTheDocument();
+    expect(screen.queryByText("Adjust times")).not.toBeInTheDocument();
+
+    activeRow = runawayRow();
+    rerenderHarness(rerender);
+
+    await waitFor(() => expect(screen.getByText("Adjust times")).toBeInTheDocument());
+    expect(screen.queryByText("Add past feed")).not.toBeInTheDocument();
+  });
+
+  it("prefills the side the session is already on", async () => {
+    activeRow = runawayRow();
+    renderHarness();
+
+    await openAdjustSheet();
+
+    // Time on both accumulators, so the correction starts from "both" rather
+    // than the alternate-sides suggestion a fresh past feed would use.
+    expect(screen.getByRole("button", { name: "both" })).toHaveClass("bg-feeding");
+  });
+
+  it("writes the corrected per-side seconds against the session's own start", async () => {
+    activeRow = runawayRow();
+    const openedAgainst = activeRow.logged_at;
+    renderHarness();
+    await openAdjustSheet();
+
+    fireEvent.click(screen.getByRole("button", { name: "left" }));
+    fireEvent.click(screen.getByRole("radio", { name: "20m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+    expect(adjustFeed).toHaveBeenCalledTimes(1);
+    expect(adjustFeed).toHaveBeenCalledWith({
+      rowId: "partner-row",
+      startAt: new Date(openedAgainst),
+      leftSeconds: 20 * 60,
+      rightSeconds: 0,
+    });
+    expect(screen.getByTestId("duration")).toHaveTextContent("20");
+    expect(screen.getByTestId("side")).toHaveTextContent("left");
+  });
+
+  it("keeps the session bound so Save still finalizes it", async () => {
+    activeRow = runawayRow();
+    renderHarness();
+    await waitFor(() => expect(screen.getByTestId("bound")).toHaveTextContent("partner-row"));
+
+    await openAdjustSheet();
+    fireEvent.click(screen.getByRole("radio", { name: "30m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+
+    // Unbinding here would make Save insert a duplicate and leave the runaway
+    // session running forever.
+    expect(screen.getByTestId("bound")).toHaveTextContent("partner-row");
+    // The parent authored this start for this row, so the form must not
+    // re-stamp it on the next refetch.
+    expect(startAuthor()).toBe("parent");
+    expect(loggedAt()).toBe(activeRow!.logged_at);
+  });
+
+  it("keeps an untouched split intact when only the start is corrected", async () => {
+    activeRow = runawayRow();
+    renderHarness();
+    await openAdjustSheet();
+
+    // Straight to Save: the parent came here for the start time, not the split.
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+    // Re-splitting would turn a real 09:03 / 62:49 into 36:00 each way.
+    expect(adjustFeed).toHaveBeenCalledWith(
+      expect.objectContaining({ leftSeconds: 543, rightSeconds: 3769 }),
+    );
+  });
+
+  it("re-splits once the length itself changes", async () => {
+    activeRow = runawayRow();
+    renderHarness();
+    await openAdjustSheet();
+
+    fireEvent.click(screen.getByRole("radio", { name: "20m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+    expect(adjustFeed).toHaveBeenCalledWith(
+      expect.objectContaining({ leftSeconds: 600, rightSeconds: 600 }),
+    );
+  });
+
+  it("closes the sheet when the session is finished elsewhere with nothing replacing it", async () => {
+    activeRow = runawayRow();
+    const { rerender } = renderHarness();
+    await openAdjustSheet();
+
+    // A partner tapped Save (or Reset) on their device: the row is gone and
+    // nothing took its place. The times would otherwise land on a completed
+    // row, contradicting the duration the partner recorded.
+    activeRow = null;
+    rerenderHarness(rerender);
+
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+    expect(adjustFeed).not.toHaveBeenCalled();
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "That feed already finished" }),
+    );
+  });
+
+  it("closes the sheet when the session underneath it is replaced", async () => {
+    activeRow = runawayRow();
+    const { rerender } = renderHarness();
+    await openAdjustSheet();
+
+    activeRow = liveRow({ id: "someone-elses-row" });
+    rerenderHarness(rerender);
+
+    // The correction describes a session that no longer exists, so it must not
+    // land on the one that replaced it.
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+    expect(adjustFeed).not.toHaveBeenCalled();
+  });
+
+  it("refuses a start older than the window that keeps the session reachable", async () => {
+    activeRow = runawayRow({ logged_at: new Date(Date.now() - 13 * 60 * 60 * 1000).toISOString() });
+    renderHarness();
+    await openAdjustSheet();
+
+    fireEvent.click(screen.getByRole("radio", { name: "20m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+
+    // Writing it would drop the row out of the active set: the form unbinds,
+    // Save inserts a duplicate and the session runs forever.
+    await waitFor(() =>
+      expect(screen.getByText(/only be moved back 12 hours/)).toBeInTheDocument(),
+    );
+    expect(adjustFeed).not.toHaveBeenCalled();
+    expect(sheetState()).toBe("open");
+  });
+
+  it("still shows the corrected times if the row leaves the active set", async () => {
+    activeRow = runawayRow();
+    const { rerender } = renderHarness();
+    await openAdjustSheet();
+    fireEvent.click(screen.getByRole("radio", { name: "20m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+    await waitFor(() => expect(sheetState()).toBe("closed"));
+
+    activeRow = null;
+    rerenderHarness(rerender);
+
+    expect(screen.getAllByText("20:00").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("duration")).toHaveTextContent("20");
+  });
+
+  it("leaves the sheet open and says so when the update fails", async () => {
+    activeRow = runawayRow();
+    adjustFeed.mockRejectedValueOnce(new Error("Network request failed"));
+    renderHarness();
+    await openAdjustSheet();
+
+    fireEvent.click(screen.getByRole("radio", { name: "15m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+
+    // Next to the button they'll press again, and said exactly once.
+    await waitFor(() =>
+      expect(screen.getByText("Network request failed")).toBeInTheDocument(),
+    );
+    expect(sheetState()).toBe("open");
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it("says the timer stopped, since the correction pauses it", async () => {
+    activeRow = runawayRow({ active_side: "left", side_started_at: new Date().toISOString() });
+    renderHarness();
+    await openAdjustSheet();
+    fireEvent.click(screen.getByRole("radio", { name: "20m" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update times" }));
+
+    await waitFor(() =>
+      expect(toastSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Times updated",
+          description: expect.stringContaining("Timer paused"),
+        }),
+      ),
+    );
+  });
+
+  it("nudges once a running session passes an hour", async () => {
+    activeRow = runawayRow({ active_side: "left", side_started_at: new Date().toISOString() });
+    renderHarness();
+
+    await waitFor(() => expect(nudge()).toBeInTheDocument());
+    expect(nudge()).toHaveTextContent("Still nursing? It's been 1h 12m");
+    expect(nudge()).toHaveTextContent("adjust the times or save the feed");
+  });
+
+  it("does not ask a paused session whether it's still nursing", async () => {
+    activeRow = runawayRow();
+    renderHarness();
+
+    await waitFor(() => expect(pausedNudge()).toBeInTheDocument());
+    expect(pausedNudge()).toHaveTextContent("Paused at 1h 12m");
+    expect(nudge()).not.toBeInTheDocument();
+  });
+
+  it("stays quiet for a session still inside the hour", async () => {
+    activeRow = liveRow({
+      active_side: null,
+      side_started_at: null,
+      duration_seconds_left: 1800,
+      duration_seconds_right: 1799,
+    });
+    renderHarness();
+
+    await waitFor(() => expect(screen.getByText("Adjust times")).toBeInTheDocument());
+    expect(nudge()).not.toBeInTheDocument();
+    expect(pausedNudge()).not.toBeInTheDocument();
   });
 });
