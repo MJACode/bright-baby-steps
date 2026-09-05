@@ -17,7 +17,16 @@
       "Bash(npm run build:*)",
       "mcp__Mobbin__search_screens",
       "mcp__Mobbin__search_flows",
-      "mcp__Mobbin__search_sections"
+      "mcp__Mobbin__search_sections",
+      "mcp__Supabase__list_tables",
+      "mcp__Supabase__list_migrations",
+      "mcp__Supabase__list_edge_functions",
+      "mcp__Supabase__get_edge_function",
+      "mcp__Supabase__list_extensions",
+      "mcp__Supabase__get_advisors",
+      "mcp__Supabase__query_logs",
+      "mcp__Supabase__search_docs",
+      "mcp__Supabase__generate_typescript_types"
     ]
   },
   "statusLine": {

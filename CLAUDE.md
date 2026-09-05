@@ -84,7 +84,7 @@ All colors are defined as CSS HSL variables in `src/index.css` and exposed as Ta
 
 ## Design Pattern Research — Mobbin MCP
 
-Grace Flare is connected to **Mobbin** (claude.ai connector, org-level) — a library of real shipped app UI. Tools: `mcp__Mobbin__search_screens`, `mcp__Mobbin__search_flows`, `mcp__Mobbin__search_sections`. The `frontend` agent has these in its tool allowlist.
+Grace Flare is connected to **Mobbin** (claude.ai connector, org-level) — a library of real shipped app UI. Tools: `mcp__Mobbin__search_screens`, `mcp__Mobbin__search_flows`, `mcp__Mobbin__search_sections`. The `frontend` and `ux` agents both have these in their tool allowlists — `ux` to ground a pattern recommendation, `frontend` to build against it.
 
 **Standing rule: any new screen, flow, or interaction pattern starts with Mobbin references, before any JSX is written.** That covers new pages under `src/pages/**`, new multi-step flows (onboarding, invite/accept, consent, paywall, setup wizards), new interaction patterns the codebase doesn't already have (pickers, timelines, scrubbable charts, swipe actions, bottom-sheet composers), and redesigns of a surface the user has said isn't working.
 
@@ -92,7 +92,7 @@ Grace Flare is connected to **Mobbin** (claude.ai connector, org-level) — a li
 
 **Search discipline.** `platform: "ios"` for the app shell (we ship to iOS via Capacitor; users are one-handed on a phone); `"web"` only for genuinely web-first marketing/legal/settings pages. One screen or one journey per query, described concretely. Keep `limit` low (3–5 flows, 5–10 screens) — every result is an image and images are expensive in context. Read the images, not just the metadata. Cite each referenced screen as a markdown link to its `mobbin_url`.
 
-**If the `frontend` agent reports it has no `mcp__Mobbin__*` tools**, the grant hasn't loaded — agent definitions in `.claude/agents/` are read at session start, so a freshly-added tool needs a new session. Don't debug it mid-task: the parent Claude runs the Mobbin searches itself and passes the returned `mobbin_url` references and structural notes into the delegation prompt. Same outcome, no round-trip.
+**If the `frontend` or `ux` agent reports it has no `mcp__Mobbin__*` tools**, the grant hasn't loaded — agent definitions in `.claude/agents/` are read at session start, so a freshly-added tool needs a new session. Don't debug it mid-task: the parent Claude runs the Mobbin searches itself and passes the returned `mobbin_url` references and structural notes into the delegation prompt. Same outcome, no round-trip.
 
 **The hard boundary.** Mobbin decides *what the screen does and how it's arranged*. The Brand Guidelines above decide *how it looks* — always. Never carry a hex, type scale, radius, or component library across from a reference; translate the structure into our tokens, Nunito/Quicksand, `--radius: 1rem`, 48px touch targets, shadcn primitives already in `src/components/ui/**`, and our voice. Where a Mobbin pattern conflicts with an established Grace Flare convention, the convention wins — surface the conflict rather than silently diverging. If the connector is unavailable, say so in one line and proceed on judgement; never block work on it.
 
@@ -264,8 +264,10 @@ Three subagents in `.claude/agents/` carry the bulk of the implementation work. 
 | Agent | Domain | Lessons file |
 |---|---|---|
 | `frontend` | UI: `src/components/**`, `src/pages/**`, client-state hooks, Tailwind, brand tokens. Holds the **Mobbin** MCP tools — see "Design Pattern Research" above | `tasks/lessons-frontend.md` |
-| `backend` | Supabase: `supabase/migrations/**`, `supabase/functions/**`, RLS, edge functions, cron, Vault | `tasks/lessons-backend.md` |
-| `qa` | Read-only QA reviewer. Runs after every non-trivial frontend or backend change | `tasks/lessons-qa.md` |
+| `backend` | Supabase: `supabase/migrations/**`, `supabase/functions/**`, RLS, edge functions, cron, Vault. Holds the **Supabase** MCP tools (`mcp__Supabase__*`) | `tasks/lessons-backend.md` |
+| `qa` | Read-only QA reviewer. Runs after every non-trivial frontend or backend change. Holds read-only Supabase MCP tools to verify live schema against a diff | `tasks/lessons-qa.md` |
+
+**MCP tool grants are an allowlist.** A subagent only receives the tools named in its `tools:` frontmatter — naming a tool in the agent's prose does nothing. Two rules follow: (1) the server prefix must match the connector's actual name (`mcp__Supabase__*`, `mcp__Mobbin__*`) — a stale prefix silently yields "no such tool"; (2) `.claude/agents/*.md` is read at **session start**, so a newly-granted tool reaches the agent on the next session, not the current one. If an agent reports a tool is missing, check those two things before assuming the connector is down.
 
 **Routing rule.** Before writing code, decide which specialist owns the surface area and invoke that agent. The parent Claude orchestrates — it does not write the code itself on tasks that have a clear specialist. Mixed-surface tasks (e.g. a feature with both a migration and a UI) split into two delegations (backend first to land the schema, then frontend to wire the UI), with QA between the two if the backend change is risky.
 
