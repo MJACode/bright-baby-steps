@@ -106,6 +106,11 @@ interface DetectionLog {
   sleep_type: string;
 }
 
+/** Before a morning exists, an early one can't. */
+export const EARLY_WAKING_MIN_AGE_MONTHS = 3;
+/** A wake before this hour is the "early" in early waking. */
+export const EARLY_WAKING_HOUR = 6;
+
 export function detectTriageReasons(
   logs: DetectionLog[],
   ageMonths: number,
@@ -125,17 +130,31 @@ export function detectTriageReasons(
   ).length;
   if (shortNapCount >= 3) reasons.push("short_naps");
 
-  // early_waking — at least 2 nights ending before 6:00 local AND
-  // those nights are >= 50% of nights with an ended_at
-  const nightWithEnd = recent.filter(
-    (l) => l.sleep_type === "night" && l.ended_at,
-  );
-  if (nightWithEnd.length >= 2) {
-    const earlyCount = nightWithEnd.filter(
-      (l) => new Date(l.ended_at as string).getHours() < 6,
-    ).length;
-    if (earlyCount >= 2 && earlyCount / nightWithEnd.length >= 0.5) {
-      reasons.push("early_waking");
+  // early_waking — at least 2 mornings starting before 6:00 local AND those
+  // mornings are >= 50% of the nights with an ended_at.
+  //
+  // The morning is the LAST segment of a night, not any segment of it: a night
+  // broken by a 02:40 feed ends three rows, and counting each one would report
+  // fragmentation as early rising. Newborns are excluded — they don't have a
+  // morning yet, which is what the 0-3mo content below says in as many words.
+  if (ageMonths >= EARLY_WAKING_MIN_AGE_MONTHS) {
+    const finalWakePerNight = new Map<string, Date>();
+    for (const l of recent) {
+      if (l.sleep_type !== "night" || !l.ended_at) continue;
+      const start = new Date(l.started_at);
+      const end = new Date(l.ended_at);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
+      // Group by the evening the night began — same rule as night_wakings below.
+      const key = format(start.getHours() < 12 ? subDays(start, 1) : start, "yyyy-MM-dd");
+      const current = finalWakePerNight.get(key);
+      if (!current || end > current) finalWakePerNight.set(key, end);
+    }
+    const mornings = Array.from(finalWakePerNight.values());
+    if (mornings.length >= 2) {
+      const earlyCount = mornings.filter((w) => w.getHours() < EARLY_WAKING_HOUR).length;
+      if (earlyCount >= 2 && earlyCount / mornings.length >= 0.5) {
+        reasons.push("early_waking");
+      }
     }
   }
 

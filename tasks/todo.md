@@ -22,22 +22,22 @@ Branch: `claude/sleep-tab-patterns-coach-m7ymda`
 
 ## Tasks
 ### Data layer
-- [ ] `src/lib/sleepPatterns.ts` — pure, tested helpers: day segmentation across
+- [x] `src/lib/sleepPatterns.ts` — pure, tested helpers: day segmentation across
       the tracking-day boundary, longest stretch, nap count, wake windows,
       bedtime band (median + spread), nap-count week-over-week, coverage rule
-- [ ] Extract the wake-window gap calc out of `predictNextNap` rather than
+- [x] Extract the wake-window gap calc out of `predictNextNap` rather than
       rewriting it
-- [ ] `useSleepDay` / `useSleepWeek` query hooks (day-scoped; the existing
+- [x] `useSleepDay` / `useSleepWeek` query hooks (day-scoped; the existing
       50-row desc query is the wrong shape)
 
 ### Data-correctness fixes (found during research, verified in code)
-- [ ] Delete `ageMinSleepHours` + `sleepRecommendations` from SleepPage; read
+- [x] Delete `ageMinSleepHours` + `sleepRecommendations` from SleepPage; read
       `TOTAL_SLEEP_BY_BRACKET` / `NAPS_BY_BRACKET` from `sleepPlan.ts`.
       Today `"3mo": 14` vs canonical `12` false-flags a typical 4-month-old.
-- [ ] `detectTriageReasons` early_waking: gate to >=3 months and count only the
+- [x] `detectTriageReasons` early_waking: gate to >=3 months and count only the
       final night segment per tracking day (today a 2:40am feed-split reads as
       an early wake)
-- [ ] SleepPage `ageMonths` must use corrected age for preemies, matching
+- [x] SleepPage `ageMonths` must use corrected age for preemies, matching
       `useSleepCoach` (today the tab and the coach disagree)
 
 ### UI

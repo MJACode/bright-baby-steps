@@ -24,9 +24,10 @@ import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 import { SleepTodoCard } from "@/components/sleep/SleepTodoCard";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
-import { detectTriageReasons } from "@/lib/sleepTriage";
+import { detectTriageReasons, getAgeBucket } from "@/lib/sleepTriage";
+import { BUCKET_LABEL, NAPS_BY_BRACKET, TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
-import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { sleepAgeMonths, useSleepCoach } from "@/hooks/useSleepCoach";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
@@ -42,15 +43,6 @@ import { trackingDayKey, trackingWindowStart } from "@/lib/trackingDay";
 import type { Tables } from "@/integrations/supabase/types";
 
 type SleepLogRow = Tables<"sleep_logs">;
-
-// Age-appropriate minimum total sleep hours per day
-const ageMinSleepHours: Record<string, number> = {
-  newborn: 14,
-  "3mo": 14,
-  "6mo": 12,
-  "9mo": 12,
-  "12mo+": 11,
-};
 
 type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
 
@@ -93,7 +85,7 @@ function SleepInsights({
     // signal that could matter can't be toggled into silence. (Sleep-advisor
     // review, 2026-06-19.)
     const avgDailyHours = totalMin / daysWithData / 60;
-    const minHours = ageMinSleepHours[getAgeGroup(ageMonths)] ?? 11;
+    const minHours = TOTAL_SLEEP_BY_BRACKET[getAgeBucket(ageMonths)].low;
     if (avgDailyHours < minHours) {
       if (!calmMode) {
         result.push({
@@ -146,20 +138,20 @@ function SleepInsights({
   );
 }
 
-const sleepRecommendations: Record<string, { total: string; naps: string }> = {
-  newborn: { total: "14–17 hrs", naps: "4–5 naps/day" },
-  "3mo": { total: "14–16 hrs", naps: "3–4 naps/day" },
-  "6mo": { total: "12–15 hrs", naps: "2–3 naps/day" },
-  "9mo": { total: "12–15 hrs", naps: "2 naps/day" },
-  "12mo+": { total: "11–14 hrs", naps: "1–2 naps/day" },
-};
-
-function getAgeGroup(ageMonths: number): string {
-  if (ageMonths < 3) return "newborn";
-  if (ageMonths < 6) return "3mo";
-  if (ageMonths < 9) return "6mo";
-  if (ageMonths < 12) return "9mo";
-  return "12mo+";
+// The sourced tables in sleepPlan.ts are the only age bands in the app — the
+// plan dialog, the to-do list and this popover all read the same numbers.
+function sleepGuide(ageMonths: number) {
+  const bucket = getAgeBucket(ageMonths);
+  const total = TOTAL_SLEEP_BY_BRACKET[bucket];
+  const naps = NAPS_BY_BRACKET[bucket];
+  return {
+    label: BUCKET_LABEL[bucket],
+    total: `${total.low}–${total.high} hrs`,
+    naps:
+      naps.typical === 0
+        ? naps.note ?? "Most have dropped the nap"
+        : `${naps.typical} ${naps.typical === 1 ? "nap" : "naps"}/day`,
+  };
 }
 
 export default function SleepPage() {
@@ -371,10 +363,11 @@ export default function SleepPage() {
     );
   }
 
-  const ageMonths = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24 * 30.44));
+  // Corrected for prematurity, matching useSleepCoach — the plan, the triage
+  // rules and the coach have to band the same baby.
+  const ageMonths = sleepAgeMonths(activeChild);
   const ageDays = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24));
-  const ageGroup = getAgeGroup(ageMonths);
-  const rec = sleepRecommendations[ageGroup];
+  const guide = sleepGuide(ageMonths);
 
   // Calm, non-clinical reassurance tying more night wakings to normal
   // development. Shown when a developmental leap is underway (stormy/sunny) or a
@@ -418,11 +411,11 @@ export default function SleepPage() {
             <PopoverContent side="bottom" align="start" className="w-80 p-4 space-y-4">
               <div>
                 <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
-                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep guide ({ageGroup})
+                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep guide ({guide.label})
                 </p>
                 <div className="space-y-1 text-xs">
-                  <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{rec.total}</span></p>
-                  <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{rec.naps}</span></p>
+                  <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{guide.total}</span></p>
+                  <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{guide.naps}</span></p>
                 </div>
               </div>
               <div>
