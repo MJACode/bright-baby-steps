@@ -14,6 +14,7 @@ import { DeepLinkHandler } from "./components/DeepLinkHandler";
 import { WatchBridge } from "./integrations/watch/WatchBridge";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SleepPage from "./pages/dashboard/SleepPage";
+import SleepHistoryPage from "./pages/dashboard/SleepHistoryPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
 
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/dashboard" element={<DashboardLayout />}>
                 <Route index element={<Dashboard />} />
                 <Route path="sleep" element={<SleepPage />} />
+                <Route path="sleep/history" element={<SleepHistoryPage />} />
                 <Route path="diapers" element={<DiapersPage />} />
                 <Route path="feeding" element={<FeedingPage />} />
                 <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />

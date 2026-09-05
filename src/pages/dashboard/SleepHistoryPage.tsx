@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { ChevronLeft, CloudMoon, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
+import { CloudMoon, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -160,12 +159,6 @@ export default function SleepHistoryPage() {
   return (
     <div className="space-y-5">
       <div>
-        <Link
-          to="/dashboard/sleep"
-          className="inline-flex items-center gap-1 min-h-[48px] text-sm font-semibold text-sleep"
-        >
-          <ChevronLeft aria-hidden className="w-4 h-4" /> Sleep
-        </Link>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
           <Moon className="w-7 h-7 text-sleep" /> Sleep history
         </h1>

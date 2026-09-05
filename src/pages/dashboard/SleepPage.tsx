@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -32,7 +32,11 @@ import { TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
-import { trackingWindowStart, trackingDayKey } from "@/lib/trackingDay";
+import {
+  trackingDayKey,
+  trackingWindowStart,
+  type TrackingSchedule,
+} from "@/lib/trackingDay";
 
 const RECENT_DAYS = 3;
 const WINDOW_DAYS = 14;
@@ -49,23 +53,25 @@ function SleepNotes({
   logs,
   ageMonths,
   nightWakingReassurance,
+  schedule,
 }: {
   logs: { started_at: string; duration_minutes: number | null }[];
   ageMonths: number;
   nightWakingReassurance: string | null;
+  schedule: TrackingSchedule;
 }) {
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
 
   const shortfallNote = useMemo(() => {
     if (!calmMode) return null;
-    const sevenAgo = trackingWindowStart(7);
+    const sevenAgo = trackingWindowStart(7, schedule);
     const recentLogs = logs.filter((l) => new Date(l.started_at) >= sevenAgo);
     if (recentLogs.length === 0) return null;
 
     const byDay = new Map<string, number>();
     recentLogs.forEach((l) => {
-      const key = trackingDayKey(l.started_at);
+      const key = trackingDayKey(l.started_at, schedule);
       if (!key) return;
       byDay.set(key, (byDay.get(key) ?? 0) + (l.duration_minutes || 0));
     });
@@ -76,7 +82,7 @@ function SleepNotes({
 
     if (avgDailyHours >= minHours * 0.7) return null;
     return "Even in calm mode, a gentle heads-up: your baby's logged sleep has been well below the typical range this week. If that matches what you're seeing, it's worth mentioning at your next pediatrician visit.";
-  }, [logs, ageMonths, calmMode]);
+  }, [logs, ageMonths, calmMode, schedule]);
 
   if (!shortfallNote && !nightWakingReassurance) return null;
 
@@ -108,8 +114,8 @@ export default function SleepPage() {
   const [savingTimer, setSavingTimer] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
 
-  const window = useSleepWindow(activeChild ?? null, WINDOW_DAYS);
-  const logs = window.logs;
+  const sleepWindow = useSleepWindow(activeChild ?? null, WINDOW_DAYS);
+  const logs = sleepWindow.logs;
 
   // sleep_logs carries an exclusion constraint (no_overlapping_sleep) — surface
   // the clash before the insert so the parent sees which session is in the way.
@@ -153,15 +159,10 @@ export default function SleepPage() {
         throw error;
       }
     },
+    // No onError toast: the only caller is PastSessionSheet, which renders the
+    // failure inline next to the Save button the parent will press again.
     onSuccess: () => {
       invalidateAfterLogWrite(queryClient);
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Unable to save sleep log",
-        description: error.message,
-        variant: "destructive",
-      });
     },
   });
 
@@ -226,9 +227,12 @@ export default function SleepPage() {
   const planMethod = savedPlan?.method ?? "gentle_foundations";
   const showFerberTimer =
     planMethod === "ferber" && !!activeSleepLog && activeSleepLog.sleep_type === "night";
-  const showChairCard = planMethod === "chair" && !!savedPlan && !!activeSleepLog;
+  // Unlike the Ferber check-in clock, the chair stage is something a parent
+  // advances between nights — gating it on a running session would remove the
+  // only way to move a stage.
+  const showChairCard = planMethod === "chair" && !!savedPlan;
 
-  const recentDays = [...window.days].reverse().filter((d) => d.blocks.length > 0).slice(0, RECENT_DAYS);
+  const recentDays = [...sleepWindow.days].reverse().filter((d) => d.blocks.length > 0).slice(0, RECENT_DAYS);
 
   return (
     <div className="space-y-6">
@@ -268,11 +272,11 @@ export default function SleepPage() {
       </Card>
 
       <TodayRhythmCard
-        days={window.days}
-        coverage={window.coverage}
-        schedule={window.schedule}
+        days={sleepWindow.days}
+        coverage={sleepWindow.coverage}
+        schedule={sleepWindow.schedule}
         ageMonths={ageMonths}
-        isLoading={window.isLoading}
+        isLoading={sleepWindow.isLoading}
       />
 
       <SleepTodoCard
@@ -282,11 +286,11 @@ export default function SleepPage() {
       />
 
       <SleepWeekCard
-        days={window.days}
+        days={sleepWindow.days}
         logs={logs}
-        coverage={window.coverage}
-        napTrend={window.napTrend}
-        schedule={window.schedule}
+        coverage={sleepWindow.coverage}
+        napTrend={sleepWindow.napTrend}
+        schedule={sleepWindow.schedule}
         ageMonths={ageMonths}
       />
 
@@ -294,6 +298,7 @@ export default function SleepPage() {
         logs={logs}
         ageMonths={ageMonths}
         nightWakingReassurance={nightWakingReassurance}
+        schedule={sleepWindow.schedule}
       />
 
       <SleepPlanReminderBanner
