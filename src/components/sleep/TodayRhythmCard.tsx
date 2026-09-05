@@ -19,6 +19,7 @@ import {
   clockOffsetInDay,
   describeRhythmDay,
   rhythmRowSegments,
+  trackingDayLengthMin,
   type RhythmSegmentKind,
 } from "@/lib/sleepRhythm";
 import type { SleepDayData } from "@/hooks/useSleepPatterns";
@@ -91,7 +92,7 @@ export function TodayRhythmCard({
   const selected = bandDays.find((d) => d.dayKey === selectedKey) ?? bandDays[bandDays.length - 1];
 
   const bedtimeRange = BEDTIME_RANGE_BY_BRACKET[getAgeBucket(ageMonths)];
-  const anchors = [bedtimeRange.earliest, bedtimeRange.latest]
+  const anchorOffsets = [bedtimeRange.earliest, bedtimeRange.latest]
     .filter((v): v is string => !!v)
     .map((v) => clockOffsetInDay(parseHHmm(v), schedule.dayStartMin));
 
@@ -158,6 +159,10 @@ export function TodayRhythmCard({
                 const parsed = parseISO(day.dayKey);
                 const short = Number.isNaN(parsed.getTime()) ? "" : format(parsed, "EEE");
                 const isSelected = day.dayKey === selected.dayKey;
+                // A DST day runs 23 or 25 hours, and block minutes are measured
+                // against that — a fixed 1440 denominator would push the last
+                // block of the day off the end of its own track.
+                const dayLength = trackingDayLengthMin(day.dayKey, schedule);
                 return (
                   <li key={day.dayKey}>
                     <button
@@ -184,23 +189,23 @@ export function TodayRhythmCard({
                         className="relative flex-1 h-6 rounded-md overflow-hidden"
                         style={{ background: NO_DATA_FILL }}
                       >
-                        {rhythmRowSegments(day.blocks).map((seg) =>
+                        {rhythmRowSegments(day.blocks, dayLength).map((seg) =>
                           seg.kind === "nodata" ? null : (
                             <span
                               key={`${seg.kind}-${seg.startMin}`}
                               className={cn("absolute inset-y-0", SEGMENT_CLASS[seg.kind])}
                               style={{
-                                left: `${(seg.startMin / MINUTES_PER_DAY) * 100}%`,
-                                width: `${((seg.endMin - seg.startMin) / MINUTES_PER_DAY) * 100}%`,
+                                left: `${(seg.startMin / dayLength) * 100}%`,
+                                width: `${((seg.endMin - seg.startMin) / dayLength) * 100}%`,
                               }}
                             />
                           ),
                         )}
-                        {anchors.map((offset) => (
+                        {anchorOffsets.map((offset) => (
                           <span
                             key={offset}
                             className="absolute inset-y-0 w-px bg-foreground/20"
-                            style={{ left: `${(offset / MINUTES_PER_DAY) * 100}%` }}
+                            style={{ left: `${(offset / dayLength) * 100}%` }}
                           />
                         ))}
                       </span>

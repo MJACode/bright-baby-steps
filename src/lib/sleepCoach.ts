@@ -38,7 +38,7 @@ export function predictNextNap(opts: {
     return h >= 20 || h < 6;
   };
 
-  const lastWake = completed.sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
+  const lastWake = [...completed].sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
   if (!lastWake) {
     const target = AGE_DEFAULTS_MIN(opts.ageMonths);
     const start = addMinutes(now, target - 30);

@@ -10,28 +10,43 @@
 // night when they simply didn't open the app, so anything outside the span we
 // actually have evidence for renders as "no data" and stays visually inert.
 
-import { addMinutes, format, parseISO, startOfDay } from "date-fns";
+import { addMinutes, differenceInMinutes, format, parseISO, startOfDay } from "date-fns";
 
 import {
   MINUTES_PER_DAY,
+  NAP_TREND_WINDOW_DAYS,
   NIGHT_CLAIM_MIN_QUALIFYING_DAYS,
   RHYTHM_MIN_LOGGED_DAYS,
   canMakeNightClaim,
   isNightSleep,
-  sleepDayStats,
+  nightlyLongestStretches,
+  trackingDayEndFromKey,
+  trackingDayStartFromKey,
   type NapCountTrend,
   type NightBedtime,
   type SleepBlock,
   type SleepCoverage,
   type SleepDayStats,
+  type SleepLogRow,
 } from "@/lib/sleepPatterns";
 import { formatDurationShort } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
+import { DEFAULT_TRACKING_SCHEDULE, type TrackingSchedule } from "@/lib/trackingDay";
 
-/** The shape both the band and the observations read — one tracking day. */
-export interface RhythmDay {
-  dayKey: string;
-  blocks: SleepBlock[];
+/**
+ * How many minutes a tracking day actually runs. A day that absorbs a DST
+ * fall-back runs 1500 and one that loses an hour runs 1380, and `SleepBlock`
+ * minutes are measured against that — a band drawn on a fixed 1440 would push
+ * the last block of the day off the end of its own track.
+ */
+export function trackingDayLengthMin(
+  dayKey: string,
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): number {
+  const start = trackingDayStartFromKey(dayKey, schedule);
+  const end = trackingDayEndFromKey(dayKey, schedule);
+  if (!start || !end) return MINUTES_PER_DAY;
+  return Math.max(1, differenceInMinutes(end, start));
 }
 
 // ---------------------------------------------------------------------------
@@ -54,13 +69,17 @@ export interface RhythmSegment {
  * Everything before the first log and after the last is "nodata" — we know a
  * baby was asleep when a sleep says so, and we know nothing at all otherwise.
  */
-export function rhythmRowSegments(blocks: SleepBlock[]): RhythmSegment[] {
+export function rhythmRowSegments(
+  blocks: SleepBlock[],
+  dayLengthMin: number = MINUTES_PER_DAY,
+): RhythmSegment[] {
+  const dayEnd = Math.max(1, dayLengthMin);
   const sorted = (blocks ?? [])
     .filter((b) => b.endMin > b.startMin)
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 
   if (sorted.length === 0) {
-    return [{ startMin: 0, endMin: MINUTES_PER_DAY, kind: "nodata" }];
+    return [{ startMin: 0, endMin: dayEnd, kind: "nodata" }];
   }
 
   const firstStart = sorted[0].startMin;
@@ -83,8 +102,8 @@ export function rhythmRowSegments(blocks: SleepBlock[]): RhythmSegment[] {
     }
   }
 
-  if (cursor < MINUTES_PER_DAY) {
-    segments.push({ startMin: cursor, endMin: MINUTES_PER_DAY, kind: "nodata" });
+  if (cursor < dayEnd) {
+    segments.push({ startMin: cursor, endMin: dayEnd, kind: "nodata" });
   }
   return segments;
 }
@@ -214,21 +233,9 @@ export interface WeekObservation {
 
 export const MAX_WEEK_OBSERVATIONS = 2;
 
-/** Longest unbroken run of NIGHT sleep in a day, through the same engine that
- *  produces every other stat on the page. */
-export function longestNightStretchMin(blocks: SleepBlock[]): number {
-  return sleepDayStats((blocks ?? []).filter((b) => isNightSleep(b.sleepType))).longestStretchMin;
-}
-
-function completedNightDays(days: RhythmDay[]): RhythmDay[] {
-  return days.filter(
-    (d) => d.blocks.some((b) => isNightSleep(b.sleepType)) && !d.blocks.some((b) => b.isOngoing),
-  );
-}
-
 export interface WeekObservationInput {
-  /** Oldest first. */
-  days: RhythmDay[];
+  logs: SleepLogRow[];
+  schedule: TrackingSchedule;
   coverage: SleepCoverage;
   napTrend: NapCountTrend;
   calmMode: boolean;
@@ -241,7 +248,8 @@ export interface WeekObservationInput {
  * them. Calm mode keeps the facts and drops the comparisons.
  */
 export function sleepWeekObservations({
-  days,
+  logs,
+  schedule,
   coverage,
   napTrend,
   calmMode,
@@ -249,21 +257,21 @@ export function sleepWeekObservations({
   const observations: WeekObservation[] = [];
 
   if (canMakeNightClaim(coverage)) {
-    const nights = completedNightDays(days);
-    const lastNight = nights[nights.length - 1];
-    const lastNightMin = lastNight ? longestNightStretchMin(lastNight.blocks) : 0;
-    if (lastNight && lastNightMin > 0) {
-      const recent = nights.slice(-7).map((d) => longestNightStretchMin(d.blocks)).filter((m) => m > 0);
-      const average = recent.length
-        ? Math.round(recent.reduce((sum, m) => sum + m, 0) / recent.length)
-        : 0;
-      const fact = `Longest stretch last night: ${formatDurationShort(lastNightMin)}.`;
+    // Whole-session runs, not per-day slices: an unbroken 19:40-06:20 night is
+    // one 640-minute stretch, which is the number the parent lived through.
+    const recent = nightlyLongestStretches(logs, schedule).slice(-NAP_TREND_WINDOW_DAYS);
+    const lastNight = recent[recent.length - 1];
+    if (lastNight && lastNight.minutes > 0) {
+      const average = Math.round(
+        recent.reduce((sum, n) => sum + n.minutes, 0) / recent.length,
+      );
+      const fact = `Longest stretch last night: ${formatDurationShort(lastNight.minutes)}.`;
       observations.push({
         id: "night-stretch",
         text:
           calmMode || recent.length < 2
             ? fact
-            : `${fact} Your ${recent.length}-day average is ${formatDurationShort(average)}.`,
+            : `${fact} Your ${recent.length}-night average is ${formatDurationShort(average)}.`,
       });
     }
   }
@@ -272,6 +280,7 @@ export function sleepWeekObservations({
   if (!calmMode) {
     const { current, previous } = napTrend;
     if (
+      previous &&
       current.perDay !== null &&
       previous.perDay !== null &&
       current.days >= RHYTHM_MIN_LOGGED_DAYS &&

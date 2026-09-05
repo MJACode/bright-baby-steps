@@ -66,7 +66,7 @@ export function SleepWeekCard({
   const span = Math.max(1, rangeMax - rangeMin);
   const positionOf = (minutes: number) => ((minutes - rangeMin) / span) * 100;
 
-  const observations = sleepWeekObservations({ days, coverage, napTrend, calmMode });
+  const observations = sleepWeekObservations({ logs, schedule, coverage, napTrend, calmMode });
   const sentence = bedtimeSentence(summary, calmMode);
   const showBedtime = !calmMode;
   const hasBedtimeData = canShowBedtimeColumns(summary);

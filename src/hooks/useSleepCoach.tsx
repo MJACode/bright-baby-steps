@@ -11,8 +11,6 @@ interface ChildLite {
   due_date?: string | null;
 }
 
-export type { SleepLogRow } from "@/lib/sleepPatterns";
-
 /**
  * The age every sleep surface bands on — corrected for prematurity, so the
  * plan, the triage rules and the coach all read the same baby.
@@ -34,7 +32,9 @@ export function useSleepCoach(activeChild: ChildLite | null) {
       if (!activeChild) return null;
       const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const { data } = await supabase.from("sleep_logs")
-        .select("started_at, ended_at, duration_minutes, sleep_type")
+        .select(
+          "started_at, ended_at, duration_minutes, sleep_type, source, paused_at, paused_accumulated_seconds",
+        )
         .eq("child_id", activeChild.id)
         .gte("started_at", since)
         .order("started_at", { ascending: false })

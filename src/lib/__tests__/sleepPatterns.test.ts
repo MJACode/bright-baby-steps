@@ -3,12 +3,17 @@ import { QueryClient } from "@tanstack/react-query";
 import { sleepDayQueryKey, sleepWindowQueryKey } from "@/hooks/useSleepPatterns";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import {
+  NAP_TIMING_MIN_LOGGED_DAYS,
+  NAP_TIMING_WINDOW_DAYS,
   NIGHT_CLAIM_MIN_QUALIFYING_DAYS,
   RHYTHM_MIN_LOGGED_DAYS,
   bedtimeBand,
   canMakeNightClaim,
+  canPersonalizeNapTiming,
   canShowRhythm,
   napCountTrend,
+  nightlyLongestStretches,
+  ongoingSleepElapsedSeconds,
   sampleConfidence,
   segmentSleepForDay,
   sleepCoverage,
@@ -29,12 +34,21 @@ function at(y: number, m: number, d: number, h: number, min = 0): Date {
   return new Date(y, m - 1, d, h, min, 0, 0);
 }
 
-function sleep(start: Date, end: Date | null, sleepType = "nap"): SleepLogRow {
+function sleep(
+  start: Date,
+  end: Date | null,
+  sleepType = "nap",
+  overrides: Partial<SleepLogRow> = {},
+): SleepLogRow {
   return {
     started_at: start.toISOString(),
     ended_at: end ? end.toISOString() : null,
     duration_minutes: end ? Math.round((end.getTime() - start.getTime()) / 60000) : null,
     sleep_type: sleepType,
+    source: "timer",
+    paused_at: null,
+    paused_accumulated_seconds: 0,
+    ...overrides,
   };
 }
 
@@ -88,7 +102,15 @@ describe("segmentSleepForDay", () => {
     const logs = [
       sleep(at(2026, 8, 20, 8, 0), at(2026, 8, 30, 8, 0), "night"), // 10 days long
       sleep(at(2026, 9, 1, 10, 0), at(2026, 9, 1, 9, 0)), // ends before it starts
-      { started_at: "not-a-date", ended_at: null, duration_minutes: null, sleep_type: "nap" },
+      {
+        started_at: "not-a-date",
+        ended_at: null,
+        duration_minutes: null,
+        sleep_type: "nap",
+        source: "timer",
+        paused_at: null,
+        paused_accumulated_seconds: 0,
+      },
     ];
 
     for (const block of segmentSleepForDay(logs, "2026-08-25", MIDNIGHT, at(2026, 9, 3, 9))) {
@@ -99,6 +121,46 @@ describe("segmentSleepForDay", () => {
     expect(segmentSleepForDay(logs, "2026-08-25", MIDNIGHT, at(2026, 9, 3, 9))).toEqual([
       { startMin: 0, endMin: 1440, sleepType: "night", isOngoing: false },
     ]);
+  });
+
+  it("drops an unended manual or voice row instead of painting it to now", () => {
+    // A parse that missed the end time is not a running session. Painting it
+    // open-ended would invent hours of sleep on every day it touches.
+    const manual = sleep(at(2026, 9, 1, 19, 0), null, "night", { source: "manual" });
+    const voice = sleep(at(2026, 9, 2, 13, 0), null, "nap", { source: "voice" });
+    const now = at(2026, 9, 2, 18, 0);
+
+    expect(segmentSleepForDay([manual, voice], "2026-09-01", MIDNIGHT, now)).toEqual([]);
+    expect(segmentSleepForDay([manual, voice], "2026-09-02", MIDNIGHT, now)).toEqual([]);
+
+    // The same row from the timer is a real in-progress session.
+    const timer = sleep(at(2026, 9, 2, 13, 0), null, "nap", { source: "timer" });
+    expect(segmentSleepForDay([timer], "2026-09-02", MIDNIGHT, now)).toEqual([
+      { startMin: 13 * 60, endMin: 18 * 60, sleepType: "nap", isOngoing: true },
+    ]);
+  });
+
+  it("subtracts paused time from an in-progress session, the way the timer face does", () => {
+    const now = at(2026, 9, 2, 11, 0);
+
+    // Two hours since the start, thirty minutes of it paused and resumed.
+    const resumed = sleep(at(2026, 9, 2, 9, 0), null, "nap", {
+      paused_accumulated_seconds: 30 * 60,
+    });
+    expect(segmentSleepForDay([resumed], "2026-09-02", MIDNIGHT, now)).toEqual([
+      { startMin: 9 * 60, endMin: 10 * 60 + 30, sleepType: "nap", isOngoing: true },
+    ]);
+
+    // Still paused, since 10:30 — the block stops where the timer stopped.
+    const paused = sleep(at(2026, 9, 2, 9, 0), null, "nap", {
+      paused_at: at(2026, 9, 2, 10, 30).toISOString(),
+    });
+    expect(segmentSleepForDay([paused], "2026-09-02", MIDNIGHT, now)).toEqual([
+      { startMin: 9 * 60, endMin: 10 * 60 + 30, sleepType: "nap", isOngoing: true },
+    ]);
+
+    expect(ongoingSleepElapsedSeconds(resumed, now)).toBe(90 * 60);
+    expect(ongoingSleepElapsedSeconds(paused, now)).toBe(90 * 60);
   });
 
   it("returns blocks in start order and skips days with nothing in them", () => {
@@ -175,6 +237,103 @@ describe("wakeWindowSamples", () => {
   });
 });
 
+describe("predictNextNap reads the shared wake-window engine", () => {
+  // The test's own model of "which part of the day did this wake happen in",
+  // deliberately independent of sleepCoach's private copy.
+  const daypart = (hour: number) =>
+    hour < 11 ? "morning" : hour < 14 ? "midday" : hour < 17 ? "afternoon" : "evening";
+
+  const medianOf = (values: number[]) =>
+    values.length === 0 ? null : [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+
+  const morningLogs = [
+    sleep(at(2026, 9, 2, 6, 0), at(2026, 9, 2, 7, 0), "night"),
+    sleep(at(2026, 9, 2, 9, 0), at(2026, 9, 2, 10, 0)),
+    sleep(at(2026, 9, 2, 12, 30), at(2026, 9, 2, 14, 0)),
+    sleep(at(2026, 9, 2, 19, 0), at(2026, 9, 3, 6, 0), "night"),
+  ];
+
+  const eveningLogs = [
+    sleep(at(2026, 9, 2, 9, 0), at(2026, 9, 2, 10, 0)),
+    sleep(at(2026, 9, 2, 13, 0), at(2026, 9, 2, 14, 0)),
+    sleep(at(2026, 9, 2, 16, 0), at(2026, 9, 2, 17, 0)),
+  ];
+
+  const cases: {
+    name: string;
+    sleeps: SleepLogRow[];
+    now: Date;
+    lastWake: Date | null;
+    expected: { start: Date; end: Date; confidence: string } | null;
+  }[] = [
+    {
+      name: "medians the same-daypart windows when it has them",
+      sleeps: morningLogs,
+      now: at(2026, 9, 3, 8, 0),
+      lastWake: at(2026, 9, 3, 6, 0),
+      expected: {
+        start: at(2026, 9, 3, 8, 15),
+        end: at(2026, 9, 3, 8, 45),
+        confidence: "medium",
+      },
+    },
+    {
+      name: "falls back to every window when the daypart has no samples",
+      sleeps: eveningLogs,
+      now: at(2026, 9, 2, 17, 30),
+      lastWake: at(2026, 9, 2, 17, 0),
+      expected: { start: at(2026, 9, 2, 19, 45), end: at(2026, 9, 2, 20, 15), confidence: "low" },
+    },
+    {
+      name: "uses age-typical timing when nothing has finished yet",
+      sleeps: [sleep(at(2026, 9, 3, 7, 30), null)],
+      now: at(2026, 9, 3, 8, 0),
+      lastWake: null,
+      expected: { start: at(2026, 9, 3, 10, 30), end: at(2026, 9, 3, 11, 0), confidence: "low" },
+    },
+    {
+      name: "suggests nothing when the window would open at night",
+      sleeps: [sleep(at(2026, 9, 2, 19, 0), at(2026, 9, 2, 21, 0), "night")],
+      now: at(2026, 9, 2, 21, 30),
+      lastWake: at(2026, 9, 2, 21, 0),
+      expected: null,
+    },
+  ];
+
+  for (const testCase of cases) {
+    it(testCase.name, () => {
+      const prediction = predictNextNap({
+        ageMonths: 6,
+        sleeps: testCase.sleeps,
+        now: testCase.now,
+      });
+
+      if (!testCase.expected) {
+        expect(prediction).toBeNull();
+        return;
+      }
+      expect(prediction?.windowStart).toEqual(testCase.expected.start);
+      expect(prediction?.windowEnd).toEqual(testCase.expected.end);
+      expect(prediction?.confidence).toBe(testCase.expected.confidence);
+
+      if (!testCase.lastWake) return;
+      // The offset the coach applies is a median of `wakeWindowSamples` output,
+      // not a second engine: reproduce it from that function alone.
+      const windows = wakeWindowSamples(testCase.sleeps);
+      const part = daypart(testCase.lastWake.getHours());
+      const sameDaypart = windows
+        .filter((w) => daypart(w.wokeAt.getHours()) === part)
+        .map((w) => w.minutes);
+      const offset =
+        medianOf(sameDaypart) ?? medianOf(windows.map((w) => w.minutes)) ?? 180;
+      const center = new Date(testCase.lastWake.getTime() + offset * 60_000);
+
+      expect(prediction?.windowStart).toEqual(new Date(center.getTime() - 15 * 60_000));
+      expect(prediction?.windowEnd).toEqual(new Date(center.getTime() + 15 * 60_000));
+    });
+  }
+});
+
 describe("wakeWindows", () => {
   it("separates the morning window from the pre-bed one instead of averaging them", () => {
     const logs = [
@@ -238,6 +397,76 @@ describe("bedtimeBand", () => {
       nights: 0,
     });
   });
+
+  it("pivots on the family's own day start, not a hardcoded noon", () => {
+    const logs = [
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 2, 20, 30), at(2026, 9, 3, 7, 0), "night"),
+      // A 09:00 night row under a 07:00 day start belongs to the day that just
+      // opened — encoding it past midnight would make it the band's "latest".
+      sleep(at(2026, 9, 3, 9, 0), at(2026, 9, 3, 11, 0), "night"),
+    ];
+    const band = bedtimeBand(logs, SEVEN_AM);
+
+    expect(band.nights).toBe(3);
+    expect(band.earliestMin).toBe(9 * 60);
+    expect(band.latestMin).toBe(20 * 60 + 30);
+  });
+
+  it("still keeps a past-midnight bedtime ordered under a 07:00 day start", () => {
+    const logs = [
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 3, 0, 30), at(2026, 9, 3, 7, 0), "night"),
+    ];
+    const band = bedtimeBand(logs, SEVEN_AM);
+    expect(band.earliestMin).toBe(20 * 60);
+    expect(band.latestMin).toBe(24 * 60 + 30);
+  });
+});
+
+describe("nightlyLongestStretches", () => {
+  it("measures the night, not the part of it that fell inside one tracking day", () => {
+    const night = sleep(at(2026, 9, 1, 19, 40), at(2026, 9, 2, 6, 20), "night");
+
+    expect(nightlyLongestStretches([night], MIDNIGHT)).toEqual([
+      {
+        key: "2026-09-01",
+        minutes: 640,
+        startedAt: at(2026, 9, 1, 19, 40),
+        endedAt: at(2026, 9, 2, 6, 20),
+      },
+    ]);
+
+    // The day-scoped stat is the thing that can't answer this question.
+    const evening = sleepDayStats(segmentSleepForDay([night], "2026-09-01", MIDNIGHT));
+    const morning = sleepDayStats(segmentSleepForDay([night], "2026-09-02", MIDNIGHT));
+    expect(evening.longestStretchMin).toBe(260);
+    expect(morning.longestStretchMin).toBe(380);
+  });
+
+  it("merges rows that touch and lets a real wake end the stretch", () => {
+    const logs = [
+      // One night logged as two back-to-back rows.
+      sleep(at(2026, 9, 3, 20, 0), at(2026, 9, 4, 0, 0), "night"),
+      sleep(at(2026, 9, 4, 0, 0), at(2026, 9, 4, 6, 0), "night"),
+      // A night genuinely broken by a 30-minute wake.
+      sleep(at(2026, 9, 4, 20, 0), at(2026, 9, 5, 1, 0), "night"),
+      sleep(at(2026, 9, 5, 1, 30), at(2026, 9, 5, 6, 30), "night"),
+    ];
+
+    expect(nightlyLongestStretches(logs, MIDNIGHT).map((n) => [n.key, n.minutes])).toEqual([
+      ["2026-09-03", 600],
+      ["2026-09-04", 300],
+    ]);
+  });
+
+  it("ignores naps and sessions that never ended", () => {
+    const logs = [
+      sleep(at(2026, 9, 3, 13, 0), at(2026, 9, 3, 15, 0)),
+      sleep(at(2026, 9, 3, 20, 0), null, "night"),
+    ];
+    expect(nightlyLongestStretches(logs, MIDNIGHT)).toEqual([]);
+  });
 });
 
 describe("napCountTrend", () => {
@@ -266,6 +495,26 @@ describe("napCountTrend", () => {
 
   it("reports no rate at all rather than zero when a window holds nothing", () => {
     expect(napCountTrend([], MIDNIGHT, at(2026, 9, 10, 12, 0)).current).toEqual({
+      naps: 0,
+      days: 0,
+      perDay: null,
+    });
+  });
+
+  it("reports no previous window when the caller fetched too short a span", () => {
+    const now = at(2026, 9, 10, 12, 0);
+    const logs = [
+      sleep(at(2026, 9, 9, 9, 0), at(2026, 9, 9, 10, 0)),
+      sleep(at(2026, 9, 10, 9, 0), at(2026, 9, 10, 10, 0)),
+    ];
+
+    // A 7-day fetch holds one window, not two. An empty "previous" here would
+    // read as naps having dropped to nothing.
+    const week = napCountTrend(logs, MIDNIGHT, now, 7);
+    expect(week.current).toEqual({ naps: 2, days: 2, perDay: 1 });
+    expect(week.previous).toBeNull();
+
+    expect(napCountTrend(logs, MIDNIGHT, now, 14).previous).toEqual({
       naps: 0,
       days: 0,
       perDay: null,
@@ -311,6 +560,57 @@ describe("sleepCoverage", () => {
     const logs = [sleep(at(2026, 8, 1, 20, 0), at(2026, 8, 2, 7, 0), "night")];
     expect(sleepCoverage(logs, MIDNIGHT, 7, now).loggedDays).toBe(0);
   });
+
+  it("counts nights, so fragmentation can't qualify a family a night early", () => {
+    // Four nights, each broken by a 02:40 wake. Keying the morning fragment by
+    // its own tracking day would score this as five and trip the night claim.
+    const logs: SleepLogRow[] = [];
+    for (const d of [5, 6, 7, 8]) {
+      logs.push(sleep(at(2026, 9, d, 20, 0), at(2026, 9, d + 1, 2, 40), "night"));
+      logs.push(sleep(at(2026, 9, d + 1, 3, 0), at(2026, 9, d + 1, 7, 0), "night"));
+    }
+    const coverage = sleepCoverage(logs, MIDNIGHT, 7, now);
+
+    expect(coverage.qualifyingDays).toBe(4);
+    expect(canMakeNightClaim(coverage)).toBe(false);
+
+    // A fifth real night is what unlocks it.
+    logs.push(sleep(at(2026, 9, 9, 20, 0), at(2026, 9, 10, 7, 0), "night"));
+    expect(canMakeNightClaim(sleepCoverage(logs, MIDNIGHT, 7, now))).toBe(true);
+  });
+});
+
+describe("canPersonalizeNapTiming", () => {
+  const now = at(2026, 9, 20, 12, 0);
+
+  it("turns on once ten of the fourteen days hold a log", () => {
+    const logs = Array.from({ length: NAP_TIMING_MIN_LOGGED_DAYS }, (_, i) =>
+      sleep(at(2026, 9, 7 + i, 13, 0), at(2026, 9, 7 + i, 14, 0)),
+    );
+    const coverage = sleepCoverage(logs, MIDNIGHT, NAP_TIMING_WINDOW_DAYS, now);
+
+    expect(coverage.loggedDays).toBe(NAP_TIMING_MIN_LOGGED_DAYS);
+    expect(coverage.totalDays).toBe(NAP_TIMING_WINDOW_DAYS);
+    expect(canPersonalizeNapTiming(coverage)).toBe(true);
+  });
+
+  it("stays off when nine days are logged, and when the window itself is short", () => {
+    const nine = Array.from({ length: NAP_TIMING_MIN_LOGGED_DAYS - 1 }, (_, i) =>
+      sleep(at(2026, 9, 8 + i, 13, 0), at(2026, 9, 8 + i, 14, 0)),
+    );
+    expect(canPersonalizeNapTiming(sleepCoverage(nine, MIDNIGHT, NAP_TIMING_WINDOW_DAYS, now))).toBe(
+      false,
+    );
+
+    // A 7-day window can never hold ten logged days, so asking it is asking for
+    // a permanent false — the window length has to be checked too.
+    const week = Array.from({ length: 7 }, (_, i) =>
+      sleep(at(2026, 9, 14 + i, 13, 0), at(2026, 9, 14 + i, 14, 0)),
+    );
+    const weekCoverage = sleepCoverage(week, MIDNIGHT, 7, now);
+    expect(weekCoverage.loggedDays).toBe(7);
+    expect(canPersonalizeNapTiming(weekCoverage)).toBe(false);
+  });
 });
 
 describe("detectTriageReasons — early_waking", () => {
@@ -337,6 +637,21 @@ describe("detectTriageReasons — early_waking", () => {
       logs.push(sleep(day(offset + 1, 20, 0), day(offset, 5, 15), "night"));
     }
     expect(detectTriageReasons(logs, 6)).toContain("early_waking");
+  });
+
+  it("stays quiet when a 04:45 wake resettles until 06:30", () => {
+    // Intended behaviour, not an accident: the baby got up at 06:30. A wake
+    // that resettles is a night waking, which the night_wakings rule owns.
+    const logs: SleepLogRow[] = [];
+    for (const offset of [1, 2, 3]) {
+      logs.push(sleep(day(offset + 1, 20, 0), day(offset, 4, 45), "night"));
+      logs.push(sleep(day(offset, 5, 0), day(offset, 6, 30), "night"));
+    }
+    expect(detectTriageReasons(logs, 8)).not.toContain("early_waking");
+
+    // Drop the resettle and 04:45 becomes the morning, which does flag.
+    const withoutResettle = logs.filter((_, i) => i % 2 === 0);
+    expect(detectTriageReasons(withoutResettle, 8)).toContain("early_waking");
   });
 
   it("stays quiet for a newborn, who has no morning to wake early from", () => {

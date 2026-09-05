@@ -135,8 +135,11 @@ export function detectTriageReasons(
   //
   // The morning is the LAST segment of a night, not any segment of it: a night
   // broken by a 02:40 feed ends three rows, and counting each one would report
-  // fragmentation as early rising. Newborns are excluded — they don't have a
-  // morning yet, which is what the 0-3mo content below says in as many words.
+  // fragmentation as early rising. This also means a 04:45 wake that resettles
+  // until 06:30 stays silent — the baby got up at 06:30, and the resettle is
+  // the whole difference between a night waking and an early riser. Newborns
+  // are excluded — they don't have a morning yet, which is what the 0-3mo
+  // content below says in as many words.
   if (ageMonths >= EARLY_WAKING_MIN_AGE_MONTHS) {
     const finalWakePerNight = new Map<string, Date>();
     for (const l of recent) {
@@ -144,7 +147,11 @@ export function detectTriageReasons(
       const start = new Date(l.started_at);
       const end = new Date(l.ended_at);
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) continue;
-      // Group by the evening the night began — same rule as night_wakings below.
+      // Group by the evening the night began, pivoting at noon over every night
+      // row. Deliberately NOT the night_wakings rule below, which keys only
+      // 22:00-04:59 and ignores everything in between: these two agree on the
+      // hours they share, so keep them separate rather than "syncing" one to
+      // the other.
       const key = format(start.getHours() < 12 ? subDays(start, 1) : start, "yyyy-MM-dd");
       const current = finalWakePerNight.get(key);
       if (!current || end > current) finalWakePerNight.set(key, end);

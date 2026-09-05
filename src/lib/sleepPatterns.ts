@@ -10,6 +10,7 @@
 // surface that states a number gates on `sleepCoverage` first.
 
 import {
+  addDays,
   addMinutes,
   differenceInMinutes,
   format,
@@ -25,24 +26,38 @@ import {
   type TrackingSchedule,
 } from "@/lib/trackingDay";
 
-/** The columns every sleep derivation reads. Canonical shape — `useSleepCoach`
- *  re-exports this rather than declaring its own. */
+/** The columns every sleep derivation reads. Canonical shape — every sleep
+ *  query selects all of them so the pure layer can tell a running timer from a
+ *  parse that simply missed an end time. */
 export interface SleepLogRow {
   started_at: string;
   ended_at: string | null;
   duration_minutes: number | null;
   sleep_type: string;
+  source: string | null;
+  paused_at: string | null;
+  paused_accumulated_seconds: number | null;
 }
 
 export const MINUTES_PER_DAY = 1440;
 
+/** The only source that produces a genuinely in-progress row. */
+export const TIMER_SOURCE = "timer";
+
 /** A rhythm band renders once there are this many logged days behind it. */
 export const RHYTHM_MIN_LOGGED_DAYS = 3;
 /** Bedtime band, longest stretch, total-sleep average — anything about the
- *  night needs this many days with a complete night sleep. */
+ *  night needs this many nights with a complete night sleep. */
 export const NIGHT_CLAIM_MIN_QUALIFYING_DAYS = 5;
-/** Nap timing / wake windows stay "age-typical" until two weeks are logged. */
-export const NAP_TIMING_MIN_DAYS = 14;
+/** Nap timing looks back over this many days... */
+export const NAP_TIMING_WINDOW_DAYS = 14;
+/** ...and needs this many of them logged. Ten rather than fourteen: a parent
+ *  who logs five days a week is still describing a real rhythm, and demanding
+ *  a perfect fortnight means they never see personalised nap timing at all. */
+export const NAP_TIMING_MIN_LOGGED_DAYS = 10;
+
+/** Each half of the nap-count comparison. */
+export const NAP_TREND_WINDOW_DAYS = 7;
 
 /** Wake windows outside this band are logging artefacts, not awake time —
  *  a 10-minute gap is one sleep logged twice, a 7-hour gap is a missed nap. */
@@ -54,7 +69,8 @@ export type Confidence = "high" | "medium" | "low";
 export const CONFIDENCE_HIGH_SAMPLES = 5;
 export const CONFIDENCE_MEDIUM_SAMPLES = 2;
 
-/** The one confidence ladder in the app. `predictNextNap` reads it too. */
+/** The one confidence ladder in the app. Calibrated for per-bucket nap counts,
+ *  which is the only quantity `predictNextNap` feeds it. */
 export function sampleConfidence(sampleCount: number): Confidence {
   if (sampleCount >= CONFIDENCE_HIGH_SAMPLES) return "high";
   if (sampleCount >= CONFIDENCE_MEDIUM_SAMPLES) return "medium";
@@ -77,6 +93,43 @@ function median(values: number[]): number | null {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
+/**
+ * Whether a row is a session that is still running.
+ *
+ * A NULL `ended_at` on its own means nothing: voice- and manual-sourced sleeps
+ * legitimately carry one when the parse missed an end time. Only a timer row
+ * is in progress — the same contract `useActiveSleep` scopes its query to.
+ */
+export function isOngoingSleep(log: Pick<SleepLogRow, "ended_at" | "source">): boolean {
+  return !log.ended_at && log.source === TIMER_SOURCE;
+}
+
+/**
+ * Elapsed seconds of an in-progress session: wall clock since the start, minus
+ * every paused span.
+ *
+ * `useActiveSleep.computeElapsedSeconds` delegates here, so the running timer
+ * face and the rhythm band can never disagree about the same session.
+ */
+export function ongoingSleepElapsedSeconds(
+  log: {
+    started_at: string;
+    paused_at: string | null;
+    paused_accumulated_seconds: number | null;
+  },
+  now: Date,
+): number {
+  const started = toDate(log.started_at);
+  if (!started) return 0;
+  let elapsed = Math.max(0, Math.floor((now.getTime() - started.getTime()) / 1000));
+  elapsed -= log.paused_accumulated_seconds ?? 0;
+  const pausedAt = toDate(log.paused_at);
+  if (pausedAt) {
+    elapsed -= Math.max(0, Math.floor((now.getTime() - pausedAt.getTime()) / 1000));
+  }
+  return Math.max(0, elapsed);
+}
+
 /** The instant a "yyyy-MM-dd" tracking day begins. */
 export function trackingDayStartFromKey(
   dayKey: string,
@@ -85,6 +138,22 @@ export function trackingDayStartFromKey(
   const parsed = parseISO(dayKey);
   if (Number.isNaN(parsed.getTime())) return null;
   return addMinutes(startOfDay(parsed), schedule.dayStartMin);
+}
+
+/**
+ * The instant a "yyyy-MM-dd" tracking day ends — the next day's start.
+ *
+ * Not `dayStart + 1440`: a day that absorbs a DST fall-back runs 25 real hours
+ * and one that loses an hour runs 23, so fixed arithmetic double-counts a
+ * sleep on one of those days and drops it from both on the other.
+ */
+export function trackingDayEndFromKey(
+  dayKey: string,
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): Date | null {
+  const parsed = parseISO(dayKey);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return addMinutes(startOfDay(addDays(parsed, 1)), schedule.dayStartMin);
 }
 
 /** The last `days` tracking-day keys, oldest first, ending with the one
@@ -103,15 +172,43 @@ export function trackingDayKeysBack(
 }
 
 // ---------------------------------------------------------------------------
+// Which night a sleep belongs to
+// ---------------------------------------------------------------------------
+
+const NOON_MIN = 12 * 60;
+
+/**
+ * The clock minute that separates one night from the next.
+ *
+ * A night split by a 02:40 feed has to group with the 20:00 stretch that opened
+ * it. The family's own day start does that whenever it lands in the morning; a
+ * midnight day start would cut the night in half, so that case falls back to a
+ * noon anchor.
+ */
+export function nightAnchorMin(schedule: TrackingSchedule): number {
+  return schedule.dayStartMin > 0 && schedule.dayStartMin <= NOON_MIN
+    ? schedule.dayStartMin
+    : NOON_MIN;
+}
+
+/** Which night a night-sleep row belongs to, keyed by the date it opened on. */
+export function nightKey(start: Date, schedule: TrackingSchedule): string | null {
+  return trackingDayKey(start, { dayStartMin: nightAnchorMin(schedule), nightStartMin: null });
+}
+
+// ---------------------------------------------------------------------------
 // Day segmentation
 // ---------------------------------------------------------------------------
 
 export interface SleepBlock {
-  /** Minutes from the tracking day's start, 0-1440. */
+  /** Minutes from the tracking day's start. 0-1440 on an ordinary day; a day
+   *  that absorbs a DST fall-back runs to 1500 and one that loses an hour to
+   *  1380, because the block describes real elapsed time. */
   startMin: number;
   endMin: number;
   sleepType: string;
-  /** This day's portion runs up to `now` and has no end yet. */
+  /** This day's portion runs up to the session's live elapsed time and has no
+   *  end yet. */
   isOngoing: boolean;
   logId?: string;
 }
@@ -121,8 +218,9 @@ export interface SleepBlock {
  *
  * A session that crosses the day boundary is split, so a 19:40-06:20 night
  * gives the evening its 19:40-24:00 portion and the morning its 00:00-06:20
- * one — each day renders what actually happened in it. An in-progress session
- * runs open-ended to `now`.
+ * one — each day renders what actually happened in it. An in-progress timer
+ * session runs open-ended to its live elapsed time, paused spans excluded, so
+ * the band and the timer face agree.
  */
 export function segmentSleepForDay(
   logs: (SleepLogRow & { id?: string })[],
@@ -132,15 +230,23 @@ export function segmentSleepForDay(
 ): SleepBlock[] {
   const dayStart = trackingDayStartFromKey(dayKey, schedule);
   if (!dayStart) return [];
-  const dayEnd = addMinutes(dayStart, MINUTES_PER_DAY);
+  const dayEnd = trackingDayEndFromKey(dayKey, schedule) ?? addMinutes(dayStart, MINUTES_PER_DAY);
+  const dayLengthMin = Math.max(1, differenceInMinutes(dayEnd, dayStart));
 
   const blocks: SleepBlock[] = [];
   for (const log of logs ?? []) {
     const start = toDate(log.started_at);
     if (!start) continue;
 
-    const ongoing = !log.ended_at;
-    const rawEnd = ongoing ? now : toDate(log.ended_at);
+    const ongoing = isOngoingSleep(log);
+    // An unended non-timer row is a parse that lost the end time, not a running
+    // session. Painting it to `now` would invent a phantom block on every day
+    // it touches and inflate that day's totals.
+    if (!log.ended_at && !ongoing) continue;
+
+    const rawEnd = ongoing
+      ? new Date(start.getTime() + ongoingSleepElapsedSeconds(log, now) * 1000)
+      : toDate(log.ended_at);
     if (!rawEnd) continue;
     const end = rawEnd < start ? start : rawEnd;
 
@@ -149,8 +255,8 @@ export function segmentSleepForDay(
     const clampedStart = start < dayStart ? dayStart : start;
     const clampedEnd = end > dayEnd ? dayEnd : end;
 
-    const startMin = clampMinutes(differenceInMinutes(clampedStart, dayStart));
-    const endMin = clampMinutes(differenceInMinutes(clampedEnd, dayStart));
+    const startMin = clampMinutes(differenceInMinutes(clampedStart, dayStart), dayLengthMin);
+    const endMin = clampMinutes(differenceInMinutes(clampedEnd, dayStart), dayLengthMin);
     const isOngoing = ongoing && end <= dayEnd;
 
     if (endMin <= startMin && !isOngoing) continue;
@@ -167,9 +273,9 @@ export function segmentSleepForDay(
   return blocks.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 }
 
-function clampMinutes(value: number): number {
+function clampMinutes(value: number, maxMin: number = MINUTES_PER_DAY): number {
   if (!Number.isFinite(value)) return 0;
-  return Math.min(MINUTES_PER_DAY, Math.max(0, Math.round(value)));
+  return Math.min(maxMin, Math.max(0, Math.round(value)));
 }
 
 export interface SleepDayStats {
@@ -177,8 +283,12 @@ export interface SleepDayStats {
   napMin: number;
   nightMin: number;
   napCount: number;
-  /** Longest unbroken run of sleep in the day. Blocks that touch (a session
-   *  logged as two rows back to back) count as one stretch. */
+  /** Longest unbroken run of sleep WITHIN this tracking day. Blocks that touch
+   *  (a session logged as two rows back to back) count as one stretch.
+   *
+   *  Clipped at the day boundary by construction, so an unbroken 19:40-06:20
+   *  night reads as 260 here and 380 on the next day — never 640. Any claim
+   *  about the night stretch must read `nightlyLongestStretches` instead. */
   longestStretchMin: number;
 }
 
@@ -292,7 +402,6 @@ export interface WakeWindowSummary {
   firstMedianMin: number | null;
   beforeBedMedianMin: number | null;
   dayCount: number;
-  confidence: Confidence;
 }
 
 /**
@@ -300,6 +409,11 @@ export interface WakeWindowSummary {
  * misleading — the first window after a night wake is legitimately the
  * shortest and the pre-bed one the longest, so averaging them describes no
  * moment the parent will actually live through.
+ *
+ * There is deliberately no confidence field: a fortnight yields 25-30 windows,
+ * which pins the 5/2 sample ladder to "high" for everybody and says nothing.
+ * Gate what you render on `canPersonalizeNapTiming(coverage)` like every other
+ * surface does.
  */
 export function wakeWindows(
   logs: WakeWindowInput[],
@@ -318,7 +432,6 @@ export function wakeWindows(
     firstMedianMin: median(firstOfDay.map((w) => w.minutes)),
     beforeBedMedianMin: median(beforeBed.map((w) => w.minutes)),
     dayCount: days.size,
-    confidence: sampleConfidence(windows.length),
   };
 }
 
@@ -326,28 +439,13 @@ export function wakeWindows(
 // Bedtime band
 // ---------------------------------------------------------------------------
 
-const NOON_MIN = 12 * 60;
-
-/**
- * Which night a night-sleep row belongs to.
- *
- * A night split by a 02:40 feed has to group with the 20:00 stretch that
- * opened it. The family's own day start does that whenever it lands in the
- * morning; a midnight day start would cut the night in half, so that case
- * falls back to a noon anchor.
- */
-function nightKey(start: Date, schedule: TrackingSchedule): string | null {
-  const anchorMin =
-    schedule.dayStartMin > 0 && schedule.dayStartMin <= NOON_MIN ? schedule.dayStartMin : NOON_MIN;
-  return trackingDayKey(start, { dayStartMin: anchorMin, nightStartMin: null });
-}
-
 export interface NightBedtime {
   /** The night this bedtime belongs to, keyed by the date it opened on. */
   key: string;
-  /** Minutes since midnight on the night's own date. A bedtime past midnight
-   *  reads above 1440 (00:30 is 1470) so the band stays ordered — render with
-   *  `formatHHmm`, which wraps. */
+  /** Minutes since midnight on the night's own date, encoded so the band stays
+   *  ordered around the night anchor: a bedtime before the anchor reads above
+   *  1440 (00:30 with a noon anchor is 1470) — render with `formatHHmm`, which
+   *  wraps. */
   minutes: number;
   startedAt: Date;
 }
@@ -363,6 +461,7 @@ export function nightlyBedtimes(
   logs: SleepLogRow[],
   schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
 ): NightBedtime[] {
+  const anchor = nightAnchorMin(schedule);
   const earliestStartPerNight = new Map<string, Date>();
   for (const log of logs ?? []) {
     if (!isNightSleep(log.sleep_type)) continue;
@@ -377,19 +476,68 @@ export function nightlyBedtimes(
   return Array.from(earliestStartPerNight.entries())
     .map(([key, startedAt]) => {
       const min = startedAt.getHours() * 60 + startedAt.getMinutes();
-      return {
-        key,
-        startedAt,
-        minutes: startedAt.getHours() < 12 ? min + MINUTES_PER_DAY : min,
-      };
+      // Pivot on the same anchor the grouping used. Pivoting on a hardcoded
+      // noon would push a 09:00 start past every evening bedtime under a 07:00
+      // day start and make it the band's "latest".
+      return { key, startedAt, minutes: min < anchor ? min + MINUTES_PER_DAY : min };
     })
     .sort((a, b) => a.key.localeCompare(b.key));
 }
 
+export interface NightStretch {
+  /** The night it belongs to, keyed the same way `nightlyBedtimes` keys. */
+  key: string;
+  minutes: number;
+  startedAt: Date;
+  endedAt: Date;
+}
+
+/**
+ * The longest unbroken run of night sleep in each night, oldest first.
+ *
+ * Measured on whole sessions, before any tracking-day split: an unbroken
+ * 19:40-06:20 night is 640 minutes, where `sleepDayStats` would report 260 on
+ * one day and 380 on the next and never the night itself. Rows that touch or
+ * overlap — one night logged as two rows — merge into a single run; a genuine
+ * wake in between ends the run, which is the point.
+ */
+export function nightlyLongestStretches(
+  logs: SleepLogRow[],
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): NightStretch[] {
+  const sessions = (logs ?? [])
+    .filter((l) => isNightSleep(l.sleep_type) && l.ended_at)
+    .map((l) => ({ start: toDate(l.started_at), end: toDate(l.ended_at) }))
+    .filter((s): s is { start: Date; end: Date } => !!s.start && !!s.end && s.end > s.start)
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const runs: { start: Date; end: Date }[] = [];
+  for (const session of sessions) {
+    const last = runs[runs.length - 1];
+    if (last && session.start.getTime() <= last.end.getTime()) {
+      if (session.end > last.end) last.end = session.end;
+      continue;
+    }
+    runs.push({ start: session.start, end: session.end });
+  }
+
+  const longestPerNight = new Map<string, NightStretch>();
+  for (const run of runs) {
+    const key = nightKey(run.start, schedule);
+    if (!key) continue;
+    const minutes = differenceInMinutes(run.end, run.start);
+    const current = longestPerNight.get(key);
+    if (!current || minutes > current.minutes) {
+      longestPerNight.set(key, { key, minutes, startedAt: run.start, endedAt: run.end });
+    }
+  }
+
+  return Array.from(longestPerNight.values()).sort((a, b) => a.key.localeCompare(b.key));
+}
+
 export interface BedtimeBand {
-  /** Minutes since midnight on the night's own date. A bedtime past midnight
-   *  reads above 1440 (00:30 is 1470) so the band stays ordered — render with
-   *  `formatHHmm`, which wraps. */
+  /** Minutes since midnight on the night's own date, encoded around the night
+   *  anchor — see `NightBedtime.minutes`. */
   medianMin: number | null;
   earliestMin: number | null;
   latestMin: number | null;
@@ -428,17 +576,27 @@ export interface NapCountWindow {
 
 export interface NapCountTrend {
   current: NapCountWindow;
-  previous: NapCountWindow;
+  /** Null when the fetched span can't hold two full comparison windows. A zero
+   *  window here would read as "naps dropped to nothing", which is a phantom. */
+  previous: NapCountWindow | null;
 }
 
+/**
+ * Naps per logged day this week against the week before.
+ *
+ * `days` must be the span the caller actually fetched. Assuming a fortnight
+ * when the caller asked for a week compares real naps against days that were
+ * never queried.
+ */
 export function napCountTrend(
   logs: SleepLogRow[],
   schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
   now: Date = new Date(),
+  days = NAP_TREND_WINDOW_DAYS * 2,
 ): NapCountTrend {
-  const keys = trackingDayKeysBack(14, schedule, now);
-  const previousKeys = new Set(keys.slice(0, 7));
-  const currentKeys = new Set(keys.slice(7));
+  const span = Math.max(0, Math.floor(days));
+  const keys = trackingDayKeysBack(span, schedule, now);
+  const windowLen = Math.min(NAP_TREND_WINDOW_DAYS, span);
 
   const tally = (window: Set<string>): NapCountWindow => {
     const loggedDays = new Set<string>();
@@ -449,11 +607,16 @@ export function napCountTrend(
       loggedDays.add(key);
       if (!isNightSleep(log.sleep_type)) naps += 1;
     }
-    const days = loggedDays.size;
-    return { naps, days, perDay: days === 0 ? null : naps / days };
+    const loggedCount = loggedDays.size;
+    return { naps, days: loggedCount, perDay: loggedCount === 0 ? null : naps / loggedCount };
   };
 
-  return { current: tally(currentKeys), previous: tally(previousKeys) };
+  const current = tally(new Set(keys.slice(span - windowLen)));
+  if (span < windowLen * 2) return { current, previous: null };
+  return {
+    current,
+    previous: tally(new Set(keys.slice(span - windowLen * 2, span - windowLen))),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -461,7 +624,10 @@ export function napCountTrend(
 // ---------------------------------------------------------------------------
 
 export interface SleepCoverage {
-  /** Days holding at least one night sleep with both a start and an end. */
+  /** Nights holding a night sleep with both a start and an end. Counted per
+   *  NIGHT, not per tracking day: a night broken into an evening row and a
+   *  03:00 row would otherwise qualify two days and let a night claim fire a
+   *  night early — the exact thing this gate exists to prevent. */
   qualifyingDays: number;
   /** Days holding any sleep log at all. */
   loggedDays: number;
@@ -480,10 +646,15 @@ export function sleepCoverage(
   const qualifying = new Set<string>();
 
   for (const log of logs ?? []) {
-    const key = trackingDayKey(log.started_at, schedule);
+    const start = toDate(log.started_at);
+    if (!start) continue;
+    const key = trackingDayKey(start, schedule);
     if (!key || !window.has(key)) continue;
     logged.add(key);
-    if (isNightSleep(log.sleep_type) && log.started_at && log.ended_at) qualifying.add(key);
+    if (isNightSleep(log.sleep_type) && log.ended_at) {
+      const night = nightKey(start, schedule);
+      if (night) qualifying.add(night);
+    }
   }
 
   return {
@@ -503,8 +674,17 @@ export function canMakeNightClaim(coverage: SleepCoverage): boolean {
   return coverage.qualifyingDays >= NIGHT_CLAIM_MIN_QUALIFYING_DAYS;
 }
 
-/** Below this, nap timing is age-typical guidance and has to be worded that
- *  way — the same line `predictNextNap` draws at low confidence. */
+/**
+ * Below this, nap timing is age-typical guidance and has to be worded that way.
+ *
+ * Both halves matter: the coverage has to have been measured over the full
+ * fortnight (a 7-day window can never reach ten logged days, so asking it is
+ * asking for a permanent false), and ten of those fourteen days have to hold
+ * a log.
+ */
 export function canPersonalizeNapTiming(coverage: SleepCoverage): boolean {
-  return coverage.loggedDays >= NAP_TIMING_MIN_DAYS;
+  return (
+    coverage.totalDays >= NAP_TIMING_WINDOW_DAYS &&
+    coverage.loggedDays >= NAP_TIMING_MIN_LOGGED_DAYS
+  );
 }
