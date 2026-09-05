@@ -11,17 +11,19 @@ import {
 import {
   BEDTIME_INSUFFICIENT_COPY,
   MAX_WEEK_OBSERVATIONS,
+  WAKE_INSUFFICIENT_COPY,
   ageTypicalSleepCaption,
-  bedtimeColumns,
   bedtimeSentence,
-  canShowBedtimeColumns,
+  canShowClockColumns,
   clockOffsetInDay,
   describeRhythmDay,
   formatClockMinutes,
+  nightClockColumns,
   rhythmRowSegments,
   sleepWeekObservations,
-  summarizeBedtimeColumns,
+  summarizeClockColumns,
   trackingDayLengthMin,
+  wakeSentence,
 } from "@/lib/sleepRhythm";
 import { SHORTFALL_ESCALATION_COPY } from "@/lib/sleepPlan";
 import type { TrackingSchedule } from "@/lib/trackingDay";
@@ -180,27 +182,27 @@ describe("bedtime columns", () => {
   ];
 
   it("leaves an unlogged night empty instead of plotting it at zero", () => {
-    const columns = bedtimeColumns(["2026-09-01", "2026-09-02", "2026-09-03"], bedtimes);
+    const columns = nightClockColumns(["2026-09-01", "2026-09-02", "2026-09-03"], bedtimes);
     expect(columns.map((c) => c.minutes)).toEqual([19 * 60 + 10, null, 20 * 60 + 5]);
   });
 
   it("summarises only the nights actually plotted", () => {
-    const summary = summarizeBedtimeColumns(
-      bedtimeColumns(["2026-09-01", "2026-09-02", "2026-09-03"], bedtimes),
+    const summary = summarizeClockColumns(
+      nightClockColumns(["2026-09-01", "2026-09-02", "2026-09-03"], bedtimes),
     );
     expect(summary).toEqual({ earliestMin: 19 * 60 + 10, latestMin: 20 * 60 + 5, nights: 2 });
-    expect(canShowBedtimeColumns(summary)).toBe(false);
+    expect(canShowClockColumns(summary)).toBe(false);
   });
 
   it("needs five nights before it says anything about the range", () => {
-    const fiveNights = summarizeBedtimeColumns(
+    const fiveNights = summarizeClockColumns(
       Array.from({ length: 5 }, (_, i) => ({
         dayKey: `2026-09-0${i + 1}`,
         label: "M",
         minutes: 19 * 60 + i * 10,
       })),
     );
-    expect(canShowBedtimeColumns(fiveNights)).toBe(true);
+    expect(canShowClockColumns(fiveNights)).toBe(true);
     expect(bedtimeSentence(fiveNights, false)).toBe(
       "Bedtime landed between 7:00 PM and 7:40 PM this week.",
     );
@@ -217,6 +219,54 @@ describe("bedtime columns", () => {
       "Log 5 nights and your bedtime range shows up here.",
     );
     expect(BEDTIME_INSUFFICIENT_COPY).not.toMatch(/%|\bof 7\b|\bof seven\b|\bmissed\b/i);
+  });
+});
+
+describe("wake-up columns", () => {
+  it("needs five nights before it says anything about the range", () => {
+    const fiveNights = summarizeClockColumns(
+      Array.from({ length: 5 }, (_, i) => ({
+        dayKey: `2026-09-0${i + 1}`,
+        label: "M",
+        // Encoded past midnight the way `nightlyWakeTimes` encodes a morning.
+        minutes: MINUTES_PER_DAY + 6 * 60 + i * 10,
+      })),
+    );
+    expect(canShowClockColumns(fiveNights)).toBe(true);
+    expect(wakeSentence(fiveNights, false)).toBe(
+      "Mornings started between 6:00 AM and 6:40 AM this week.",
+    );
+  });
+
+  it("states one time when every morning landed together", () => {
+    const flat = {
+      earliestMin: MINUTES_PER_DAY + 7 * 60,
+      latestMin: MINUTES_PER_DAY + 7 * 60,
+      nights: 6,
+    };
+    expect(wakeSentence(flat, false)).toBe("Mornings started at 7:00 AM this week.");
+  });
+
+  it("stays silent in calm mode, and below the threshold", () => {
+    const enough = {
+      earliestMin: MINUTES_PER_DAY + 6 * 60,
+      latestMin: MINUTES_PER_DAY + 7 * 60,
+      nights: 6,
+    };
+    expect(wakeSentence(enough, true)).toBeNull();
+    expect(
+      wakeSentence(
+        { earliestMin: MINUTES_PER_DAY + 6 * 60, latestMin: MINUTES_PER_DAY + 6 * 60, nights: 2 },
+        false,
+      ),
+    ).toBeNull();
+  });
+
+  it("never counts the nights that are missing", () => {
+    expect(WAKE_INSUFFICIENT_COPY).toBe(
+      "Log 5 nights and your wake-up range shows up here.",
+    );
+    expect(WAKE_INSUFFICIENT_COPY).not.toMatch(/%|\bof 7\b|\bof seven\b|\bmissed\b/i);
   });
 });
 
@@ -412,7 +462,11 @@ describe("sleepWeekObservations", () => {
 // change.
 function reachableCopy(): string[] {
   const week = [night(25, 4), night(26, 5), night(27, 6), night(28, 4), night(29, 5), night(30, 4)];
-  const out: string[] = [BEDTIME_INSUFFICIENT_COPY, SHORTFALL_ESCALATION_COPY];
+  const out: string[] = [
+    BEDTIME_INSUFFICIENT_COPY,
+    WAKE_INSUFFICIENT_COPY,
+    SHORTFALL_ESCALATION_COPY,
+  ];
 
   // One caption per age bracket the tab can band a child into.
   for (const ageMonths of [1, 4, 7, 10, 14, 20, 30, 42]) {
@@ -459,6 +513,18 @@ function reachableCopy(): string[] {
     }
   }
 
+  for (const calmMode of [true, false]) {
+    for (const summary of [
+      { earliestMin: MINUTES_PER_DAY + 6 * 60, latestMin: MINUTES_PER_DAY + 8 * 60, nights: 7 },
+      { earliestMin: MINUTES_PER_DAY + 7 * 60, latestMin: MINUTES_PER_DAY + 7 * 60, nights: 5 },
+      { earliestMin: MINUTES_PER_DAY + 5 * 60 + 20, latestMin: MINUTES_PER_DAY + 13 * 60, nights: 6 },
+      { earliestMin: null, latestMin: null, nights: 0 },
+    ]) {
+      const sentence = wakeSentence(summary, calmMode);
+      if (sentence) out.push(sentence);
+    }
+  }
+
   const statsCases: SleepDayStats[] = [
     { totalMin: 0, napMin: 0, nightMin: 0, napCount: 0 },
     { totalMin: 60, napMin: 60, nightMin: 0, napCount: 1 },
@@ -495,6 +561,7 @@ describe("sleep copy guardrails", () => {
     expect(copy).toContain(SHORTFALL_ESCALATION_COPY);
     expect(copy.some((c) => c.includes("naps a day this week"))).toBe(true);
     expect(copy.some((c) => c.includes("Bedtime landed"))).toBe(true);
+    expect(copy.some((c) => c.includes("Mornings started"))).toBe(true);
     expect(copy.some((c) => c.includes("no sleep logged"))).toBe(true);
   });
 

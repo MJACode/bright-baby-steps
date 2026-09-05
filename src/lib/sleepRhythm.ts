@@ -24,7 +24,6 @@ import {
   trackingDayEndFromKey,
   trackingDayStartFromKey,
   type NapCountTrend,
-  type NightBedtime,
   type SleepBlock,
   type SleepCoverage,
   type SleepDayStats,
@@ -194,10 +193,10 @@ export function ageTypicalSleepCaption(ageMonths: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// Bedtime columns
+// Night clock columns — where bedtime landed, and where the morning started
 // ---------------------------------------------------------------------------
 
-export interface BedtimeColumn {
+export interface ClockColumn {
   dayKey: string;
   /** Two-letter weekday, for the axis. */
   label: string;
@@ -206,11 +205,15 @@ export interface BedtimeColumn {
 }
 
 /**
- * One column per day in `dayKeys`, filled from `nightlyBedtimes`. A night with
- * no logged sleep stays null and renders as an empty column rather than a zero.
+ * One column per day in `dayKeys`, filled from a per-night mark —
+ * `nightlyBedtimes` or `nightlyWakeTimes`. A night with no logged sleep stays
+ * null and renders as an empty column rather than a zero.
  */
-export function bedtimeColumns(dayKeys: string[], bedtimes: NightBedtime[]): BedtimeColumn[] {
-  const byKey = new Map(bedtimes.map((b) => [b.key, b.minutes]));
+export function nightClockColumns(
+  dayKeys: string[],
+  marks: { key: string; minutes: number }[],
+): ClockColumn[] {
+  const byKey = new Map(marks.map((m) => [m.key, m.minutes]));
   return dayKeys.map((dayKey) => {
     const parsed = parseISO(dayKey);
     return {
@@ -221,7 +224,7 @@ export function bedtimeColumns(dayKeys: string[], bedtimes: NightBedtime[]): Bed
   });
 }
 
-export interface BedtimeColumnSummary {
+export interface ClockColumnSummary {
   earliestMin: number | null;
   latestMin: number | null;
   nights: number;
@@ -234,7 +237,7 @@ export interface BedtimeColumnSummary {
  * so "this week" in the copy means the same seven nights the parent is looking
  * at.
  */
-export function summarizeBedtimeColumns(columns: BedtimeColumn[]): BedtimeColumnSummary {
+export function summarizeClockColumns(columns: ClockColumn[]): ClockColumnSummary {
   const plotted = (columns ?? []).map((c) => c.minutes).filter((m): m is number => m !== null);
   if (plotted.length === 0) return { earliestMin: null, latestMin: null, nights: 0 };
   return {
@@ -245,18 +248,18 @@ export function summarizeBedtimeColumns(columns: BedtimeColumn[]): BedtimeColumn
 }
 
 /** Enough nights plotted for the columns to mean anything. */
-export function canShowBedtimeColumns(summary: BedtimeColumnSummary): boolean {
+export function canShowClockColumns(summary: ClockColumnSummary): boolean {
   return summary.nights >= NIGHT_CLAIM_MIN_QUALIFYING_DAYS;
 }
 
 /** The plain-words restatement that sits under the columns. */
 export function bedtimeSentence(
-  summary: BedtimeColumnSummary,
+  summary: ClockColumnSummary,
   calmMode: boolean,
 ): string | null {
   // Spread is an evaluation, not a fact about tonight — calm mode drops it.
   if (calmMode) return null;
-  if (!canShowBedtimeColumns(summary)) return null;
+  if (!canShowClockColumns(summary)) return null;
   if (summary.earliestMin === null || summary.latestMin === null) return null;
   if (summary.earliestMin === summary.latestMin) {
     return `Bedtime landed at ${formatClockMinutes(summary.earliestMin)} this week.`;
@@ -266,9 +269,24 @@ export function bedtimeSentence(
   )} this week.`;
 }
 
+/** The plain-words restatement that sits under the wake-up columns. */
+export function wakeSentence(summary: ClockColumnSummary, calmMode: boolean): string | null {
+  if (calmMode) return null;
+  if (!canShowClockColumns(summary)) return null;
+  if (summary.earliestMin === null || summary.latestMin === null) return null;
+  if (summary.earliestMin === summary.latestMin) {
+    return `Mornings started at ${formatClockMinutes(summary.earliestMin)} this week.`;
+  }
+  return `Mornings started between ${formatClockMinutes(
+    summary.earliestMin,
+  )} and ${formatClockMinutes(summary.latestMin)} this week.`;
+}
+
 /** What stands in for the columns before there's enough to plot. Never counts
  *  the days that are missing. */
 export const BEDTIME_INSUFFICIENT_COPY = `Log ${NIGHT_CLAIM_MIN_QUALIFYING_DAYS} nights and your bedtime range shows up here.`;
+
+export const WAKE_INSUFFICIENT_COPY = `Log ${NIGHT_CLAIM_MIN_QUALIFYING_DAYS} nights and your wake-up range shows up here.`;
 
 // ---------------------------------------------------------------------------
 // Weekly observations

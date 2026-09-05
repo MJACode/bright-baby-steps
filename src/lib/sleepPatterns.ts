@@ -12,6 +12,7 @@
 import {
   addDays,
   addMinutes,
+  differenceInCalendarDays,
   differenceInMinutes,
   format,
   parseISO,
@@ -440,6 +441,56 @@ export function nightlyBedtimes(
       // noon would push a 09:00 start past every evening bedtime under a 07:00
       // day start and make it the band's "latest".
       return { key, startedAt, minutes: min < anchor ? min + MINUTES_PER_DAY : min };
+    })
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+export interface NightWake {
+  /** The night this wake ended, keyed the same way `nightlyBedtimes` keys. */
+  key: string;
+  /** Minutes since midnight on the night's own date, so a 06:20 wake the
+   *  morning after reads 1820 and stays ordered after that night's bedtime —
+   *  render with `formatClockMinutes`, which wraps. */
+  minutes: number;
+  endedAt: Date;
+}
+
+/**
+ * When each night actually ended, one entry per night, oldest first.
+ *
+ * The mirror of `nightlyBedtimes`: grouped on the STARTS, so a 03:00
+ * back-to-sleep row still belongs to the night it continues, and keeping the
+ * latest end per night — the morning wake rather than a 02:40 rousing. A night
+ * still in progress has no wake yet and contributes nothing.
+ */
+export function nightlyWakeTimes(
+  logs: SleepLogRow[],
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): NightWake[] {
+  const latestEndPerNight = new Map<string, Date>();
+  for (const log of logs ?? []) {
+    if (!isNightSleep(log.sleep_type) || !log.ended_at) continue;
+    const start = toDate(log.started_at);
+    const end = toDate(log.ended_at);
+    if (!start || !end) continue;
+    const key = nightKey(start, schedule);
+    if (!key) continue;
+    const current = latestEndPerNight.get(key);
+    if (!current || end > current) latestEndPerNight.set(key, end);
+  }
+
+  return Array.from(latestEndPerNight.entries())
+    .map(([key, endedAt]) => {
+      // Offset by calendar days rather than pivoting on the night anchor the
+      // way `nightlyBedtimes` does: a night that runs to 13:00 has an end clock
+      // of 780, which sits past a noon anchor and would encode the wake BEFORE
+      // its own bedtime. Reading the clock fields off the Date and adding whole
+      // days is also DST-safe — elapsed minutes from midnight would render a
+      // 06:20 wake as 5:20 AM the morning the clocks go forward.
+      const dayOffset = differenceInCalendarDays(startOfDay(endedAt), parseISO(key));
+      const minutes =
+        endedAt.getHours() * 60 + endedAt.getMinutes() + dayOffset * MINUTES_PER_DAY;
+      return { key, endedAt, minutes };
     })
     .sort((a, b) => a.key.localeCompare(b.key));
 }

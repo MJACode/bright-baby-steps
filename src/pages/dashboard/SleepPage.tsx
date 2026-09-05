@@ -287,8 +287,6 @@ export default function SleepPage() {
       <SleepWeekCard
         days={sleepWindow.days}
         logs={logs}
-        coverage={sleepWindow.coverage}
-        napTrend={sleepWindow.napTrend}
         schedule={sleepWindow.schedule}
         ageMonths={ageMonths}
       />

@@ -3,6 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { sleepWindowQueryKey } from "@/hooks/useSleepPatterns";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import {
+  MINUTES_PER_DAY,
   NIGHT_CLAIM_MIN_QUALIFYING_DAYS,
   RHYTHM_MIN_LOGGED_DAYS,
   canMakeNightClaim,
@@ -11,6 +12,7 @@ import {
   napCountTrend,
   nightlyBedtimes,
   nightlyLongestStretches,
+  nightlyWakeTimes,
   ongoingSleepElapsedSeconds,
   sampleConfidence,
   segmentSleepForDay,
@@ -402,6 +404,64 @@ describe("nightlyBedtimes", () => {
       earliestMin: 20 * 60,
       latestMin: 24 * 60 + 30,
     });
+  });
+});
+
+describe("nightlyWakeTimes", () => {
+  it("takes the last end of each night, and groups a back-to-sleep row with the night it continues", () => {
+    const logs = [
+      // Night one, fragmented by a 02:40 wake — the 07:00 end is the morning.
+      sleep(at(2026, 9, 1, 19, 30), at(2026, 9, 2, 2, 40), "night"),
+      sleep(at(2026, 9, 2, 3, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 2, 20, 30), at(2026, 9, 3, 6, 20), "night"),
+      sleep(at(2026, 9, 2, 13, 0), at(2026, 9, 2, 14, 0)), // a nap is not a wake
+    ];
+    expect(nightlyWakeTimes(logs, MIDNIGHT)).toEqual([
+      {
+        key: "2026-09-01",
+        minutes: MINUTES_PER_DAY + 7 * 60,
+        endedAt: at(2026, 9, 2, 7, 0),
+      },
+      {
+        key: "2026-09-02",
+        minutes: MINUTES_PER_DAY + 6 * 60 + 20,
+        endedAt: at(2026, 9, 3, 6, 20),
+      },
+    ]);
+  });
+
+  it("returns nothing for a night still in progress", () => {
+    const logs = [
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 2, 20, 0), null, "night"),
+    ];
+    expect(nightlyWakeTimes(logs, MIDNIGHT).map((w) => w.key)).toEqual(["2026-09-01"]);
+  });
+
+  it("keeps a same-day wake below the ones that cross midnight", () => {
+    // A 09:00 night row under a 07:00 day start opens the day it lands on, so
+    // its 11:00 end is a same-day wake and must not encode past midnight.
+    const logs = [
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 3, 9, 0), at(2026, 9, 3, 11, 0), "night"),
+    ];
+    expect(nightlyWakeTimes(logs, SEVEN_AM).map((w) => w.minutes)).toEqual([
+      MINUTES_PER_DAY + 7 * 60,
+      11 * 60,
+    ]);
+  });
+
+  it("is oldest first", () => {
+    const logs = [
+      sleep(at(2026, 9, 3, 20, 0), at(2026, 9, 4, 7, 0), "night"),
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 6, 30), "night"),
+      sleep(at(2026, 9, 2, 20, 0), at(2026, 9, 3, 6, 45), "night"),
+    ];
+    expect(nightlyWakeTimes(logs, MIDNIGHT).map((w) => w.key)).toEqual([
+      "2026-09-01",
+      "2026-09-02",
+      "2026-09-03",
+    ]);
   });
 });
 
