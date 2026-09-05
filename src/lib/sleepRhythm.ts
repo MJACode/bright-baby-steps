@@ -286,6 +286,8 @@ export function wakeSentence(summary: ClockColumnSummary, calmMode: boolean): st
  *  the days that are missing. */
 export const BEDTIME_INSUFFICIENT_COPY = `Log ${NIGHT_CLAIM_MIN_QUALIFYING_DAYS} nights and your bedtime range shows up here.`;
 
+/** The wake-column mirror of `BEDTIME_INSUFFICIENT_COPY`, held to the same rule:
+ *  it names what to do, never the days that are missing. */
 export const WAKE_INSUFFICIENT_COPY = `Log ${NIGHT_CLAIM_MIN_QUALIFYING_DAYS} nights and your wake-up range shows up here.`;
 
 // ---------------------------------------------------------------------------

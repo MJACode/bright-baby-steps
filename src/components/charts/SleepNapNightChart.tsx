@@ -54,9 +54,9 @@ export function EmptyChartCard({
   );
 }
 
-/** Stacked nap-vs-night hours for the last seven tracking days. Shared by the
- *  Analytics trends list and the Sleep tab's weekly view — one chart, so the
- *  two surfaces can't bucket the same week differently. */
+/** Stacked nap-vs-night hours for the last seven tracking days. Rendered by the
+ *  Analytics trends list; the Sleep tab's weekly view moved to the clock
+ *  columns in `SleepWeekCard`. */
 export function SleepNapNightChart({
   sleep,
   title = "7-Day Sleep (Nap vs Night)",
