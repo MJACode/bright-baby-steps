@@ -10,7 +10,7 @@
 // night when they simply didn't open the app, so anything outside the span we
 // actually have evidence for renders as "no data" and stays visually inert.
 
-import { addMinutes, differenceInMinutes, format, parseISO, startOfDay } from "date-fns";
+import { addDays, addMinutes, differenceInMinutes, format, parseISO, startOfDay } from "date-fns";
 
 import {
   MINUTES_PER_DAY,
@@ -19,6 +19,7 @@ import {
   RHYTHM_MIN_LOGGED_DAYS,
   canMakeNightClaim,
   isNightSleep,
+  lastCompletedNightKey,
   nightlyLongestStretches,
   trackingDayEndFromKey,
   trackingDayStartFromKey,
@@ -31,6 +32,8 @@ import {
 } from "@/lib/sleepPatterns";
 import { formatDurationShort } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
+import { getAgeBucket } from "@/lib/sleepTriage";
+import { BUCKET_LABEL, NAPS_BY_BRACKET, TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
 import { DEFAULT_TRACKING_SCHEDULE, type TrackingSchedule } from "@/lib/trackingDay";
 
 /**
@@ -108,16 +111,44 @@ export function rhythmRowSegments(
   return segments;
 }
 
-/** Where a wall-clock time sits on a track that starts at `dayStartMin`. */
-export function clockOffsetInDay(clockMin: number, dayStartMin: number): number {
-  return ((clockMin - dayStartMin) % MINUTES_PER_DAY + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+/**
+ * How far into a given tracking day a wall-clock time falls, in real minutes.
+ *
+ * Measured against the day itself rather than by subtracting clock minutes: on
+ * a spring-forward day 19:00 is 18 real hours after a midnight day start, not
+ * 19, and every mark drawn from this shares a track sized by that same day's
+ * length (`trackingDayLengthMin`).
+ */
+export function clockOffsetInDay(
+  clockMin: number,
+  dayKey: string,
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): number {
+  const dayStart = trackingDayStartFromKey(dayKey, schedule);
+  const dayEnd = trackingDayEndFromKey(dayKey, schedule);
+  if (!dayStart || !dayEnd) return 0;
+
+  // Wall-clock arithmetic on the date fields, not elapsed-minute arithmetic:
+  // `addMinutes` would land on 20:00 where the family reads 19:00.
+  const atClock = (reference: Date): Date => {
+    const d = new Date(reference);
+    d.setHours(0, 0, 0, 0);
+    d.setMinutes(Math.round(clockMin));
+    return d;
+  };
+
+  let instant = atClock(dayStart);
+  if (instant < dayStart) instant = atClock(addDays(dayStart, 1));
+
+  const length = Math.max(1, differenceInMinutes(dayEnd, dayStart));
+  return Math.min(length, Math.max(0, differenceInMinutes(instant, dayStart)));
 }
 
 /** Wall clock for a bedtime measured in minutes since its own night's midnight,
  *  which reads past 1440 when bedtime lands after midnight. */
-export function formatClockMinutes(minutes: number): string {
+export function formatClockMinutes(minutes: number, pattern = "h:mm a"): string {
   const wrapped = ((Math.round(minutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-  return format(addMinutes(startOfDay(new Date(2000, 0, 1)), wrapped), "h:mm a");
+  return format(addMinutes(startOfDay(new Date(2000, 0, 1)), wrapped), pattern);
 }
 
 /**
@@ -143,6 +174,23 @@ export function describeRhythmDay(
     );
   }
   return `${label}: ${formatDurationShort(stats.totalMin)} of sleep — ${parts.join(", ")}.`;
+}
+
+/**
+ * The age-typical line under the band. A population fact, never a verdict on
+ * this baby — it states what is typical and leaves the comparison to nobody.
+ */
+export function ageTypicalSleepCaption(ageMonths: number): string {
+  const bucket = getAgeBucket(ageMonths);
+  const total = TOTAL_SLEEP_BY_BRACKET[bucket];
+  const naps = NAPS_BY_BRACKET[bucket];
+  // The bracket's own note carries a percentage, which reads as a score on this
+  // tab — the plain-words version says the same thing.
+  const napPart =
+    naps.typical === 0
+      ? "with or without a nap"
+      : `${naps.typical} ${naps.typical === 1 ? "nap" : "naps"} a day`;
+  return `Typical at ${BUCKET_LABEL[bucket]}: ${total.low}–${total.high} hours of sleep, ${napPart}.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +230,7 @@ export interface BedtimeColumnSummary {
 /**
  * The spread across exactly the nights plotted.
  *
- * Derived from the columns rather than from `bedtimeBand` over the whole fetch,
+ * Derived from the columns actually plotted rather than from the whole fetch,
  * so "this week" in the copy means the same seven nights the parent is looking
  * at.
  */
@@ -239,6 +287,29 @@ export interface WeekObservationInput {
   coverage: SleepCoverage;
   napTrend: NapCountTrend;
   calmMode: boolean;
+  now: Date;
+}
+
+/**
+ * How to introduce the most recent night we hold.
+ *
+ * "Last night" is a claim about when, and the night claim only needs five
+ * nights out of fourteen — so the most recent LOGGED night is routinely days
+ * old. Naming it keeps the fact on screen for a parent who logs some nights
+ * and not others, which suppressing would take away from exactly them.
+ */
+export function nightStretchLead(
+  nightKeyValue: string,
+  schedule: TrackingSchedule,
+  now: Date,
+): string {
+  if (nightKeyValue === lastCompletedNightKey(now, schedule)) return "Longest stretch last night";
+  const parsed = parseISO(nightKeyValue);
+  if (Number.isNaN(parsed.getTime())) return "Longest stretch";
+  const label = dayLabel(parsed, now);
+  if (label === "Today") return "Longest stretch tonight";
+  if (label === "Yesterday") return "Longest stretch last night";
+  return `Longest stretch on ${label}`;
 }
 
 /**
@@ -253,6 +324,7 @@ export function sleepWeekObservations({
   coverage,
   napTrend,
   calmMode,
+  now,
 }: WeekObservationInput): WeekObservation[] {
   const observations: WeekObservation[] = [];
 
@@ -265,7 +337,11 @@ export function sleepWeekObservations({
       const average = Math.round(
         recent.reduce((sum, n) => sum + n.minutes, 0) / recent.length,
       );
-      const fact = `Longest stretch last night: ${formatDurationShort(lastNight.minutes)}.`;
+      // The most recent night we hold is not automatically last night — gaps
+      // are ordinary, so the lead names the night it actually measured.
+      const fact = `${nightStretchLead(lastNight.key, schedule, now)}: ${formatDurationShort(
+        lastNight.minutes,
+      )}.`;
       observations.push({
         id: "night-stretch",
         text:

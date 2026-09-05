@@ -49,13 +49,6 @@ export const RHYTHM_MIN_LOGGED_DAYS = 3;
 /** Bedtime band, longest stretch, total-sleep average — anything about the
  *  night needs this many nights with a complete night sleep. */
 export const NIGHT_CLAIM_MIN_QUALIFYING_DAYS = 5;
-/** Nap timing looks back over this many days... */
-export const NAP_TIMING_WINDOW_DAYS = 14;
-/** ...and needs this many of them logged. Ten rather than fourteen: a parent
- *  who logs five days a week is still describing a real rhythm, and demanding
- *  a perfect fortnight means they never see personalised nap timing at all. */
-export const NAP_TIMING_MIN_LOGGED_DAYS = 10;
-
 /** Each half of the nap-count comparison. */
 export const NAP_TREND_WINDOW_DAYS = 7;
 
@@ -85,12 +78,6 @@ function toDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
-}
-
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
 }
 
 /**
@@ -196,6 +183,23 @@ export function nightKey(start: Date, schedule: TrackingSchedule): string | null
   return trackingDayKey(start, { dayStartMin: nightAnchorMin(schedule), nightStartMin: null });
 }
 
+/**
+ * The key of the night a parent would call "last night".
+ *
+ * Not `nightKey(now)`: after the anchor the current night is the one just
+ * beginning, so at 21:00 `nightKey(now)` names tonight while last night is the
+ * key before it. Anything that says "last night" has to compare against this,
+ * or the most recent LOGGED night gets that label however old it is.
+ */
+export function lastCompletedNightKey(
+  now: Date,
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): string | null {
+  const anchor = nightAnchorMin(schedule);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  return nightKey(nowMin >= anchor ? subDays(now, 1) : now, schedule);
+}
+
 // ---------------------------------------------------------------------------
 // Day segmentation
 // ---------------------------------------------------------------------------
@@ -278,18 +282,21 @@ function clampMinutes(value: number, maxMin: number = MINUTES_PER_DAY): number {
   return Math.min(maxMin, Math.max(0, Math.round(value)));
 }
 
+/**
+ * Everything a single tracking day can honestly say about itself.
+ *
+ * Deliberately holds no "longest stretch": every quantity here is clipped at
+ * the day boundary, so an unbroken 19:40-06:20 night would report 260 minutes
+ * on one day and 380 on the next and never the 640 the parent lived through.
+ * That claim belongs to `nightlyLongestStretches`, which measures whole
+ * sessions.
+ */
 export interface SleepDayStats {
   totalMin: number;
   napMin: number;
   nightMin: number;
+  /** Naps as runs, not rows: one nap logged as two touching rows is one nap. */
   napCount: number;
-  /** Longest unbroken run of sleep WITHIN this tracking day. Blocks that touch
-   *  (a session logged as two rows back to back) count as one stretch.
-   *
-   *  Clipped at the day boundary by construction, so an unbroken 19:40-06:20
-   *  night reads as 260 here and 380 on the next day — never 640. Any claim
-   *  about the night stretch must read `nightlyLongestStretches` instead. */
-  longestStretchMin: number;
 }
 
 export function sleepDayStats(blocks: SleepBlock[]): SleepDayStats {
@@ -302,14 +309,11 @@ export function sleepDayStats(blocks: SleepBlock[]): SleepDayStats {
   }
 
   let napCount = 0;
-  let longestStretchMin = 0;
   let runType: string | null = null;
-  let runStart = 0;
   let runEnd = 0;
 
   const closeRun = () => {
     if (runType === null) return;
-    longestStretchMin = Math.max(longestStretchMin, runEnd - runStart);
     if (!isNightSleep(runType)) napCount += 1;
   };
 
@@ -321,12 +325,11 @@ export function sleepDayStats(blocks: SleepBlock[]): SleepDayStats {
     }
     closeRun();
     runType = block.sleepType;
-    runStart = block.startMin;
     runEnd = block.endMin;
   }
   closeRun();
 
-  return { totalMin: napMin + nightMin, napMin, nightMin, napCount, longestStretchMin };
+  return { totalMin: napMin + nightMin, napMin, nightMin, napCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -390,49 +393,6 @@ export function wakeWindowSamples(
     });
   }
   return windows;
-}
-
-export interface WakeWindowSummary {
-  windows: WakeWindow[];
-  /** Windows that open on a morning wake — night sleep ended, day started. */
-  firstOfDay: WakeWindow[];
-  /** Windows that close into night sleep — the pre-bed stretch. */
-  beforeBed: WakeWindow[];
-  medianMin: number | null;
-  firstMedianMin: number | null;
-  beforeBedMedianMin: number | null;
-  dayCount: number;
-}
-
-/**
- * Wake windows split by where they sit in the day. A single daily mean is
- * misleading — the first window after a night wake is legitimately the
- * shortest and the pre-bed one the longest, so averaging them describes no
- * moment the parent will actually live through.
- *
- * There is deliberately no confidence field: a fortnight yields 25-30 windows,
- * which pins the 5/2 sample ladder to "high" for everybody and says nothing.
- * Gate what you render on `canPersonalizeNapTiming(coverage)` like every other
- * surface does.
- */
-export function wakeWindows(
-  logs: WakeWindowInput[],
-  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
-): WakeWindowSummary {
-  const windows = wakeWindowSamples(logs, schedule);
-  const firstOfDay = windows.filter((w) => isNightSleep(w.wokeFrom));
-  const beforeBed = windows.filter((w) => isNightSleep(w.sleptInto));
-  const days = new Set(windows.map((w) => w.dayKey).filter((k): k is string => !!k));
-
-  return {
-    windows,
-    firstOfDay,
-    beforeBed,
-    medianMin: median(windows.map((w) => w.minutes)),
-    firstMedianMin: median(firstOfDay.map((w) => w.minutes)),
-    beforeBedMedianMin: median(beforeBed.map((w) => w.minutes)),
-    dayCount: days.size,
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -535,33 +495,6 @@ export function nightlyLongestStretches(
   return Array.from(longestPerNight.values()).sort((a, b) => a.key.localeCompare(b.key));
 }
 
-export interface BedtimeBand {
-  /** Minutes since midnight on the night's own date, encoded around the night
-   *  anchor — see `NightBedtime.minutes`. */
-  medianMin: number | null;
-  earliestMin: number | null;
-  latestMin: number | null;
-  nights: number;
-}
-
-export function bedtimeBand(
-  logs: SleepLogRow[],
-  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
-): BedtimeBand {
-  const bedtimes = nightlyBedtimes(logs, schedule).map((n) => n.minutes);
-
-  if (bedtimes.length === 0) {
-    return { medianMin: null, earliestMin: null, latestMin: null, nights: 0 };
-  }
-
-  return {
-    medianMin: median(bedtimes),
-    earliestMin: Math.min(...bedtimes),
-    latestMin: Math.max(...bedtimes),
-    nights: bedtimes.length,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Nap-count trend
 // ---------------------------------------------------------------------------
@@ -598,24 +531,31 @@ export function napCountTrend(
   const keys = trackingDayKeysBack(span, schedule, now);
   const windowLen = Math.min(NAP_TREND_WINDOW_DAYS, span);
 
-  const tally = (window: Set<string>): NapCountWindow => {
+  const tally = (windowKeys: string[]): NapCountWindow => {
+    const window = new Set(windowKeys);
     const loggedDays = new Set<string>();
-    let naps = 0;
     for (const log of logs ?? []) {
       const key = trackingDayKey(log.started_at, schedule);
-      if (!key || !window.has(key)) continue;
-      loggedDays.add(key);
-      if (!isNightSleep(log.sleep_type)) naps += 1;
+      if (key && window.has(key)) loggedDays.add(key);
     }
+
+    // Counted the same way the rhythm card counts them — merged runs off each
+    // day's blocks, not rows. Counting rows here would tell a parent they had
+    // two naps on a day the card above says was one.
+    let naps = 0;
+    for (const key of windowKeys) {
+      naps += sleepDayStats(segmentSleepForDay(logs ?? [], key, schedule, now)).napCount;
+    }
+
     const loggedCount = loggedDays.size;
     return { naps, days: loggedCount, perDay: loggedCount === 0 ? null : naps / loggedCount };
   };
 
-  const current = tally(new Set(keys.slice(span - windowLen)));
+  const current = tally(keys.slice(span - windowLen));
   if (span < windowLen * 2) return { current, previous: null };
   return {
     current,
-    previous: tally(new Set(keys.slice(span - windowLen * 2, span - windowLen))),
+    previous: tally(keys.slice(span - windowLen * 2, span - windowLen)),
   };
 }
 
@@ -672,19 +612,4 @@ export function canShowRhythm(coverage: SleepCoverage): boolean {
 /** Bedtime band, longest stretch, nightly averages. */
 export function canMakeNightClaim(coverage: SleepCoverage): boolean {
   return coverage.qualifyingDays >= NIGHT_CLAIM_MIN_QUALIFYING_DAYS;
-}
-
-/**
- * Below this, nap timing is age-typical guidance and has to be worded that way.
- *
- * Both halves matter: the coverage has to have been measured over the full
- * fortnight (a 7-day window can never reach ten logged days, so asking it is
- * asking for a permanent false), and ten of those fourteen days have to hold
- * a log.
- */
-export function canPersonalizeNapTiming(coverage: SleepCoverage): boolean {
-  return (
-    coverage.totalDays >= NAP_TIMING_WINDOW_DAYS &&
-    coverage.loggedDays >= NAP_TIMING_MIN_LOGGED_DAYS
-  );
 }

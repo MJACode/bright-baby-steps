@@ -66,9 +66,17 @@ export function SleepWeekCard({
   const span = Math.max(1, rangeMax - rangeMin);
   const positionOf = (minutes: number) => ((minutes - rangeMin) / span) * 100;
 
-  const observations = sleepWeekObservations({ logs, schedule, coverage, napTrend, calmMode });
+  const observations = sleepWeekObservations({
+    logs,
+    schedule,
+    coverage,
+    napTrend,
+    calmMode,
+    now: new Date(),
+  });
+  // Calm mode drops the evaluation, never the facts: `bedtimeSentence` already
+  // returns null for it, and the columns are where each night actually landed.
   const sentence = bedtimeSentence(summary, calmMode);
-  const showBedtime = !calmMode;
   const hasBedtimeData = canShowBedtimeColumns(summary);
 
   return (
@@ -79,72 +87,70 @@ export function SleepWeekCard({
 
       <SleepNapNightChart sleep={logs} title="Nap vs night, last 7 days" />
 
-      {showBedtime && (
-        <Card className="border-0 bg-card/60">
-          <CardContent className="p-4 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              When bedtime landed
-            </p>
+      <Card className="border-0 bg-card/60">
+        <CardContent className="p-4 space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            When bedtime landed
+          </p>
 
-            {hasBedtimeData ? (
-              <>
-                <div className="flex items-stretch gap-2">
-                  <div className="w-12 shrink-0 relative text-[11px] text-muted-foreground">
-                    <span className="absolute top-0 right-0">{formatClockMinutes(rangeMin)}</span>
-                    <span className="absolute bottom-0 right-0">
-                      {formatClockMinutes(rangeMax)}
-                    </span>
-                  </div>
-                  <div className="relative flex-1 h-28">
-                    {anchorMins.length === 2 && (
-                      <div
-                        aria-hidden
-                        className="absolute inset-x-0 bg-sleep/10 rounded-md"
-                        style={{
-                          top: `${positionOf(anchorMins[0])}%`,
-                          height: `${positionOf(anchorMins[1]) - positionOf(anchorMins[0])}%`,
-                        }}
-                      />
-                    )}
-                    <div className="absolute inset-0 flex items-stretch gap-1">
-                      {columns.map((col) => (
-                        <div key={col.dayKey} className="relative flex-1">
-                          <div aria-hidden className="absolute inset-y-0 left-1/2 w-px bg-muted" />
-                          {col.minutes !== null && (
-                            <div
-                              aria-hidden
-                              className="absolute left-0 right-0 h-2 rounded-full bg-sleep"
-                              style={{
-                                top: `calc(${positionOf(col.minutes)}% - 0.25rem)`,
-                              }}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+          {hasBedtimeData ? (
+            <>
+              <div className="flex items-stretch gap-2">
+                <div className="w-12 shrink-0 relative text-xs text-muted-foreground">
+                  <span className="absolute top-0 right-0">{formatClockMinutes(rangeMin)}</span>
+                  <span className="absolute bottom-0 right-0">
+                    {formatClockMinutes(rangeMax)}
+                  </span>
                 </div>
-                <div className="flex gap-1 pl-14">
-                  {columns.map((col) => (
-                    <span
-                      key={col.dayKey}
+                <div className="relative flex-1 h-28">
+                  {anchorMins.length === 2 && (
+                    <div
                       aria-hidden
-                      className="flex-1 text-center text-[11px] text-muted-foreground"
-                    >
-                      {col.label}
-                    </span>
-                  ))}
+                      className="absolute inset-x-0 bg-sleep/10 rounded-md"
+                      style={{
+                        top: `${positionOf(anchorMins[0])}%`,
+                        height: `${positionOf(anchorMins[1]) - positionOf(anchorMins[0])}%`,
+                      }}
+                    />
+                  )}
+                  <div className="absolute inset-0 flex items-stretch gap-1">
+                    {columns.map((col) => (
+                      <div key={col.dayKey} className="relative flex-1">
+                        <div aria-hidden className="absolute inset-y-0 left-1/2 w-px bg-muted" />
+                        {col.minutes !== null && (
+                          <div
+                            aria-hidden
+                            className="absolute left-0 right-0 h-2 rounded-full bg-sleep"
+                            style={{
+                              top: `calc(${positionOf(col.minutes)}% - 0.25rem)`,
+                            }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                {sentence && <p className="text-sm text-foreground/85 leading-snug">{sentence}</p>}
-              </>
-            ) : (
-              <p className="text-sm text-foreground/80 leading-snug">
-                {BEDTIME_INSUFFICIENT_COPY}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              </div>
+              <div className="flex gap-1 pl-14">
+                {columns.map((col) => (
+                  <span
+                    key={col.dayKey}
+                    aria-hidden
+                    className="flex-1 text-center text-xs text-muted-foreground"
+                  >
+                    {col.label}
+                  </span>
+                ))}
+              </div>
+              {sentence && <p className="text-sm text-foreground/85 leading-snug">{sentence}</p>}
+            </>
+          ) : (
+            <p className="text-sm text-foreground/80 leading-snug">
+              {BEDTIME_INSUFFICIENT_COPY}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {observations.length > 0 && (
         <Card className="border-0 bg-sleep-bg/60">

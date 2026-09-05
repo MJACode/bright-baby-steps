@@ -71,10 +71,13 @@ export function useActiveSleep(childId: string | undefined) {
   });
 
   const invalidate = () => invalidateAfterLogWrite(queryClient);
-  // pause/resume write only paused_at + paused_accumulated_seconds and leave the
-  // row in progress, so nothing outside the active-session query can change.
-  // The full log-write fan-out would cost ~10 refetches per tap.
-  const invalidateActive = () => queryClient.invalidateQueries({ queryKey: activeKey });
+  // Pausing changes how long the session has been asleep, and the rhythm band
+  // sizes its in-progress block from the same row — invalidating only
+  // `activeKey` is MORE specific than the window query, so prefix-matching
+  // never reaches it and the band keeps growing past the frozen timer face.
+  // The `sleep-logs` root covers every sleep query without the full
+  // cross-module log-write fan-out.
+  const invalidateSleep = () => queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
 
   const start = useMutation({
     mutationFn: async (input: {
@@ -125,7 +128,7 @@ export function useActiveSleep(childId: string | undefined) {
         elapsedSeconds: computeElapsedSeconds(active),
       });
     },
-    onSuccess: invalidateActive,
+    onSuccess: invalidateSleep,
   });
 
   const resume = useMutation({
@@ -151,7 +154,7 @@ export function useActiveSleep(childId: string | undefined) {
         elapsedSeconds: computeElapsedSeconds(active),
       });
     },
-    onSuccess: invalidateActive,
+    onSuccess: invalidateSleep,
   });
 
   const stop = useMutation({

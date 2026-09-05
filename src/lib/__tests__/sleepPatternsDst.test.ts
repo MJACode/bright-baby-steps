@@ -12,6 +12,7 @@ import {
   trackingDayStartFromKey,
   type SleepLogRow,
 } from "@/lib/sleepPatterns";
+import { clockOffsetInDay, trackingDayLengthMin } from "@/lib/sleepRhythm";
 import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
 
 const MIDNIGHT: TrackingSchedule = { dayStartMin: 0, nightStartMin: null };
@@ -208,5 +209,29 @@ describe("every surface files a DST-day sleep the same way", () => {
     const backNow = at(2026, 11, 2, 12, 0);
     expect(sleepCoverage([backNap], MIDNIGHT, 7, backNow).loggedDays).toBe(1);
     expect(segmentSleepForDay([backNap], FALL_BACK, MIDNIGHT, backNow)).toHaveLength(1);
+  });
+});
+
+describe("clock marks on a DST day", () => {
+  it("places a bedtime line by real elapsed time, not by subtracting clock minutes", () => {
+    // The hour between 02:00 and 03:00 never happens, so 19:00 is 18 real hours
+    // after a midnight day start. Marks share a track sized by the same day
+    // length, so an offset measured on the clock would drift by that hour.
+    expect(clockOffsetInDay(19 * 60, SPRING_FORWARD, MIDNIGHT)).toBe(18 * 60);
+    // The repeated hour runs the other way.
+    expect(clockOffsetInDay(19 * 60, FALL_BACK, MIDNIGHT)).toBe(20 * 60);
+    // An ordinary day is unchanged.
+    expect(clockOffsetInDay(19 * 60, "2026-03-10", MIDNIGHT)).toBe(19 * 60);
+  });
+
+  it("keeps a mark inside its own track under a 07:00 day start", () => {
+    for (const dayKey of [SPRING_FORWARD, FALL_BACK]) {
+      const length = trackingDayLengthMin(dayKey, SEVEN_AM);
+      for (const clockMin of [0, 6 * 60 + 59, 7 * 60, 19 * 60, 23 * 60 + 59]) {
+        const offset = clockOffsetInDay(clockMin, dayKey, SEVEN_AM);
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThanOrEqual(length);
+      }
+    }
   });
 });

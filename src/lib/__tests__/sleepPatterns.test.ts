@@ -1,17 +1,15 @@
 import { QueryClient } from "@tanstack/react-query";
 
-import { sleepDayQueryKey, sleepWindowQueryKey } from "@/hooks/useSleepPatterns";
+import { sleepWindowQueryKey } from "@/hooks/useSleepPatterns";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import {
-  NAP_TIMING_MIN_LOGGED_DAYS,
-  NAP_TIMING_WINDOW_DAYS,
   NIGHT_CLAIM_MIN_QUALIFYING_DAYS,
   RHYTHM_MIN_LOGGED_DAYS,
-  bedtimeBand,
   canMakeNightClaim,
-  canPersonalizeNapTiming,
   canShowRhythm,
+  lastCompletedNightKey,
   napCountTrend,
+  nightlyBedtimes,
   nightlyLongestStretches,
   ongoingSleepElapsedSeconds,
   sampleConfidence,
@@ -20,7 +18,6 @@ import {
   sleepDayStats,
   trackingDayKeysBack,
   wakeWindowSamples,
-  wakeWindows,
   type SleepLogRow,
 } from "@/lib/sleepPatterns";
 import { predictNextNap } from "@/lib/sleepCoach";
@@ -192,7 +189,6 @@ describe("sleepDayStats", () => {
       napMin: 140,
       nightMin: 600,
       napCount: 2,
-      longestStretchMin: 360,
     });
   });
 
@@ -202,7 +198,6 @@ describe("sleepDayStats", () => {
       napMin: 0,
       nightMin: 0,
       napCount: 0,
-      longestStretchMin: 0,
     });
   });
 });
@@ -334,34 +329,18 @@ describe("predictNextNap reads the shared wake-window engine", () => {
   }
 });
 
-describe("wakeWindows", () => {
-  it("separates the morning window from the pre-bed one instead of averaging them", () => {
-    const logs = [
-      sleep(at(2026, 9, 2, 19, 0), at(2026, 9, 3, 7, 0), "night"),
-      sleep(at(2026, 9, 3, 9, 0), at(2026, 9, 3, 10, 30)),
-      sleep(at(2026, 9, 3, 13, 0), at(2026, 9, 3, 14, 30)),
-      sleep(at(2026, 9, 3, 19, 30), at(2026, 9, 4, 7, 0), "night"),
-    ];
-    const summary = wakeWindows(logs, MIDNIGHT);
+describe("nightlyBedtimes", () => {
+  // The spread the week card plots, derived the same way `summarizeBedtimeColumns`
+  // derives it — over whatever `nightlyBedtimes` calls a night.
+  const band = (logs: SleepLogRow[], schedule: TrackingSchedule) => {
+    const minutes = nightlyBedtimes(logs, schedule).map((n) => n.minutes);
+    return {
+      nights: minutes.length,
+      earliestMin: minutes.length ? Math.min(...minutes) : null,
+      latestMin: minutes.length ? Math.max(...minutes) : null,
+    };
+  };
 
-    expect(summary.firstOfDay.map((w) => w.minutes)).toEqual([120]);
-    expect(summary.beforeBed.map((w) => w.minutes)).toEqual([300]);
-    expect(summary.medianMin).toBe(150);
-    expect(summary.firstMedianMin).toBe(120);
-    expect(summary.beforeBedMedianMin).toBe(300);
-    expect(summary.dayCount).toBe(1);
-  });
-
-  it("reuses the sleepCoach confidence ladder", () => {
-    expect(sampleConfidence(0)).toBe("low");
-    expect(sampleConfidence(1)).toBe("low");
-    expect(sampleConfidence(2)).toBe("medium");
-    expect(sampleConfidence(4)).toBe("medium");
-    expect(sampleConfidence(5)).toBe("high");
-  });
-});
-
-describe("bedtimeBand", () => {
   it("takes the first night segment of each night, not every night row", () => {
     const logs = [
       // Night one, fragmented by a 02:40 wake.
@@ -371,12 +350,11 @@ describe("bedtimeBand", () => {
       sleep(at(2026, 9, 3, 20, 0), at(2026, 9, 4, 7, 0), "night"),
       sleep(at(2026, 9, 2, 13, 0), at(2026, 9, 2, 14, 0)), // a nap is not a bedtime
     ];
-    const band = bedtimeBand(logs, MIDNIGHT);
-
-    expect(band.nights).toBe(3);
-    expect(band.earliestMin).toBe(19 * 60 + 30);
-    expect(band.latestMin).toBe(20 * 60 + 30);
-    expect(band.medianMin).toBe(20 * 60);
+    expect(band(logs, MIDNIGHT)).toEqual({
+      nights: 3,
+      earliestMin: 19 * 60 + 30,
+      latestMin: 20 * 60 + 30,
+    });
   });
 
   it("keeps a past-midnight bedtime above the evening ones so the band stays ordered", () => {
@@ -384,17 +362,18 @@ describe("bedtimeBand", () => {
       sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
       sleep(at(2026, 9, 3, 0, 30), at(2026, 9, 3, 7, 0), "night"),
     ];
-    const band = bedtimeBand(logs, MIDNIGHT);
-    expect(band.earliestMin).toBe(20 * 60);
-    expect(band.latestMin).toBe(24 * 60 + 30);
+    expect(band(logs, MIDNIGHT)).toEqual({
+      nights: 2,
+      earliestMin: 20 * 60,
+      latestMin: 24 * 60 + 30,
+    });
   });
 
   it("is empty rather than zero when no night has been logged", () => {
-    expect(bedtimeBand([sleep(at(2026, 9, 2, 13, 0), at(2026, 9, 2, 14, 0))], MIDNIGHT)).toEqual({
-      medianMin: null,
+    expect(band([sleep(at(2026, 9, 2, 13, 0), at(2026, 9, 2, 14, 0))], MIDNIGHT)).toEqual({
+      nights: 0,
       earliestMin: null,
       latestMin: null,
-      nights: 0,
     });
   });
 
@@ -406,11 +385,11 @@ describe("bedtimeBand", () => {
       // opened — encoding it past midnight would make it the band's "latest".
       sleep(at(2026, 9, 3, 9, 0), at(2026, 9, 3, 11, 0), "night"),
     ];
-    const band = bedtimeBand(logs, SEVEN_AM);
-
-    expect(band.nights).toBe(3);
-    expect(band.earliestMin).toBe(9 * 60);
-    expect(band.latestMin).toBe(20 * 60 + 30);
+    expect(band(logs, SEVEN_AM)).toEqual({
+      nights: 3,
+      earliestMin: 9 * 60,
+      latestMin: 20 * 60 + 30,
+    });
   });
 
   it("still keeps a past-midnight bedtime ordered under a 07:00 day start", () => {
@@ -418,9 +397,23 @@ describe("bedtimeBand", () => {
       sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
       sleep(at(2026, 9, 3, 0, 30), at(2026, 9, 3, 7, 0), "night"),
     ];
-    const band = bedtimeBand(logs, SEVEN_AM);
-    expect(band.earliestMin).toBe(20 * 60);
-    expect(band.latestMin).toBe(24 * 60 + 30);
+    expect(band(logs, SEVEN_AM)).toEqual({
+      nights: 2,
+      earliestMin: 20 * 60,
+      latestMin: 24 * 60 + 30,
+    });
+  });
+});
+
+describe("lastCompletedNightKey", () => {
+  it("names the night that just ended, before and after the anchor", () => {
+    // 09:00 — the night that opened yesterday evening has just ended.
+    expect(lastCompletedNightKey(at(2026, 9, 10, 9, 0), MIDNIGHT)).toBe("2026-09-09");
+    // 21:00 — tonight has opened, so last night is still yesterday's.
+    expect(lastCompletedNightKey(at(2026, 9, 10, 21, 0), MIDNIGHT)).toBe("2026-09-09");
+    // Under a 07:00 day start the anchor moves with the family.
+    expect(lastCompletedNightKey(at(2026, 9, 10, 6, 30), SEVEN_AM)).toBe("2026-09-09");
+    expect(lastCompletedNightKey(at(2026, 9, 10, 8, 0), SEVEN_AM)).toBe("2026-09-09");
   });
 });
 
@@ -437,11 +430,14 @@ describe("nightlyLongestStretches", () => {
       },
     ]);
 
-    // The day-scoped stat is the thing that can't answer this question.
+    // The day-scoped stats are the thing that can't answer this question: each
+    // day holds its own slice of the night and neither is the 640 the parent
+    // lived through, which is why they carry no stretch figure at all.
     const evening = sleepDayStats(segmentSleepForDay([night], "2026-09-01", MIDNIGHT));
     const morning = sleepDayStats(segmentSleepForDay([night], "2026-09-02", MIDNIGHT));
-    expect(evening.longestStretchMin).toBe(260);
-    expect(morning.longestStretchMin).toBe(380);
+    expect(evening.nightMin).toBe(260);
+    expect(morning.nightMin).toBe(380);
+    expect(Object.keys(evening).sort()).toEqual(["napCount", "napMin", "nightMin", "totalMin"]);
   });
 
   it("merges rows that touch and lets a real wake end the stretch", () => {
@@ -491,6 +487,23 @@ describe("napCountTrend", () => {
 
     expect(trend.current).toEqual({ naps: 3, days: 2, perDay: 1.5 });
     expect(trend.previous).toEqual({ naps: 3, days: 3, perDay: 1 });
+  });
+
+  it("counts the naps the rhythm card counts, not the rows", () => {
+    const now = at(2026, 9, 10, 12, 0);
+    const logs = [
+      // One nap the parent stopped and restarted, logged as two touching rows.
+      sleep(at(2026, 9, 10, 9, 0), at(2026, 9, 10, 9, 40)),
+      sleep(at(2026, 9, 10, 9, 40), at(2026, 9, 10, 10, 20)),
+      // A second, genuinely separate nap.
+      sleep(at(2026, 9, 10, 13, 0), at(2026, 9, 10, 14, 0)),
+    ];
+
+    const tileCount = sleepDayStats(segmentSleepForDay(logs, "2026-09-10", MIDNIGHT, now)).napCount;
+    expect(tileCount).toBe(2);
+    // The trend and the tile describe the same day, so they cannot disagree
+    // about how many naps it held.
+    expect(napCountTrend(logs, MIDNIGHT, now, 14).current.naps).toBe(tileCount);
   });
 
   it("reports no rate at all rather than zero when a window holds nothing", () => {
@@ -580,39 +593,6 @@ describe("sleepCoverage", () => {
   });
 });
 
-describe("canPersonalizeNapTiming", () => {
-  const now = at(2026, 9, 20, 12, 0);
-
-  it("turns on once ten of the fourteen days hold a log", () => {
-    const logs = Array.from({ length: NAP_TIMING_MIN_LOGGED_DAYS }, (_, i) =>
-      sleep(at(2026, 9, 7 + i, 13, 0), at(2026, 9, 7 + i, 14, 0)),
-    );
-    const coverage = sleepCoverage(logs, MIDNIGHT, NAP_TIMING_WINDOW_DAYS, now);
-
-    expect(coverage.loggedDays).toBe(NAP_TIMING_MIN_LOGGED_DAYS);
-    expect(coverage.totalDays).toBe(NAP_TIMING_WINDOW_DAYS);
-    expect(canPersonalizeNapTiming(coverage)).toBe(true);
-  });
-
-  it("stays off when nine days are logged, and when the window itself is short", () => {
-    const nine = Array.from({ length: NAP_TIMING_MIN_LOGGED_DAYS - 1 }, (_, i) =>
-      sleep(at(2026, 9, 8 + i, 13, 0), at(2026, 9, 8 + i, 14, 0)),
-    );
-    expect(canPersonalizeNapTiming(sleepCoverage(nine, MIDNIGHT, NAP_TIMING_WINDOW_DAYS, now))).toBe(
-      false,
-    );
-
-    // A 7-day window can never hold ten logged days, so asking it is asking for
-    // a permanent false — the window length has to be checked too.
-    const week = Array.from({ length: 7 }, (_, i) =>
-      sleep(at(2026, 9, 14 + i, 13, 0), at(2026, 9, 14 + i, 14, 0)),
-    );
-    const weekCoverage = sleepCoverage(week, MIDNIGHT, 7, now);
-    expect(weekCoverage.loggedDays).toBe(7);
-    expect(canPersonalizeNapTiming(weekCoverage)).toBe(false);
-  });
-});
-
 describe("detectTriageReasons — early_waking", () => {
   // Anchored to the run date: the detector windows on the last 7 days.
   const day = (offset: number, h: number, min = 0) => {
@@ -666,16 +646,13 @@ describe("detectTriageReasons — early_waking", () => {
 describe("sleep pattern query keys", () => {
   it("are reached by the canonical log-write invalidation", () => {
     const client = new QueryClient();
-    const dayKey = sleepDayQueryKey("child-1", "2026-09-10", 0);
     const windowKey = sleepWindowQueryKey("child-1", 14, "2026-09-10", 0);
 
-    client.setQueryData(dayKey, []);
     client.setQueryData(windowKey, []);
-    expect(client.getQueryState(dayKey)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(windowKey)?.isInvalidated).toBe(false);
 
     invalidateAfterLogWrite(client);
 
-    expect(client.getQueryState(dayKey)?.isInvalidated).toBe(true);
     expect(client.getQueryState(windowKey)?.isInvalidated).toBe(true);
   });
 });

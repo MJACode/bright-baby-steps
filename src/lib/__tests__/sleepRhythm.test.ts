@@ -1,5 +1,7 @@
 import {
   MINUTES_PER_DAY,
+  segmentSleepForDay,
+  sleepDayStats,
   type NapCountTrend,
   type SleepBlock,
   type SleepCoverage,
@@ -9,6 +11,7 @@ import {
 import {
   BEDTIME_INSUFFICIENT_COPY,
   MAX_WEEK_OBSERVATIONS,
+  ageTypicalSleepCaption,
   bedtimeColumns,
   bedtimeSentence,
   canShowBedtimeColumns,
@@ -20,6 +23,7 @@ import {
   summarizeBedtimeColumns,
   trackingDayLengthMin,
 } from "@/lib/sleepRhythm";
+import { SHORTFALL_ESCALATION_COPY } from "@/lib/sleepPlan";
 import type { TrackingSchedule } from "@/lib/trackingDay";
 
 const MIDNIGHT: TrackingSchedule = { dayStartMin: 0, nightStartMin: null };
@@ -58,6 +62,10 @@ function night(day: number, hours: number): SleepLogRow {
   const start = new Date(2026, 7, day, 20, 0, 0);
   return sleepLog(start, new Date(start.getTime() + hours * 60 * 60 * 1000), "night");
 }
+
+// The morning after the last night in the `week` fixture. Every observation is
+// dated against this, because "last night" is a claim about when.
+const NOW = new Date(2026, 7, 31, 9, 0, 0);
 
 describe("rhythmRowSegments", () => {
   it("renders a day with nothing logged as inert, never as awake", () => {
@@ -112,12 +120,23 @@ describe("rhythmRowSegments", () => {
 });
 
 describe("clockOffsetInDay", () => {
+  const SEVEN_AM: TrackingSchedule = { dayStartMin: 7 * 60, nightStartMin: null };
+
   it("places a clock time relative to the family's own day start", () => {
-    expect(clockOffsetInDay(19 * 60, 0)).toBe(19 * 60);
+    expect(clockOffsetInDay(19 * 60, "2026-09-05", MIDNIGHT)).toBe(19 * 60);
     // 19:00 under a 07:00 day start is 12 hours into the tracking day.
-    expect(clockOffsetInDay(19 * 60, 7 * 60)).toBe(12 * 60);
+    expect(clockOffsetInDay(19 * 60, "2026-09-05", SEVEN_AM)).toBe(12 * 60);
     // 03:00 under a 07:00 day start is 20 hours in, not a negative offset.
-    expect(clockOffsetInDay(3 * 60, 7 * 60)).toBe(20 * 60);
+    expect(clockOffsetInDay(3 * 60, "2026-09-05", SEVEN_AM)).toBe(20 * 60);
+  });
+
+  it("never places a mark past the end of its own track", () => {
+    const length = trackingDayLengthMin("2026-09-05", MIDNIGHT);
+    for (const clockMin of [0, 1, 12 * 60, 23 * 60 + 59]) {
+      const offset = clockOffsetInDay(clockMin, "2026-09-05", MIDNIGHT);
+      expect(offset).toBeGreaterThanOrEqual(0);
+      expect(offset).toBeLessThanOrEqual(length);
+    }
   });
 });
 
@@ -137,7 +156,6 @@ describe("describeRhythmDay", () => {
       napMin: 120,
       nightMin: 680,
       napCount: 2,
-      longestStretchMin: 400,
     };
     expect(describeRhythmDay("2026-09-05", stats, now)).toBe(
       "Today: 13h 20m of sleep — 11h 20m at night, 2h across 2 naps.",
@@ -150,7 +168,6 @@ describe("describeRhythmDay", () => {
       napMin: 0,
       nightMin: 0,
       napCount: 0,
-      longestStretchMin: 0,
     };
     expect(describeRhythmDay("2026-09-04", empty, now)).toBe("Yesterday: no sleep logged.");
   });
@@ -222,6 +239,7 @@ describe("sleepWeekObservations", () => {
       coverage: coverage(6),
       napTrend: napTrend(null, null),
       calmMode: false,
+      now: NOW,
     });
     expect(first.id).toBe("night-stretch");
     expect(first.text).toBe("Longest stretch last night: 5h. Your 6-night average is 4h 10m.");
@@ -233,6 +251,7 @@ describe("sleepWeekObservations", () => {
       coverage: coverage(4),
       napTrend: napTrend(null, null),
       calmMode: false,
+      now: NOW,
     });
     expect(observations.some((o) => o.id === "night-stretch")).toBe(false);
   });
@@ -243,6 +262,7 @@ describe("sleepWeekObservations", () => {
       coverage: coverage(6),
       napTrend: napTrend(3, 4),
       calmMode: true,
+      now: NOW,
     });
     expect(observations).toEqual([
       { id: "night-stretch", text: "Longest stretch last night: 5h." },
@@ -256,6 +276,7 @@ describe("sleepWeekObservations", () => {
       coverage: coverage(0, 0),
       napTrend: napTrend(3, 3),
       calmMode: false,
+      now: NOW,
     });
     expect(observation.text).toBe("3 naps a day this week, about the same as the week before.");
   });
@@ -267,6 +288,7 @@ describe("sleepWeekObservations", () => {
       coverage: coverage(0, 0),
       napTrend: napTrend(3, 4),
       calmMode: false,
+      now: NOW,
     });
     expect(observation.text).toBe("3 naps a day this week, 4 the week before.");
   });
@@ -279,6 +301,7 @@ describe("sleepWeekObservations", () => {
         coverage: coverage(0, 0),
         napTrend: napTrend(3, 4, 2),
         calmMode: false,
+        now: NOW,
       }),
     ).toEqual([]);
   });
@@ -291,8 +314,74 @@ describe("sleepWeekObservations", () => {
         coverage: coverage(0, 0),
         napTrend: { current: { naps: 21, days: 7, perDay: 3 }, previous: null },
         calmMode: false,
+        now: NOW,
       }),
     ).toEqual([]);
+  });
+
+  it("names the night when the most recent one logged is not last night", () => {
+    // Five nights are enough for the claim, and nothing since. The stretch is
+    // still a fact — the lead has to say which night it measured.
+    const gappy = [night(20, 4), night(21, 5), night(22, 4), night(23, 5), night(24, 6)];
+    const [observation] = sleepWeekObservations({
+      logs: gappy,
+      schedule: MIDNIGHT,
+      coverage: coverage(5),
+      napTrend: napTrend(null, null),
+      calmMode: false,
+      now: NOW,
+    });
+
+    expect(observation.text).not.toContain("last night");
+    expect(observation.text).toContain("Longest stretch on Mon, Aug 24: 6h.");
+  });
+
+  it("says last night on the morning after, and still on the evening after that", () => {
+    const logs = [night(25, 4), night(26, 4), night(27, 4), night(28, 4), night(30, 5)];
+    const lead = (now: Date) =>
+      sleepWeekObservations({
+        logs,
+        schedule: MIDNIGHT,
+        coverage: coverage(5),
+        napTrend: napTrend(null, null),
+        calmMode: true,
+        now,
+      })[0].text;
+
+    // 09:00 the next morning, and 21:00 that evening once tonight has opened.
+    expect(lead(new Date(2026, 7, 31, 9, 0))).toBe("Longest stretch last night: 5h.");
+    expect(lead(new Date(2026, 7, 31, 21, 0))).toBe("Longest stretch last night: 5h.");
+    // Two mornings later it is no longer last night.
+    expect(lead(new Date(2026, 8, 1, 9, 0))).toBe("Longest stretch on Sunday: 5h.");
+  });
+
+  it("is the only place the tab answers how long the night was", () => {
+    // The exact night from the defect: unbroken 19:40-06:20 under the default
+    // midnight day start.
+    const start = new Date(2026, 7, 30, 19, 40);
+    const unbroken = sleepLog(start, new Date(2026, 7, 31, 6, 20), "night");
+    const priorNights = [night(25, 9), night(26, 9), night(27, 9), night(28, 9)];
+
+    const [observation] = sleepWeekObservations({
+      logs: [...priorNights, unbroken],
+      schedule: MIDNIGHT,
+      coverage: coverage(5),
+      napTrend: napTrend(null, null),
+      calmMode: true,
+      now: NOW,
+    });
+    expect(observation.text).toBe("Longest stretch last night: 10h 40m.");
+
+    // The rhythm card is fed day-scoped stats, and those carry no stretch
+    // figure at all — 4h 20m on one day and 6h 20m on the next could only ever
+    // contradict the line above.
+    const evening = sleepDayStats(segmentSleepForDay([unbroken], "2026-08-30", MIDNIGHT, NOW));
+    const morning = sleepDayStats(segmentSleepForDay([unbroken], "2026-08-31", MIDNIGHT, NOW));
+    expect(evening.nightMin).toBe(260);
+    expect(morning.nightMin).toBe(380);
+    for (const stats of [evening, morning]) {
+      expect(Object.keys(stats).sort()).toEqual(["napCount", "napMin", "nightMin", "totalMin"]);
+    }
   });
 
   it("never shows more than two", () => {
@@ -301,6 +390,7 @@ describe("sleepWeekObservations", () => {
       coverage: coverage(6),
       napTrend: napTrend(3, 4),
       calmMode: false,
+      now: NOW,
     });
     expect(observations.length).toBeLessThanOrEqual(MAX_WEEK_OBSERVATIONS);
     expect(observations).toHaveLength(2);
@@ -310,31 +400,54 @@ describe("sleepWeekObservations", () => {
 // Every string this module can put in front of a parent, swept against the
 // shapes the Sleep tab bans. A deny-list is a tripwire rather than a proof, so
 // it runs over an enumerator of the reachable states rather than a sample.
+//
+// Scope: the copy the pattern view owns — the weekly observations, the bedtime
+// sentence, the band's screen-reader line, the age-typical caption and the
+// calm-mode escalation note. Two surfaces the Sleep tab also renders are
+// deliberately NOT swept, because their strings are built inside component
+// state machines rather than a pure module, and their voice predates this work:
+// `SleepPlanReminderBanner` ("Aim to start the wind-down now", "You're on
+// track") and `SleepCoachCard`'s titles and cues. Both are product-voice
+// decisions, not defects to fix here — extracting and sweeping them is its own
+// change.
 function reachableCopy(): string[] {
   const week = [night(25, 4), night(26, 5), night(27, 6), night(28, 4), night(29, 5), night(30, 4)];
-  const out: string[] = [BEDTIME_INSUFFICIENT_COPY];
+  const out: string[] = [BEDTIME_INSUFFICIENT_COPY, SHORTFALL_ESCALATION_COPY];
 
-  for (const calmMode of [true, false]) {
-    for (const qualifying of [0, 4, 5, 7]) {
-      for (const trend of [
-        napTrend(null, null),
-        napTrend(1, 1),
-        napTrend(3, 4),
-        napTrend(4, 3),
-        napTrend(2, 2, 2),
-        { current: { naps: 12, days: 4, perDay: 3 }, previous: null } as NapCountTrend,
-      ]) {
-        for (const observation of sleepWeekObservations({
-          logs: week,
-          schedule: MIDNIGHT,
-          coverage: coverage(qualifying),
-          napTrend: trend,
-          calmMode,
-        })) {
-          out.push(observation.text);
+  // One caption per age bracket the tab can band a child into.
+  for (const ageMonths of [1, 4, 7, 10, 14, 20, 30, 42]) {
+    out.push(ageTypicalSleepCaption(ageMonths));
+  }
+
+  // Both sides of the "is this last night?" branch: the morning after the
+  // fixture's last night, and a fortnight later when it plainly is not.
+  for (const now of [NOW, new Date(2026, 8, 12, 9, 0)]) {
+    for (const calmMode of [true, false]) {
+      for (const qualifying of [0, 4, 5, 7]) {
+        for (const trend of [
+          napTrend(null, null),
+          napTrend(1, 1),
+          napTrend(3, 4),
+          napTrend(4, 3),
+          napTrend(2, 2, 2),
+          { current: { naps: 12, days: 4, perDay: 3 }, previous: null } as NapCountTrend,
+        ]) {
+          for (const observation of sleepWeekObservations({
+            logs: week,
+            schedule: MIDNIGHT,
+            coverage: coverage(qualifying),
+            napTrend: trend,
+            calmMode,
+            now,
+          })) {
+            out.push(observation.text);
+          }
         }
       }
     }
+  }
+
+  for (const calmMode of [true, false]) {
     for (const summary of [
       { earliestMin: 19 * 60, latestMin: 20 * 60 + 30, nights: 7 },
       { earliestMin: 19 * 60, latestMin: 19 * 60, nights: 5 },
@@ -347,9 +460,9 @@ function reachableCopy(): string[] {
   }
 
   const statsCases: SleepDayStats[] = [
-    { totalMin: 0, napMin: 0, nightMin: 0, napCount: 0, longestStretchMin: 0 },
-    { totalMin: 60, napMin: 60, nightMin: 0, napCount: 1, longestStretchMin: 60 },
-    { totalMin: 800, napMin: 120, nightMin: 680, napCount: 3, longestStretchMin: 400 },
+    { totalMin: 0, napMin: 0, nightMin: 0, napCount: 0 },
+    { totalMin: 60, napMin: 60, nightMin: 0, napCount: 1 },
+    { totalMin: 800, napMin: 120, nightMin: 680, napCount: 3 },
   ];
   for (const stats of statsCases) {
     out.push(describeRhythmDay("2026-09-05", stats, new Date(2026, 8, 5, 12)));
@@ -377,6 +490,9 @@ describe("sleep copy guardrails", () => {
   it("enumerates every reachable state", () => {
     expect(copy.length).toBeGreaterThan(10);
     expect(copy.some((c) => c.includes("Longest stretch last night"))).toBe(true);
+    expect(copy.some((c) => c.includes("Longest stretch on"))).toBe(true);
+    expect(copy.some((c) => c.includes("Typical at"))).toBe(true);
+    expect(copy).toContain(SHORTFALL_ESCALATION_COPY);
     expect(copy.some((c) => c.includes("naps a day this week"))).toBe(true);
     expect(copy.some((c) => c.includes("Bedtime landed"))).toBe(true);
     expect(copy.some((c) => c.includes("no sleep logged"))).toBe(true);

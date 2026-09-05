@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { addMinutes, format, parseISO, startOfDay } from "date-fns";
+import { format, parseISO } from "date-fns";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,17 +7,13 @@ import { cn } from "@/lib/utils";
 import { dayLabel } from "@/lib/dayLabel";
 import { formatDurationShort } from "@/lib/sessionAnchor";
 import { getAgeBucket } from "@/lib/sleepTriage";
+import { BEDTIME_RANGE_BY_BRACKET, parseHHmm } from "@/lib/sleepPlan";
+import { canShowRhythm, type SleepCoverage } from "@/lib/sleepPatterns";
 import {
-  BEDTIME_RANGE_BY_BRACKET,
-  BUCKET_LABEL,
-  NAPS_BY_BRACKET,
-  TOTAL_SLEEP_BY_BRACKET,
-  parseHHmm,
-} from "@/lib/sleepPlan";
-import { MINUTES_PER_DAY, canShowRhythm, type SleepCoverage } from "@/lib/sleepPatterns";
-import {
+  ageTypicalSleepCaption,
   clockOffsetInDay,
   describeRhythmDay,
+  formatClockMinutes,
   rhythmRowSegments,
   trackingDayLengthMin,
   type RhythmSegmentKind,
@@ -38,22 +34,6 @@ const SEGMENT_CLASS: Record<Exclude<RhythmSegmentKind, "nodata">, string> = {
   nap: "bg-sleep/45",
   awake: "bg-muted",
 };
-
-function clockLabel(minutesSinceMidnight: number): string {
-  const wrapped = ((minutesSinceMidnight % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-  return format(addMinutes(startOfDay(new Date(2000, 0, 1)), wrapped), "h a");
-}
-
-function ageCaption(ageMonths: number): string {
-  const bucket = getAgeBucket(ageMonths);
-  const total = TOTAL_SLEEP_BY_BRACKET[bucket];
-  const naps = NAPS_BY_BRACKET[bucket];
-  const napPart =
-    naps.typical === 0
-      ? naps.note ?? "most have dropped the nap"
-      : `${naps.typical} ${naps.typical === 1 ? "nap" : "naps"} a day`;
-  return `Typical at ${BUCKET_LABEL[bucket]}: ${total.low}–${total.high} hours of sleep, ${napPart}.`;
-}
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -92,9 +72,9 @@ export function TodayRhythmCard({
   const selected = bandDays.find((d) => d.dayKey === selectedKey) ?? bandDays[bandDays.length - 1];
 
   const bedtimeRange = BEDTIME_RANGE_BY_BRACKET[getAgeBucket(ageMonths)];
-  const anchorOffsets = [bedtimeRange.earliest, bedtimeRange.latest]
+  const anchorClockMins = [bedtimeRange.earliest, bedtimeRange.latest]
     .filter((v): v is string => !!v)
-    .map((v) => clockOffsetInDay(parseHHmm(v), schedule.dayStartMin));
+    .map(parseHHmm);
 
   if (isLoading) {
     return (
@@ -118,6 +98,9 @@ export function TodayRhythmCard({
     ? "Today"
     : dayLabel(parsedSelected);
   const stats = selected.stats;
+  // The axis belongs to the day whose numbers are on screen: a DST day runs 23
+  // or 25 hours, so its midpoint is not 12:00 after the day start.
+  const selectedDayLength = trackingDayLengthMin(selected.dayKey, schedule);
 
   return (
     <section aria-labelledby="sleep-rhythm-heading" className="space-y-3">
@@ -146,12 +129,12 @@ export function TodayRhythmCard({
           )}
 
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground pl-10">
-              <span>{clockLabel(schedule.dayStartMin)}</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground pl-10">
+              <span>{formatClockMinutes(schedule.dayStartMin, "h a")}</span>
               <span className="flex-1 text-center">
-                {clockLabel(schedule.dayStartMin + MINUTES_PER_DAY / 2)}
+                {formatClockMinutes(schedule.dayStartMin + selectedDayLength / 2, "h a")}
               </span>
-              <span>{clockLabel(schedule.dayStartMin)}</span>
+              <span>{formatClockMinutes(schedule.dayStartMin, "h a")}</span>
             </div>
 
             <ul className="space-y-1">
@@ -201,11 +184,15 @@ export function TodayRhythmCard({
                             />
                           ),
                         )}
-                        {anchorOffsets.map((offset) => (
+                        {anchorClockMins.map((clockMin) => (
                           <span
-                            key={offset}
+                            key={clockMin}
                             className="absolute inset-y-0 w-px bg-foreground/20"
-                            style={{ left: `${(offset / dayLength) * 100}%` }}
+                            style={{
+                              left: `${
+                                (clockOffsetInDay(clockMin, day.dayKey, schedule) / dayLength) * 100
+                              }%`,
+                            }}
                           />
                         ))}
                       </span>
@@ -215,7 +202,7 @@ export function TodayRhythmCard({
               })}
             </ul>
 
-            <div className="flex flex-wrap gap-x-3 gap-y-1 pl-10 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span aria-hidden className="w-2 h-2 rounded-sm bg-sleep" /> Night
               </span>
@@ -236,21 +223,20 @@ export function TodayRhythmCard({
             </div>
           </div>
 
+          {/* Day-scoped facts only. A "longest stretch" tile belongs to the
+              night, not the tracking day — it lives with the weekly
+              observations, which measure whole sessions. */}
           {stats.totalMin > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <StatTile
                 label="Naps"
                 value={stats.napCount === 0 ? "None" : String(stats.napCount)}
               />
               <StatTile label="Night" value={formatDurationShort(stats.nightMin)} />
-              <StatTile
-                label="Longest stretch"
-                value={formatDurationShort(stats.longestStretchMin)}
-              />
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">{ageCaption(ageMonths)}</p>
+          <p className="text-xs text-muted-foreground">{ageTypicalSleepCaption(ageMonths)}</p>
         </CardContent>
       </Card>
 
