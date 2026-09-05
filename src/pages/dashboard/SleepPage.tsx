@@ -27,8 +27,7 @@ import { ChairStageCard } from "@/components/sleep/ChairStageCard";
 import { SleepPlanDialog } from "@/components/SleepPlanDialog";
 import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 
-import { detectTriageReasons, getAgeBucket } from "@/lib/sleepTriage";
-import { TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
+import { detectTriageReasons, getAgeBucket, type AgeBucket } from "@/lib/sleepTriage";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
@@ -40,6 +39,34 @@ import {
 
 const RECENT_DAYS = 3;
 const WINDOW_DAYS = 14;
+
+/**
+ * Average daily sleep, in hours, below which calm mode still surfaces the
+ * pediatrician heads-up.
+ *
+ * These are absolute floors, deliberately NOT derived from the age band the
+ * tab displays. The escalation used to be `displayMinimum * 0.7`, and when the
+ * display minimum was corrected to the sourced AASM/NSF values the escalation
+ * silently moved with it — 9.8h to 8.4h for a 3-6 month old, which would have
+ * silenced the heads-up for babies who previously received it. Pinning the
+ * numbers keeps a correction to a *reference range* from ever narrowing a
+ * *safety* path as a side effect.
+ *
+ * Values are the pre-correction thresholds, carried forward unchanged pending a
+ * fresh sleep-advisor review. Raising one is a product decision; lowering one
+ * needs that review first. (Original escalation: sleep-advisor review
+ * 2026-06-19. Pinned 2026-09-05.)
+ */
+const SHORTFALL_ESCALATION_HOURS: Record<AgeBucket, number> = {
+  "0-3mo": 9.8,
+  "3-6mo": 9.8,
+  "6-9mo": 8.4,
+  "9-12mo": 8.4,
+  "12-18mo": 7.7,
+  "18-24mo": 7.7,
+  "2-3yr": 7.7,
+  "3yr+": 7.7,
+};
 
 /**
  * The two non-suppressible sleep notes.
@@ -78,9 +105,8 @@ function SleepNotes({
     const daysWithData = byDay.size || 1;
     const totalMin = Array.from(byDay.values()).reduce((sum, m) => sum + m, 0);
     const avgDailyHours = totalMin / daysWithData / 60;
-    const minHours = TOTAL_SLEEP_BY_BRACKET[getAgeBucket(ageMonths)].low;
 
-    if (avgDailyHours >= minHours * 0.7) return null;
+    if (avgDailyHours >= SHORTFALL_ESCALATION_HOURS[getAgeBucket(ageMonths)]) return null;
     return "Even in calm mode, a gentle heads-up: your baby's logged sleep has been well below the typical range this week. If that matches what you're seeing, it's worth mentioning at your next pediatrician visit.";
   }, [logs, ageMonths, calmMode, schedule]);
 
