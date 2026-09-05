@@ -332,7 +332,7 @@ describe("predictNextNap reads the shared wake-window engine", () => {
 });
 
 describe("nightlyBedtimes", () => {
-  // The spread the week card plots, derived the same way `summarizeBedtimeColumns`
+  // The spread the week card plots, derived the same way `summarizeClockColumns`
   // derives it — over whatever `nightlyBedtimes` calls a night.
   const band = (logs: SleepLogRow[], schedule: TrackingSchedule) => {
     const minutes = nightlyBedtimes(logs, schedule).map((n) => n.minutes);
@@ -436,6 +436,43 @@ describe("nightlyWakeTimes", () => {
       sleep(at(2026, 9, 2, 20, 0), null, "night"),
     ];
     expect(nightlyWakeTimes(logs, MIDNIGHT).map((w) => w.key)).toEqual(["2026-09-01"]);
+  });
+
+  it("returns nothing for a night in progress that was fragmented by a mid-night stop", () => {
+    // The timer was stopped for a 02:00 feed and restarted. The 02:00 end is
+    // not a morning — the night is still running.
+    const logs = [
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 2, 19, 30), at(2026, 9, 3, 2, 0), "night"),
+      sleep(at(2026, 9, 3, 2, 20), null, "night"),
+    ];
+    expect(nightlyWakeTimes(logs, MIDNIGHT).map((w) => w.key)).toEqual(["2026-09-01"]);
+  });
+
+  it("does not let an ongoing nap suppress the night it keys to", () => {
+    // Under the default midnight schedule the night anchor is noon, so a 10:00
+    // nap keys to the previous day's night.
+    const logs = [
+      sleep(at(2026, 9, 1, 20, 0), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 2, 10, 0), null, "nap"),
+    ];
+    expect(nightlyWakeTimes(logs, MIDNIGHT).map((w) => w.key)).toEqual(["2026-09-01"]);
+  });
+
+  it("does not let a non-timer row with no end suppress the night", () => {
+    // A voice log legitimately carries a null end when the parse missed one.
+    // It is not a running session, so the night's other rows still resolve.
+    const logs = [
+      sleep(at(2026, 9, 1, 19, 30), at(2026, 9, 2, 7, 0), "night"),
+      sleep(at(2026, 9, 2, 2, 0), null, "night", { source: "voice" }),
+    ];
+    expect(nightlyWakeTimes(logs, MIDNIGHT)).toEqual([
+      {
+        key: "2026-09-01",
+        minutes: MINUTES_PER_DAY + 7 * 60,
+        endedAt: at(2026, 9, 2, 7, 0),
+      },
+    ]);
   });
 
   it("keeps a same-day wake below the ones that cross midnight", () => {

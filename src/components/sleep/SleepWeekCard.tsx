@@ -59,7 +59,7 @@ export function SleepWeekCard({ days, logs, schedule, ageMonths }: SleepWeekCard
       {/* No age-typical band here on purpose: there is no wake range in
           `sleepPlan.ts`, and inventing one would be a clinical claim. */}
       <NightClockColumns
-        title="When they woke up"
+        title="When mornings started"
         columns={wakes}
         sentence={wakeSentence(summarizeClockColumns(wakes), calmMode)}
         insufficientCopy={WAKE_INSUFFICIENT_COPY}

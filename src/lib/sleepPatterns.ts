@@ -460,13 +460,29 @@ export interface NightWake {
  *
  * The mirror of `nightlyBedtimes`: grouped on the STARTS, so a 03:00
  * back-to-sleep row still belongs to the night it continues, and keeping the
- * latest end per night — the morning wake rather than a 02:40 rousing. A night
- * still in progress has no wake yet and contributes nothing.
+ * latest end per night — the morning wake rather than a 02:40 rousing.
+ *
+ * A night with any running night-sleep row is suppressed WHOLE. Skipping the
+ * running row alone is not enough: a parent who stops the timer for a 02:00
+ * feed and restarts it leaves the night with a completed 19:30-02:00 segment,
+ * and 02:00 would publish as that night's morning wake while the baby is still
+ * asleep. Only a timer row counts as running (`isOngoingSleep`) — a voice- or
+ * manual-sourced sleep carries a null end when the parse missed one — and only
+ * a night-typed row, since an ongoing 10:00 nap keys to the PREVIOUS night
+ * under the default noon anchor and would erase a real wake.
  */
 export function nightlyWakeTimes(
   logs: SleepLogRow[],
   schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
 ): NightWake[] {
+  const openNights = new Set<string>();
+  for (const log of logs ?? []) {
+    if (!isNightSleep(log.sleep_type) || !isOngoingSleep(log)) continue;
+    const start = toDate(log.started_at);
+    const key = start ? nightKey(start, schedule) : null;
+    if (key) openNights.add(key);
+  }
+
   const latestEndPerNight = new Map<string, Date>();
   for (const log of logs ?? []) {
     if (!isNightSleep(log.sleep_type) || !log.ended_at) continue;
@@ -474,7 +490,7 @@ export function nightlyWakeTimes(
     const end = toDate(log.ended_at);
     if (!start || !end) continue;
     const key = nightKey(start, schedule);
-    if (!key) continue;
+    if (!key || openNights.has(key)) continue;
     const current = latestEndPerNight.get(key);
     if (!current || end > current) latestEndPerNight.set(key, end);
   }
