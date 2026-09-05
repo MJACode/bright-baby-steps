@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Moon, Sparkles, Clock } from "lucide-react";
-import { startOfDay, differenceInMinutes } from "date-fns";
+import { ChevronRight, Compass, Moon, Sparkles, Clock } from "lucide-react";
+import { startOfDay, differenceInMinutes, formatDistanceToNow } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +21,14 @@ import { SleepAlertPopup } from "@/components/SleepAlertPopup";
 interface SleepPlanReminderBannerProps {
   childId: string;
   childName: string;
+  /**
+   * `banner` is the standalone card. `row` is the Sleep tab's one tappable
+   * plan entry — same derived state, collapsed into a single line that also
+   * opens the plan, so the tab carries one plan surface instead of two.
+   */
+  variant?: "banner" | "row";
+  /** Row variant only. */
+  onOpen?: () => void;
 }
 
 type RecentLog = {
@@ -279,6 +287,8 @@ function bannerToAlertKind(state: BannerState): SleepAlertKind | null {
 export function SleepPlanReminderBanner({
   childId,
   childName,
+  variant = "banner",
+  onOpen,
 }: SleepPlanReminderBannerProps) {
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
@@ -356,10 +366,11 @@ export function SleepPlanReminderBanner({
     title: state?.title ?? null,
   });
 
-  if (!savedPlan || !state) return null;
+  if (variant !== "row" && (!savedPlan || !state)) return null;
 
-  const Icon =
-    state.kind === "empathy" || state.kind === "on-track"
+  const Icon = !state
+    ? Moon
+    : state.kind === "empathy" || state.kind === "on-track"
       ? Sparkles
       : state.kind === "off-plan"
         ? Compass
@@ -369,7 +380,47 @@ export function SleepPlanReminderBanner({
           ? Clock
           : Moon;
 
-  const isEmpathy = state.kind === "empathy" || state.kind === "on-track";
+  const isEmpathy = state?.kind === "empathy" || state?.kind === "on-track";
+
+  if (variant === "row") {
+    const title = state?.title ?? (savedPlan ? "Your sleep plan" : `${childName}'s sleep plan`);
+    const subtitle =
+      state?.body ??
+      (savedPlan
+        ? `Saved ${formatDistanceToNow(new Date(savedPlan.updated_at), { addSuffix: true })} \u00b7 tap to view or adjust`
+        : "Our age-based recommendation \u2014 tap to view or customize.");
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="w-full min-h-[48px] rounded-2xl border border-sleep/20 bg-sleep/5 p-4 flex items-center gap-3 text-left transition-colors motion-reduce:transition-none hover:bg-sleep/10"
+        >
+          <span className="rounded-full bg-sleep/15 flex items-center justify-center shrink-0 w-10 h-10">
+            <Icon aria-hidden className="text-sleep w-5 h-5" />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block font-display font-bold text-sm leading-tight">{title}</span>
+            <span className="block text-xs text-muted-foreground mt-0.5 line-clamp-2">
+              {subtitle}
+            </span>
+          </span>
+          <ChevronRight aria-hidden className="w-4 h-4 shrink-0 text-muted-foreground" />
+        </button>
+        {alertKind && popup.visible && state && (
+          <SleepAlertPopup
+            title={state.title}
+            body={alertBody}
+            onDismiss={popup.dismiss}
+            onRemindLater={popup.remindLater}
+          />
+        )}
+      </>
+    );
+  }
+
+  if (!state) return null;
 
   return (
     <>

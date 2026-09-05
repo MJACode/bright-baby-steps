@@ -88,7 +88,18 @@ function deriveCoachState(
   return null;
 }
 
-export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null }) {
+interface SleepCoachCardProps {
+  activeChild: ChildLite | null;
+  /**
+   * `card` is the standalone Home-screen surface, with its own Start CTA.
+   * `strip` is the prediction fused into the Sleep tab's Now card — same
+   * prediction, no CTA, because the timer directly below owns the one Start
+   * button on that screen.
+   */
+  variant?: "card" | "strip";
+}
+
+export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCardProps) {
   const { data } = useSleepCoach(activeChild);
   const { data: plan } = useSleepPlan(activeChild?.id ?? null);
   const pred = data?.prediction ?? null;
@@ -178,6 +189,28 @@ export function SleepCoachCard({ activeChild }: { activeChild: ChildLite | null 
       });
     }
   };
+
+  // The gate wraps the prediction and nothing else. On the Sleep tab the timer
+  // is a sibling of this strip, so a free account can still start a sleep.
+  if (variant === "strip") {
+    return (
+      <PremiumGate feature="predictions" variant="blur">
+        <div className="rounded-xl border border-sleep/20 bg-sleep/10 p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-sleep" />
+            <span className="text-[11px] font-mono uppercase tracking-wider text-sleep">
+              Sleep Coach
+            </span>
+            {pill}
+            <span className={cn("ml-auto w-2 h-2 rounded-full", confidenceTone)} />
+          </div>
+          <p className="text-sm font-bold leading-snug">{state.title}</p>
+          <p className="text-sm text-foreground/85 leading-snug mt-0.5">{state.cue}</p>
+          <p className="text-xs text-muted-foreground mt-1">{pred.reason}</p>
+        </div>
+      </PremiumGate>
+    );
+  }
 
   return (
     <PremiumGate feature="predictions" variant="blur">

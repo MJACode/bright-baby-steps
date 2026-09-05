@@ -342,6 +342,50 @@ function nightKey(start: Date, schedule: TrackingSchedule): string | null {
   return trackingDayKey(start, { dayStartMin: anchorMin, nightStartMin: null });
 }
 
+export interface NightBedtime {
+  /** The night this bedtime belongs to, keyed by the date it opened on. */
+  key: string;
+  /** Minutes since midnight on the night's own date. A bedtime past midnight
+   *  reads above 1440 (00:30 is 1470) so the band stays ordered — render with
+   *  `formatHHmm`, which wraps. */
+  minutes: number;
+  startedAt: Date;
+}
+
+/**
+ * When each night actually began, one entry per night, oldest first.
+ *
+ * `bedtimeBand` summarises this and the weekly column view plots it, so the
+ * band a parent reads and the columns they look at can never disagree about
+ * which sleep opened a night.
+ */
+export function nightlyBedtimes(
+  logs: SleepLogRow[],
+  schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
+): NightBedtime[] {
+  const earliestStartPerNight = new Map<string, Date>();
+  for (const log of logs ?? []) {
+    if (!isNightSleep(log.sleep_type)) continue;
+    const start = toDate(log.started_at);
+    if (!start) continue;
+    const key = nightKey(start, schedule);
+    if (!key) continue;
+    const current = earliestStartPerNight.get(key);
+    if (!current || start < current) earliestStartPerNight.set(key, start);
+  }
+
+  return Array.from(earliestStartPerNight.entries())
+    .map(([key, startedAt]) => {
+      const min = startedAt.getHours() * 60 + startedAt.getMinutes();
+      return {
+        key,
+        startedAt,
+        minutes: startedAt.getHours() < 12 ? min + MINUTES_PER_DAY : min,
+      };
+    })
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
 export interface BedtimeBand {
   /** Minutes since midnight on the night's own date. A bedtime past midnight
    *  reads above 1440 (00:30 is 1470) so the band stays ordered — render with
@@ -356,21 +400,7 @@ export function bedtimeBand(
   logs: SleepLogRow[],
   schedule: TrackingSchedule = DEFAULT_TRACKING_SCHEDULE,
 ): BedtimeBand {
-  const earliestStartPerNight = new Map<string, Date>();
-  for (const log of logs ?? []) {
-    if (!isNightSleep(log.sleep_type)) continue;
-    const start = toDate(log.started_at);
-    if (!start) continue;
-    const key = nightKey(start, schedule);
-    if (!key) continue;
-    const current = earliestStartPerNight.get(key);
-    if (!current || start < current) earliestStartPerNight.set(key, start);
-  }
-
-  const bedtimes = Array.from(earliestStartPerNight.values()).map((d) => {
-    const min = d.getHours() * 60 + d.getMinutes();
-    return d.getHours() < 12 ? min + MINUTES_PER_DAY : min;
-  });
+  const bedtimes = nightlyBedtimes(logs, schedule).map((n) => n.minutes);
 
   if (bedtimes.length === 0) {
     return { medianMin: null, earliestMin: null, latestMin: null, nights: 0 };
