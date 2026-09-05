@@ -191,6 +191,39 @@ export const SAFE_SLEEP_ABCS = {
   source: AAP_SAFE_SLEEP,
 };
 
+/**
+ * Average daily sleep, in hours, below which calm mode still surfaces the
+ * pediatrician heads-up.
+ *
+ * These are absolute floors, deliberately NOT derived from TOTAL_SLEEP_BY_BRACKET
+ * above. The escalation used to be `displayMinimum * 0.7`, and when the display
+ * minimum was corrected to the sourced AASM/NSF values the escalation silently
+ * moved with it — 9.8h to 8.4h for a 3-6 month old, which would have silenced
+ * the heads-up for babies who previously received it. Pinning the numbers keeps
+ * a correction to a *reference range* from ever narrowing a *safety* path as a
+ * side effect.
+ *
+ * Values are the pre-correction thresholds, carried forward unchanged pending a
+ * fresh sleep-advisor review. Raising one is a product decision; lowering one
+ * needs that review first. Every value is pinned in
+ * `sleepShortfall.test.ts`, so an edit here has to be an explicit one.
+ * (Original escalation: sleep-advisor review 2026-06-19. Pinned 2026-09-05.)
+ */
+export const SHORTFALL_ESCALATION_HOURS: Record<AgeBucket, number> = {
+  "0-3mo": 9.8,
+  "3-6mo": 9.8,
+  "6-9mo": 8.4,
+  "9-12mo": 8.4,
+  "12-18mo": 7.7,
+  "18-24mo": 7.7,
+  "2-3yr": 7.7,
+  "3yr+": 7.7,
+};
+
+/** The one note calm mode cannot suppress. */
+export const SHORTFALL_ESCALATION_COPY =
+  "Even in calm mode, a gentle heads-up: your baby's logged sleep has been well below the typical range this week. If that matches what you're seeing, it's worth mentioning at your next pediatrician visit.";
+
 export const SOURCES: SleepPlanSource[] = [
   {
     title: "Recommended Amount of Sleep for Pediatric Populations: AASM Consensus Statement",

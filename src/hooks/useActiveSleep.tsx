@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { ongoingSleepElapsedSeconds } from "@/lib/sleepPatterns";
 import {
   scheduleSessionNotification,
   cancelSessionNotification,
@@ -26,20 +27,16 @@ type ActiveSleepRow = {
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 
-// Server-truth elapsed seconds for an in-progress session.
-// Returns: total wall-clock since start, minus accumulated paused seconds,
-// minus the current pause segment if currently paused. Never trusts the
-// client wall clock for the start moment — only for "now".
+// Server-truth elapsed seconds for an in-progress session: total wall-clock
+// since start, minus accumulated paused seconds, minus the current pause
+// segment if currently paused. Never trusts the client wall clock for the
+// start moment — only for "now".
+//
+// One engine, shared with the rhythm band: `segmentSleepForDay` sizes an
+// in-progress block with the same call, so the timer face and the band can't
+// print different lengths for the same session.
 export function computeElapsedSeconds(row: ActiveSleepRow): number {
-  const startedMs = new Date(row.started_at).getTime();
-  const now = Date.now();
-  let elapsed = Math.max(0, Math.floor((now - startedMs) / 1000));
-  elapsed -= row.paused_accumulated_seconds;
-  if (row.paused_at) {
-    const pausedMs = new Date(row.paused_at).getTime();
-    elapsed -= Math.max(0, Math.floor((now - pausedMs) / 1000));
-  }
-  return Math.max(0, elapsed);
+  return ongoingSleepElapsedSeconds(row, new Date());
 }
 
 export function useActiveSleep(childId: string | undefined) {
@@ -74,10 +71,13 @@ export function useActiveSleep(childId: string | undefined) {
   });
 
   const invalidate = () => invalidateAfterLogWrite(queryClient);
-  // pause/resume write only paused_at + paused_accumulated_seconds and leave the
-  // row in progress, so nothing outside the active-session query can change.
-  // The full log-write fan-out would cost ~10 refetches per tap.
-  const invalidateActive = () => queryClient.invalidateQueries({ queryKey: activeKey });
+  // Pausing changes how long the session has been asleep, and the rhythm band
+  // sizes its in-progress block from the same row — invalidating only
+  // `activeKey` is MORE specific than the window query, so prefix-matching
+  // never reaches it and the band keeps growing past the frozen timer face.
+  // The `sleep-logs` root covers every sleep query without the full
+  // cross-module log-write fan-out.
+  const invalidateSleep = () => queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
 
   const start = useMutation({
     mutationFn: async (input: {
@@ -128,7 +128,7 @@ export function useActiveSleep(childId: string | undefined) {
         elapsedSeconds: computeElapsedSeconds(active),
       });
     },
-    onSuccess: invalidateActive,
+    onSuccess: invalidateSleep,
   });
 
   const resume = useMutation({
@@ -154,7 +154,7 @@ export function useActiveSleep(childId: string | undefined) {
         elapsedSeconds: computeElapsedSeconds(active),
       });
     },
-    onSuccess: invalidateActive,
+    onSuccess: invalidateSleep,
   });
 
   const stop = useMutation({

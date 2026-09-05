@@ -1,6 +1,8 @@
-import { differenceInMinutes, addMinutes, getHours } from "date-fns";
+import { addMinutes, getHours } from "date-fns";
 
-interface Sleep { started_at: string; ended_at: string | null; }
+import { sampleConfidence, wakeWindowSamples } from "@/lib/sleepPatterns";
+
+interface Sleep { started_at: string; ended_at: string | null; sleep_type?: string | null; }
 
 export interface NapPrediction {
   windowStart: Date;
@@ -36,7 +38,7 @@ export function predictNextNap(opts: {
     return h >= 20 || h < 6;
   };
 
-  const lastWake = completed.sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
+  const lastWake = [...completed].sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
   if (!lastWake) {
     const target = AGE_DEFAULTS_MIN(opts.ageMonths);
     const start = addMinutes(now, target - 30);
@@ -49,20 +51,13 @@ export function predictNextNap(opts: {
     };
   }
 
-  const samples: number[] = [];
-  for (let i = 1; i < completed.length; i++) {
-    const w = differenceInMinutes(completed[i - 1].start, completed[i].end);
-    if (w > 30 && w < 360) samples.push(w);
-  }
+  const windows = wakeWindowSamples(opts.sleeps);
+  const samples = windows.map((w) => w.minutes);
 
   const b = bucket(getHours(lastWake));
-  const sameBucket: number[] = [];
-  for (let i = 1; i < completed.length; i++) {
-    if (bucket(getHours(completed[i].end)) === b) {
-      const w = differenceInMinutes(completed[i - 1].start, completed[i].end);
-      if (w > 30 && w < 360) sameBucket.push(w);
-    }
-  }
+  const sameBucket = windows
+    .filter((w) => bucket(getHours(w.wokeAt)) === b)
+    .map((w) => w.minutes);
 
   const median = (arr: number[]) => {
     if (arr.length === 0) return null;
@@ -71,8 +66,7 @@ export function predictNextNap(opts: {
   };
 
   const personal = median(sameBucket) ?? median(samples) ?? AGE_DEFAULTS_MIN(opts.ageMonths);
-  const confidence: NapPrediction["confidence"] =
-    sameBucket.length >= 5 ? "high" : sameBucket.length >= 2 ? "medium" : "low";
+  const confidence: NapPrediction["confidence"] = sampleConfidence(sameBucket.length);
 
   const center = addMinutes(lastWake, personal);
   const windowStart = addMinutes(center, -15);

@@ -1,90 +1,69 @@
-# Task — Let a parent set the schedule their data is tracked against
+# Sleep tab — pattern view + Sleep Coach callout
 
-Request: *"Allow user to set schedule to track data. Meaning a user wants to
-track 7am to 12pm or something else. Huckleberry does this already — look at
-them for competitive. This is important for when to track overall sleep and
-other data."*
+Branch: `claude/sleep-tab-patterns-coach-m7ymda`
 
-## What the app did before
-Every daily aggregate was pinned to **local midnight**, with no way to change
-it:
+## Decisions (approved 2026-09-05)
+- Pattern view (24h rhythm + weekly observations) is **free**. Only the next-nap
+  prediction stays behind `PremiumGate feature="predictions"`.
+- Sleep Coach is **fused into the timer card** as a prediction strip — one Start
+  button on the tab, not two. Home-screen `SleepCoachCard` keeps its current
+  standalone form via a `variant` prop (no fork).
+- **Full restructure**: tabs die, History moves to its own route.
 
-- `groupLogsByDay` keyed History day headers by `format(at, "yyyy-MM-dd")`.
-- `useLogHistory` fetched from `subDays(startOfDay(now), days - 1)`.
-- `AnalyticsPage`'s 7-day bars bucketed by calendar date.
-- `SleepPage` insights averaged daily sleep by calendar date.
-- Nap-vs-night was derived only from the saved sleep plan's `bedtime_earliest`,
-  then an age-bracket default (`resolveNightStartMin`) — the family never got a
-  say.
+## New IA (single scroll)
+1. H1 "Sleep" + child name (info popover cut)
+2. **Now card** — prediction strip (gated) + timer + one Start CTA; Ferber /
+   Chair render in this card's footer when a night sleep is active
+3. **Today's rhythm** — 24h band, hero total, 3 stat tiles, age-band caption
+4. `SleepTodoCard` (Today's Sleep Plan) — unchanged
+5. **This week** — 7-day nap/night bars + bedtime band + <=2 derived observations
+6. Sleep plan — demoted to one tappable row (absorbs the reminder banner)
+7. Recent sleep — last 3 tracking days + "See all sleep →" (`/dashboard/sleep/history`)
 
-So a 3 AM feed opened a brand-new "Today" with one row in it, and the night the
-parent was actually living through was split across two day headers.
+## Tasks
+### Data layer
+- [x] `src/lib/sleepPatterns.ts` — pure, tested helpers: day segmentation across
+      the tracking-day boundary, longest stretch, nap count, wake windows,
+      bedtime band (median + spread), nap-count week-over-week, coverage rule
+- [x] Extract the wake-window gap calc out of `predictNextNap` rather than
+      rewriting it
+- [x] `useSleepDay` / `useSleepWeek` query hooks (day-scoped; the existing
+      50-row desc query is the wrong shape)
 
-## Interpretation of "7am to 12pm"
-Read as a **day boundary, not a filter**. The tracking day *rotates* — it runs
-from the day start to the same clock time the next day — so nothing is ever
-dropped: a 3 AM log under a 07:00 day start files under the previous date,
-where the parent already thinks it belongs. A literal 7am–12pm window would
-discard every night feed, which is the opposite of what a tracking app is for.
-Two boundaries are settable, matching Huckleberry's split:
+### Data-correctness fixes (found during research, verified in code)
+- [x] Delete `ageMinSleepHours` + `sleepRecommendations` from SleepPage; read
+      `TOTAL_SLEEP_BY_BRACKET` / `NAPS_BY_BRACKET` from `sleepPlan.ts`.
+      Today `"3mo": 14` vs canonical `12` false-flags a typical 4-month-old.
+- [x] `detectTriageReasons` early_waking: gate to >=3 months and count only the
+      final night segment per tracking day (today a 2:40am feed-split reads as
+      an early wake)
+- [x] SleepPage `ageMonths` must use corrected age for preemies, matching
+      `useSleepCoach` (today the tab and the coach disagree)
 
-- **Day starts** — anchors totals, day headers, and the 7-day charts.
-- **Night starts** — the nap-vs-night line.
+### UI
+- [ ] Fuse coach into timer card; `variant` prop on `SleepCoachCard`; gate wraps
+      only the prediction strip, never the timer
+- [ ] `TodayRhythmCard` — 3 states (asleep / awake / **no data**, visually inert);
+      fixed 12AM–12AM axis; in-progress session open-ended to now; tap → that day
+- [ ] `SleepWeekCard` — lift `SleepNapNightChart` out of AnalyticsPage, do not
+      build a second one
+- [ ] `SleepHistoryPage` route + move `GroupedLogList` / `useLogHistory` / edit
+      dialog wholesale
+- [ ] Cut: Tabs block, info popover, both static advice strings (keep the
+      calm-mode extreme-shortfall soft-out verbatim), plan entry card, reminder
+      banner off the main scroll
+- [ ] Persistent under-1 safe-sleep line (AAP ABCs), non-suppressible in calm mode
 
-## Changes
-- [x] `supabase/migrations/20260830000000_child_tracking_schedule.sql` — adds
-      nullable `day_start_time` / `night_start_time` (HH:MM text, CHECK-
-      constrained) to `public.children`, and surfaces both in
-      `get_child_profile()`. **NULL = today's behaviour** (midnight; night from
-      the plan/bracket), so no existing family's history silently reshuffles.
-      Per-child, not per-account — a newborn and a toddler keep different days.
-- [x] `src/lib/trackingDay.ts` — the one place the boundary math lives:
-      `trackingDayStart/Date/Key`, `isSameTrackingDay`, `trackingWindowStart`,
-      `parseClock`, `formatClock`.
-- [x] `src/hooks/useTrackingSchedule.ts` — resolves the active child's schedule
-      off the already-cached `["children"]` query (no extra request), memoized
-      on the two clock strings so the 30s refetch doesn't re-key downstream
-      `useMemo`s.
-- [x] `groupLogsByDay` takes a schedule; `GroupedLogList` takes it as a **prop**
-      (stays presentational) and anchors `dayLabel` to the current tracking day
-      so "Today" still reads Today at 3 AM.
-- [x] `useLogHistory` windows from the tracking-day start, keys the cache on
-      `dayStartMin`, trims the partial oldest day by tracking day, and hands the
-      schedule back so the list groups on the same boundary it fetched.
-- [x] `AnalyticsPage` — calendar dots, the 7-day buckets, and all four charts.
-      Two keying functions, one key space: a cell/bucket keys by its own date, a
-      log keys by the tracking day containing it.
-- [x] `SleepPage` insights — 7-day window and daily-average buckets.
-- [x] `resolveNightStartMin(plan, bucket, familyNightStartMin?)` — the family's
-      setting now beats the plan's bedtime, which beats the bracket default.
-      Threaded through `buildSleepTodo`, `useSleepTodo`, and `SleepCoachCard`,
-      so a quick-started sleep is typed against the family's own night.
-- [x] `src/components/TrackingScheduleSettings.tsx` — Profile & Settings card
-      with two `type="time"` inputs (mirrors the quiet-hours pattern), a
-      plain-language preview line, a warning when night ≤ day, and a "Back to
-      midnight" reset.
-- [x] Tests: `src/lib/__tests__/trackingDay.test.ts` (19) plus custom-day-start
-      cases in `groupLogsByDay.test.ts`.
+### Copy / guardrails
+- [ ] Thresholds: >=3 logged days for rhythm; >=5 qualifying nights for any night
+      claim; 14 days before nap timing is called personal. Reuse the existing
+      `sleepCoach` confidence ladder, do not invent a second one.
+- [ ] No score, no grade, no red/green trend arrows, no wakings count, no
+      time-to-settle, no method-joined-to-trend copy
+- [ ] Calm mode: keeps facts (rhythm, totals), drops evaluations (comparisons,
+      bedtime spread, first-nap time)
+- [ ] Insufficient data reads "Log 5 nights and your bedtime range shows up
+      here" — never "you've logged 3 of 7 days"
 
-## Verification
-`npx tsc -p tsconfig.app.json --noEmit` clean · `npm test` 443 passed
-(31 files) · `npx eslint` clean on every changed file · `npm run build` ✓.
-
-The migration is written but **not applied to live** — it needs
-`supabase db push` or an MCP `apply_migration` before the setting persists in
-production. Until then the UI writes to columns that don't exist yet.
-
-## Not done, deliberately
-- **The Calendar tab still runs midnight-to-midnight.** `DayTimeline` /
-  `WeekTimeline` draw a literal 24-hour clock grid; re-anchoring that is a
-  visual redesign (where does the axis start? what does a week column mean?),
-  not a boundary swap. Aggregates moved; the timeline grid didn't.
-- **`buildSleepTodo`'s internal `dayStart`** stays at calendar midnight. The
-  sleep to-do anchors on the observed wake anchor, not the day boundary, and
-  its slot-filling logic is covered by a large fixture suite that encodes that
-  assumption. The night boundary — the part that actually mislabels data — is
-  wired.
-- **No default flip.** New and existing children both start at midnight. Making
-  07:00 the default would retro-regroup every family's history on upgrade; if
-  the product wants Huckleberry's default, that's a one-line change plus a
-  migration backfill, and it should be a deliberate call.
+## Review
+_(to fill in)_

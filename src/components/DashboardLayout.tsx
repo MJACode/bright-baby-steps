@@ -26,6 +26,7 @@ const backTargets: Record<string, { to: string; label: string }> = {
   "/dashboard/cry-analyzer": { to: "/dashboard/more", label: "More" },
   "/dashboard/weekly": { to: "/dashboard/more", label: "More" },
   "/dashboard/analytics": { to: "/dashboard/more", label: "More" },
+  "/dashboard/sleep/history": { to: "/dashboard/sleep", label: "Sleep" },
   "/dashboard/profile": { to: "/dashboard", label: "Home" },
   "/dashboard/calendar": { to: "/dashboard", label: "Home" },
 };
