@@ -1,157 +1,99 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { useCallback, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, parseISO } from "date-fns";
+import { ChevronRight, CloudMoon, Moon } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useLeaps } from "@/hooks/useLeaps";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { badgeVariants } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Moon, Sun, Clock, Pencil, Info, Plus, CloudMoon, Sparkle, Sunrise, CheckCircle2, Trash2, CalendarCheck, History } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
-import { format, formatDistanceToNow } from "date-fns";
-import { AddChildDialog } from "@/components/AddChildDialog";
+import { useActiveSleep } from "@/hooks/useActiveSleep";
+import { useSleepWindow } from "@/hooks/useSleepPatterns";
+import { useSleepPlan, type FerberSchedule } from "@/hooks/useSleepPlan";
+import { sleepAgeMonths, useSleepCoach } from "@/hooks/useSleepCoach";
 import { toast } from "@/hooks/use-toast";
+
+import { Card, CardContent } from "@/components/ui/card";
+import { AddChildDialog } from "@/components/AddChildDialog";
+import { SleepCoachCard } from "@/components/SleepCoachCard";
 import SleepTimer from "@/components/sleep/SleepTimer";
-import { SleepPlanDialog } from "@/components/SleepPlanDialog";
-import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 import { SleepTodoCard } from "@/components/sleep/SleepTodoCard";
+import { TodayRhythmCard } from "@/components/sleep/TodayRhythmCard";
+import { SleepWeekCard } from "@/components/sleep/SleepWeekCard";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
+import { SleepPlanDialog } from "@/components/SleepPlanDialog";
+import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
+
 import { detectTriageReasons, getAgeBucket } from "@/lib/sleepTriage";
-import { BUCKET_LABEL, NAPS_BY_BRACKET, TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
-import { cancelSessionNotification } from "@/lib/sessionNotifications";
-import { sleepAgeMonths, useSleepCoach } from "@/hooks/useSleepCoach";
-import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
+import { TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
-import { useSleepPlan } from "@/hooks/useSleepPlan";
-import type { FerberSchedule } from "@/hooks/useSleepPlan";
-import { useLoggedByNames } from "@/hooks/useLoggedByNames";
-import { LoggedByChip } from "@/components/LoggedByChip";
-import { GroupedLogList } from "@/components/logging/GroupedLogList";
-import { useLogHistory } from "@/hooks/useLogHistory";
-import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
-import { summarizeSleepDay } from "@/lib/logDaySummary";
-import { trackingDayKey, trackingWindowStart } from "@/lib/trackingDay";
-import type { Tables } from "@/integrations/supabase/types";
+import { dayLabel } from "@/lib/dayLabel";
+import { trackingWindowStart, trackingDayKey } from "@/lib/trackingDay";
 
-type SleepLogRow = Tables<"sleep_logs">;
+const RECENT_DAYS = 3;
+const WINDOW_DAYS = 14;
 
-type SleepLogEntry = { started_at: string; ended_at: string | null; duration_minutes: number | null; sleep_type: string };
-
-// A short list of nudges — always actionable, and only the ones that aren't
-// already on screen somewhere else on the tab.
-function SleepInsights({
+/**
+ * The two non-suppressible sleep notes.
+ *
+ * Everything evaluative was cut from this tab; what remains is the leap /
+ * regression reassurance and — in calm mode only — the escalation for a large
+ * shortfall against the age band, which a parent must never be able to toggle
+ * into silence. (Sleep-advisor review, 2026-06-19.)
+ */
+function SleepNotes({
   logs,
   ageMonths,
   nightWakingReassurance,
 }: {
-  logs: SleepLogEntry[];
+  logs: { started_at: string; duration_minutes: number | null }[];
   ageMonths: number;
   nightWakingReassurance: string | null;
 }) {
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
-  const schedule = useTrackingSchedule();
 
-  const insights = useMemo(() => {
-    const result: { icon: React.ReactNode; text: string }[] = [];
-    const sevenAgo = trackingWindowStart(7, schedule);
-    const recentLogs = logs.filter(l => new Date(l.started_at) >= sevenAgo);
-    if (recentLogs.length === 0) return result;
+  const shortfallNote = useMemo(() => {
+    if (!calmMode) return null;
+    const sevenAgo = trackingWindowStart(7);
+    const recentLogs = logs.filter((l) => new Date(l.started_at) >= sevenAgo);
+    if (recentLogs.length === 0) return null;
 
-    // Bucketed by the family's tracking day, so an 11pm–7am night counts once
-    // against the day it started rather than splitting the average in two.
     const byDay = new Map<string, number>();
-    recentLogs.forEach(l => {
-      const key = trackingDayKey(l.started_at, schedule);
+    recentLogs.forEach((l) => {
+      const key = trackingDayKey(l.started_at);
       if (!key) return;
       byDay.set(key, (byDay.get(key) ?? 0) + (l.duration_minutes || 0));
     });
     const daysWithData = byDay.size || 1;
-    const totalMin = Array.from(byDay.values()).reduce((s, m) => s + m, 0);
-
-    // 1. Average daily sleep below age minimum. Calm mode hides the mild
-    // comparison — it's the most anxiety-inducing aggregate on the page — but a
-    // LARGE shortfall (below ~70% of the age minimum) still surfaces a
-    // non-numeric, pediatrician-soft-out heads-up even in calm mode, so the one
-    // signal that could matter can't be toggled into silence. (Sleep-advisor
-    // review, 2026-06-19.)
+    const totalMin = Array.from(byDay.values()).reduce((sum, m) => sum + m, 0);
     const avgDailyHours = totalMin / daysWithData / 60;
     const minHours = TOTAL_SLEEP_BY_BRACKET[getAgeBucket(ageMonths)].low;
-    if (avgDailyHours < minHours) {
-      if (!calmMode) {
-        result.push({
-          icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
-          text: "A consistent bedtime routine can help stretch sleep — something gentle to try this week.",
-        });
-      } else if (avgDailyHours < minHours * 0.7) {
-        result.push({
-          icon: <CloudMoon className="w-5 h-5 text-sleep shrink-0" />,
-          text: "Even in calm mode, a gentle heads-up: your baby's logged sleep has been well below the typical range this week. If that matches what you're seeing, it's worth mentioning at your next pediatrician visit.",
-        });
-      }
-    }
 
-    // 2. Early waking pattern — uses the shared triage rule so Insights stays
-    // consistent with the rest of the app on what counts as "early waking."
-    if (detectTriageReasons(logs, ageMonths).includes("early_waking")) {
-      result.push({
-        icon: <Sunrise className="w-5 h-5 text-sleep shrink-0" />,
-        text: "Early waking pattern detected — try a slightly later bedtime or a blackout curtain.",
-      });
-    }
+    if (avgDailyHours >= minHours * 0.7) return null;
+    return "Even in calm mode, a gentle heads-up: your baby's logged sleep has been well below the typical range this week. If that matches what you're seeing, it's worth mentioning at your next pediatrician visit.";
+  }, [logs, ageMonths, calmMode]);
 
-    return result;
-  }, [logs, ageMonths, calmMode, schedule]);
-
-  if (insights.length === 0 && !nightWakingReassurance) return null;
+  if (!shortfallNote && !nightWakingReassurance) return null;
 
   return (
     <div className="space-y-2">
-      {/* Night-waking reassurance — only when a regression window or leap applies */}
-      {nightWakingReassurance && (
-        <Card className="border-0 bg-sleep-bg/60">
-          <CardContent className="p-3 flex items-start gap-3">
-            <Moon className="w-5 h-5 text-sleep shrink-0" />
-            <p className="text-sm text-foreground/80 leading-relaxed">{nightWakingReassurance}</p>
-          </CardContent>
-        </Card>
-      )}
-
-      {insights.map((insight, i) => (
-        <Card key={i} className="border-0 bg-sleep-bg/60">
-          <CardContent className="p-3 flex items-start gap-3">
-            {insight.icon}
-            <p className="text-sm text-foreground/80 leading-relaxed">{insight.text}</p>
-          </CardContent>
-        </Card>
-      ))}
+      {[nightWakingReassurance, shortfallNote]
+        .filter((text): text is string => !!text)
+        .map((text) => (
+          <Card key={text.slice(0, 24)} className="border-0 bg-sleep-bg/60">
+            <CardContent className="p-3 flex items-start gap-3">
+              <Moon aria-hidden className="w-5 h-5 text-sleep shrink-0" />
+              <p className="text-sm text-foreground/80 leading-relaxed">{text}</p>
+            </CardContent>
+          </Card>
+        ))}
     </div>
   );
-}
-
-// The sourced tables in sleepPlan.ts are the only age bands in the app — the
-// plan dialog, the to-do list and this popover all read the same numbers.
-function sleepGuide(ageMonths: number) {
-  const bucket = getAgeBucket(ageMonths);
-  const total = TOTAL_SLEEP_BY_BRACKET[bucket];
-  const naps = NAPS_BY_BRACKET[bucket];
-  return {
-    label: BUCKET_LABEL[bucket],
-    total: `${total.low}–${total.high} hrs`,
-    naps:
-      naps.typical === 0
-        ? naps.note ?? "Most have dropped the nap"
-        : `${naps.typical} ${naps.typical === 1 ? "nap" : "naps"}/day`,
-  };
 }
 
 export default function SleepPage() {
@@ -159,57 +101,28 @@ export default function SleepPage() {
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
   const { data: coach } = useSleepCoach(activeChild ?? null);
-  const { data: savedPlan, isLoading: isLoadingPlan } = useSleepPlan(activeChild?.id ?? null);
+  const { data: savedPlan } = useSleepPlan(activeChild?.id ?? null);
   const { data: leaps } = useLeaps(activeChild ?? null);
+  const { active: activeSleepLog } = useActiveSleep(activeChild?.id);
 
-  // Edit state
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  // History rows can be older than the 50 the stats query holds, so the delete
-  // path can't look the row back up by id — hold onto the row itself.
-  const [editingRow, setEditingRow] = useState<SleepLogRow | null>(null);
-  const [editSleepType, setEditSleepType] = useState<"nap" | "night">("nap");
-  const [editStartedAt, setEditStartedAt] = useState<Date>(new Date());
-  const [editEndedAt, setEditEndedAt] = useState<Date>(new Date());
   const [savingTimer, setSavingTimer] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
-  const [tab, setTab] = useState("history");
 
-  const { data: logs } = useQuery({
-    queryKey: ["sleep-logs", activeChild?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sleep_logs")
-        .select("*")
-        .eq("child_id", activeChild!.id)
-        .order("started_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!activeChild,
-  });
-
-  const history = useLogHistory<SleepLogRow>({
-    table: "sleep_logs",
-    childId: activeChild?.id,
-    dateColumn: "started_at",
-  });
-
-  const loggedByNames = useLoggedByNames([
-    ...(logs?.map((l) => l.parent_id) ?? []),
-    ...history.logs.map((l) => l.parent_id),
-  ]);
+  const window = useSleepWindow(activeChild ?? null, WINDOW_DAYS);
+  const logs = window.logs;
 
   // sleep_logs carries an exclusion constraint (no_overlapping_sleep) — surface
   // the clash before the insert so the parent sees which session is in the way.
-  // Only covers the 50 rows the query holds, so back-filling something older
-  // falls through to the constraint and its generic copy.
+  // Only covers the fetched window, so back-filling something older falls
+  // through to the constraint and its generic copy.
   const findSleepOverlap = useCallback(
     (start: Date, end: Date) => {
-      const hit = logs?.find((l) => {
+      const hit = logs.find((l) => {
         if (!l.ended_at) return false;
-        return new Date(l.started_at).getTime() < end.getTime() && start.getTime() < new Date(l.ended_at).getTime();
+        return (
+          new Date(l.started_at).getTime() < end.getTime() &&
+          start.getTime() < new Date(l.ended_at).getTime()
+        );
       });
       return hit ? { start: new Date(hit.started_at), end: new Date(hit.ended_at!) } : null;
     },
@@ -217,7 +130,12 @@ export default function SleepPage() {
   );
 
   const addLog = useMutation({
-    mutationFn: async (log: { started_at: string; ended_at: string; sleep_type: string; notes: string | null }) => {
+    mutationFn: async (log: {
+      started_at: string;
+      ended_at: string;
+      sleep_type: string;
+      notes: string | null;
+    }) => {
       const { error } = await supabase.from("sleep_logs").insert({
         ...log,
         child_id: activeChild!.id,
@@ -238,88 +156,14 @@ export default function SleepPage() {
     onSuccess: () => {
       invalidateAfterLogWrite(queryClient);
     },
-  });
-
-  const updateLog = useMutation({
-    mutationFn: async () => {
-      const startDate = editStartedAt;
-      const endDate = editEndedAt;
-
-      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-        throw new Error("Please enter valid start and end times.");
-      }
-
-      if (endDate <= startDate) {
-        throw new Error("End time must be after start time.");
-      }
-
-      const payload = {
-        sleep_type: editSleepType,
-        started_at: startDate.toISOString(),
-        ended_at: endDate.toISOString(),
-      };
-
-      if (editingId) {
-        const { error } = await supabase.from("sleep_logs").update(payload).eq("id", editingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("sleep_logs").insert({
-          ...payload,
-          child_id: activeChild!.id,
-          parent_id: user!.id,
-        });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      invalidateAfterLogWrite(queryClient);
-      setEditDialogOpen(false);
-      setEditingId(null);
-      setEditingRow(null);
-      toast({ title: editingId ? "Sleep log updated! ✏️" : "Sleep logged! 😴" });
-    },
     onError: (error: Error) => {
-      toast({ title: "Unable to save sleep log", description: error.message, variant: "destructive" });
+      toast({
+        title: "Unable to save sleep log",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
-
-  const deleteLog = useDeleteWithUndo<NonNullable<typeof logs>[0]>({
-    table: "sleep_logs",
-    invalidateKeys: [["sleep-logs"], ["sleep-today-logs"], ["activity-feed"]],
-  });
-
-  const handleDelete = () => {
-    const row = editingRow;
-    if (!row) return;
-    setEditDialogOpen(false);
-    setEditingId(null);
-    setEditingRow(null);
-    deleteLog.mutate(row, {
-      onSuccess: () => {
-        // Deleting an in-progress timer session must also cancel its scheduled
-        // "still sleeping?" notification, same as useActiveSleep's cancel path.
-        if (!row.ended_at && row.source === "timer") void cancelSessionNotification(row.id);
-      },
-    });
-  };
-
-  const openAdd = () => {
-    setEditingId(null);
-    setEditingRow(null);
-    setEditSleepType("nap");
-    setEditStartedAt(new Date(Date.now() - 30 * 60 * 1000));
-    setEditEndedAt(new Date());
-    setEditDialogOpen(true);
-  };
-
-  const openEdit = (log: SleepLogRow) => {
-    setEditingId(log.id);
-    setEditingRow(log);
-    setEditSleepType(log.sleep_type as "nap" | "night");
-    setEditStartedAt(new Date(log.started_at));
-    setEditEndedAt(log.ended_at ? new Date(log.ended_at) : new Date());
-    setEditDialogOpen(true);
-  };
 
   const handleTimerComplete = useCallback(
     async (startedAt: Date, endedAt: Date, sleepType: "nap" | "night", notes: string) => {
@@ -343,12 +187,6 @@ export default function SleepPage() {
     [addLog],
   );
 
-  const formatMinutes = (mins: number) => {
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
   if (!activeChild) {
     return (
       <div className="space-y-6">
@@ -366,8 +204,9 @@ export default function SleepPage() {
   // Corrected for prematurity, matching useSleepCoach — the plan, the triage
   // rules and the coach have to band the same baby.
   const ageMonths = sleepAgeMonths(activeChild);
-  const ageDays = Math.floor((Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24));
-  const guide = sleepGuide(ageMonths);
+  const ageDays = Math.floor(
+    (Date.now() - new Date(activeChild.date_of_birth).getTime()) / (1000 * 60 * 60 * 24),
+  );
 
   // Calm, non-clinical reassurance tying more night wakings to normal
   // development. Shown when a developmental leap is underway (stormy/sunny) or a
@@ -378,248 +217,142 @@ export default function SleepPage() {
   // masks illness/pain/hunger. (Sleep-advisor review, 2026-06-19.)
   const inLeapWindow =
     leaps?.currentStatus.phase === "stormy" || leaps?.currentStatus.phase === "sunny";
-  const inRegressionWindow = detectTriageReasons(logs ?? [], ageMonths).includes("night_wakings");
+  const inRegressionWindow = detectTriageReasons(logs, ageMonths).includes("night_wakings");
   const nightWakingReassurance =
     inLeapWindow || inRegressionWindow
       ? "More night wakings lately? Around this age that's very common — a leap, teething, or a schedule shift can all do it, and it usually passes within a week or two. If it lasts longer or comes with other symptoms, it's worth a quick check with your pediatrician."
       : null;
 
-  const activeSleepLog = logs?.find((l) => !l.ended_at) ?? null;
   const planMethod = savedPlan?.method ?? "gentle_foundations";
   const showFerberTimer =
-    planMethod === "ferber" &&
-    !!activeSleepLog &&
-    activeSleepLog.sleep_type === "night";
-  const showChairCard = planMethod === "chair" && !!savedPlan;
+    planMethod === "ferber" && !!activeSleepLog && activeSleepLog.sleep_type === "night";
+  const showChairCard = planMethod === "chair" && !!savedPlan && !!activeSleepLog;
+
+  const recentDays = [...window.days].reverse().filter((d) => d.blocks.length > 0).slice(0, RECENT_DAYS);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div>
-            <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-              <Moon className="w-7 h-7 text-sleep" /> Sleep
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s sleep tracker</p>
-          </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="touch-target text-muted-foreground hover:text-sleep">
-                <Info className="w-5 h-5" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent side="bottom" align="start" className="w-80 p-4 space-y-4">
-              <div>
-                <p className="font-bold text-xs flex items-center gap-1 mb-1.5">
-                  <Clock className="w-3.5 h-3.5 text-sleep" /> Sleep guide ({guide.label})
-                </p>
-                <div className="space-y-1 text-xs">
-                  <p><span className="text-muted-foreground">Recommended:</span> <span className="font-semibold">{guide.total}</span></p>
-                  <p><span className="text-muted-foreground">Naps:</span> <span className="font-semibold">{guide.naps}</span></p>
-                </div>
-              </div>
-              <div>
-                <p className="font-bold text-xs mb-1.5">How to use this page</p>
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <p>The timer keeps running even if you close the app — reopen any time and it picks up where you left off.</p>
-                  <p>Tap any row under <strong>History</strong> to edit or delete it.</p>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+          <Moon className="w-7 h-7 text-sleep" /> Sleep
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">{activeChild.name}</p>
       </div>
 
-      {/* Live Sleep Timer — Primary CTA */}
+      {/* Now — the prediction and the timer share one Start button. The gate
+          lives inside the coach strip, so a free account can still log a sleep. */}
       <Card className="border-0 bg-sleep-bg/60">
-        <CardContent className="p-4">
+        <CardContent className="p-4 space-y-4">
+          <SleepCoachCard activeChild={activeChild} variant="strip" />
           <SleepTimer
-            childId={activeChild?.id}
+            childId={activeChild.id}
             onManualSubmit={handleTimerComplete}
             isSavingManual={savingTimer}
             checkOverlap={findSleepOverlap}
           />
+          {showFerberTimer && user && activeSleepLog && (
+            <FerberCheckInTimer
+              childId={activeChild.id}
+              parentId={user.id}
+              method="ferber"
+              ferberSchedule={(savedPlan?.ferber_schedule as unknown as FerberSchedule | null) ?? null}
+              activeSleepLog={{
+                id: activeSleepLog.id,
+                started_at: activeSleepLog.started_at,
+                sleep_type: activeSleepLog.sleep_type,
+              }}
+            />
+          )}
+          {showChairCard && savedPlan && <ChairStageCard childId={activeChild.id} plan={savedPlan} />}
         </CardContent>
       </Card>
 
-      {showFerberTimer && user && activeSleepLog && (
-        <FerberCheckInTimer
-          childId={activeChild.id}
-          parentId={user.id}
-          method="ferber"
-          ferberSchedule={
-            (savedPlan?.ferber_schedule as unknown as FerberSchedule | null) ??
-            null
-          }
-          activeSleepLog={{
-            id: activeSleepLog.id,
-            started_at: activeSleepLog.started_at,
-            sleep_type: activeSleepLog.sleep_type,
-          }}
-        />
-      )}
+      <TodayRhythmCard
+        days={window.days}
+        coverage={window.coverage}
+        schedule={window.schedule}
+        ageMonths={ageMonths}
+        isLoading={window.isLoading}
+      />
 
-      {showChairCard && savedPlan && (
-        <ChairStageCard childId={activeChild.id} plan={savedPlan} />
-      )}
+      <SleepTodoCard
+        childId={activeChild.id}
+        ageMonths={ageMonths}
+        childName={activeChild.name ?? "your baby"}
+      />
 
-      <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 h-14 p-1 bg-muted/60">
-          <TabsTrigger
-            value="history"
-            className="touch-target gap-1 font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
+      <SleepWeekCard
+        days={window.days}
+        logs={logs}
+        coverage={window.coverage}
+        napTrend={window.napTrend}
+        schedule={window.schedule}
+        ageMonths={ageMonths}
+      />
+
+      <SleepNotes
+        logs={logs}
+        ageMonths={ageMonths}
+        nightWakingReassurance={nightWakingReassurance}
+      />
+
+      <SleepPlanReminderBanner
+        childId={activeChild.id}
+        childName={activeChild.name ?? "your baby"}
+        variant="row"
+        onOpen={() => setPlanOpen(true)}
+      />
+
+      <section aria-labelledby="sleep-recent-heading" className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="sleep-recent-heading" className="font-display font-bold text-base">
+            Recent sleep
+          </h2>
+          <Link
+            to="/dashboard/sleep/history"
+            className="inline-flex items-center gap-1 min-h-[48px] text-sm font-semibold text-sleep"
           >
-            <History className="w-4 h-4" /> History
-          </TabsTrigger>
-          <TabsTrigger
-            value="plan"
-            className="touch-target gap-1 font-bold data-[state=active]:bg-sleep/15 data-[state=active]:text-sleep data-[state=active]:shadow-sm rounded-lg h-full"
-          >
-            <CalendarCheck className="w-4 h-4" /> Plan & Insights
-          </TabsTrigger>
-        </TabsList>
+            See all sleep <ChevronRight aria-hidden className="w-4 h-4" />
+          </Link>
+        </div>
 
-        <TabsContent value="history" className="mt-4 space-y-5">
-          <div className="space-y-2">
-            <h2 className="font-display font-bold text-sm">History</h2>
-            <GroupedLogList<SleepLogRow>
-              logs={history.logs}
-              isLoading={history.isLoading}
-              isError={history.isError}
-              hasEarlier={history.hasEarlier}
-              truncated={history.truncated}
-              onShowEarlier={history.showEarlier}
-              onRetry={history.refetch}
-              getDate={(log) => log.started_at}
-              schedule={history.schedule}
-              summarize={summarizeSleepDay}
-              labels={{ unit: "sleep", unitPlural: "sleeps" }}
-              renderRow={(log) => {
-                const minutes = log.duration_minutes || 0;
-                const typeLabel = log.sleep_type === "nap" ? "nap" : "night sleep";
-                return (
-                  <Card key={log.id} className="border-0 bg-sleep-bg">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(log)}
-                      aria-label={`Edit ${typeLabel}, ${minutes} minutes, ${format(new Date(log.started_at), "h:mm a")}`}
-                      className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sleep/10 motion-reduce:transition-none"
-                    >
-                      <span className="flex items-center gap-3 min-w-0">
-                        <span className={cn(badgeVariants({ variant: "secondary" }), "shrink-0")}>
-                          {log.sleep_type === "nap" ? "☀️ Nap" : "🌙 Night"}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold">{formatMinutes(minutes)}</span>
-                          <span className="block text-xs text-foreground/75">
-                            {format(new Date(log.started_at), "h:mm a")}
-                          </span>
-                          <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
-                        </span>
-                      </span>
-                      <Pencil aria-hidden className="w-4 h-4 shrink-0 text-muted-foreground" />
-                    </button>
-                  </Card>
-                );
-              }}
-              emptyState={
-                <Card className="border-0 bg-sleep-bg">
-                  <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
-                    <CloudMoon className="w-10 h-10 text-sleep/40" />
-                    <p className="text-sm text-muted-foreground text-center">
-                      Every nap and night sleep you log will show up here.
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={openAdd}
-                      className="gap-1.5 text-sleep border-sleep/30 hover:bg-sleep-bg touch-target"
-                    >
-                      <Plus className="w-4 h-4" /> Log a first sleep
-                    </Button>
-                  </CardContent>
-                </Card>
-              }
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="plan" className="mt-4 space-y-5">
-          <Card className="border bg-sleep/5 border-sleep/20">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-sleep/15 flex items-center justify-center shrink-0">
-                {isLoadingPlan ? (
-                  <Sparkle className="w-5 h-5 text-sleep/40" />
-                ) : savedPlan ? (
-                  <CheckCircle2 className="w-5 h-5 text-sleep" />
-                ) : (
-                  <Sparkle className="w-5 h-5 text-sleep" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                {isLoadingPlan ? (
-                  <>
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-48 mt-1.5" />
-                  </>
-                ) : savedPlan ? (
-                  <>
-                    <p className="font-display font-bold text-sm leading-tight flex items-center gap-1.5">
-                      Your sleep plan
-                      <CheckCircle2 className="w-3.5 h-3.5 text-sleep" />
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Saved {formatDistanceToNow(new Date(savedPlan.updated_at), { addSuffix: true })} · tap to view or adjust
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-display font-bold text-sm leading-tight">{activeChild.name}'s sleep plan</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Our age-based recommendation — tap to view or customize.</p>
-                  </>
-                )}
-              </div>
-              <Button
-                type="button"
-                onClick={() => setPlanOpen(true)}
-                disabled={isLoadingPlan}
-                className="bg-sleep hover:bg-sleep/90 text-white touch-target gap-1.5 shrink-0"
-              >
-                {isLoadingPlan ? (
-                  <Skeleton className="h-4 w-12 bg-white/30" />
-                ) : savedPlan ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    View
-                  </>
-                ) : (
-                  <>
-                    <Sparkle className="w-4 h-4" />
-                    View
-                  </>
-                )}
-              </Button>
+        {recentDays.length === 0 ? (
+          <Card className="border-0 bg-sleep-bg">
+            <CardContent className="p-4 flex flex-col items-center justify-center py-8 gap-3">
+              <CloudMoon aria-hidden className="w-10 h-10 text-sleep/40" />
+              <p className="text-sm text-muted-foreground text-center">
+                Every nap and night sleep you log will show up here.
+              </p>
             </CardContent>
           </Card>
-
-          <SleepTodoCard
-            childId={activeChild.id}
-            ageMonths={ageMonths}
-            childName={activeChild.name ?? "your baby"}
-          />
-
-          <SleepPlanReminderBanner
-            childId={activeChild.id}
-            childName={activeChild.name ?? "your baby"}
-          />
-
-          <SleepInsights
-            logs={logs ?? []}
-            ageMonths={ageMonths}
-            nightWakingReassurance={nightWakingReassurance}
-          />
-        </TabsContent>
-      </Tabs>
+        ) : (
+          <ul className="space-y-2">
+            {recentDays.map((day) => {
+              const parsed = parseISO(day.dayKey);
+              const label = Number.isNaN(parsed.getTime()) ? day.dayKey : dayLabel(parsed);
+              return (
+                <li key={day.dayKey}>
+                  <Link
+                    to="/dashboard/sleep/history"
+                    className="w-full min-h-[48px] rounded-2xl bg-sleep-bg p-3 flex items-center justify-between gap-3 transition-colors motion-reduce:transition-none hover:bg-sleep/10"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{label}</span>
+                      <span className="block text-xs text-foreground/75">
+                        {formatDurationShort(day.stats.nightMin)} at night ·{" "}
+                        {day.stats.napCount} {day.stats.napCount === 1 ? "nap" : "naps"}
+                      </span>
+                    </span>
+                    <span className="text-sm font-bold tabular-nums shrink-0">
+                      {formatDurationShort(day.stats.totalMin)}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <SleepPlanDialog
         open={planOpen}
@@ -630,68 +363,6 @@ export default function SleepPage() {
         ageDays={ageDays}
         logs={coach?.logs ?? []}
       />
-
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={(open) => { setEditDialogOpen(open); if (!open) { setEditingId(null); setEditingRow(null); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-display">{editingId ? "Edit Sleep Log" : "Log Sleep"}</DialogTitle>
-            <DialogDescription>Set start and end time, then save changes.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Button type="button" variant={editSleepType === "nap" ? "default" : "outline"} onClick={() => setEditSleepType("nap")} className="flex-1 touch-target gap-2">
-                <Sun className="w-5 h-5" /> Nap
-              </Button>
-              <Button type="button" variant={editSleepType === "night" ? "default" : "outline"} onClick={() => setEditSleepType("night")} className="flex-1 touch-target gap-2">
-                <Moon className="w-5 h-5" /> Night
-              </Button>
-            </div>
-            <MobileDateTimePicker
-              label="Start Time"
-              value={editStartedAt}
-              onChange={setEditStartedAt}
-              maxDate={new Date()}
-            />
-            <MobileDateTimePicker
-              label="End Time"
-              value={editEndedAt}
-              onChange={setEditEndedAt}
-              maxDate={new Date()}
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1 touch-target"
-                onClick={() => setEditDialogOpen(false)}
-                disabled={updateLog.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => updateLog.mutate()}
-                className="flex-1 touch-target bg-sleep hover:bg-sleep/90 text-white"
-                disabled={updateLog.isPending}
-              >
-                {updateLog.isPending ? "Saving..." : editingId ? "Update Sleep Log" : "Save Sleep Log"}
-              </Button>
-            </div>
-            {editingId && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full touch-target gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={handleDelete}
-                disabled={updateLog.isPending || deleteLog.isPending}
-              >
-                <Trash2 className="w-4 h-4" /> Delete entry
-              </Button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
