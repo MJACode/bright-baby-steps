@@ -110,6 +110,11 @@ export function rhythmRowSegments(
   return segments;
 }
 
+/** What the band's blank ground means, in words. Absence gets no ink and no
+ *  swatch, so this line is the only thing that says what it is. */
+export const BLANK_STRETCH_COPY =
+  "A blank stretch is time with no sleep logged — not time awake.";
+
 /**
  * How far into a given tracking day a wall-clock time falls, in real minutes.
  *

@@ -8,7 +8,7 @@ import {
   type SleepCoverage,
   type SleepLogRow,
 } from "@/lib/sleepPatterns";
-import { sleepWeekObservations } from "@/lib/sleepRhythm";
+import { BLANK_STRETCH_COPY, sleepWeekObservations } from "@/lib/sleepRhythm";
 import type { SleepDayData } from "@/hooks/useSleepPatterns";
 import type { TrackingSchedule } from "@/lib/trackingDay";
 
@@ -52,6 +52,12 @@ function blockStyles(container: HTMLElement): { left: string; width: string }[] 
     left: el.style.left,
     width: el.style.width,
   }));
+}
+
+function blockClasses(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>("span[style*='width']")).map(
+    (el) => el.className,
+  );
 }
 
 describe("TodayRhythmCard", () => {
@@ -129,5 +135,67 @@ describe("TodayRhythmCard", () => {
       <TodayRhythmCard days={days} coverage={coverage(3)} schedule={MIDNIGHT} ageMonths={8} />,
     );
     expect(full.container.querySelectorAll("li")).toHaveLength(7);
+  });
+
+  it("explains a blank stretch in words instead of giving absence a swatch", () => {
+    const now = new Date(2026, 8, 5, 12, 0);
+    const nap = sleepLog(new Date(2026, 8, 5, 13, 0), new Date(2026, 8, 5, 14, 30));
+
+    render(
+      <TodayRhythmCard
+        days={[dayData("2026-09-05", [nap], now)]}
+        coverage={coverage(1)}
+        schedule={MIDNIGHT}
+        ageMonths={8}
+      />,
+    );
+
+    expect(screen.queryByText(/not logged/i)).toBeNull();
+    expect(screen.getByText(BLANK_STRETCH_COPY)).toBeInTheDocument();
+    // The three states that still earn a swatch. "Night" also labels a stat
+    // tile, so it is only ever asserted as present.
+    expect(screen.getAllByText("Night").length).toBeGreaterThan(0);
+    expect(screen.getByText("Nap")).toBeInTheDocument();
+    expect(screen.getByText("Awake")).toBeInTheDocument();
+  });
+
+  it("drops the nap ring on a catnap too narrow for its fill to show", () => {
+    const now = new Date(2026, 8, 5, 23, 0);
+
+    // Eight minutes is under 4px of the track: a full-opacity ring on each edge
+    // would be the whole block, which reads as night.
+    const catnap = render(
+      <TodayRhythmCard
+        days={[
+          dayData(
+            "2026-09-05",
+            [sleepLog(new Date(2026, 8, 5, 13, 0), new Date(2026, 8, 5, 13, 8))],
+            now,
+          ),
+        ]}
+        coverage={coverage(1)}
+        schedule={MIDNIGHT}
+        ageMonths={8}
+      />,
+    );
+    expect(blockClasses(catnap.container)).toHaveLength(1);
+    expect(blockClasses(catnap.container).some((c) => c.includes("ring"))).toBe(false);
+    catnap.unmount();
+
+    const nap = render(
+      <TodayRhythmCard
+        days={[
+          dayData(
+            "2026-09-05",
+            [sleepLog(new Date(2026, 8, 5, 13, 0), new Date(2026, 8, 5, 14, 30))],
+            now,
+          ),
+        ]}
+        coverage={coverage(1)}
+        schedule={MIDNIGHT}
+        ageMonths={8}
+      />,
+    );
+    expect(blockClasses(nap.container).some((c) => c.includes("ring-sleep"))).toBe(true);
   });
 });

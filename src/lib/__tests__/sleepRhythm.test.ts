@@ -10,6 +10,7 @@ import {
 } from "@/lib/sleepPatterns";
 import {
   BEDTIME_INSUFFICIENT_COPY,
+  BLANK_STRETCH_COPY,
   MAX_WEEK_OBSERVATIONS,
   WAKE_INSUFFICIENT_COPY,
   ageTypicalSleepCaption,
@@ -452,10 +453,11 @@ describe("sleepWeekObservations", () => {
 // it runs over an enumerator of the reachable states rather than a sample.
 //
 // Scope: the copy the pattern view owns — the weekly observations, the bedtime
-// sentence, the band's screen-reader line, the age-typical caption and the
-// calm-mode escalation note. Two surfaces the Sleep tab also renders are
-// deliberately NOT swept, because their strings are built inside component
-// state machines rather than a pure module, and their voice predates this work:
+// sentence, the band's screen-reader line and blank-stretch caption, the
+// age-typical caption and the calm-mode escalation note. Two surfaces the Sleep
+// tab also renders are deliberately NOT swept, because their strings are built
+// inside component state machines rather than a pure module, and their voice
+// predates this work:
 // `SleepPlanReminderBanner` ("Aim to start the wind-down now", "You're on
 // track") and `SleepCoachCard`'s titles and cues. Both are product-voice
 // decisions, not defects to fix here — extracting and sweeping them is its own
@@ -464,6 +466,7 @@ function reachableCopy(): string[] {
   const week = [night(25, 4), night(26, 5), night(27, 6), night(28, 4), night(29, 5), night(30, 4)];
   const out: string[] = [
     BEDTIME_INSUFFICIENT_COPY,
+    BLANK_STRETCH_COPY,
     WAKE_INSUFFICIENT_COPY,
     SHORTFALL_ESCALATION_COPY,
   ];
@@ -559,6 +562,7 @@ describe("sleep copy guardrails", () => {
     expect(copy.some((c) => c.includes("Longest stretch on"))).toBe(true);
     expect(copy.some((c) => c.includes("Typical at"))).toBe(true);
     expect(copy).toContain(SHORTFALL_ESCALATION_COPY);
+    expect(copy).toContain(BLANK_STRETCH_COPY);
     expect(copy.some((c) => c.includes("naps a day this week"))).toBe(true);
     expect(copy.some((c) => c.includes("Bedtime landed"))).toBe(true);
     expect(copy.some((c) => c.includes("Mornings started"))).toBe(true);
