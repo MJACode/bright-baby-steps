@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { pickNextEvent, predictNextFeed } from "@/lib/nextEvent";
+import { pickNextEvent } from "@/lib/nextEvent";
 import { predictNextNap } from "@/lib/sleepCoach";
 
 const MIN = 60_000;
-const HOUR = 60 * MIN;
 
 function at(hhmm: string, dayOffset = 0): Date {
   const [h, m] = hhmm.split(":").map(Number);
@@ -13,39 +12,6 @@ function at(hhmm: string, dayOffset = 0): Date {
   d.setHours(h, m, 0, 0);
   return d;
 }
-
-describe("predictNextFeed", () => {
-  it("projects the average interval forward from the most recent feed", () => {
-    const last = at("07:00");
-    const times = [
-      last.getTime() - 6 * HOUR,
-      last.getTime() - 4 * HOUR,
-      last.getTime() - 2 * HOUR,
-      last.getTime(),
-    ];
-    const pred = predictNextFeed(times);
-    expect(pred?.at.getTime()).toBe(last.getTime() + 2 * HOUR);
-    expect(pred?.samples).toBe(3);
-  });
-
-  it("falls back to a 3h interval when there is only one feed", () => {
-    const last = at("07:00");
-    const pred = predictNextFeed([last.getTime()]);
-    expect(pred?.at.getTime()).toBe(last.getTime() + 3 * HOUR);
-    expect(pred?.samples).toBe(0);
-  });
-
-  it("returns null with no feeds", () => {
-    expect(predictNextFeed([])).toBeNull();
-  });
-
-  it("ignores input ordering", () => {
-    const last = at("07:00");
-    const asc = [last.getTime() - 2 * HOUR, last.getTime()];
-    const desc = [...asc].reverse();
-    expect(predictNextFeed(desc)?.at.getTime()).toBe(predictNextFeed(asc)?.at.getTime());
-  });
-});
 
 describe("pickNextEvent", () => {
   it("picks the nap when it lands first", () => {

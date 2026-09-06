@@ -63,8 +63,12 @@ export type Confidence = "high" | "medium" | "low";
 export const CONFIDENCE_HIGH_SAMPLES = 5;
 export const CONFIDENCE_MEDIUM_SAMPLES = 2;
 
-/** The one confidence ladder in the app. Calibrated for per-bucket nap counts,
- *  which is the only quantity `predictNextNap` feeds it. */
+/** The one confidence ladder in the app. Calibrated for per-bucket nap counts
+ *  (`predictNextNap`) and for the daytime feed-interval counts `predictNextFeed`
+ *  draws its median from — both are "how many comparable samples back this
+ *  number", counted over the same trailing fortnight. Nothing else may feed it:
+ *  a quantity on a different scale pins it to one band and prints a word that
+ *  means nothing. */
 export function sampleConfidence(sampleCount: number): Confidence {
   if (sampleCount >= CONFIDENCE_HIGH_SAMPLES) return "high";
   if (sampleCount >= CONFIDENCE_MEDIUM_SAMPLES) return "medium";
