@@ -20,7 +20,8 @@ tells them when the baby might be sleepy.
 - [x] `Dashboard.tsx` + `homeSections.ts` — Home card behind a `feedCoach` toggle.
 - [x] `FeedingLog.tsx` — move the card to the top as `variant="strip"`.
 - [x] Tests in `src/lib/__tests__/feedCoach.test.ts`.
-- [ ] QA pass, then commit + PR.
+- [x] QA pass — Fix-required; blocking defect + 4 should-fixes addressed in a follow-up pass.
+- [ ] Second QA pass, then commit + PR.
 
 ## Review
 
@@ -51,3 +52,20 @@ tsconfig.app.json` clean, `npm run build` clean, eslint clean on every touched
 file (the one warning in FeedingLog.tsx predates this change). The two
 regression tests were mutation-checked — swapping the median for a mean and
 dropping the night filter fails both.
+
+## QA follow-up (2026-09-06)
+
+Blocking — the prediction's night suppression read the clock band only, while
+`deriveFeedCoachState` also branches on `nightSleepInProgress`/`isNightNow`. Since
+`resolveNightWindow` clamps `nightOpensAt` later than a running night timer, the
+bedtime lead-in was a hole where the headline said "feed now" over the card's own
+"Overnight". Two tests written first, shown failing at 6b91b9a, then the `asleep`
+term added. The wake-to-feed exception is covered and still passes both ways.
+
+Also: `now` is wired (`now > windowEnd` → null), which unpins NextEventBand from
+a stale hunger time and let the now-unreachable duplicate of that rule come out of
+`feedPredictionHeadline`; three clamp tests rebuilt on ≥3-feed fixtures and each
+mutation-checked; `TZ: "UTC"` pinned in `vitest.config.ts`; the confidence dot map
+moved to `sleepPatterns.ts` beside `sampleConfidence` and shared by both cards.
+
+681 tests pass, and pass again under `TZ=Asia/Tokyo`. tsc, build and lint clean.

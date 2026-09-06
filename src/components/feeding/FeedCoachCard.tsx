@@ -10,6 +10,7 @@ import {
   feedPredictionHeadline,
   HUNGER_CUES,
 } from "@/lib/feedCoach";
+import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { cn } from "@/lib/utils";
 
 interface ChildLite extends FeedCoachChild {
@@ -20,12 +21,6 @@ const PILL_TONE = {
   solid: "bg-feeding text-white border-transparent",
   soft: "bg-feeding/15 text-feeding border-transparent",
   muted: "bg-muted text-muted-foreground border-transparent",
-} as const;
-
-const CONFIDENCE_TONE = {
-  high: "bg-primary",
-  medium: "bg-accent",
-  low: "bg-muted-foreground",
 } as const;
 
 interface FeedCoachCardProps {
@@ -102,7 +97,7 @@ export function FeedCoachCard({
                   aria-hidden
                   className={cn(
                     "ml-auto w-2 h-2 rounded-full shrink-0",
-                    CONFIDENCE_TONE[prediction.confidence],
+                    CONFIDENCE_DOT_CLASS[prediction.confidence],
                   )}
                 />
               </div>

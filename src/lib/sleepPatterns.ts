@@ -75,6 +75,17 @@ export function sampleConfidence(sampleCount: number): Confidence {
   return "low";
 }
 
+/**
+ * The dot beside a prediction, one class per rung of the ladder above. Lives
+ * with `sampleConfidence` so the Sleep and Feed coach cards can't drift into
+ * two different colour scales for the same word.
+ */
+export const CONFIDENCE_DOT_CLASS: Record<Confidence, string> = {
+  high: "bg-primary",
+  medium: "bg-accent",
+  low: "bg-muted-foreground",
+};
+
 export function isNightSleep(sleepType: string | null | undefined): boolean {
   return sleepType === "night";
 }

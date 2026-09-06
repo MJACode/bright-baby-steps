@@ -718,15 +718,33 @@ export function predictNextFeed(opts: {
 
   const center = addMinutes(lastFeed, interval);
   const windowStart = addMinutes(center, -FEED_WINDOW_PAD_MIN);
+  const windowEnd = addMinutes(center, FEED_WINDOW_PAD_MIN);
 
-  // Never point a parent at a sleeping baby. The exception is the wake-to-feed
-  // brackets — newborns, and preemies under 3 months corrected — where feeding
-  // overnight IS the guidance, so the window is exactly what the parent needs.
-  if (!guidance.wakeToFeedOvernight && isNightInstant(windowStart, band)) return null;
+  // Never point a parent at a sleeping baby. Read from the same two signals
+  // `deriveFeedCoachState` branches on, not from the clock alone: a running
+  // night timer puts the baby down before the boundary, and `nightOpensAt` is
+  // clamped so a timer can only ever open the night LATER than the clock would.
+  // The band by itself therefore leaves the whole bedtime lead-in as a hole,
+  // where the card's own state says "Overnight" while this line says "feed now".
+  //
+  // The exception is the wake-to-feed brackets — newborns, and preemies under
+  // 3 months corrected — where feeding overnight IS the guidance, so the window
+  // is exactly what the parent needs.
+  const asleep = !!opts.night && (opts.night.nightSleepInProgress || opts.night.isNightNow);
+  if (!guidance.wakeToFeedOvernight && (asleep || isNightInstant(windowStart, band))) {
+    return null;
+  }
+
+  // A window that has already closed is a stale clock time. The card's elapsed
+  // state ("It's been 4h 20m — consider a feed") is the live surface by then,
+  // and `pickNextEvent` always takes the EARLIER instant — so a window left in
+  // the past would outrank every future nap and pin the Home band to "likely
+  // hungry anytime now" for the rest of the day.
+  if (opts.now && opts.now > windowEnd) return null;
 
   return {
     windowStart,
-    windowEnd: addMinutes(center, FEED_WINDOW_PAD_MIN),
+    windowEnd,
     confidence,
     reason:
       confidence === "high"
@@ -738,23 +756,22 @@ export function predictNextFeed(opts: {
 }
 
 /**
- * The headline the prediction has earned right now, or null when it has none.
+ * The headline for a live prediction.
  *
- * Once the window has closed the clock time is stale, and the elapsed state the
- * card renders underneath ("It's been 4h 20m — consider a feed") is the live
- * surface. Printing an hours-old "likely hungry around 3:40" beside it would
- * have one card contradicting itself, so the headline stands down instead.
+ * A closed window has no headline at all, but that is `predictNextFeed`'s call,
+ * not this one's — it returns null once `now` is past `windowEnd`, so every
+ * prediction that reaches here is still ahead of or inside its window. A second
+ * copy of that rule down here would be a branch no caller can reach.
  *
- * Lives here rather than in the card so it goes through the same copy sweep as
- * `feedCoachCopy`.
+ * Lives in the lib rather than in the card so it goes through the same copy
+ * discipline as `feedCoachCopy`.
  */
 export function feedPredictionHeadline(opts: {
   prediction: FeedPrediction;
   now: Date;
   calmMode: boolean;
-}): string | null {
+}): string {
   const { prediction, now, calmMode } = opts;
-  if (now > prediction.windowEnd) return null;
   if (now >= prediction.windowStart) return "Likely hungry any time now";
   const clock = calmMode
     ? formatApproxClock(prediction.windowStart)

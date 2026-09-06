@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { pickNextEvent } from "@/lib/nextEvent";
+import { predictNextFeed } from "@/lib/feedCoach";
 import { predictNextNap } from "@/lib/sleepCoach";
 
 const MIN = 60_000;
@@ -60,5 +61,29 @@ describe("nap time agrees with the sleep coach engine", () => {
     const pred = predictNextNap({ ageMonths: 4, sleeps, now: at("07:00") });
     const pick = pickNextEvent(pred!.windowStart, at("11:00"));
     expect(pick).toEqual({ type: "nap", at: pred!.windowStart });
+  });
+});
+
+// A closed hunger window used to outrank every future nap: `pickNextEvent`
+// takes the earlier instant, and a past `windowStart` always wins, so the band
+// stuck on "likely hungry anytime now" while the Feed Coach card had already
+// stood its own headline down. The feed engine now returns null past its window.
+describe("an elapsed hunger window lets the nap surface again", () => {
+  const feeds = [at("08:00"), at("11:00"), at("14:00")].map((d) => ({
+    logged_at: d.toISOString(),
+  }));
+
+  it("stops predicting a feed once the window has closed", () => {
+    expect(predictNextFeed({ ageMonths: 4, feeds, now: at("17:00") })).not.toBeNull();
+    expect(predictNextFeed({ ageMonths: 4, feeds, now: at("17:30") })).toBeNull();
+  });
+
+  it("hands the band the nap once the feed side has stood down", () => {
+    const hunger = predictNextFeed({ ageMonths: 4, feeds, now: at("17:30") });
+    const napAt = at("18:15");
+    expect(pickNextEvent(napAt, hunger?.windowStart ?? null)).toEqual({
+      type: "nap",
+      at: napAt,
+    });
   });
 });
