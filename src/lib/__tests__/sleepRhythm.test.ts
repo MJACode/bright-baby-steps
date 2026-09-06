@@ -10,6 +10,7 @@ import {
 } from "@/lib/sleepPatterns";
 import {
   BEDTIME_INSUFFICIENT_COPY,
+  BLANK_STRETCH_COPY,
   MAX_WEEK_OBSERVATIONS,
   WAKE_INSUFFICIENT_COPY,
   ageTypicalSleepCaption,
@@ -118,87 +119,6 @@ describe("rhythmRowSegments", () => {
         expect(segments[i].startMin).toBe(segments[i - 1].endMin);
       }
     }
-  });
-
-  describe("the future is not missing data", () => {
-    function tiles(segments: { startMin: number; endMin: number }[], dayEnd: number) {
-      expect(segments[0].startMin).toBe(0);
-      expect(segments[segments.length - 1].endMin).toBe(dayEnd);
-      for (let i = 1; i < segments.length; i++) {
-        expect(segments[i].startMin).toBe(segments[i - 1].endMin);
-      }
-    }
-
-    it("reports the rest of the day as future, never as unlogged", () => {
-      // 7:03am, one night sleep behind us. The 23 minutes since it ended are
-      // genuinely unlogged; the 17 hours after now have not happened.
-      const segments = rhythmRowSegments([block(0, 400, "night")], MINUTES_PER_DAY, 423);
-
-      expect(segments).toEqual([
-        { startMin: 0, endMin: 400, kind: "night" },
-        { startMin: 400, endMin: 423, kind: "nodata" },
-        { startMin: 423, endMin: MINUTES_PER_DAY, kind: "future" },
-      ]);
-      expect(segments.filter((s) => s.kind === "future")).toHaveLength(1);
-      tiles(segments, MINUTES_PER_DAY);
-    });
-
-    it("keeps awake time claimed only where it was already claimed", () => {
-      const segments = rhythmRowSegments(
-        [block(0, 400, "night"), block(600, 660, "nap")],
-        MINUTES_PER_DAY,
-        700,
-      );
-
-      expect(segments).toEqual([
-        { startMin: 0, endMin: 400, kind: "night" },
-        { startMin: 400, endMin: 600, kind: "awake" },
-        { startMin: 600, endMin: 660, kind: "nap" },
-        { startMin: 660, endMin: 700, kind: "nodata" },
-        { startMin: 700, endMin: MINUTES_PER_DAY, kind: "future" },
-      ]);
-    });
-
-    it("splits a block straddling now, keeping its kind for the part already slept", () => {
-      const segments = rhythmRowSegments([block(600, 900, "nap")], MINUTES_PER_DAY, 700);
-
-      expect(segments).toEqual([
-        { startMin: 0, endMin: 600, kind: "nodata" },
-        { startMin: 600, endMin: 700, kind: "nap" },
-        { startMin: 700, endMin: MINUTES_PER_DAY, kind: "future" },
-      ]);
-    });
-
-    it("leaves the segments untouched when nowMin is omitted", () => {
-      const blocks = [block(0, 400, "night"), block(600, 660, "nap")];
-      expect(rhythmRowSegments(blocks, MINUTES_PER_DAY, undefined)).toEqual(
-        rhythmRowSegments(blocks, MINUTES_PER_DAY),
-      );
-    });
-
-    it("still tiles the day for a now that falls outside it", () => {
-      const blocks = [block(600, 660)];
-      const dayEnd = 1380; // a spring-forward tracking day
-      for (const nowMin of [-30, 0, 1, dayEnd, dayEnd + 60, Number.NaN, Number.POSITIVE_INFINITY]) {
-        tiles(rhythmRowSegments(blocks, dayEnd, nowMin), dayEnd);
-      }
-      // At the day start there is nothing to report but the day ahead.
-      expect(rhythmRowSegments(blocks, dayEnd, 0)).toEqual([
-        { startMin: 0, endMin: dayEnd, kind: "future" },
-      ]);
-      // Past the end, the day is complete and reads exactly as an unclamped one.
-      expect(rhythmRowSegments(blocks, dayEnd, dayEnd)).toEqual(
-        rhythmRowSegments(blocks, dayEnd),
-      );
-    });
-
-    it("marks a day with nothing logged yet as future rather than unlogged", () => {
-      const segments = rhythmRowSegments([], MINUTES_PER_DAY, 30);
-      expect(segments).toEqual([
-        { startMin: 0, endMin: 30, kind: "nodata" },
-        { startMin: 30, endMin: MINUTES_PER_DAY, kind: "future" },
-      ]);
-    });
   });
 });
 
@@ -533,10 +453,11 @@ describe("sleepWeekObservations", () => {
 // it runs over an enumerator of the reachable states rather than a sample.
 //
 // Scope: the copy the pattern view owns — the weekly observations, the bedtime
-// sentence, the band's screen-reader line, the age-typical caption and the
-// calm-mode escalation note. Two surfaces the Sleep tab also renders are
-// deliberately NOT swept, because their strings are built inside component
-// state machines rather than a pure module, and their voice predates this work:
+// sentence, the band's screen-reader line and blank-stretch caption, the
+// age-typical caption and the calm-mode escalation note. Two surfaces the Sleep
+// tab also renders are deliberately NOT swept, because their strings are built
+// inside component state machines rather than a pure module, and their voice
+// predates this work:
 // `SleepPlanReminderBanner` ("Aim to start the wind-down now", "You're on
 // track") and `SleepCoachCard`'s titles and cues. Both are product-voice
 // decisions, not defects to fix here — extracting and sweeping them is its own
@@ -545,6 +466,7 @@ function reachableCopy(): string[] {
   const week = [night(25, 4), night(26, 5), night(27, 6), night(28, 4), night(29, 5), night(30, 4)];
   const out: string[] = [
     BEDTIME_INSUFFICIENT_COPY,
+    BLANK_STRETCH_COPY,
     WAKE_INSUFFICIENT_COPY,
     SHORTFALL_ESCALATION_COPY,
   ];
@@ -640,6 +562,7 @@ describe("sleep copy guardrails", () => {
     expect(copy.some((c) => c.includes("Longest stretch on"))).toBe(true);
     expect(copy.some((c) => c.includes("Typical at"))).toBe(true);
     expect(copy).toContain(SHORTFALL_ESCALATION_COPY);
+    expect(copy).toContain(BLANK_STRETCH_COPY);
     expect(copy.some((c) => c.includes("naps a day this week"))).toBe(true);
     expect(copy.some((c) => c.includes("Bedtime landed"))).toBe(true);
     expect(copy.some((c) => c.includes("Mornings started"))).toBe(true);

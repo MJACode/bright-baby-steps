@@ -8,7 +8,7 @@ import {
   type SleepCoverage,
   type SleepLogRow,
 } from "@/lib/sleepPatterns";
-import { sleepWeekObservations } from "@/lib/sleepRhythm";
+import { BLANK_STRETCH_COPY, sleepWeekObservations } from "@/lib/sleepRhythm";
 import type { SleepDayData } from "@/hooks/useSleepPatterns";
 import type { TrackingSchedule } from "@/lib/trackingDay";
 
@@ -52,6 +52,12 @@ function blockStyles(container: HTMLElement): { left: string; width: string }[] 
     left: el.style.left,
     width: el.style.width,
   }));
+}
+
+function blockClasses(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll<HTMLElement>("span[style*='width']")).map(
+    (el) => el.className,
+  );
 }
 
 describe("TodayRhythmCard", () => {
@@ -145,9 +151,7 @@ describe("TodayRhythmCard", () => {
     );
 
     expect(screen.queryByText(/not logged/i)).toBeNull();
-    expect(
-      screen.getByText("A blank stretch is time with no sleep logged — not time awake."),
-    ).toBeInTheDocument();
+    expect(screen.getByText(BLANK_STRETCH_COPY)).toBeInTheDocument();
     // The three states that still earn a swatch. "Night" also labels a stat
     // tile, so it is only ever asserted as present.
     expect(screen.getAllByText("Night").length).toBeGreaterThan(0);
@@ -155,31 +159,43 @@ describe("TodayRhythmCard", () => {
     expect(screen.getByText("Awake")).toBeInTheDocument();
   });
 
-  it("paints nothing past the current moment on today's row", () => {
-    vi.useFakeTimers();
-    try {
-      // 07:03 on a plain (non-DST) tracking day: 423 of 1440 minutes have
-      // happened, so no segment may reach past 29.375% of the track.
-      const now = new Date(2026, 8, 5, 7, 3);
-      vi.setSystemTime(now);
-      const night = sleepLog(new Date(2026, 8, 5, 0, 0), new Date(2026, 8, 5, 6, 0), "night");
+  it("drops the nap ring on a catnap too narrow for its fill to show", () => {
+    const now = new Date(2026, 8, 5, 23, 0);
 
-      const { container } = render(
-        <TodayRhythmCard
-          days={[dayData("2026-09-05", [night], now)]}
-          coverage={coverage(1)}
-          schedule={MIDNIGHT}
-          ageMonths={8}
-        />,
-      );
+    // Eight minutes is under 4px of the track: a full-opacity ring on each edge
+    // would be the whole block, which reads as night.
+    const catnap = render(
+      <TodayRhythmCard
+        days={[
+          dayData(
+            "2026-09-05",
+            [sleepLog(new Date(2026, 8, 5, 13, 0), new Date(2026, 8, 5, 13, 8))],
+            now,
+          ),
+        ]}
+        coverage={coverage(1)}
+        schedule={MIDNIGHT}
+        ageMonths={8}
+      />,
+    );
+    expect(blockClasses(catnap.container)).toHaveLength(1);
+    expect(blockClasses(catnap.container).some((c) => c.includes("ring"))).toBe(false);
+    catnap.unmount();
 
-      const segments = blockStyles(container);
-      expect(segments.length).toBeGreaterThan(0);
-      for (const { left, width } of segments) {
-        expect(parseFloat(left) + parseFloat(width)).toBeLessThanOrEqual((423 / 1440) * 100 + 0.001);
-      }
-    } finally {
-      vi.useRealTimers();
-    }
+    const nap = render(
+      <TodayRhythmCard
+        days={[
+          dayData(
+            "2026-09-05",
+            [sleepLog(new Date(2026, 8, 5, 13, 0), new Date(2026, 8, 5, 14, 30))],
+            now,
+          ),
+        ]}
+        coverage={coverage(1)}
+        schedule={MIDNIGHT}
+        ageMonths={8}
+      />,
+    );
+    expect(blockClasses(nap.container).some((c) => c.includes("ring-sleep"))).toBe(true);
   });
 });

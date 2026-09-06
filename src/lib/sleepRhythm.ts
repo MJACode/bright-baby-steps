@@ -55,7 +55,7 @@ export function trackingDayLengthMin(
 // The 24h band
 // ---------------------------------------------------------------------------
 
-export type RhythmSegmentKind = "night" | "nap" | "awake" | "nodata" | "future";
+export type RhythmSegmentKind = "night" | "nap" | "awake" | "nodata";
 
 export interface RhythmSegment {
   /** Minutes from the tracking day's start, 0-1440. */
@@ -65,45 +65,15 @@ export interface RhythmSegment {
 }
 
 /**
- * Everything from `nowMin` onward, as one `future` segment.
- *
- * The returned range is unchanged: callers rely on the segments tiling
- * `0 -> dayEnd` with no gaps, so the tail is replaced rather than dropped.
- */
-function clampToNow(
-  segments: RhythmSegment[],
-  dayEnd: number,
-  nowMin: number | undefined,
-): RhythmSegment[] {
-  if (nowMin === undefined || !Number.isFinite(nowMin)) return segments;
-  if (nowMin >= dayEnd) return segments;
-  if (nowMin <= 0) return [{ startMin: 0, endMin: dayEnd, kind: "future" }];
-
-  const elapsed: RhythmSegment[] = [];
-  for (const seg of segments) {
-    if (seg.startMin >= nowMin) break;
-    elapsed.push(seg.endMin > nowMin ? { ...seg, endMin: nowMin } : seg);
-  }
-  elapsed.push({ startMin: nowMin, endMin: dayEnd, kind: "future" });
-  return elapsed;
-}
-
-/**
  * One day's 24h track, painted left to right with no gaps.
  *
  * Awake time is only claimed BETWEEN the first and last thing logged that day.
  * Everything before the first log and after the last is "nodata" — we know a
  * baby was asleep when a sleep says so, and we know nothing at all otherwise.
- *
- * `nowMin` exists because the future is not missing data. Without it, today's
- * row reports the rest of the day as unlogged from the moment the baby wakes —
- * at 7am that is most of the track making a claim about hours that have not
- * happened. Pass it for today's row only; every other day is complete.
  */
 export function rhythmRowSegments(
   blocks: SleepBlock[],
   dayLengthMin: number = MINUTES_PER_DAY,
-  nowMin?: number,
 ): RhythmSegment[] {
   const dayEnd = Math.max(1, dayLengthMin);
   const sorted = (blocks ?? [])
@@ -111,7 +81,7 @@ export function rhythmRowSegments(
     .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
 
   if (sorted.length === 0) {
-    return clampToNow([{ startMin: 0, endMin: dayEnd, kind: "nodata" }], dayEnd, nowMin);
+    return [{ startMin: 0, endMin: dayEnd, kind: "nodata" }];
   }
 
   const firstStart = sorted[0].startMin;
@@ -137,8 +107,13 @@ export function rhythmRowSegments(
   if (cursor < dayEnd) {
     segments.push({ startMin: cursor, endMin: dayEnd, kind: "nodata" });
   }
-  return clampToNow(segments, dayEnd, nowMin);
+  return segments;
 }
+
+/** What the band's blank ground means, in words. Absence gets no ink and no
+ *  swatch, so this line is the only thing that says what it is. */
+export const BLANK_STRETCH_COPY =
+  "A blank stretch is time with no sleep logged — not time awake.";
 
 /**
  * How far into a given tracking day a wall-clock time falls, in real minutes.

@@ -8,8 +8,8 @@ import { dayLabel } from "@/lib/dayLabel";
 import { formatDurationShort } from "@/lib/sessionAnchor";
 import { canShowRhythm, type SleepCoverage } from "@/lib/sleepPatterns";
 import {
+  BLANK_STRETCH_COPY,
   ageTypicalSleepCaption,
-  clockOffsetInDay,
   describeRhythmDay,
   formatClockMinutes,
   rhythmRowSegments,
@@ -17,7 +17,7 @@ import {
   type RhythmSegmentKind,
 } from "@/lib/sleepRhythm";
 import type { SleepDayData } from "@/hooks/useSleepPatterns";
-import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
+import type { TrackingSchedule } from "@/lib/trackingDay";
 
 const BAND_DAYS = 7;
 
@@ -30,15 +30,25 @@ const TRACK_GROUND = "bg-background";
 // height, so the legend swatch scales with it.
 const AWAKE_BAR_HEIGHT = "h-1/2";
 
+const NAP_FILL = "inset-y-0 bg-sleep/45";
+
 // Three ink weights and nothing. An unlogged stretch is not awake time, so it
 // gets no ink at all: half a bar against bare ground is a wider gap than any
 // two fills could be. Nap carries an opaque edge because its 45% fill alone
 // does not clear 3:1 against the ground.
-const SEGMENT_CLASS: Record<Exclude<RhythmSegmentKind, "nodata" | "future">, string> = {
+const SEGMENT_CLASS: Record<Exclude<RhythmSegmentKind, "nodata">, string> = {
   night: "inset-y-0 bg-sleep",
-  nap: "inset-y-0 bg-sleep/45 ring-1 ring-inset ring-sleep",
+  nap: `${NAP_FILL} ring-1 ring-inset ring-sleep`,
   awake: `top-1/2 -translate-y-1/2 ${AWAKE_BAR_HEIGHT} bg-muted-foreground/80`,
 };
+
+// The nap ring is a full-opacity `--sleep` pixel on each edge, so a block under
+// about 4px wide is entirely ring and reads as solid night. The track is around
+// 274px on a 390px viewport (less the card's p-4, the w-9 label and the gap-2),
+// which puts 4px at roughly 1.5% of the day — about 20 minutes. Below that the
+// ring comes off: a pale sliver understates a catnap, but mis-colouring one as
+// night is a claim about the data.
+const MIN_NAP_RING_WIDTH_SHARE = 0.015;
 
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
@@ -95,13 +105,6 @@ export function TodayRhythmCard({
   const bandDays = canShowRhythm(coverage) ? days.slice(-BAND_DAYS) : days.slice(-1);
   const rows = [...bandDays].reverse();
   const selected = bandDays.find((d) => d.dayKey === selectedKey) ?? bandDays[bandDays.length - 1];
-
-  // Read once per render, with no ticking timer: the clamp only has to be right
-  // to within whatever else re-renders the tab, and re-segmenting a fortnight
-  // every second to move a boundary one pixel is not worth it.
-  const now = new Date();
-  const todayKey = trackingDayKey(now, schedule);
-  const nowClockMin = now.getHours() * 60 + now.getMinutes();
 
   if (isLoading) {
     return (
@@ -173,11 +176,6 @@ export function TodayRhythmCard({
                 // against that — a fixed 1440 denominator would push the last
                 // block of the day off the end of its own track.
                 const dayLength = trackingDayLengthMin(day.dayKey, schedule);
-                // Only today has a future to leave blank.
-                const nowMin =
-                  day.dayKey === todayKey
-                    ? clockOffsetInDay(nowClockMin, day.dayKey, schedule)
-                    : undefined;
                 return (
                   <li key={day.dayKey}>
                     <button
@@ -206,18 +204,25 @@ export function TodayRhythmCard({
                           TRACK_GROUND,
                         )}
                       >
-                        {rhythmRowSegments(day.blocks, dayLength, nowMin).map((seg) =>
-                          seg.kind === "nodata" || seg.kind === "future" ? null : (
+                        {rhythmRowSegments(day.blocks, dayLength).map((seg) => {
+                          if (seg.kind === "nodata") return null;
+                          const widthShare = (seg.endMin - seg.startMin) / dayLength;
+                          const isSliver =
+                            seg.kind === "nap" && widthShare < MIN_NAP_RING_WIDTH_SHARE;
+                          return (
                             <span
                               key={`${seg.kind}-${seg.startMin}`}
-                              className={cn("absolute", SEGMENT_CLASS[seg.kind])}
+                              className={cn(
+                                "absolute",
+                                isSliver ? NAP_FILL : SEGMENT_CLASS[seg.kind],
+                              )}
                               style={{
                                 left: `${(seg.startMin / dayLength) * 100}%`,
-                                width: `${((seg.endMin - seg.startMin) / dayLength) * 100}%`,
+                                width: `${widthShare * 100}%`,
                               }}
                             />
-                          ),
-                        )}
+                          );
+                        })}
                       </span>
                     </button>
                   </li>
@@ -231,9 +236,7 @@ export function TodayRhythmCard({
               <LegendItem kind="awake" label="Awake" />
             </div>
 
-            <p className="text-xs text-muted-foreground pl-10">
-              A blank stretch is time with no sleep logged — not time awake.
-            </p>
+            <p className="text-xs text-muted-foreground pl-10">{BLANK_STRETCH_COPY}</p>
           </div>
 
           {/* Day-scoped facts only. A "longest stretch" tile belongs to the
