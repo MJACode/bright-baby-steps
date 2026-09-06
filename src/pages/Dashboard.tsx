@@ -5,6 +5,7 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { SlidersHorizontal } from "lucide-react";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
+import { FeedCoachCard } from "@/components/feeding/FeedCoachCard";
 import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { NextEventBand } from "@/components/NextEventBand";
@@ -63,6 +64,10 @@ export default function Dashboard() {
 
       {/* Sleep Coach (Flare+) */}
       {isVisible("sleepCoach") && <SleepCoachCard activeChild={activeChild} />}
+
+      {/* Feed Coach — predicted hunger window (Flare+) over the free
+          elapsed-time state and hunger cues. */}
+      {isVisible("feedCoach") && <FeedCoachCard activeChild={activeChild} />}
 
       {/* Developmental Leaps */}
       {isVisible("leaps") && <LeapCard activeChild={activeChild} />}

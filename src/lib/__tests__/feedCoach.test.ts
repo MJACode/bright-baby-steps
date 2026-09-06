@@ -2,12 +2,15 @@ import {
   feedGuidanceForAge,
   deriveFeedCoachState,
   feedCoachCopy,
+  feedPredictionHeadline,
   formatHoursSince,
+  predictNextFeed,
   HUNGER_CUES,
   OVERNIGHT_WAKE_THRESHOLD_HOURS,
   type FeedNightWindow,
 } from "@/lib/feedCoach";
 import { resolveNightWindow } from "@/lib/nightWindow";
+import { sampleConfidence } from "@/lib/sleepPatterns";
 
 const NOW = new Date("2024-07-15T12:00:00Z");
 
@@ -115,6 +118,12 @@ function nightWindow(opts: {
     morningEndsAt: opts.morningEndsAt ?? new Date("2024-07-15T07:00:00Z"),
   };
 }
+
+const feedsAt = (...stamps: string[]) =>
+  stamps.map((s) => ({ logged_at: new Date(s).toISOString() }));
+
+const minutesAfter = (from: string, to: Date) =>
+  Math.round((to.getTime() - new Date(from).getTime()) / 60_000);
 
 // [age in months, overnight feed gap] — realistic bedtime-feed → morning-feed
 // spans, each inside its bracket's own morning bound, so every entry lands in
@@ -1403,5 +1412,448 @@ describe("feedCoach + resolveNightWindow — the evening never de-escalates", ()
     });
     expect(state.kind).toBe("night-stretch");
     expect(feedCoachCopy(state, "Lulu").pill.label).toBe("Overnight");
+  });
+});
+
+describe("predictNextFeed", () => {
+  // The fixture night: opens 22:00 (a 20:00 start plus the lead-in), ends 07:00.
+  const NIGHT = nightWindow({ isNightNow: false });
+
+  it("mirrors each bracket's cadence copy in typicalIntervalMinutes", () => {
+    expect(feedGuidanceForAge(0).typicalIntervalMinutes).toBe(150);
+    expect(feedGuidanceForAge(2).typicalIntervalMinutes).toBe(210);
+    expect(feedGuidanceForAge(4).typicalIntervalMinutes).toBe(210);
+    expect(feedGuidanceForAge(8).typicalIntervalMinutes).toBe(270);
+    expect(feedGuidanceForAge(14).typicalIntervalMinutes).toBe(300);
+    // Two brackets print the same cadence sentence, so they must fall back to
+    // the same interval — otherwise the number and the sentence drift apart.
+    expect(feedGuidanceForAge(2).typicalCadence).toBe(feedGuidanceForAge(4).typicalCadence);
+    expect(feedGuidanceForAge(2).typicalIntervalMinutes).toBe(
+      feedGuidanceForAge(4).typicalIntervalMinutes,
+    );
+  });
+
+  it("returns null with no feeds at all", () => {
+    expect(predictNextFeed({ ageMonths: 4, feeds: [], night: NIGHT, now: NOW })).toBeNull();
+  });
+
+  it("leaves the overnight gap out of the median", () => {
+    // The regression this engine exists for. The 21:30 → 05:00 gap is 7h 30m —
+    // inside the 8-hour cap, so only the night rule can drop it. Averaged in, it
+    // pulls the interval from 3h to nearly 4h and pushes the window an hour late.
+    const feeds = feedsAt(
+      "2024-07-15T08:00:00Z",
+      "2024-07-15T11:00:00Z",
+      "2024-07-15T14:00:00Z",
+      "2024-07-15T17:00:00Z",
+      "2024-07-15T21:30:00Z",
+      "2024-07-16T05:00:00Z",
+      "2024-07-16T08:00:00Z",
+      "2024-07-16T11:00:00Z",
+    );
+    const pred = predictNextFeed({
+      ageMonths: 4,
+      feeds,
+      night: NIGHT,
+      now: new Date("2024-07-16T11:30:00Z"),
+    });
+    expect(pred).not.toBeNull();
+    // 3h after the last feed, minus the 20-minute lead-in. A mean over every
+    // gap (the overnight one included) comes to 4h 5m — a 13:40 window becomes
+    // a 14:45 one, and the card starts telling parents to wait.
+    expect(minutesAfter("2024-07-16T11:00:00Z", pred!.windowStart)).toBe(180 - 20);
+    expect(minutesAfter("2024-07-16T11:00:00Z", pred!.windowEnd)).toBe(180 + 20);
+    expect(pred!.reason).toMatch(/Based on 5 daytime gaps/);
+  });
+
+  it("takes the median, so one cluster-feeding evening can't drag the window in", () => {
+    const stamps: string[] = [];
+    for (const day of ["01", "02", "03", "04", "05"]) {
+      stamps.push(
+        `2024-07-${day}T07:30:00Z`,
+        `2024-07-${day}T10:30:00Z`,
+        `2024-07-${day}T13:30:00Z`,
+        `2024-07-${day}T16:30:00Z`,
+      );
+    }
+    stamps.push(
+      "2024-07-06T07:30:00Z",
+      "2024-07-06T10:30:00Z",
+      "2024-07-06T13:30:00Z",
+      "2024-07-06T16:30:00Z",
+      // Cluster feeding: six half-hour gaps through the evening.
+      "2024-07-06T17:00:00Z",
+      "2024-07-06T17:30:00Z",
+      "2024-07-06T18:00:00Z",
+      "2024-07-06T18:30:00Z",
+      "2024-07-06T19:00:00Z",
+    );
+    const pred = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt(...stamps),
+      night: NIGHT,
+      now: new Date("2024-07-06T19:30:00Z"),
+    });
+    // Median 3h → 21:40. The mean of the same gaps is 2h 22m, which would put
+    // the window at 21:02 and have the card asking for a feed before the baby
+    // has finished cluster feeding.
+    expect(minutesAfter("2024-07-06T19:00:00Z", pred!.windowStart)).toBe(180 - 20);
+  });
+
+  it("drops sub-20-minute gaps — a top-up is not a new interval", () => {
+    // A nursing session logged as three separate side switches, then two real
+    // three-hour gaps. The short ones outnumber the real ones, so they have to
+    // be dropped BEFORE the median, not survived by it: left in, the median is
+    // 10 minutes and the card asks for a feed at 13:50 instead of 17:40.
+    const pred = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt(
+        "2024-07-15T08:00:00Z",
+        "2024-07-15T08:10:00Z",
+        "2024-07-15T08:20:00Z",
+        "2024-07-15T08:30:00Z",
+        "2024-07-15T11:00:00Z",
+        "2024-07-15T14:00:00Z",
+      ),
+      night: NIGHT,
+      now: new Date("2024-07-15T14:30:00Z"),
+    });
+    expect(minutesAfter("2024-07-15T14:00:00Z", pred!.windowStart)).toBe(180 - 20);
+  });
+
+  it("falls back to the age-typical interval with fewer than two usable gaps", () => {
+    const pred = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt("2024-07-15T13:00:00Z", "2024-07-15T13:10:00Z"),
+      night: NIGHT,
+      now: new Date("2024-07-15T13:20:00Z"),
+    });
+    expect(minutesAfter("2024-07-15T13:10:00Z", pred!.windowStart)).toBe(210 - 20);
+    expect(pred!.confidence).toBe("low");
+    expect(pred!.reason).toMatch(/Age-typical timing/);
+  });
+
+  it("still falls back on a single usable gap — one interval is an anecdote", () => {
+    const pred = predictNextFeed({
+      ageMonths: 8,
+      feeds: feedsAt("2024-07-15T08:00:00Z", "2024-07-15T11:00:00Z"),
+      night: NIGHT,
+      now: new Date("2024-07-15T11:30:00Z"),
+    });
+    expect(minutesAfter("2024-07-15T11:00:00Z", pred!.windowStart)).toBe(270 - 20);
+    expect(pred!.confidence).toBe("low");
+  });
+
+  it("drops a gap longer than eight hours — the feed that closed it was never logged", () => {
+    // Two days with a missed feed in each: 08:00 → 17:30 (9h 30m) and the
+    // evening-to-morning span, both wholly inside the family's daytime band, so
+    // only the eight-hour cap can catch them. Left in, they are half the sample
+    // and the median jumps from 3 hours to 9h 30m.
+    const pred = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt(
+        "2024-07-15T08:00:00Z",
+        "2024-07-15T17:30:00Z",
+        "2024-07-15T20:30:00Z",
+        "2024-07-16T08:00:00Z",
+        "2024-07-16T11:00:00Z",
+      ),
+      night: NIGHT,
+      now: new Date("2024-07-16T11:30:00Z"),
+    });
+    expect(minutesAfter("2024-07-16T11:00:00Z", pred!.windowStart)).toBe(180 - 20);
+    expect(pred!.confidence).toBe("medium");
+  });
+
+  it("ignores a night band that doesn't wrap past midnight", () => {
+    // A 22:30 night start plus the bracket lead-in opens the night at 00:30, so
+    // the band reads start-before-end. Taken literally, `m >= 30 || m < 420`
+    // matches every minute of the day: every gap would be dropped as overnight
+    // and every window suppressed. The generic 20:00–06:00 hours stand in
+    // instead, so an afternoon rhythm still reads as an afternoon rhythm.
+    const incoherent = nightWindow({
+      isNightNow: false,
+      nightStartsAt: new Date("2024-07-14T22:30:00Z"),
+      morningEndsAt: new Date("2024-07-15T07:00:00Z"),
+    });
+    const afternoon = predictNextFeed({
+      ageMonths: 6,
+      feeds: feedsAt(
+        "2024-07-15T08:00:00Z",
+        "2024-07-15T11:00:00Z",
+        "2024-07-15T14:00:00Z",
+      ),
+      night: incoherent,
+      now: new Date("2024-07-15T14:30:00Z"),
+    });
+    expect(afternoon).not.toBeNull();
+    // The measured 3-hour rhythm, not the 4h 30m age fallback — proof the gaps
+    // survived the band rather than every one being written off as overnight.
+    expect(minutesAfter("2024-07-15T14:00:00Z", afternoon!.windowStart)).toBe(180 - 20);
+
+    // And the stand-in band still suppresses: a 22:10 window is past 20:00.
+    expect(
+      predictNextFeed({
+        ageMonths: 6,
+        feeds: feedsAt(
+          "2024-07-15T13:30:00Z",
+          "2024-07-15T16:30:00Z",
+          "2024-07-15T19:30:00Z",
+        ),
+        night: incoherent,
+        now: new Date("2024-07-15T20:00:00Z"),
+      }),
+    ).toBeNull();
+  });
+
+  it("goes quiet when the window lands overnight, and keeps it for the wake-to-feed brackets", () => {
+    const feeds = feedsAt("2024-07-15T23:00:00Z");
+    const now = new Date("2024-07-15T23:10:00Z");
+
+    // 6 months: a 04:30 window would be pointing a parent at a sleeping baby.
+    expect(predictNextFeed({ ageMonths: 6, feeds, night: NIGHT, now })).toBeNull();
+    expect(predictNextFeed({ ageMonths: 2, feeds, night: NIGHT, now })).toBeNull();
+
+    // Newborn: feeding overnight IS the guidance, so the window stands.
+    const newborn = predictNextFeed({ ageMonths: 0, feeds, night: NIGHT, now });
+    expect(newborn).not.toBeNull();
+    expect(minutesAfter("2024-07-15T23:00:00Z", newborn!.windowStart)).toBe(150 - 20);
+
+    // And so does a preemie still inside the rule at 2 months corrected.
+    const preemie = predictNextFeed({
+      ageMonths: 2,
+      feeds,
+      isPremature: true,
+      night: NIGHT,
+      now,
+    });
+    expect(preemie).not.toBeNull();
+  });
+
+  it("falls back to 20:00–06:00 when no night window is resolved", () => {
+    const feeds = feedsAt("2024-07-15T16:30:00Z");
+    const now = new Date("2024-07-15T17:00:00Z");
+    // 6 months → a 21:00 window. Past the generic 20:00 boundary, but still
+    // inside the family's own evening, which doesn't close until 22:00.
+    expect(predictNextFeed({ ageMonths: 6, feeds, now })).toBeNull();
+    expect(predictNextFeed({ ageMonths: 6, feeds, night: NIGHT, now })).not.toBeNull();
+  });
+
+  it("tracks the shared confidence ladder on the gaps that survived the filters", () => {
+    const clock = [
+      "2024-07-15T08:00:00Z",
+      "2024-07-15T10:00:00Z",
+      "2024-07-15T12:00:00Z",
+      "2024-07-15T14:00:00Z",
+      "2024-07-15T16:00:00Z",
+      "2024-07-15T18:00:00Z",
+      "2024-07-15T20:00:00Z",
+    ];
+    for (let gaps = 0; gaps <= 6; gaps++) {
+      const pred = predictNextFeed({
+        ageMonths: 4,
+        feeds: feedsAt(...clock.slice(0, gaps + 1)),
+        night: NIGHT,
+        // Five minutes past that fixture's own last feed, so every window is
+        // still ahead — a shared `now` would put the short fixtures behind it.
+        now: new Date(new Date(clock[gaps]).getTime() + 5 * 60_000),
+      });
+      expect(`${gaps} gaps: ${pred!.confidence}`).toBe(`${gaps} gaps: ${sampleConfidence(gaps)}`);
+    }
+  });
+
+  it("counts only the surviving gaps toward confidence", () => {
+    // Six feeds, but the overnight gap and the 10-minute top-up are dropped —
+    // two usable gaps is "a few recent feeds", not a fortnight of evidence.
+    const pred = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt(
+        "2024-07-15T05:00:00Z",
+        "2024-07-15T08:00:00Z",
+        "2024-07-15T08:10:00Z",
+        "2024-07-15T11:00:00Z",
+        "2024-07-15T14:00:00Z",
+      ),
+      night: NIGHT,
+      now: new Date("2024-07-15T14:30:00Z"),
+    });
+    expect(pred!.confidence).toBe("medium");
+    expect(pred!.reason).toMatch(/a few recent feeds/);
+  });
+
+  it("stands down once the window has closed, rather than holding a stale time", () => {
+    // Two surfaces read this: the card, whose elapsed state ("It's been 4h 20m
+    // — consider a feed") is the live answer by then, and NextEventBand, where
+    // `pickNextEvent` takes the EARLIER instant — so a window left in the past
+    // outranks every future nap and pins the band to "likely hungry anytime
+    // now" for the rest of the day.
+    const feeds = feedsAt(
+      "2024-07-15T08:00:00Z",
+      "2024-07-15T11:00:00Z",
+      "2024-07-15T14:00:00Z",
+    );
+    // Window runs 16:40–17:20.
+    const live = predictNextFeed({
+      ageMonths: 4,
+      feeds,
+      night: NIGHT,
+      now: new Date("2024-07-15T17:00:00Z"),
+    });
+    expect(live).not.toBeNull();
+    expect(minutesAfter("2024-07-15T14:00:00Z", live!.windowEnd)).toBe(180 + 20);
+
+    expect(
+      predictNextFeed({
+        ageMonths: 4,
+        feeds,
+        night: NIGHT,
+        now: new Date("2024-07-15T17:21:00Z"),
+      }),
+    ).toBeNull();
+  });
+
+  it("reads the feeds in any order", () => {
+    const stamps = [
+      "2024-07-15T08:00:00Z",
+      "2024-07-15T11:00:00Z",
+      "2024-07-15T14:00:00Z",
+    ];
+    const asc = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt(...stamps),
+      night: NIGHT,
+      now: new Date("2024-07-15T14:30:00Z"),
+    });
+    const desc = predictNextFeed({
+      ageMonths: 4,
+      feeds: feedsAt(...[...stamps].reverse()),
+      night: NIGHT,
+      now: new Date("2024-07-15T14:30:00Z"),
+    });
+    expect(desc!.windowStart.getTime()).toBe(asc!.windowStart.getTime());
+  });
+});
+
+describe("feedPredictionHeadline", () => {
+  const prediction = {
+    windowStart: new Date("2024-07-15T15:40:00Z"),
+    windowEnd: new Date("2024-07-15T16:20:00Z"),
+    confidence: "high" as const,
+    reason: "Based on 9 daytime gaps between feeds over the last 2 weeks.",
+  };
+
+  it("names the clock time before the window opens", () => {
+    expect(
+      feedPredictionHeadline({
+        prediction,
+        now: new Date("2024-07-15T14:00:00Z"),
+        calmMode: false,
+      }),
+    ).toBe("Likely hungry around 3:40 PM");
+  });
+
+  it("softens to the nearest quarter hour in calm mode", () => {
+    expect(
+      feedPredictionHeadline({
+        prediction,
+        now: new Date("2024-07-15T14:00:00Z"),
+        calmMode: true,
+      }),
+    ).toBe("Likely hungry around 3:45");
+  });
+
+  it("switches to any-time-now once the window is open", () => {
+    expect(
+      feedPredictionHeadline({
+        prediction,
+        now: new Date("2024-07-15T16:00:00Z"),
+        calmMode: false,
+      }),
+    ).toBe("Likely hungry any time now");
+  });
+
+  it("never labels the prediction with sleep wording", () => {
+    for (const now of ["2024-07-15T14:00:00Z", "2024-07-15T16:00:00Z"]) {
+      for (const calmMode of [true, false]) {
+        const headline = feedPredictionHeadline({ prediction, now: new Date(now), calmMode });
+        expect(headline).not.toMatch(/sleep|slept/i);
+      }
+    }
+  });
+});
+
+describe("predictNextFeed — never nudges at a sleeping baby", () => {
+  // Three afternoon feeds three hours apart: a 3-hour median, so the window
+  // opens 2h 40m after the last one.
+  const AFTERNOON = feedsAt(
+    "2024-07-15T10:30:00Z",
+    "2024-07-15T13:30:00Z",
+    "2024-07-15T16:30:00Z",
+  );
+
+  it("goes quiet while a night sleep is running, before the clock agrees", () => {
+    // The bedtime hole. A night timer started at 19:05 puts the baby down, but
+    // `resolveNightWindow` clamps `nightOpensAt` so a timer can only ever open
+    // the night LATER than the clock would — so the clock band alone still
+    // reads 19:10 as daytime, and the prediction has to read the timer itself.
+    // Without it the card renders "Likely hungry any time now" directly above
+    // its own muted "Overnight: 2h 50m since the last feed".
+    const night = nightWindow({ isNightNow: false, nightSleepInProgress: true });
+    const now = new Date("2024-07-15T19:20:00Z");
+    expect(predictNextFeed({ ageMonths: 4, feeds: AFTERNOON, night, now })).toBeNull();
+
+    // Same evening with nobody asleep: the window is exactly what the parent wants.
+    const awake = predictNextFeed({
+      ageMonths: 4,
+      feeds: AFTERNOON,
+      night: nightWindow({ isNightNow: false }),
+      now,
+    });
+    expect(awake).not.toBeNull();
+    expect(minutesAfter("2024-07-15T16:30:00Z", awake!.windowStart)).toBe(180 - 20);
+  });
+
+  it("keeps the window for the wake-to-feed brackets even with a night timer running", () => {
+    const night = nightWindow({ isNightNow: false, nightSleepInProgress: true });
+    const now = new Date("2024-07-15T19:20:00Z");
+
+    const newborn = predictNextFeed({ ageMonths: 0, feeds: AFTERNOON, night, now });
+    expect(newborn).not.toBeNull();
+    expect(minutesAfter("2024-07-15T16:30:00Z", newborn!.windowStart)).toBe(180 - 20);
+
+    const preemie = predictNextFeed({
+      ageMonths: 2,
+      feeds: AFTERNOON,
+      isPremature: true,
+      night,
+      now,
+    });
+    expect(preemie).not.toBeNull();
+  });
+
+  it("stays quiet through the whole night the card is calling night", () => {
+    // 06:50, still inside the night, with a window that lands at 07:10 — past
+    // the clock band's own morning end. The state machine is in its overnight
+    // branch, so the prediction can't be the one surface saying "feed now".
+    const feeds = feedsAt(
+      "2024-07-14T10:00:00Z",
+      "2024-07-14T13:00:00Z",
+      "2024-07-14T16:00:00Z",
+      "2024-07-15T04:30:00Z",
+    );
+    const now = new Date("2024-07-15T06:50:00Z");
+    expect(
+      predictNextFeed({ ageMonths: 4, feeds, night: nightWindow({ isNightNow: true }), now }),
+    ).toBeNull();
+
+    // Once the night has ended the same inputs predict again.
+    const morning = predictNextFeed({
+      ageMonths: 4,
+      feeds,
+      night: nightWindow({ isNightNow: false }),
+      now,
+    });
+    expect(morning).not.toBeNull();
+    expect(minutesAfter("2024-07-15T04:30:00Z", morning!.windowStart)).toBe(180 - 20);
   });
 });

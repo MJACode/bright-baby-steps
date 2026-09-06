@@ -1,69 +1,71 @@
-# Sleep tab — pattern view + Sleep Coach callout
+# Hunger indicators on Home + Feed screen
 
-Branch: `claude/sleep-tab-patterns-coach-m7ymda`
+Goal: tell the parent when the baby might be hungry, mirroring how Sleep Coach
+tells them when the baby might be sleepy.
 
-## Decisions (approved 2026-09-05)
-- Pattern view (24h rhythm + weekly observations) is **free**. Only the next-nap
-  prediction stays behind `PremiumGate feature="predictions"`.
-- Sleep Coach is **fused into the timer card** as a prediction strip — one Start
-  button on the tab, not two. Home-screen `SleepCoachCard` keeps its current
-  standalone form via a `variant` prop (no fork).
-- **Full restructure**: tabs die, History moves to its own route.
+## Decisions (approved 2026-09-06)
+- Predictive headline ("Likely hungry around 3:40 PM"), mirroring SleepCoachCard.
+- Prediction is Flare+-gated (`PremiumGate feature="predictions"`); the existing
+  elapsed-time state + hunger-cue list stay free and unchanged.
+- Feed screen: promote the coach to the top of the Feeding tab as a `strip`.
 
-## New IA (single scroll)
-1. H1 "Sleep" + child name (info popover cut)
-2. **Now card** — prediction strip (gated) + timer + one Start CTA; Ferber /
-   Chair render in this card's footer when a night sleep is active
-3. **Today's rhythm** — 24h band, hero total, 3 stat tiles, age-band caption
-4. `SleepTodoCard` (Today's Sleep Plan) — unchanged
-5. **This week** — 7-day nap/night bars + bedtime band + <=2 derived observations
-6. Sleep plan — demoted to one tappable row (absorbs the reminder banner)
-7. Recent sleep — last 3 tracking days + "See all sleep →" (`/dashboard/sleep/history`)
-
-## Tasks
-### Data layer
-- [x] `src/lib/sleepPatterns.ts` — pure, tested helpers: day segmentation across
-      the tracking-day boundary, longest stretch, nap count, wake windows,
-      bedtime band (median + spread), nap-count week-over-week, coverage rule
-- [x] Extract the wake-window gap calc out of `predictNextNap` rather than
-      rewriting it
-- [x] `useSleepDay` / `useSleepWeek` query hooks (day-scoped; the existing
-      50-row desc query is the wrong shape)
-
-### Data-correctness fixes (found during research, verified in code)
-- [x] Delete `ageMinSleepHours` + `sleepRecommendations` from SleepPage; read
-      `TOTAL_SLEEP_BY_BRACKET` / `NAPS_BY_BRACKET` from `sleepPlan.ts`.
-      Today `"3mo": 14` vs canonical `12` false-flags a typical 4-month-old.
-- [x] `detectTriageReasons` early_waking: gate to >=3 months and count only the
-      final night segment per tracking day (today a 2:40am feed-split reads as
-      an early wake)
-- [x] SleepPage `ageMonths` must use corrected age for preemies, matching
-      `useSleepCoach` (today the tab and the coach disagree)
-
-### UI
-- [ ] Fuse coach into timer card; `variant` prop on `SleepCoachCard`; gate wraps
-      only the prediction strip, never the timer
-- [ ] `TodayRhythmCard` — 3 states (asleep / awake / **no data**, visually inert);
-      fixed 12AM–12AM axis; in-progress session open-ended to now; tap → that day
-- [ ] `SleepWeekCard` — lift `SleepNapNightChart` out of AnalyticsPage, do not
-      build a second one
-- [ ] `SleepHistoryPage` route + move `GroupedLogList` / `useLogHistory` / edit
-      dialog wholesale
-- [ ] Cut: Tabs block, info popover, both static advice strings (keep the
-      calm-mode extreme-shortfall soft-out verbatim), plan entry card, reminder
-      banner off the main scroll
-- [ ] Persistent under-1 safe-sleep line (AAP ABCs), non-suppressible in calm mode
-
-### Copy / guardrails
-- [ ] Thresholds: >=3 logged days for rhythm; >=5 qualifying nights for any night
-      claim; 14 days before nap timing is called personal. Reuse the existing
-      `sleepCoach` confidence ladder, do not invent a second one.
-- [ ] No score, no grade, no red/green trend arrows, no wakings count, no
-      time-to-settle, no method-joined-to-trend copy
-- [ ] Calm mode: keeps facts (rhythm, totals), drops evaluations (comparisons,
-      bedtime spread, first-nap time)
-- [ ] Insufficient data reads "Log 5 nights and your bedtime range shows up
-      here" — never "you've logged 3 of 7 days"
+## Plan
+- [x] `src/lib/feedCoach.ts` — add `predictNextFeed()` + per-bracket
+      `typicalIntervalMinutes`. Median of DAYTIME feed intervals only.
+- [x] Retire `predictNextFeed` in `src/lib/nextEvent.ts`; point `NextEventBand`
+      at the one engine so Home can't quote two hunger times.
+- [x] `src/hooks/useFeedCoach.tsx` — mirror `useSleepCoach`.
+- [x] `FeedCoachCard` — `variant: "card" | "strip"`, gated prediction headline,
+      null-child guard, self-sourced `lastFeedAt`.
+- [x] `Dashboard.tsx` + `homeSections.ts` — Home card behind a `feedCoach` toggle.
+- [x] `FeedingLog.tsx` — move the card to the top as `variant="strip"`.
+- [x] Tests in `src/lib/__tests__/feedCoach.test.ts`.
+- [x] QA pass — Fix-required; blocking defect + 4 should-fixes addressed in a follow-up pass.
+- [ ] Second QA pass, then commit + PR.
 
 ## Review
-_(to fill in)_
+
+One engine, one clock, one night window. `predictNextFeed` lives in
+`src/lib/feedCoach.ts`; `nextEvent.ts` keeps only `pickNextEvent`. `useFeedCoach`
+resolves the night window and the minute ticker once and hands both to the card,
+so the prediction and the elapsed-time state can't disagree about when the night
+starts. NextEventBand now reads that hook instead of running its own query and
+its own mean.
+
+Judgement calls that differ from the plan:
+- 1-3mo `typicalIntervalMinutes` is 210, not 195: it prints the same cadence
+  sentence as the 3-6mo bracket ("every 3–4 hours"), so the two must share a
+  midpoint or the number and the copy drift.
+- The reason line says "daytime gaps between feeds", not "daytime feeds" — the
+  count is intervals, and a number a parent reads has to name what it counted.
+- The headline stands down once the window has closed rather than printing a
+  stale clock time next to the live "it's been Xh" state. `feedPredictionHeadline`
+  lives in the lib so it goes through the same copy discipline as `feedCoachCopy`.
+- On the Feeding tab the card was already the first element under the page
+  header (the timers live inside the log dialog), so the move was a no-op; only
+  `variant="strip"` changed.
+- `"feed-coach"` replaces the retired `"next-event"` root in
+  `LOG_WRITE_QUERY_KEYS`, so a logged feed refreshes the prediction.
+
+Verification: 674 tests pass (95 in feedCoach.test.ts, 14 new), `tsc --noEmit -p
+tsconfig.app.json` clean, `npm run build` clean, eslint clean on every touched
+file (the one warning in FeedingLog.tsx predates this change). The two
+regression tests were mutation-checked — swapping the median for a mean and
+dropping the night filter fails both.
+
+## QA follow-up (2026-09-06)
+
+Blocking — the prediction's night suppression read the clock band only, while
+`deriveFeedCoachState` also branches on `nightSleepInProgress`/`isNightNow`. Since
+`resolveNightWindow` clamps `nightOpensAt` later than a running night timer, the
+bedtime lead-in was a hole where the headline said "feed now" over the card's own
+"Overnight". Two tests written first, shown failing at 6b91b9a, then the `asleep`
+term added. The wake-to-feed exception is covered and still passes both ways.
+
+Also: `now` is wired (`now > windowEnd` → null), which unpins NextEventBand from
+a stale hunger time and let the now-unreachable duplicate of that rule come out of
+`feedPredictionHeadline`; three clamp tests rebuilt on ≥3-feed fixtures and each
+mutation-checked; `TZ: "UTC"` pinned in `vitest.config.ts`; the confidence dot map
+moved to `sleepPatterns.ts` beside `sampleConfidence` and shared by both cards.
+
+681 tests pass, and pass again under `TZ=Asia/Tokyo`. tsc, build and lint clean.

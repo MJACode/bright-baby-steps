@@ -69,6 +69,12 @@ export const HOME_SECTIONS: { id: string; label: string; description: string; ic
     icon: Moon,
   },
   {
+    id: "feedCoach",
+    label: "Feed Coach",
+    description: "Hunger windows and cues for today",
+    icon: UtensilsCrossed,
+  },
+  {
     id: "leaps",
     label: "Developmental Leaps",
     description: "Track your baby's current leap",

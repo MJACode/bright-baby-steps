@@ -63,13 +63,28 @@ export type Confidence = "high" | "medium" | "low";
 export const CONFIDENCE_HIGH_SAMPLES = 5;
 export const CONFIDENCE_MEDIUM_SAMPLES = 2;
 
-/** The one confidence ladder in the app. Calibrated for per-bucket nap counts,
- *  which is the only quantity `predictNextNap` feeds it. */
+/** The one confidence ladder in the app. Calibrated for per-bucket nap counts
+ *  (`predictNextNap`) and for the daytime feed-interval counts `predictNextFeed`
+ *  draws its median from — both are "how many comparable samples back this
+ *  number", counted over the same trailing fortnight. Nothing else may feed it:
+ *  a quantity on a different scale pins it to one band and prints a word that
+ *  means nothing. */
 export function sampleConfidence(sampleCount: number): Confidence {
   if (sampleCount >= CONFIDENCE_HIGH_SAMPLES) return "high";
   if (sampleCount >= CONFIDENCE_MEDIUM_SAMPLES) return "medium";
   return "low";
 }
+
+/**
+ * The dot beside a prediction, one class per rung of the ladder above. Lives
+ * with `sampleConfidence` so the Sleep and Feed coach cards can't drift into
+ * two different colour scales for the same word.
+ */
+export const CONFIDENCE_DOT_CLASS: Record<Confidence, string> = {
+  high: "bg-primary",
+  medium: "bg-accent",
+  low: "bg-muted-foreground",
+};
 
 export function isNightSleep(sleepType: string | null | undefined): boolean {
   return sleepType === "night";
