@@ -130,4 +130,56 @@ describe("TodayRhythmCard", () => {
     );
     expect(full.container.querySelectorAll("li")).toHaveLength(7);
   });
+
+  it("explains a blank stretch in words instead of giving absence a swatch", () => {
+    const now = new Date(2026, 8, 5, 12, 0);
+    const nap = sleepLog(new Date(2026, 8, 5, 13, 0), new Date(2026, 8, 5, 14, 30));
+
+    render(
+      <TodayRhythmCard
+        days={[dayData("2026-09-05", [nap], now)]}
+        coverage={coverage(1)}
+        schedule={MIDNIGHT}
+        ageMonths={8}
+      />,
+    );
+
+    expect(screen.queryByText(/not logged/i)).toBeNull();
+    expect(
+      screen.getByText("A blank stretch is time with no sleep logged — not time awake."),
+    ).toBeInTheDocument();
+    // The three states that still earn a swatch. "Night" also labels a stat
+    // tile, so it is only ever asserted as present.
+    expect(screen.getAllByText("Night").length).toBeGreaterThan(0);
+    expect(screen.getByText("Nap")).toBeInTheDocument();
+    expect(screen.getByText("Awake")).toBeInTheDocument();
+  });
+
+  it("paints nothing past the current moment on today's row", () => {
+    vi.useFakeTimers();
+    try {
+      // 07:03 on a plain (non-DST) tracking day: 423 of 1440 minutes have
+      // happened, so no segment may reach past 29.375% of the track.
+      const now = new Date(2026, 8, 5, 7, 3);
+      vi.setSystemTime(now);
+      const night = sleepLog(new Date(2026, 8, 5, 0, 0), new Date(2026, 8, 5, 6, 0), "night");
+
+      const { container } = render(
+        <TodayRhythmCard
+          days={[dayData("2026-09-05", [night], now)]}
+          coverage={coverage(1)}
+          schedule={MIDNIGHT}
+          ageMonths={8}
+        />,
+      );
+
+      const segments = blockStyles(container);
+      expect(segments.length).toBeGreaterThan(0);
+      for (const { left, width } of segments) {
+        expect(parseFloat(left) + parseFloat(width)).toBeLessThanOrEqual((423 / 1440) * 100 + 0.001);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

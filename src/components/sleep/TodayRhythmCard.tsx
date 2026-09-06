@@ -6,8 +6,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { dayLabel } from "@/lib/dayLabel";
 import { formatDurationShort } from "@/lib/sessionAnchor";
-import { getAgeBucket } from "@/lib/sleepTriage";
-import { BEDTIME_RANGE_BY_BRACKET, parseHHmm } from "@/lib/sleepPlan";
 import { canShowRhythm, type SleepCoverage } from "@/lib/sleepPatterns";
 import {
   ageTypicalSleepCaption,
@@ -19,20 +17,27 @@ import {
   type RhythmSegmentKind,
 } from "@/lib/sleepRhythm";
 import type { SleepDayData } from "@/hooks/useSleepPatterns";
-import type { TrackingSchedule } from "@/lib/trackingDay";
+import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
 
 const BAND_DAYS = 7;
 
-// An unlogged stretch is not awake time. It renders as an inert hatch built
-// from the muted token so it reads as "we don't know" and can never be
-// mistaken for "your baby was up".
-const NO_DATA_FILL =
-  "repeating-linear-gradient(45deg, hsl(var(--muted-foreground) / 0.14) 0 3px, transparent 3px 7px)";
+// The bare track. Opaque, so a segment composites the same whether its row is
+// selected (which tints the row behind it) or not — and so a legend swatch on
+// this same ground is literally the same composite as the chart.
+const TRACK_GROUND = "bg-background";
 
-const SEGMENT_CLASS: Record<Exclude<RhythmSegmentKind, "nodata">, string> = {
-  night: "bg-sleep",
-  nap: "bg-sleep/45",
-  awake: "bg-muted",
+// The one knob for the awake bar. A share of the track rather than a pixel
+// height, so the legend swatch scales with it.
+const AWAKE_BAR_HEIGHT = "h-1/2";
+
+// Three ink weights and nothing. An unlogged stretch is not awake time, so it
+// gets no ink at all: half a bar against bare ground is a wider gap than any
+// two fills could be. Nap carries an opaque edge because its 45% fill alone
+// does not clear 3:1 against the ground.
+const SEGMENT_CLASS: Record<Exclude<RhythmSegmentKind, "nodata" | "future">, string> = {
+  night: "inset-y-0 bg-sleep",
+  nap: "inset-y-0 bg-sleep/45 ring-1 ring-inset ring-sleep",
+  awake: `top-1/2 -translate-y-1/2 ${AWAKE_BAR_HEIGHT} bg-muted-foreground/80`,
 };
 
 function StatTile({ label, value }: { label: string; value: string }) {
@@ -41,6 +46,26 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-semibold text-muted-foreground">{label}</p>
       <p className="text-base font-bold tabular-nums mt-0.5">{value}</p>
     </div>
+  );
+}
+
+function LegendItem({
+  kind,
+  label,
+}: {
+  kind: keyof typeof SEGMENT_CLASS;
+  label: string;
+}) {
+  return (
+    <span className="flex items-center gap-1">
+      <span
+        aria-hidden
+        className={cn("relative block w-4 h-4 rounded-sm overflow-hidden", TRACK_GROUND)}
+      >
+        <span className={cn("absolute inset-x-0", SEGMENT_CLASS[kind])} />
+      </span>
+      {label}
+    </span>
   );
 }
 
@@ -71,10 +96,12 @@ export function TodayRhythmCard({
   const rows = [...bandDays].reverse();
   const selected = bandDays.find((d) => d.dayKey === selectedKey) ?? bandDays[bandDays.length - 1];
 
-  const bedtimeRange = BEDTIME_RANGE_BY_BRACKET[getAgeBucket(ageMonths)];
-  const anchorClockMins = [bedtimeRange.earliest, bedtimeRange.latest]
-    .filter((v): v is string => !!v)
-    .map(parseHHmm);
+  // Read once per render, with no ticking timer: the clamp only has to be right
+  // to within whatever else re-renders the tab, and re-segmenting a fortnight
+  // every second to move a boundary one pixel is not worth it.
+  const now = new Date();
+  const todayKey = trackingDayKey(now, schedule);
+  const nowClockMin = now.getHours() * 60 + now.getMinutes();
 
   if (isLoading) {
     return (
@@ -146,6 +173,11 @@ export function TodayRhythmCard({
                 // against that — a fixed 1440 denominator would push the last
                 // block of the day off the end of its own track.
                 const dayLength = trackingDayLengthMin(day.dayKey, schedule);
+                // Only today has a future to leave blank.
+                const nowMin =
+                  day.dayKey === todayKey
+                    ? clockOffsetInDay(nowClockMin, day.dayKey, schedule)
+                    : undefined;
                 return (
                   <li key={day.dayKey}>
                     <button
@@ -169,14 +201,16 @@ export function TodayRhythmCard({
                       </span>
                       <span
                         aria-hidden
-                        className="relative flex-1 h-6 rounded-md overflow-hidden"
-                        style={{ background: NO_DATA_FILL }}
+                        className={cn(
+                          "relative flex-1 h-6 rounded-md overflow-hidden",
+                          TRACK_GROUND,
+                        )}
                       >
-                        {rhythmRowSegments(day.blocks, dayLength).map((seg) =>
-                          seg.kind === "nodata" ? null : (
+                        {rhythmRowSegments(day.blocks, dayLength, nowMin).map((seg) =>
+                          seg.kind === "nodata" || seg.kind === "future" ? null : (
                             <span
                               key={`${seg.kind}-${seg.startMin}`}
-                              className={cn("absolute inset-y-0", SEGMENT_CLASS[seg.kind])}
+                              className={cn("absolute", SEGMENT_CLASS[seg.kind])}
                               style={{
                                 left: `${(seg.startMin / dayLength) * 100}%`,
                                 width: `${((seg.endMin - seg.startMin) / dayLength) * 100}%`,
@@ -184,17 +218,6 @@ export function TodayRhythmCard({
                             />
                           ),
                         )}
-                        {anchorClockMins.map((clockMin) => (
-                          <span
-                            key={clockMin}
-                            className="absolute inset-y-0 w-px bg-foreground/20"
-                            style={{
-                              left: `${
-                                (clockOffsetInDay(clockMin, day.dayKey, schedule) / dayLength) * 100
-                              }%`,
-                            }}
-                          />
-                        ))}
                       </span>
                     </button>
                   </li>
@@ -203,24 +226,14 @@ export function TodayRhythmCard({
             </ul>
 
             <div className="flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <span aria-hidden className="w-2 h-2 rounded-sm bg-sleep" /> Night
-              </span>
-              <span className="flex items-center gap-1">
-                <span aria-hidden className="w-2 h-2 rounded-sm bg-sleep/45" /> Nap
-              </span>
-              <span className="flex items-center gap-1">
-                <span aria-hidden className="w-2 h-2 rounded-sm bg-muted" /> Awake
-              </span>
-              <span className="flex items-center gap-1">
-                <span
-                  aria-hidden
-                  className="w-2 h-2 rounded-sm"
-                  style={{ background: NO_DATA_FILL }}
-                />{" "}
-                Not logged
-              </span>
+              <LegendItem kind="night" label="Night" />
+              <LegendItem kind="nap" label="Nap" />
+              <LegendItem kind="awake" label="Awake" />
             </div>
+
+            <p className="text-xs text-muted-foreground pl-10">
+              A blank stretch is time with no sleep logged — not time awake.
+            </p>
           </div>
 
           {/* Day-scoped facts only. A "longest stretch" tile belongs to the
