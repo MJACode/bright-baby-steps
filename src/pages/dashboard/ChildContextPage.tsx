@@ -1,6 +1,6 @@
 // "What Grace Flare remembers" — the audit-and-control surface for the
 // per-child personalization inputs that `loadMemoryContext` injects into the
-// briefing, weekly-insights, next-step-peek, activity-plan and journal prompts.
+// briefing, weekly-insights, activity-plan and journal prompts.
 //
 // Reached from Profile and from the AI surfaces themselves (Weekly insights),
 // not from the More list — this is a settings screen you visit when you wonder

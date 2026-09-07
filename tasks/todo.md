@@ -20,10 +20,10 @@ illegibility behind four competing affordances on a 64px row.
 - [ ] Delete `supabase/functions/next-step-peek/`
 
 ## Frontend
-- [ ] `TodayCard.tsx` — drop focus, guard watch, remove NextStepFeed, fix dividers
-- [ ] Delete NextStepFeed / useNextSteps / useNextStepPeek / nextSteps(.test) / skills
-- [ ] Update `useBriefing.ts` response type
-- [ ] Fix stale NextStepFeed comment in `DashboardLayout.tsx:141`
+- [x] `TodayCard.tsx` — drop focus, guard watch, remove NextStepFeed, fix dividers
+- [x] Delete NextStepFeed / useNextSteps / useNextStepPeek / nextSteps(.test) / skills
+- [x] Update `useBriefing.ts` response type
+- [x] Fix stale NextStepFeed comment in `DashboardLayout.tsx:141`
 
 ## Follow-ups (not in this change)
 - [ ] Undeploy the live `next-step-peek` edge function (manual, Supabase dashboard)

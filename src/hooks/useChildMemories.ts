@@ -38,9 +38,6 @@ export function useChildMemories(childId: string | null | undefined) {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey });
-    // The Next Steps feed biases its ordering off concern/goal memories under a
-    // separate key — refresh it too so a hub edit re-ranks the feed immediately.
-    queryClient.invalidateQueries({ queryKey: ["next-steps-memories", childId] });
   };
 
   const query = useQuery({

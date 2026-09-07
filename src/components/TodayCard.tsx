@@ -8,14 +8,12 @@ import {
 import {
   Sparkles,
   AlertTriangle,
-  Target,
   Loader2,
   ChevronDown,
   BookOpen,
 } from "lucide-react";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useBriefing } from "@/hooks/useBriefing";
-import { NextStepFeed } from "@/components/NextStepFeed";
 import {
   getDevelopmentContentForChild,
   DEV_CONTENT_DISCLAIMER,
@@ -55,6 +53,12 @@ export function TodayCard({
     showBriefing && (briefingLoading || !!briefing);
   const weekVisible = showWhatToExpect && !!entry;
 
+  // The briefing now returns `watch` only when it carries something actionable,
+  // so the collapsible would otherwise expand to reveal nothing.
+  const watchNote = briefing?.watch?.trim() ?? "";
+
+  if (!briefingRegionVisible && !weekVisible) return null;
+
   return (
     <Card className="border-0 bg-card rounded-2xl shadow-sm">
       <CardContent className="p-4 space-y-4">
@@ -76,42 +80,36 @@ export function TodayCard({
                       {briefing.status}
                     </h2>
                   </div>
-                  <Collapsible
-                    open={!prefs.briefingCollapsed}
-                    onOpenChange={(open) =>
-                      setPrefs({ briefingCollapsed: !open })
-                    }
-                  >
-                    <CollapsibleContent className="space-y-2">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-muted-foreground leading-snug">
-                          {briefing.watch}
-                        </span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Target className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                        <span className="text-sm text-muted-foreground leading-snug">
-                          {briefing.focus}
-                        </span>
-                      </div>
-                    </CollapsibleContent>
-                    <CollapsibleTrigger className="group flex items-center gap-1 touch-target min-h-[48px] text-sm font-semibold text-muted-foreground">
-                      {prefs.briefingCollapsed ? "More on today" : "Show less"}
-                      <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-                    </CollapsibleTrigger>
-                  </Collapsible>
+                  {watchNote && (
+                    <Collapsible
+                      open={!prefs.briefingCollapsed}
+                      onOpenChange={(open) =>
+                        setPrefs({ briefingCollapsed: !open })
+                      }
+                    >
+                      <CollapsibleContent>
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                          <span className="text-sm text-muted-foreground leading-snug">
+                            {watchNote}
+                          </span>
+                        </div>
+                      </CollapsibleContent>
+                      <CollapsibleTrigger className="group flex items-center gap-1 touch-target min-h-[48px] text-sm font-semibold text-muted-foreground">
+                        {prefs.briefingCollapsed ? "More on today" : "Show less"}
+                        <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+                      </CollapsibleTrigger>
+                    </Collapsible>
+                  )}
                 </>
               )
             )}
           </div>
         )}
 
-        {briefingRegionVisible && <div className="border-t border-border" />}
-
-        <NextStepFeed activeChild={activeChild} embedded />
-
-        {weekVisible && <div className="border-t border-border" />}
+        {briefingRegionVisible && weekVisible && (
+          <div className="border-t border-border" />
+        )}
 
         {weekVisible && entry && (
           <Collapsible open={weekOpen} onOpenChange={setWeekOpen}>

@@ -138,7 +138,7 @@ export default function DashboardLayout() {
 
       {/* Visit Prep sheet — mounted at the layout level so the visitPrepOpener
           subscription is live on every dashboard sub-route. Opened by the
-          header stethoscope button and NextStepFeed's checkup row. */}
+          header stethoscope button. */}
       {!isOnboarding && <VisitPrepCard activeChild={activeChild} hideTrigger />}
 
       {/* Bottom tabs */}

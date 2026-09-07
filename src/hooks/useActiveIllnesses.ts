@@ -7,8 +7,8 @@ export interface ActiveIllness {
   start_date: string;
 }
 
-// One cache entry shared by the Next-steps feed and the quick-log FAB, so the
-// two surfaces make one request and agree on what's active. childId sits at the
+// One cache entry for what's currently active, so every surface that asks makes
+// one request and agrees on the answer. childId sits at the
 // same index as MedicalTab's ["illness-logs", childId], and the "active"
 // discriminator goes last, so invalidateAfterLogWrite's ["illness-logs"] root
 // prefix-matches both.

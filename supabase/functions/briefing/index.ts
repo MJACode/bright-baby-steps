@@ -112,29 +112,11 @@ serve(async (req) => {
     const wetCount = diaperLogs.filter((d) => d.diaper_type === "wet").length;
     const dirtyCount = diaperLogs.filter((d) => d.diaper_type === "dirty" || d.diaper_type === "both").length;
 
-    // Hours since the most recent log across all three categories — drives the
-    // "time to log again" nudge that used to live in the home-screen streak card.
-    const lastTimestamps = [
-      sleepLogs[0]?.started_at,
-      feedLogs[0]?.logged_at,
-      diaperLogs[0]?.logged_at,
-    ]
-      .filter((t): t is string => Boolean(t))
-      .map((t) => new Date(t).getTime());
-    const mostRecentMs = lastTimestamps.length ? Math.max(...lastTimestamps) : null;
-    const hoursSinceLastLog = mostRecentMs !== null
-      ? (now.getTime() - mostRecentMs) / (1000 * 60 * 60)
-      : null;
-
     let contextBlock = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
 Last 48 hours summary:
 - Sleep: ${totalSleepHrs}h total (${napCount} naps, ${nightCount} night sleeps)
 - Feeds: ${feedCount} feeds (types: ${feedTypes.join(", ") || "none"})
 - Diapers: ${diaperCount} total (${wetCount} wet, ${dirtyCount} dirty)`;
-
-    if (hoursSinceLastLog !== null) {
-      contextBlock += `\n- Hours since last log of any kind: ${hoursSinceLastLog.toFixed(1)}`;
-    }
 
     if (illnesses.length > 0) {
       contextBlock += `\n- Active illnesses: ${illnesses.map((i) => i.illness_name).join(", ")}`;
@@ -160,12 +142,7 @@ Last 48 hours summary:
       return new Response(
         JSON.stringify({
           status: `Welcome! Start logging ${core.name}'s activities to get personalized insights here.`,
-          watch: "Log feeds, sleep, and diapers to unlock pattern detection.",
-          focus: core.ageMonths < 3
-            ? "At this age, skin-to-skin and tummy time are great activities to try."
-            : core.ageMonths < 6
-            ? "This is a great age for interactive play and sensory exploration."
-            : "Keep encouraging new foods and active play!",
+          watch: null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -180,21 +157,30 @@ Last 48 hours summary:
       });
     }
 
-    const systemPrompt = `You are a warm, expert parenting assistant for a baby tracking app. Given the child's data, generate a daily briefing in JSON format with exactly 3 fields:
+    const systemPrompt = `You are a warm, expert parenting assistant for a baby tracking app. Given the child's data, generate a daily briefing in JSON format with exactly 2 fields:
 
 - "status": A friendly 1-sentence summary of the last 24-48h (e.g., "Maya had 6 feeds and 11h of sleep — a solid day!")
-- "watch": A 1-sentence observation about patterns to watch (e.g., "Her last nap was shorter than usual — watch for overtiredness signs"). If everything looks normal, say something reassuring.
-- "focus": A 1-sentence age-appropriate developmental tip or activity suggestion (e.g., "At 14 weeks, tummy time helps build neck and core strength")
+- "watch": ONE short sentence naming something the parent can act on today — or null.
+
+When "watch" should be null:
+- null is the correct and expected default, not a failure. Most days there is nothing to add, and an absent line reads better than a padded one.
+- Return null whenever the honest answer would be a bare observation, a reassurance ("everything looks on track"), a generic tip, or filler.
+- Keep "watch" only when it names something the parent can actually do today, or a genuine escalation: an active illness, or an upcoming pediatrician appointment worth preparing for.
+
+What this data can and cannot tell you:
+- The summary reflects what the parent happened to record. It is NOT a complete record of the child's day.
+- If a category has zero or very few entries, treat it as NOT RECORDED — unknown. Never treat it as evidence the behaviour itself was low, short, missing, or declining.
+- Never compare a sparse window against a typical or expected baseline. You cannot tell a quiet log from a quiet day.
+- Never comment on absent, missing, sparse, or declining logs. Never ask the parent to log more. Never frame a category's absence as a problem, a gap, or something that needs tracking.
 
 Rules:
 - Use the child's name
 - Keep each field to ONE short sentence
-- Be warm, supportive, never alarming
+- Be warm, direct and supportive — never alarming, never instructional, never scolding
+- Write to the parent as "you" and "your baby"; do not use "we"
 - Use emojis sparingly (1 per field max)
-- Return ONLY valid JSON, no markdown, no code fences
 - If an illness is active, mention it in the watch field
-- If "Hours since last log" is greater than 6, gently nudge in the watch field (e.g., "It's been about 8 hours since your last entry — a quick log keeps the patterns accurate."). Do NOT mention it when 6 or under.
-- If the child's interests are listed, you may weave ONE of them into the focus tip when it fits naturally.`;
+- Return ONLY valid JSON, no markdown, no code fences. "watch" must be a string or the JSON literal null.`;
 
     // Per-child memory loaded separately so it can be appended to the
     // system-content array as a non-cached block. The leading system prompt
@@ -237,18 +223,26 @@ Rules:
     const content = llmData.content?.[0]?.text || "";
 
     // Parse JSON from response (handle possible markdown fences)
-    let briefing;
+    let parsed: { status?: unknown; watch?: unknown } = {};
     try {
       const cleaned = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
-      briefing = JSON.parse(cleaned);
+      parsed = JSON.parse(cleaned);
     } catch {
       console.error("Failed to parse LLM JSON:", content);
-      briefing = {
-        status: `${core.name} had ${feedCount} feeds and ${totalSleepHrs}h of sleep in the last 48 hours.`,
-        watch: "Everything looks on track — keep up the great work! 💛",
-        focus: "Try to maintain consistent routines today.",
-      };
     }
+
+    // Normalize onto the { status, watch } contract before it leaves the
+    // function. `watch` is nullable by design, and models asked for a JSON
+    // literal null sometimes emit the *string* "null"/"none"/"" instead — which
+    // would render as a real line on the client. Rebuilding the object also
+    // drops any key the model invents (e.g. a resurrected "focus").
+    const watchText = typeof parsed.watch === "string" ? parsed.watch.trim() : "";
+    const briefing: { status: string; watch: string | null } = {
+      status: typeof parsed.status === "string" && parsed.status.trim()
+        ? parsed.status.trim()
+        : `${core.name} had ${feedCount} feeds and ${totalSleepHrs}h of sleep in the last 48 hours.`,
+      watch: watchText && !/^(null|none|n\/a)\.?$/i.test(watchText) ? watchText : null,
+    };
 
     // Fire-and-forget memory extraction. Build a synthetic transcript that
     // pairs the contextBlock (treated as the user turn — it is what the

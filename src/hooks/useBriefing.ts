@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface BriefingData {
   status: string;
-  watch: string;
-  focus: string;
+  /** Null whenever nothing about today is actually worth flagging. */
+  watch?: string | null;
 }
 
 export function useBriefing(childId?: string) {
