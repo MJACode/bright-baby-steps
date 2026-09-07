@@ -27,43 +27,61 @@ describe("pickNextEvent", () => {
     expect(pickNextEvent(null, at("21:30"))).toEqual({ type: "feed", at: at("21:30") });
   });
 
+  it("falls back to the nap when the feed engine suppresses a prediction", () => {
+    expect(pickNextEvent(at("21:30"), null)).toEqual({ type: "nap", at: at("21:30") });
+  });
+
   it("returns null when neither side can predict", () => {
     expect(pickNextEvent(null, null)).toBeNull();
   });
+
+  it("prefers the nap on an exact tie", () => {
+    expect(pickNextEvent(at("15:05"), at("15:05"))).toEqual({
+      type: "nap",
+      at: at("15:05"),
+    });
+  });
 });
 
-// One hunger claim per screen. With the Feed Coach card rendered on Home, the
-// band and the card were both quoting the same predicted hunger instant, one
-// scroll apart, in two separate blurred panels. The card owns it; the band
-// falls back to the nap or shows nothing.
-describe("pickBandEvent defers the hunger slot to the Feed Coach card", () => {
-  it("shows the nap when the card is visible and the feed lands sooner", () => {
-    expect(pickBandEvent(at("16:20"), at("15:05"), true)).toEqual({
+// Home splits the two surfaces by horizon: a coach card owns the near moment
+// with its confidence dot, state pill, cue and CTA, and the band shows whatever
+// no card is claiming. Without the split the band and a card print the same
+// instant one scroll apart in two separate blurred panels.
+describe("pickBandEvent shows what no coach card is claiming", () => {
+  const NONE = { nap: false, feed: false };
+
+  it("picks the sooner of the two when neither card owns a side", () => {
+    expect(pickBandEvent(at("16:20"), at("15:05"), NONE)).toEqual({
+      type: "feed",
+      at: at("15:05"),
+    });
+    expect(pickBandEvent(at("15:05"), at("16:20"), NONE)).toEqual({
+      type: "nap",
+      at: at("15:05"),
+    });
+  });
+
+  it("shows the nap when the Feed Coach card owns the hunger slot", () => {
+    expect(pickBandEvent(at("16:20"), at("15:05"), { nap: false, feed: true })).toEqual({
       type: "nap",
       at: at("16:20"),
     });
   });
 
-  it("shows nothing when the card is visible and there is no nap to fall back to", () => {
-    expect(pickBandEvent(null, at("15:05"), true)).toBeNull();
-  });
-
-  it("still shows the feed when the card is hidden in Customize Home", () => {
-    expect(pickBandEvent(at("16:20"), at("15:05"), false)).toEqual({
+  it("shows the feed when the Sleep Coach card owns the nap slot", () => {
+    expect(pickBandEvent(at("15:05"), at("16:20"), { nap: true, feed: false })).toEqual({
       type: "feed",
-      at: at("15:05"),
+      at: at("16:20"),
     });
   });
 
-  it("shows the nap regardless of the card when the nap lands sooner", () => {
-    expect(pickBandEvent(at("15:05"), at("16:20"), true)).toEqual({
-      type: "nap",
-      at: at("15:05"),
-    });
-    expect(pickBandEvent(at("15:05"), at("16:20"), false)).toEqual({
-      type: "nap",
-      at: at("15:05"),
-    });
+  it("shows nothing when both cards own their side", () => {
+    expect(pickBandEvent(at("15:05"), at("16:20"), { nap: true, feed: true })).toBeNull();
+  });
+
+  it("shows nothing when a card owns the only side that has a prediction", () => {
+    expect(pickBandEvent(null, at("15:05"), { nap: false, feed: true })).toBeNull();
+    expect(pickBandEvent(at("15:05"), null, { nap: true, feed: false })).toBeNull();
   });
 });
 
