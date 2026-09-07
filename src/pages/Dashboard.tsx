@@ -53,9 +53,9 @@ export default function Dashboard() {
           Renders nothing until there's enough log history to predict from. */}
       <NextEventBand activeChild={activeChild} feedCoachVisible={isVisible("feedCoach")} />
 
-      {/* One "Today" card: AI briefing headline → ranked Next steps → condensed
-          this-week line. The briefing and this-week regions gate on their
-          Customize-Home toggles; Next steps always shows. */}
+      {/* One "Today" card: AI briefing headline → condensed this-week line.
+          Both regions gate on their Customize-Home toggles, and the card
+          renders nothing when neither is on. */}
       <TodayCard
         activeChild={activeChild}
         showBriefing={isVisible("briefing")}

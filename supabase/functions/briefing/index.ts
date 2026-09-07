@@ -68,6 +68,20 @@ serve(async (req) => {
     // Fetch last 48h of logs
     const since = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
 
+    // `illness_logs.end_date IS NULL` means "not closed out", which is not the
+    // same as "still ill" — parents routinely log the start of a cold and never
+    // return to close it. Without a recency bound a single forgotten row pins an
+    // AlertTriangle note to Home forever, and that risk is now concentrated:
+    // an open illness is the primary surviving trigger for `watch`. 21 days is
+    // the outer edge of a normal childhood illness course (most URIs, ear
+    // infections and GI bugs resolve in 7-14 days; a lingering cough can run
+    // longer), so anything older is far more likely to be a stale row than a
+    // live concern. `start_date` is a DATE column, so compare on YYYY-MM-DD.
+    const ILLNESS_LOOKBACK_DAYS = 21;
+    const illnessSince = new Date(now.getTime() - ILLNESS_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
     const [sleepRes, feedRes, diaperRes, illnessRes] = await Promise.all([
       supabase
         .from("sleep_logs")
@@ -91,7 +105,8 @@ serve(async (req) => {
         .from("illness_logs")
         .select("illness_name")
         .eq("child_id", childId)
-        .is("end_date", null),
+        .is("end_date", null)
+        .gte("start_date", illnessSince),
     ]);
 
     // Build log summary
@@ -112,32 +127,46 @@ serve(async (req) => {
     const wetCount = diaperLogs.filter((d) => d.diaper_type === "wet").length;
     const dirtyCount = diaperLogs.filter((d) => d.diaper_type === "dirty" || d.diaper_type === "both").length;
 
-    // Hours since the most recent log across all three categories — drives the
-    // "time to log again" nudge that used to live in the home-screen streak card.
-    const lastTimestamps = [
-      sleepLogs[0]?.started_at,
-      feedLogs[0]?.logged_at,
-      diaperLogs[0]?.logged_at,
-    ]
-      .filter((t): t is string => Boolean(t))
-      .map((t) => new Date(t).getTime());
-    const mostRecentMs = lastTimestamps.length ? Math.max(...lastTimestamps) : null;
-    const hoursSinceLastLog = mostRecentMs !== null
-      ? (now.getTime() - mostRecentMs) / (1000 * 60 * 60)
-      : null;
-
-    let contextBlock = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
-Last 48 hours summary:
-- Sleep: ${totalSleepHrs}h total (${napCount} naps, ${nightCount} night sleeps)
-- Feeds: ${feedCount} feeds (types: ${feedTypes.join(", ") || "none"})
-- Diapers: ${diaperCount} total (${wetCount} wet, ${dirtyCount} dirty)`;
-
-    if (hoursSinceLastLog !== null) {
-      contextBlock += `\n- Hours since last log of any kind: ${hoursSinceLastLog.toFixed(1)}`;
+    // Only categories that actually have entries make it into the context
+    // block. Emitting "- Feeds: 0 feeds (types: none)" hands the model a zero
+    // to recite as fact in "status"; an absent line is honestly "not recorded",
+    // which is what the prompt rules below already tell it to assume.
+    const recordedLines: string[] = [];
+    if (sleepLogs.length > 0) {
+      recordedLines.push(
+        `- Sleep: ${totalSleepHrs}h total (${napCount} naps, ${nightCount} night sleeps)`
+      );
+    }
+    if (feedCount > 0) {
+      recordedLines.push(`- Feeds: ${feedCount} feeds (types: ${feedTypes.join(", ")})`);
+    }
+    if (diaperCount > 0) {
+      recordedLines.push(`- Diapers: ${diaperCount} total (${wetCount} wet, ${dirtyCount} dirty)`);
     }
 
+    // Nothing logged inside the rolling 48h window. This is NOT the same as
+    // "new account" — an established parent who has one quiet weekend lands
+    // here too, so the copy has to read correctly to both. It is a
+    // forward-looking invitation, never an accusation ("you haven't logged",
+    // "nothing recorded"): that framing is exactly what the prompt below
+    // forbids the model from using, and it applies to our own copy first.
+    const emptyWindowStatus =
+      `Log a feed, nap, or diaper and ${core.name}'s briefing will appear here.`;
+
+    // No data → return the fallback without an LLM call.
+    if (recordedLines.length === 0) {
+      return new Response(
+        JSON.stringify({ status: emptyWindowStatus, watch: null }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let contextBlock = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
+What the parent recorded in the last 48 hours (this is a log of what they happened to enter, not a full account of the child's day):
+${recordedLines.join("\n")}`;
+
     if (illnesses.length > 0) {
-      contextBlock += `\n- Active illnesses: ${illnesses.map((i) => i.illness_name).join(", ")}`;
+      contextBlock += `\n- Illness started in the last ${ILLNESS_LOOKBACK_DAYS} days and not yet marked resolved: ${illnesses.map((i) => i.illness_name).join(", ")}`;
     }
 
     if (core.nextAppointment) {
@@ -155,22 +184,6 @@ Last 48 hours summary:
       contextBlock += `\n- Temperament: ${humanizeSlug(core.temperament)}`;
     }
 
-    // No data → return fallback without LLM call
-    if (feedCount === 0 && sleepLogs.length === 0 && diaperCount === 0) {
-      return new Response(
-        JSON.stringify({
-          status: `Welcome! Start logging ${core.name}'s activities to get personalized insights here.`,
-          watch: "Log feeds, sleep, and diapers to unlock pattern detection.",
-          focus: core.ageMonths < 3
-            ? "At this age, skin-to-skin and tummy time are great activities to try."
-            : core.ageMonths < 6
-            ? "This is a great age for interactive play and sensory exploration."
-            : "Keep encouraging new foods and active play!",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     // Call LLM
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
@@ -180,21 +193,32 @@ Last 48 hours summary:
       });
     }
 
-    const systemPrompt = `You are a warm, expert parenting assistant for a baby tracking app. Given the child's data, generate a daily briefing in JSON format with exactly 3 fields:
+    const systemPrompt = `You are a warm, expert parenting assistant for a baby tracking app. Given the child's data, generate a daily briefing in JSON format with exactly 2 fields:
 
-- "status": A friendly 1-sentence summary of the last 24-48h (e.g., "Maya had 6 feeds and 11h of sleep — a solid day!")
-- "watch": A 1-sentence observation about patterns to watch (e.g., "Her last nap was shorter than usual — watch for overtiredness signs"). If everything looks normal, say something reassuring.
-- "focus": A 1-sentence age-appropriate developmental tip or activity suggestion (e.g., "At 14 weeks, tummy time helps build neck and core strength")
+- "status": A friendly 1-sentence recap of what the PARENT RECORDED in the last 24-48h — a readback of the log, never a verdict on the day (e.g., "You logged 6 feeds and 11h of sleep for Maya.")
+- "watch": ONE short sentence naming something the parent can act on today — or null.
+
+When "watch" should be null:
+- null is the correct and expected default, not a failure. Most days there is nothing to add, and an absent line reads better than a padded one.
+- Return null whenever the honest answer would be a bare observation, a reassurance ("everything looks on track"), a generic tip, or filler.
+- Keep "watch" only when it names something the parent can actually do today, or a genuine escalation: an active illness, or an upcoming pediatrician appointment worth preparing for.
+
+What this data can and cannot tell you:
+- The summary reflects what the parent happened to record. It is NOT a complete record of the child's day.
+- If a category has very few entries, or is absent from the list entirely, treat it as NOT RECORDED — unknown. Never treat it as evidence the behaviour itself was low, short, missing, or declining.
+- Never compare a sparse window against a typical or expected baseline. You cannot tell a quiet log from a quiet day.
+- Never comment on absent, missing, sparse, or declining logs. Never ask the parent to log more. Never frame a category's absence as a problem, a gap, or something that needs tracking.
+- Only categories with entries are listed. A category that is not listed was not recorded — do not mention it, and never write a zero.
+- Never grade the day in "status". No "a solid day", "a quiet day", "a busy one", "a light day", "not much today". Say what was logged, attribute it to the parent ("you logged"), and stop.
 
 Rules:
 - Use the child's name
 - Keep each field to ONE short sentence
-- Be warm, supportive, never alarming
+- Be warm, direct and supportive — never alarming, never instructional, never scolding
+- Write to the parent as "you" and "your baby"; do not use "we"
 - Use emojis sparingly (1 per field max)
-- Return ONLY valid JSON, no markdown, no code fences
-- If an illness is active, mention it in the watch field
-- If "Hours since last log" is greater than 6, gently nudge in the watch field (e.g., "It's been about 8 hours since your last entry — a quick log keeps the patterns accurate."). Do NOT mention it when 6 or under.
-- If the child's interests are listed, you may weave ONE of them into the focus tip when it fits naturally.`;
+- If an open illness is listed, that is a valid reason to fill "watch" — mention it once, supportively
+- Return ONLY valid JSON, no markdown, no code fences. "watch" must be a string or the JSON literal null.`;
 
     // Per-child memory loaded separately so it can be appended to the
     // system-content array as a non-cached block. The leading system prompt
@@ -236,19 +260,73 @@ Rules:
     const llmData = await response.json();
     const content = llmData.content?.[0]?.text || "";
 
-    // Parse JSON from response (handle possible markdown fences)
-    let briefing;
+    // Parse JSON from response (handle possible markdown fences).
+    //
+    // JSON.parse succeeding does NOT mean we got an object: a bare `null`, an
+    // array, a string or a number are all valid JSON. `null` is the live risk —
+    // the system prompt tells the model three times that null is the correct
+    // default for "watch", which is exactly the pressure that makes a
+    // Haiku-class model reply with a bare `null` for the WHOLE response. Reading
+    // `.watch` off that throws a TypeError, the outer catch turns it into a 500,
+    // and the entire briefing region vanishes from Home. Anything that isn't a
+    // plain non-array object is treated as an empty object so the deterministic
+    // fallback below runs instead.
+    let parsed: { status?: unknown; watch?: unknown } = {};
     try {
       const cleaned = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
-      briefing = JSON.parse(cleaned);
+      const raw: unknown = JSON.parse(cleaned);
+      if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+        parsed = raw as { status?: unknown; watch?: unknown };
+      } else {
+        console.error("LLM returned non-object JSON, using fallback:", cleaned);
+      }
     } catch {
       console.error("Failed to parse LLM JSON:", content);
-      briefing = {
-        status: `${core.name} had ${feedCount} feeds and ${totalSleepHrs}h of sleep in the last 48 hours.`,
-        watch: "Everything looks on track — keep up the great work! 💛",
-        focus: "Try to maintain consistent routines today.",
-      };
     }
+
+    // Normalize onto the { status, watch } contract before it leaves the
+    // function. `watch` is nullable by design, and models asked for a JSON
+    // literal null sometimes emit the *string* "null"/"none"/"" instead — which
+    // would render as a real line on the client. Rebuilding the object also
+    // drops any key the model invents (e.g. a resurrected "focus").
+    const watchText = typeof parsed.watch === "string" ? parsed.watch.trim() : "";
+
+    // Deterministic fallback for `status`. Mirrors the framing the prompt asks
+    // for: a readback of what the parent recorded, not a claim about the day,
+    // and no evaluative adjective. Only categories with entries are named — the
+    // old string hardcoded feeds + sleep, so a diapers-only window rendered
+    // "had 0 feeds and 0.0h of sleep", which is the same "logging gap presented
+    // as a finding about the baby" defect, in the headline and with no model to
+    // soften it.
+    const recordedParts: string[] = [];
+    if (feedCount > 0) {
+      recordedParts.push(`${feedCount} ${feedCount === 1 ? "feed" : "feeds"}`);
+    }
+    if (totalSleepMin > 0) {
+      recordedParts.push(`${totalSleepHrs}h of sleep`);
+    }
+    if (diaperCount > 0) {
+      recordedParts.push(
+        `${diaperCount} ${diaperCount === 1 ? "diaper change" : "diaper changes"}`
+      );
+    }
+    const recordedList =
+      recordedParts.length > 1
+        ? `${recordedParts.slice(0, -1).join(", ")} and ${recordedParts[recordedParts.length - 1]}`
+        : recordedParts[0] ?? "";
+    // recordedParts can still be empty here — the only entry in the window may
+    // be an in-progress sleep session with no duration yet. Reuse the same
+    // invitation copy as the no-data path so the two never diverge in voice.
+    const fallbackStatus = recordedList
+      ? `You logged ${recordedList} for ${core.name} over the last 48 hours.`
+      : emptyWindowStatus;
+
+    const briefing: { status: string; watch: string | null } = {
+      status: typeof parsed.status === "string" && parsed.status.trim()
+        ? parsed.status.trim()
+        : fallbackStatus,
+      watch: watchText && !/^(null|none|n\/a)\.?$/i.test(watchText) ? watchText : null,
+    };
 
     // Fire-and-forget memory extraction. Build a synthetic transcript that
     // pairs the contextBlock (treated as the user turn — it is what the

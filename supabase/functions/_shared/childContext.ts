@@ -1,9 +1,10 @@
 // Shared child-core context loader (Child Context v1).
 //
-// Consolidates the child fetch + age-string computation that was previously
-// duplicated across `briefing`, `next-step-peek`, `weekly-insights`, and
-// `visit-prep-questions`, and surfaces the structured profile fields added by
-// migration 20260805000000 (interests, temperament).
+// Consolidates the child fetch + age-string computation that each AI edge
+// function used to duplicate. Current callers: `briefing`, `chat`,
+// `weekly-insights`, `visit-prep-questions`, and `extract-memory`. Also
+// surfaces the structured profile fields added by migration 20260805000000
+// (interests, temperament).
 //
 // All Supabase reads use the CALLER's session client so RLS
 // (`parent_id = auth.uid()` OR the `has_partner_access` path) does the access
@@ -39,10 +40,10 @@ export interface ChildCore {
 }
 
 /**
- * Canonical age formatter — the consolidated "best version" of the formatters
- * previously duplicated in briefing/index.ts and next-step-peek/index.ts:
- * weeks under ~3 months (parents think in weeks early on), months up to two
- * years, then years + months.
+ * Canonical age formatter — the single implementation every caller of this
+ * module shares (briefing, chat, weekly-insights, visit-prep-questions,
+ * extract-memory): weeks under ~3 months (parents think in weeks early on),
+ * months up to two years, then years + months.
  */
 export function formatAgeString(ageDays: number): string {
   const ageWeeks = Math.floor(ageDays / 7);

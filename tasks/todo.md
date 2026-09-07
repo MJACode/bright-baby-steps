@@ -1,77 +1,77 @@
-# Timer stop button not working — fix + full timer/button audit
+# Home card noise reduction — Sept 2026
 
-## Root cause (from the screenshot)
+Trigger: PM review of the Home "Today" card. Three of the five blocks were
+saying the same thing (4-month rolling/reaching), the `watch` line reported a
+logging gap as a physiological finding, and Next steps was truncated to
+illegibility behind four competing affordances on a 64px row.
 
-The screenshot shows the iOS text-selection callout ("Copy | Look Up | Translate")
-with selection handles sitting **on the Left side button itself**, while the timer
-kept running. On iOS WKWebView (we ship via Capacitor) the text inside a `<button>`
-is selectable by default, so a slightly-long or slightly-dragged press — exactly how
-a one-handed, sleep-deprived parent taps — starts a text selection and pops the
-callout instead of firing `onClick`. The tap is swallowed; the timer never pauses.
+## Decisions (approved by product)
+- [x] Cut `focus` from the briefing — redundant with the "This week" card
+- [x] `watch` becomes nullable — renders only when it carries an action
+- [x] Stop the missing-log nag (diaper shaming, "hours since last log")
+- [x] Kill Next steps entirely (Home-only feature, no other consumer)
+- [x] Keep `status` and "This week" as-is
 
-Nothing in `src/index.css` or `src/components/ui/button.tsx` suppresses
-`-webkit-touch-callout` / `user-select` on interactive elements, and nothing sets
-`touch-action: manipulation` (which also costs a ~300ms double-tap-zoom delay on
-iOS and makes buttons feel dead on the first tap).
+## Backend — `supabase/functions/briefing/index.ts`
+- [x] Drop `focus` from prompt, schema, and both fallback paths
+- [x] `watch` nullable; model returns null when nothing is actionable
+- [x] Forbid commenting on absent logs / asking the parent to log more
+- [x] Absent logs = unknown, never reported as low
+- [x] Delete `supabase/functions/next-step-peek/`
 
-The timer *logic* in `useActiveFeed` / `useActiveSleep` is sound — this is a touch
-layer bug, not a state bug.
+## Frontend
+- [x] `TodayCard.tsx` — drop focus, guard watch, remove NextStepFeed, fix dividers
+- [x] Delete NextStepFeed / useNextSteps / useNextStepPeek / nextSteps(.test) / skills
+- [x] Update `useBriefing.ts` response type
+- [x] Fix stale NextStepFeed comment in `DashboardLayout.tsx`
+- [x] CLAUDE.md: "Seven edge functions" -> six
+- [x] `docs/legal-review-log.md`: log the removed AI surface
 
-## Tasks
+## QA round 1 — Fix-required, all resolved
+- [x] Guard `JSON.parse` returning a bare `null`/array — was a 500 that wiped
+      the whole briefing region off Home. Risk raised by the new prompt telling
+      the model null is the expected default.
+- [x] No-data early return fired on a rolling 48h window, so an established
+      parent who skipped a weekend got "Welcome! Start logging…" — the exact
+      nag this change forbids the model from writing
+- [x] `status` asserted raw counts as fact ("a solid day!") — the same
+      logging-gap-as-finding defect, relocated into the headline
+- [x] Bound the `illness_logs` query to 21 days — an unclosed illness would
+      have pinned a warning to Home forever, now the dominant `watch` trigger
+- [x] Scrub stale `next-step-peek` mentions in `_shared/childContext.ts`
 
-- [x] Global touch hardening in `src/index.css`: `-webkit-touch-callout: none`,
-      `user-select: none`, `touch-action: manipulation` on buttons / `[role="button"]`
-      / `.touch-target`. Must NOT touch inputs, textareas, or body copy the parent
-      may legitimately want to copy (legal pages).
-- [x] `select-none` on the timer faces (NursingTimer, SleepTimer) — selecting
-      "07:20" is never useful and the callout covers the controls.
-- [x] NursingTimer: disable the side buttons while `start` / `setSide` are pending
-      so a double-tap can't race two writes against a stale `active` row.
-- [x] Sweep every timer + control surface for the same class of bug and for missing
-      `type="button"` / missing pending guards: NursingTimer, SleepTimer,
-      FerberCheckInTimer, CryAnalyzer, ActiveSessionBanner, QuickNavGrid,
-      PastSessionSheet, MobileDateTimePicker.
-- [x] Regression test: a side button pauses on a plain click and stays clickable.
-- [x] QA agent pass, then commit + push + draft PR.
+Resolved on review: QA flagged a missing legal-review-log entry, but it landed
+in 5e0c5a5 alongside the page edits; QA reviewed a pre-commit snapshot.
 
 ## Review
 
-**Fixed.** The stop/pause tap was being swallowed by iOS text selection, not lost
-in the timer state. One `@layer base` rule now suppresses `-webkit-touch-callout`
-and `user-select` and sets `touch-action: manipulation` on controls; it is wrapped
-in `:where()` so it carries zero specificity and any control that genuinely needs
-selectable text opts out with a plain `select-text` utility.
+Merged to main as #233. The card goes from five stacked blocks to two on a
+typical day: the `status` headline and the "This week" collapsible, with
+`watch` appearing only when it names something the parent can act on.
 
-Verified: 38 test files / 684 tests pass, typecheck clean, build clean, eslint
-126 problems — byte-identical to the base branch (all pre-existing, in
-`supabase/functions/**` and `tailwind.config.ts`).
+The finding worth remembering is that **two of the five QA fixes were the same
+defect in our own deterministic copy** that the change existed to remove from
+the model's. We wrote a prompt rule forbidding the model to ask a parent to log
+more, while our own no-data string said "Welcome! Start logging Maya's
+activities" to anyone with a quiet 48 hours — and we reframed `watch` off
+raw-count assertions while leaving `status` asserting them in the more
+prominent line. Writing a rule for the model is not the same as applying it.
 
-**What is NOT covered by test.** jsdom has no selection engine, no
-`-webkit-touch-callout` and no `touch-action`, so the CSS half — the actual root
-cause — cannot be exercised automatically. The three new tests were mutation-checked:
-reverting `sidesLocked` fails the two pending-guard tests, while the pause test
-passes either way, so it is a fence around the handler contract only. **The callout
-fix needs a tap on a real iOS build before this is called done.**
+## Outstanding — manual, gates the user-visible fix
 
-### Deliberate trades
+1. **Redeploy `briefing`.** The frontend tolerates the old response shape
+   silently: `TodayCard` ignores an extra `focus` key and renders any non-empty
+   `watch`. Until the function is redeployed, production still prints the
+   original sleep line behind "More on today" — with no type error and no
+   failing test to catch it.
+2. **Undeploy `next-step-peek`.** Deleting it from the repo does not undeploy
+   it; it stays ACTIVE and keeps accepting authenticated requests against a
+   disclosure that no longer covers it. Dashboard only — there is no MCP delete
+   tool for edge functions. Precedent: `parse-voice-log` (2026-08-28),
+   `detect-milestone` (2026-06-21).
 
-- `ActiveSessionBanner` strips grew ~36px → 48px. They were the only interactive
-  surface below the brand's 48px minimum, and `touch-target` is what pulls them
-  into the rule. Banner height is not load-bearing (`DashboardLayout` is a flex
-  column; the banner is `shrink-0` and `<main>` is `flex-1 min-h-0`).
-- Medication and temperature rows in `MedicalTab` are whole-row buttons, so their
-  text is no longer long-press selectable. Left as-is on purpose: making them
-  selectable recreates the exact swallowed-tap bug on those rows, and the values
-  are still selectable inside the edit dialog's inputs. Revisit only if a parent
-  actually reports wanting to copy from the list.
-- The side buttons pulse while a write is in flight. The lock outlasts the write
-  itself (`setSide`'s `onSuccess` awaits `invalidateQueries`, and the query client
-  retries 3× with backoff), so on a bad connection it can hold for seconds —
-  without an affordance that reads as another dead button.
+## Deferred, raised not actioned
 
-### Swept, nothing to fix
-
-`FerberCheckInTimer`, `QuickNavGrid`, `PastSessionSheet`, `MobileDateTimePicker`
-(wheel columns are `role="spinbutton"` divs — the selector cannot match them, and
-`manipulation` still permits pan), Radix slider/scroll-area/drawer handles, and
-every `<form>` in the app (no latent accidental-submit).
+`weekly-insights/index.ts` has a similar rolling-window empty state ("Start
+logging {name}'s sleep to see weekly patterns here"). Milder than the briefing
+string was, different surface, out of scope for this change.

@@ -2352,3 +2352,86 @@ no direct-notice enumeration change.
   computable without a migration. Until then a 5-week-old who has not
   regained birth weight sees the 1–3 mo framing, mitigated only by the
   pediatrician hedge. Tracked as a product follow-up.
+
+---
+
+## 2026-09-07 — Home-screen Next steps retired; `next-step-peek` data flow to Anthropic removed
+
+**Scope:** `src/pages/PrivacyPage.tsx` (§ 4 AI processing — feature list and the
+per-feature payload inventory), `src/pages/FAQPage.tsx` ("Is this medical advice?"
+and "Is my child's data sent to third parties?"), `src/pages/SubprocessorsPage.tsx`
+(Anthropic `purpose` + `dataCategories`). Code: `supabase/functions/next-step-peek/`
+deleted along with `src/components/NextStepFeed.tsx`, `src/hooks/useNextSteps.tsx`,
+`src/hooks/useNextStepPeek.tsx`, `src/lib/nextSteps.ts` (+ its test), and
+`src/lib/skills.ts`. The briefing's `focus` field was cut and its `watch` field made
+nullable in `supabase/functions/briefing/index.ts`.
+
+**Trigger:** Product decision to remove the Home "Next steps" feed and de-duplicate
+the Today card. Like the 2026-08-28 log-by-voice removal and the 2026-06-21
+photo-milestone removal, this is a **subtractive** change — it removes a data flow to
+our AI subprocessor rather than adding one.
+
+**Risk levels surfaced (in-house review, this change):**
+- **P0:** none.
+- **P1 — a live edge function outlives the disclosure that covered it.** Deleting
+  `supabase/functions/next-step-peek/` from the repo does not undeploy it; the function
+  stays ACTIVE on the Supabase project until removed by hand in the dashboard (no MCP
+  delete tool — the same gap recorded for `detect-milestone` on 2026-06-21 and
+  `parse-voice-log` on 2026-08-28). While deployed it still accepts an authenticated
+  request and forwards child data to Anthropic — a flow that Privacy § 4, the FAQ, and
+  `/subprocessors` no longer disclose as of this change. **Resolution:** first
+  outstanding item below. Mitigated by the fact that no shipped client calls it once
+  this branch merges.
+- **P2 — over-disclosure pending this edit (resolved).** Between the code removal and
+  this copy pass, three pages named "Next Step suggestions" as an active Anthropic
+  data flow and described a payload we no longer send. Over-disclosure is the
+  favourable direction — it claims *more* egress than exists, so there is no § 5
+  deceptive-claim exposure — but it is drift on pages carrying a "Last reviewed"
+  timestamp. Resolved in this change; both timestamps bumped to September 7, 2026.
+  `Effective:` dates unchanged, per the 2026-08-29 precedent: narrowing a disclosed
+  data flow is not a new term.
+- **P2 — AI output-safety improvement (not a legal defect, recorded).** The briefing's
+  `watch` field was presenting a *logging gap* as a *physiological finding* — one
+  production output told a parent her 4-month-old's "sleep is running shorter than her
+  typical 27-29 hours" from a 48-hour window in which she had simply logged less. The
+  prompt now states that a sparse window means NOT RECORDED and forbids comparing it
+  against a baseline. This is not a medical-advice claim under our disclaimers, but an
+  inference presented with more confidence than the data supports is the direction from
+  which such a claim would arise, so it is logged here. The same pass removed a
+  prompt-driven nag that asked parents to log more diapers and asserted the absence
+  "prevents us from checking hydration and digestion" — an implied clinical inference
+  we do not back.
+
+**Verified consistent (policy-vs-code):** the favourable direction holds — the copy now
+claims *less* data goes to Anthropic and the code confirms it (`next-step-peek` deleted
+from the repo; five Anthropic-invoking functions remain besides `chat`), subject to the
+P1 undeploy item above. `CLAUDE.md` edge-function line updated seven → six.
+
+**Intentionally unchanged (no schema migration, no data loss):**
+- **No table was orphaned.** Next-steps snooze/dismiss state was localStorage-only
+  (`nextstep_milestone_dismissed_*`, `nextstep_finance_dismissed_*`,
+  `nextstep_fincal_*`). The two mutations that reached Postgres wrote to
+  `parent_financial_checklist` and `milestone_flags`, both of which have live non-Next-Step
+  consumers (`FinancialTab`, `MilestoneFlags`). Nothing to drop; **Privacy § 8 deletion
+  promises are unaffected.**
+- The three orphaned localStorage key families are left in place on existing devices,
+  matching the `voice_parse_events` precedent of 2026-08-28. They hold no personal data
+  beyond child/parent UUIDs already present in that origin's storage, are never read
+  again, and clear with site data.
+
+**Escalation paths checked (product-safety, recorded for the trail):** the feed's
+`redflag` tier was the Home mirror of act-severity milestone flags. That pathway is
+fully served by `MilestoneFlags.tsx` + `EarlyInterventionExplainer` on the Milestones
+page, including the Early Intervention hand-off reviewed on 2026-06-19. Finance
+deadline reminders retain their own next-step row in `FinancialTab`; Visit Prep remains
+reachable from the header stethoscope. **No escalation or referral path was removed —
+only its duplicate on Home.**
+
+**Code refs:** branch `claude/sleep-diaper-next-steps-review-k3ngrb`, PR #233.
+
+**Outstanding:**
+1. **Delete the deployed `next-step-peek` function in the Supabase dashboard** — until
+   then a live endpoint carries an undisclosed child-data flow to Anthropic (P1 above).
+2. Confirm no out-of-repo surface (App Store / Play Store listing, marketing site,
+   onboarding upsell, screenshots) advertises the Home "Next steps" feed — those live
+   outside this repo and were not reviewable here.
