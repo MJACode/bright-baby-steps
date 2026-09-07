@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pickNextEvent } from "@/lib/nextEvent";
+import { pickBandEvent, pickNextEvent } from "@/lib/nextEvent";
 import { predictNextFeed } from "@/lib/feedCoach";
 import { predictNextNap } from "@/lib/sleepCoach";
 
@@ -29,6 +29,41 @@ describe("pickNextEvent", () => {
 
   it("returns null when neither side can predict", () => {
     expect(pickNextEvent(null, null)).toBeNull();
+  });
+});
+
+// One hunger claim per screen. With the Feed Coach card rendered on Home, the
+// band and the card were both quoting the same predicted hunger instant, one
+// scroll apart, in two separate blurred panels. The card owns it; the band
+// falls back to the nap or shows nothing.
+describe("pickBandEvent defers the hunger slot to the Feed Coach card", () => {
+  it("shows the nap when the card is visible and the feed lands sooner", () => {
+    expect(pickBandEvent(at("16:20"), at("15:05"), true)).toEqual({
+      type: "nap",
+      at: at("16:20"),
+    });
+  });
+
+  it("shows nothing when the card is visible and there is no nap to fall back to", () => {
+    expect(pickBandEvent(null, at("15:05"), true)).toBeNull();
+  });
+
+  it("still shows the feed when the card is hidden in Customize Home", () => {
+    expect(pickBandEvent(at("16:20"), at("15:05"), false)).toEqual({
+      type: "feed",
+      at: at("15:05"),
+    });
+  });
+
+  it("shows the nap regardless of the card when the nap lands sooner", () => {
+    expect(pickBandEvent(at("15:05"), at("16:20"), true)).toEqual({
+      type: "nap",
+      at: at("15:05"),
+    });
+    expect(pickBandEvent(at("15:05"), at("16:20"), false)).toEqual({
+      type: "nap",
+      at: at("15:05"),
+    });
   });
 });
 

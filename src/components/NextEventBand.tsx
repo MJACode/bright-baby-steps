@@ -6,10 +6,12 @@ import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
 import { formatApproxClock } from "@/lib/gentleTime";
-import { pickNextEvent } from "@/lib/nextEvent";
+import { pickBandEvent } from "@/lib/nextEvent";
 
 interface NextEventBandProps {
   activeChild: FeedCoachChild | null;
+  /** Whether the Feed Coach card is also on this screen. See `pickBandEvent`. */
+  feedCoachVisible?: boolean;
 }
 
 /**
@@ -19,8 +21,16 @@ interface NextEventBandProps {
  * Both sides read the coach hooks the cards themselves render — `useSleepCoach`
  * for the nap, `useFeedCoach` for the feed — so the band, the Sleep Coach card
  * and the Feed Coach card can never quote different times on the same screen.
+ *
+ * When the Feed Coach card is on Home it owns the hunger moment outright and
+ * the band shows the nap, or nothing. Deliberate: the card is the richer
+ * surface, and two blurred panels quoting the same instant one scroll apart
+ * read as a repetitive paywall. `feedCoachVisible` defaults to false so the
+ * band still predicts feeds wherever the card isn't rendered — a parent who
+ * hides Feed Coach in Customize Home leaves the band as the only hunger
+ * surface on Home.
  */
-export function NextEventBand({ activeChild }: NextEventBandProps) {
+export function NextEventBand({ activeChild, feedCoachVisible = false }: NextEventBandProps) {
   const { data: coach } = useSleepCoach(activeChild);
   const feed = useFeedCoach(activeChild);
   const { prefs } = usePreferences();
@@ -28,7 +38,11 @@ export function NextEventBand({ activeChild }: NextEventBandProps) {
 
   const nap = coach?.prediction ?? null;
   const hunger = feed.prediction;
-  const pick = pickNextEvent(nap?.windowStart ?? null, hunger?.windowStart ?? null);
+  const pick = pickBandEvent(
+    nap?.windowStart ?? null,
+    hunger?.windowStart ?? null,
+    feedCoachVisible,
+  );
   if (!pick) return null;
 
   const minutesAway = Math.round((pick.at.getTime() - Date.now()) / 60000);
