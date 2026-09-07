@@ -1,71 +1,39 @@
-# Hunger indicators on Home + Feed screen
+# Timer stop button not working — fix + full timer/button audit
 
-Goal: tell the parent when the baby might be hungry, mirroring how Sleep Coach
-tells them when the baby might be sleepy.
+## Root cause (from the screenshot)
 
-## Decisions (approved 2026-09-06)
-- Predictive headline ("Likely hungry around 3:40 PM"), mirroring SleepCoachCard.
-- Prediction is Flare+-gated (`PremiumGate feature="predictions"`); the existing
-  elapsed-time state + hunger-cue list stay free and unchanged.
-- Feed screen: promote the coach to the top of the Feeding tab as a `strip`.
+The screenshot shows the iOS text-selection callout ("Copy | Look Up | Translate")
+with selection handles sitting **on the Left side button itself**, while the timer
+kept running. On iOS WKWebView (we ship via Capacitor) the text inside a `<button>`
+is selectable by default, so a slightly-long or slightly-dragged press — exactly how
+a one-handed, sleep-deprived parent taps — starts a text selection and pops the
+callout instead of firing `onClick`. The tap is swallowed; the timer never pauses.
 
-## Plan
-- [x] `src/lib/feedCoach.ts` — add `predictNextFeed()` + per-bracket
-      `typicalIntervalMinutes`. Median of DAYTIME feed intervals only.
-- [x] Retire `predictNextFeed` in `src/lib/nextEvent.ts`; point `NextEventBand`
-      at the one engine so Home can't quote two hunger times.
-- [x] `src/hooks/useFeedCoach.tsx` — mirror `useSleepCoach`.
-- [x] `FeedCoachCard` — `variant: "card" | "strip"`, gated prediction headline,
-      null-child guard, self-sourced `lastFeedAt`.
-- [x] `Dashboard.tsx` + `homeSections.ts` — Home card behind a `feedCoach` toggle.
-- [x] `FeedingLog.tsx` — move the card to the top as `variant="strip"`.
-- [x] Tests in `src/lib/__tests__/feedCoach.test.ts`.
-- [x] QA pass — Fix-required; blocking defect + 4 should-fixes addressed in a follow-up pass.
-- [ ] Second QA pass, then commit + PR.
+Nothing in `src/index.css` or `src/components/ui/button.tsx` suppresses
+`-webkit-touch-callout` / `user-select` on interactive elements, and nothing sets
+`touch-action: manipulation` (which also costs a ~300ms double-tap-zoom delay on
+iOS and makes buttons feel dead on the first tap).
+
+The timer *logic* in `useActiveFeed` / `useActiveSleep` is sound — this is a touch
+layer bug, not a state bug.
+
+## Tasks
+
+- [ ] Global touch hardening in `src/index.css`: `-webkit-touch-callout: none`,
+      `user-select: none`, `touch-action: manipulation` on buttons / `[role="button"]`
+      / `.touch-target`. Must NOT touch inputs, textareas, or body copy the parent
+      may legitimately want to copy (legal pages).
+- [ ] `select-none` on the timer faces (NursingTimer, SleepTimer) — selecting
+      "07:20" is never useful and the callout covers the controls.
+- [ ] NursingTimer: disable the side buttons while `start` / `setSide` are pending
+      so a double-tap can't race two writes against a stale `active` row.
+- [ ] Sweep every timer + control surface for the same class of bug and for missing
+      `type="button"` / missing pending guards: NursingTimer, SleepTimer,
+      FerberCheckInTimer, CryAnalyzer, ActiveSessionBanner, QuickNavGrid,
+      PastSessionSheet, MobileDateTimePicker.
+- [ ] Regression test: a side button pauses on a plain click and stays clickable.
+- [ ] QA agent pass, then commit + push + draft PR.
 
 ## Review
 
-One engine, one clock, one night window. `predictNextFeed` lives in
-`src/lib/feedCoach.ts`; `nextEvent.ts` keeps only `pickNextEvent`. `useFeedCoach`
-resolves the night window and the minute ticker once and hands both to the card,
-so the prediction and the elapsed-time state can't disagree about when the night
-starts. NextEventBand now reads that hook instead of running its own query and
-its own mean.
-
-Judgement calls that differ from the plan:
-- 1-3mo `typicalIntervalMinutes` is 210, not 195: it prints the same cadence
-  sentence as the 3-6mo bracket ("every 3–4 hours"), so the two must share a
-  midpoint or the number and the copy drift.
-- The reason line says "daytime gaps between feeds", not "daytime feeds" — the
-  count is intervals, and a number a parent reads has to name what it counted.
-- The headline stands down once the window has closed rather than printing a
-  stale clock time next to the live "it's been Xh" state. `feedPredictionHeadline`
-  lives in the lib so it goes through the same copy discipline as `feedCoachCopy`.
-- On the Feeding tab the card was already the first element under the page
-  header (the timers live inside the log dialog), so the move was a no-op; only
-  `variant="strip"` changed.
-- `"feed-coach"` replaces the retired `"next-event"` root in
-  `LOG_WRITE_QUERY_KEYS`, so a logged feed refreshes the prediction.
-
-Verification: 674 tests pass (95 in feedCoach.test.ts, 14 new), `tsc --noEmit -p
-tsconfig.app.json` clean, `npm run build` clean, eslint clean on every touched
-file (the one warning in FeedingLog.tsx predates this change). The two
-regression tests were mutation-checked — swapping the median for a mean and
-dropping the night filter fails both.
-
-## QA follow-up (2026-09-06)
-
-Blocking — the prediction's night suppression read the clock band only, while
-`deriveFeedCoachState` also branches on `nightSleepInProgress`/`isNightNow`. Since
-`resolveNightWindow` clamps `nightOpensAt` later than a running night timer, the
-bedtime lead-in was a hole where the headline said "feed now" over the card's own
-"Overnight". Two tests written first, shown failing at 6b91b9a, then the `asleep`
-term added. The wake-to-feed exception is covered and still passes both ways.
-
-Also: `now` is wired (`now > windowEnd` → null), which unpins NextEventBand from
-a stale hunger time and let the now-unreachable duplicate of that rule come out of
-`feedPredictionHeadline`; three clamp tests rebuilt on ≥3-feed fixtures and each
-mutation-checked; `TZ: "UTC"` pinned in `vitest.config.ts`; the confidence dot map
-moved to `sleepPatterns.ts` beside `sampleConfidence` and shared by both cards.
-
-681 tests pass, and pass again under `TZ=Asia/Tokyo`. tsc, build and lint clean.
+(filled in at the end)
