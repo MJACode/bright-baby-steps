@@ -1,71 +1,34 @@
-# Hunger indicators on Home + Feed screen
+# Home card noise reduction — Sept 2026
 
-Goal: tell the parent when the baby might be hungry, mirroring how Sleep Coach
-tells them when the baby might be sleepy.
+Trigger: PM review of the Home "Today" card. Three of the five blocks were
+saying the same thing (4-month rolling/reaching), the `watch` line reported a
+logging gap as a physiological finding, and Next steps was truncated to
+illegibility behind four competing affordances on a 64px row.
 
-## Decisions (approved 2026-09-06)
-- Predictive headline ("Likely hungry around 3:40 PM"), mirroring SleepCoachCard.
-- Prediction is Flare+-gated (`PremiumGate feature="predictions"`); the existing
-  elapsed-time state + hunger-cue list stay free and unchanged.
-- Feed screen: promote the coach to the top of the Feeding tab as a `strip`.
+## Decisions (approved by product)
+- [ ] Cut `focus` from the briefing — redundant with the "This week" card
+- [ ] `watch` becomes nullable — renders only when it carries an action
+- [ ] Stop the missing-log nag (diaper shaming, "hours since last log")
+- [ ] Kill Next steps entirely (Home-only feature, no other consumer)
+- [ ] Keep `status` and "This week" as-is
 
-## Plan
-- [x] `src/lib/feedCoach.ts` — add `predictNextFeed()` + per-bracket
-      `typicalIntervalMinutes`. Median of DAYTIME feed intervals only.
-- [x] Retire `predictNextFeed` in `src/lib/nextEvent.ts`; point `NextEventBand`
-      at the one engine so Home can't quote two hunger times.
-- [x] `src/hooks/useFeedCoach.tsx` — mirror `useSleepCoach`.
-- [x] `FeedCoachCard` — `variant: "card" | "strip"`, gated prediction headline,
-      null-child guard, self-sourced `lastFeedAt`.
-- [x] `Dashboard.tsx` + `homeSections.ts` — Home card behind a `feedCoach` toggle.
-- [x] `FeedingLog.tsx` — move the card to the top as `variant="strip"`.
-- [x] Tests in `src/lib/__tests__/feedCoach.test.ts`.
-- [x] QA pass — Fix-required; blocking defect + 4 should-fixes addressed in a follow-up pass.
-- [ ] Second QA pass, then commit + PR.
+## Backend — `supabase/functions/briefing/index.ts`
+- [ ] Drop `focus` from prompt, schema, and both fallback paths
+- [ ] `watch` nullable; model returns null when nothing is actionable
+- [ ] Forbid commenting on absent logs / asking the parent to log more
+- [ ] Absent logs = unknown, never reported as low
+- [ ] Delete `supabase/functions/next-step-peek/`
+
+## Frontend
+- [ ] `TodayCard.tsx` — drop focus, guard watch, remove NextStepFeed, fix dividers
+- [ ] Delete NextStepFeed / useNextSteps / useNextStepPeek / nextSteps(.test) / skills
+- [ ] Update `useBriefing.ts` response type
+- [ ] Fix stale NextStepFeed comment in `DashboardLayout.tsx:141`
+
+## Follow-ups (not in this change)
+- [ ] Undeploy the live `next-step-peek` edge function (manual, Supabase dashboard)
+- [ ] CLAUDE.md: "Seven edge functions" -> six
+- [ ] `docs/legal-review-log.md`: log the removed AI surface
 
 ## Review
-
-One engine, one clock, one night window. `predictNextFeed` lives in
-`src/lib/feedCoach.ts`; `nextEvent.ts` keeps only `pickNextEvent`. `useFeedCoach`
-resolves the night window and the minute ticker once and hands both to the card,
-so the prediction and the elapsed-time state can't disagree about when the night
-starts. NextEventBand now reads that hook instead of running its own query and
-its own mean.
-
-Judgement calls that differ from the plan:
-- 1-3mo `typicalIntervalMinutes` is 210, not 195: it prints the same cadence
-  sentence as the 3-6mo bracket ("every 3–4 hours"), so the two must share a
-  midpoint or the number and the copy drift.
-- The reason line says "daytime gaps between feeds", not "daytime feeds" — the
-  count is intervals, and a number a parent reads has to name what it counted.
-- The headline stands down once the window has closed rather than printing a
-  stale clock time next to the live "it's been Xh" state. `feedPredictionHeadline`
-  lives in the lib so it goes through the same copy discipline as `feedCoachCopy`.
-- On the Feeding tab the card was already the first element under the page
-  header (the timers live inside the log dialog), so the move was a no-op; only
-  `variant="strip"` changed.
-- `"feed-coach"` replaces the retired `"next-event"` root in
-  `LOG_WRITE_QUERY_KEYS`, so a logged feed refreshes the prediction.
-
-Verification: 674 tests pass (95 in feedCoach.test.ts, 14 new), `tsc --noEmit -p
-tsconfig.app.json` clean, `npm run build` clean, eslint clean on every touched
-file (the one warning in FeedingLog.tsx predates this change). The two
-regression tests were mutation-checked — swapping the median for a mean and
-dropping the night filter fails both.
-
-## QA follow-up (2026-09-06)
-
-Blocking — the prediction's night suppression read the clock band only, while
-`deriveFeedCoachState` also branches on `nightSleepInProgress`/`isNightNow`. Since
-`resolveNightWindow` clamps `nightOpensAt` later than a running night timer, the
-bedtime lead-in was a hole where the headline said "feed now" over the card's own
-"Overnight". Two tests written first, shown failing at 6b91b9a, then the `asleep`
-term added. The wake-to-feed exception is covered and still passes both ways.
-
-Also: `now` is wired (`now > windowEnd` → null), which unpins NextEventBand from
-a stale hunger time and let the now-unreachable duplicate of that rule come out of
-`feedPredictionHeadline`; three clamp tests rebuilt on ≥3-feed fixtures and each
-mutation-checked; `TZ: "UTC"` pinned in `vitest.config.ts`; the confidence dot map
-moved to `sleepPatterns.ts` beside `sampleConfidence` and shared by both cards.
-
-681 tests pass, and pass again under `TZ=Asia/Tokyo`. tsc, build and lint clean.
+_(filled in when the work lands)_
