@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { format } from "date-fns";
@@ -7,11 +8,14 @@ import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
 import { formatApproxClock } from "@/lib/gentleTime";
 import { pickBandEvent } from "@/lib/nextEvent";
+import { sleepCoachShowing } from "@/lib/sleepCoachState";
 
 interface NextEventBandProps {
   activeChild: FeedCoachChild | null;
   /** Whether the Feed Coach card is also on this screen. See `pickBandEvent`. */
   feedCoachVisible?: boolean;
+  /** Whether the Sleep Coach card is also on this screen. See `pickBandEvent`. */
+  sleepCoachVisible?: boolean;
 }
 
 /**
@@ -22,30 +26,47 @@ interface NextEventBandProps {
  * for the nap, `useFeedCoach` for the feed — so the band, the Sleep Coach card
  * and the Feed Coach card can never quote different times on the same screen.
  *
- * When the Feed Coach card is on Home it owns the hunger moment outright and
- * the band shows the nap, or nothing. Deliberate: the card is the richer
- * surface, and two blurred panels quoting the same instant one scroll apart
- * read as a repetitive paywall. `feedCoachVisible` defaults to false so the
- * band still predicts feeds wherever the card isn't rendered — a parent who
- * hides Feed Coach in Customize Home leaves the band as the only hunger
- * surface on Home.
+ * The band shows the event no coach card is currently claiming. The cards own
+ * the near moment — confidence dot, state pill, cue, CTA — so the band takes
+ * what's beyond their ~60-minute horizon and arbitrates nap-vs-feed. Feed Coach
+ * always renders, so its side drops whenever that section is on; Sleep Coach
+ * only renders inside its own window, so the nap side drops only while the card
+ * is actually up. Both flags default to false: wherever a card isn't rendered —
+ * a parent can turn either off in Customize Home — the band stays the only
+ * prediction surface for that side.
  */
-export function NextEventBand({ activeChild, feedCoachVisible = false }: NextEventBandProps) {
+export function NextEventBand({
+  activeChild,
+  feedCoachVisible = false,
+  sleepCoachVisible = false,
+}: NextEventBandProps) {
   const { data: coach } = useSleepCoach(activeChild);
   const feed = useFeedCoach(activeChild);
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
 
+  // Without this tick `minutesAway` is computed once per render and never
+  // refreshes, so "in ~45 min" goes stale and the hand-off to the coach card
+  // never fires. Same 30s cadence as SleepCoachCard.
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   const nap = coach?.prediction ?? null;
   const hunger = feed.prediction;
-  const pick = pickBandEvent(
-    nap?.windowStart ?? null,
-    hunger?.windowStart ?? null,
-    feedCoachVisible,
-  );
+  const napOwned =
+    sleepCoachVisible &&
+    !!nap &&
+    sleepCoachShowing(now, nap.windowStart, nap.windowEnd, calmMode);
+  const pick = pickBandEvent(nap?.windowStart ?? null, hunger?.windowStart ?? null, {
+    nap: napOwned,
+    feed: feedCoachVisible,
+  });
   if (!pick) return null;
 
-  const minutesAway = Math.round((pick.at.getTime() - Date.now()) / 60000);
+  const minutesAway = Math.round((pick.at.getTime() - now.getTime()) / 60000);
   const whenText =
     minutesAway < 0
       ? "anytime now"

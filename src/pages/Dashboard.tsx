@@ -49,9 +49,14 @@ export default function Dashboard() {
           "when did she last eat / how long has he been down". */}
       <QuickNavGrid childId={activeChild?.id} prefs={prefs} />
 
-      {/* "What's next" glance strip — predicted nap/feed from recent patterns.
-          Renders nothing until there's enough log history to predict from. */}
-      <NextEventBand activeChild={activeChild} feedCoachVisible={isVisible("feedCoach")} />
+      {/* "What's next" glance strip — shows the predicted nap/feed the coach
+          cards below aren't showing yet. Renders nothing until there's enough
+          log history to predict from. */}
+      <NextEventBand
+        activeChild={activeChild}
+        feedCoachVisible={isVisible("feedCoach")}
+        sleepCoachVisible={isVisible("sleepCoach")}
+      />
 
       {/* One "Today" card: AI briefing headline → condensed this-week line.
           Both regions gate on their Customize-Home toggles, and the card

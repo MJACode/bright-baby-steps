@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,10 +9,10 @@ import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { useToast } from "@/hooks/use-toast";
-import { formatApproxClock } from "@/lib/gentleTime";
 import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
+import { deriveCoachState } from "@/lib/sleepCoachState";
 import { PremiumGate } from "@/components/PremiumGate";
 import { cn } from "@/lib/utils";
 
@@ -22,71 +21,6 @@ interface ChildLite {
   date_of_birth: string;
   is_premature?: boolean | null;
   due_date?: string | null;
-}
-
-type CoachState =
-  | { kind: "heads-up"; title: string; cue: string; showCta: false }
-  | { kind: "coming-up"; title: string; cue: string; showCta: true }
-  | { kind: "open"; title: string; cue: string; showCta: true }
-  | { kind: "just-passed"; title: string; cue: string; showCta: false }
-  | null;
-
-function deriveCoachState(
-  now: Date,
-  windowStart: Date,
-  windowEnd: Date,
-  calmMode: boolean,
-): CoachState {
-  const nowMs = now.getTime();
-  const startMs = windowStart.getTime();
-  const endMs = windowEnd.getTime();
-  const msToStart = startMs - nowMs;
-  const msSinceEnd = nowMs - endMs;
-
-  if (nowMs < startMs) {
-    if (msToStart > 60 * 60_000) return null;
-    if (msToStart > 15 * 60_000) {
-      return {
-        kind: "heads-up",
-        title: `Nap around ${format(windowStart, "h:mm a")}`,
-        cue: "We'll nudge when it's time to wind down.",
-        showCta: false,
-      };
-    }
-    const minutes = Math.floor(msToStart / 60_000);
-    const title = calmMode
-      ? `Nap around ${formatApproxClock(windowStart)}`
-      : msToStart < 60_000
-        ? "Nap in <1 min"
-        : `Nap in ~${minutes} min`;
-    return {
-      kind: "coming-up",
-      title,
-      cue: "Dim the lights, lower stimulation.",
-      showCta: true,
-    };
-  }
-
-  if (nowMs <= endMs) {
-    return {
-      kind: "open",
-      title: `Nap window open until ${format(windowEnd, "h:mm a")}`,
-      cue: "Try a transfer now if the cues are there.",
-      showCta: true,
-    };
-  }
-
-  if (msSinceEnd <= 60 * 60_000) {
-    if (calmMode) return null;
-    return {
-      kind: "just-passed",
-      title: "Watching for sleepy cues",
-      cue: "Windows are estimates — log the nap whenever it starts and we'll adjust.",
-      showCta: false,
-    };
-  }
-
-  return null;
 }
 
 interface SleepCoachCardProps {

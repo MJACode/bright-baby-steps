@@ -1,6 +1,5 @@
 /**
- * Picks whichever predicted event — nap or feed — lands sooner, for the
- * NextEventBand on Home.
+ * Picks which predicted event — nap or feed — the NextEventBand on Home shows.
  *
  * Neither prediction is computed here. The nap comes from
  * `sleepCoach.predictNextNap`, the feed from `feedCoach.predictNextFeed`; this
@@ -14,12 +13,14 @@
  * `predictNextNap`; anything that predicts a feed calls `predictNextFeed`;
  * nothing recomputes either.
  *
- * Agreeing on the time was only half of it. When the Feed Coach card is on
- * Home, the band and the card were both printing the same hunger moment one
- * scroll apart, in two separate blurred panels — a repetitive paywall rather
- * than a valuable one. So the band now yields the hunger slot: `pickBandEvent`
- * drops the feed side whenever the card is rendered, and the band falls back to
- * the nap or shows nothing.
+ * Agreeing on the time was only half of it. Home splits the two surfaces by
+ * horizon: the coach cards own the near moment — they carry the confidence dot,
+ * the state pill, the cue and the CTA — and the band shows whatever no card is
+ * currently claiming. That leaves the band the two jobs the cards genuinely
+ * cannot do: predicting past their ~60-minute horizon, and arbitrating
+ * nap-vs-feed so a parent isn't left comparing two panels. Without the split,
+ * the band and a card print the same instant one scroll apart in two separate
+ * blurred panels — a repetitive paywall rather than a valuable one.
  */
 
 export interface PredictedEvent {
@@ -41,18 +42,19 @@ export function pickNextEvent(
 }
 
 /**
- * What the band shows, given whether the Feed Coach card is also on the screen.
+ * What the band shows, given which sides the coach cards are currently claiming.
  *
- * One hunger claim per screen, and the richer surface owns it: the card carries
- * the confidence dot, the reason, the cues and the elapsed state, so when it is
- * rendered the band drops the feed entirely rather than restating it. With the
- * card hidden — a parent can turn it off in Customize Home — the band is the
- * only hunger surface left and keeps predicting feeds.
+ * `owned.nap` / `owned.feed` mean "a card on this screen is showing that
+ * prediction right now" — not merely that the card is enabled. Feed Coach
+ * always renders, so its side is owned whenever the section is on; Sleep Coach
+ * only renders inside its own window, so the caller resolves that through
+ * `sleepCoachShowing`. An owned side drops out entirely and the band falls back
+ * to the other one, or shows nothing when both are owned.
  */
 export function pickBandEvent(
   napAt: Date | null,
   feedAt: Date | null,
-  feedCoachVisible: boolean,
+  owned: { nap: boolean; feed: boolean },
 ): PredictedEvent | null {
-  return pickNextEvent(napAt, feedCoachVisible ? null : feedAt);
+  return pickNextEvent(owned.nap ? null : napAt, owned.feed ? null : feedAt);
 }
