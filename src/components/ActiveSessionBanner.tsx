@@ -50,7 +50,7 @@ function SleepStrip({
       to="/dashboard/sleep"
       className={cn(
         "block px-4 py-2 bg-sleep-bg/90 backdrop-blur border-b border-sleep/20",
-        "flex items-center gap-2 text-sm",
+        "flex items-center gap-2 text-sm touch-target",
         subdued && "opacity-80",
       )}
       aria-label={`${label} timer in progress, tap to view`}
@@ -95,7 +95,7 @@ function FeedStrip({
       to="/dashboard/feeding"
       className={cn(
         "block px-4 py-2 bg-feeding-bg/90 backdrop-blur border-b border-feeding/20",
-        "flex items-center gap-2 text-sm",
+        "flex items-center gap-2 text-sm touch-target",
         paused && "opacity-80",
       )}
       aria-label={`${label} timer in progress, tap to view`}

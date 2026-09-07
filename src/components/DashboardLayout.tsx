@@ -127,7 +127,7 @@ export default function DashboardLayout() {
           <Link
             to={backTargets[location.pathname].to}
             aria-label={`Back to ${backTargets[location.pathname].label}`}
-            className="inline-flex items-center gap-0.5 min-h-[48px] min-w-[48px] -mt-3 -ml-2 pl-1 pr-3 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="inline-flex items-center gap-0.5 touch-target -mt-3 -ml-2 pl-1 pr-3 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
             {backTargets[location.pathname].label}

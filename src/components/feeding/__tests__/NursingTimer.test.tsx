@@ -26,6 +26,9 @@ const adjustFeed = vi.fn(
   },
 );
 const cancelFeed = vi.fn(async () => {});
+// Read at render time by the mocked hook, so a test can hold a write in flight.
+let startPending = false;
+let setSidePending = false;
 const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -57,8 +60,8 @@ vi.mock("@/hooks/useActiveFeed", async (importOriginal) => {
     ...actual,
     useActiveFeed: () => ({
       active: activeRow,
-      start: { mutateAsync: startFeed },
-      setSide: { mutateAsync: setActiveSide },
+      start: { mutateAsync: startFeed, isPending: startPending },
+      setSide: { mutateAsync: setActiveSide, isPending: setSidePending },
       adjust: { mutateAsync: adjustFeed, isPending: false },
       cancel: { mutateAsync: cancelFeed },
     }),
@@ -171,6 +174,9 @@ const applyPastFeed = async (minutesLabel: string) => {
 const leftSide = () =>
   screen.getByText((_content, el) => el?.tagName === "BUTTON" && !!el.textContent?.includes("Left"));
 
+const rightSide = () =>
+  screen.getByText((_content, el) => el?.tagName === "BUTTON" && !!el.textContent?.includes("Right"));
+
 const remountTimer = () => {
   fireEvent.click(screen.getByTestId("toggle-type"));
   fireEvent.click(screen.getByTestId("toggle-type"));
@@ -179,6 +185,8 @@ const remountTimer = () => {
 beforeEach(() => {
   activeRow = null;
   lastFeedRow = null;
+  startPending = false;
+  setSidePending = false;
   startFeed.mockClear();
   setActiveSide.mockClear();
   adjustFeed.mockClear();
@@ -349,6 +357,42 @@ describe("NursingTimer when a feed starts on another device", () => {
 
     await waitFor(() => expect(screen.getByTestId("bound")).toHaveTextContent("partner-row"));
     expect(screen.getByText("Nursing on left...")).toBeInTheDocument();
+  });
+});
+
+describe("NursingTimer pausing the running side", () => {
+  it("pauses on a plain tap of the side that's running", async () => {
+    activeRow = liveRow();
+    renderHarness();
+    await waitFor(() => expect(screen.getByText("Nursing on left...")).toBeInTheDocument());
+
+    fireEvent.click(leftSide());
+
+    // A fence around the handler contract, not proof the iOS bug is fixed:
+    // fireEvent.click bypasses CSS, and jsdom has no selection engine, no
+    // -webkit-touch-callout and no touch-action. The callout half of that fix
+    // is verifiable only on a device.
+    await waitFor(() => expect(setActiveSide).toHaveBeenCalledWith({ nextSide: null }));
+    expect(startFeed).not.toHaveBeenCalled();
+  });
+
+  it("locks both sides while a side write is still in flight", async () => {
+    activeRow = liveRow();
+    setSidePending = true;
+    renderHarness();
+
+    // A second tap would derive its target from the pre-write row: another
+    // insert racing the unique index, or a re-flush of seconds already flushed.
+    await waitFor(() => expect(leftSide()).toBeDisabled());
+    expect(rightSide()).toBeDisabled();
+  });
+
+  it("locks both sides while the first start is still in flight", async () => {
+    startPending = true;
+    renderHarness();
+
+    await waitFor(() => expect(leftSide()).toBeDisabled());
+    expect(rightSide()).toBeDisabled();
   });
 });
 

@@ -196,6 +196,13 @@ export default function NursingTimer({
   // alternate from, so the hint states the fact and stops there.
   const suggestedSide = lastSide === "left" ? "right" : lastSide === "right" ? "left" : null;
 
+  // A second tap landing before the first write returns would compute its
+  // target from the pre-write `active` row: two inserts racing the unique
+  // index, or a flush of side seconds that's already been flushed. In edit mode
+  // the toggle is purely in-memory, so nothing is in flight to wait on.
+  const writeInFlight = !editMode && (start.isPending || setSide.isPending);
+  const sidesLocked = !editMode && (!childId || start.isPending || setSide.isPending);
+
   const toggleSide = async (next: "left" | "right") => {
     if (editMode) {
       setEditActive((cur) => (cur === next ? null : next));
@@ -377,7 +384,7 @@ export default function NursingTimer({
       <div className="flex flex-col items-center gap-1 py-3">
         <div
           className={cn(
-            "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
+            "relative flex select-none items-center justify-center w-56 h-56 rounded-full mx-auto bg-feeding-bg/60 ring-1 ring-inset ring-feeding/15",
             activeSide && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-feeding/10 motion-safe:before:animate-ping",
           )}
         >
@@ -410,7 +417,7 @@ export default function NursingTimer({
           other side" nudge only makes sense before this feed has any time on
           it — mid-feed it would be telling them to undo the side they're on. */}
       {!editMode && lastFeed && (
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="select-none text-center text-xs text-muted-foreground">
           Last feed:{" "}
           <span className="font-semibold text-foreground">
             {lastSide === "both" ? "both sides" : `${lastSide} side`}
@@ -435,7 +442,8 @@ export default function NursingTimer({
           isActive={activeSide === "left"}
           seconds={leftSeconds}
           onClick={() => toggleSide("left")}
-          disabled={!editMode && !childId}
+          disabled={sidesLocked}
+          busy={writeInFlight}
         />
         <SideButton
           label="Right"
@@ -444,7 +452,8 @@ export default function NursingTimer({
           isActive={activeSide === "right"}
           seconds={rightSeconds}
           onClick={() => toggleSide("right")}
-          disabled={!editMode && !childId}
+          disabled={sidesLocked}
+          busy={writeInFlight}
         />
       </div>
 
@@ -457,6 +466,10 @@ export default function NursingTimer({
             size="sm"
             className="text-muted-foreground gap-1.5 touch-target"
             onClick={handleReset}
+            // Same race the sides now close: clearing the counters while a
+            // start is in flight lets the landing insert re-stamp the parent's
+            // start over the form the parent just blanked.
+            disabled={sidesLocked || cancel.isPending}
           >
             <RotateCcw className="w-4 h-4" /> Reset
           </Button>
@@ -526,9 +539,13 @@ interface SideButtonProps {
   seconds: number;
   onClick: () => void;
   disabled?: boolean;
+  // A write is in flight. Disabled alone reads as "dead button" — the very
+  // complaint this change exists to fix — so the face keeps pulsing until the
+  // write and its refetch land.
+  busy?: boolean;
 }
 
-function SideButton({ label, icon, accent, isActive, seconds, onClick, disabled }: SideButtonProps) {
+function SideButton({ label, icon, accent, isActive, seconds, onClick, disabled, busy }: SideButtonProps) {
   const Icon = icon === "pause" ? Pause : Play;
   return (
     <Button
@@ -538,9 +555,11 @@ function SideButton({ label, icon, accent, isActive, seconds, onClick, disabled 
       className={cn(
         "touch-target h-auto py-3 flex flex-col items-center gap-1 font-bold",
         isActive && "bg-feeding hover:bg-feeding/90 ring-2 ring-feeding/40",
+        busy && "opacity-100 motion-safe:animate-pulse",
       )}
       onClick={onClick}
       disabled={disabled}
+      aria-busy={busy}
     >
       <span className="flex items-center gap-1.5 text-base">
         {accent === "left" ? "◀" : null}
