@@ -23,35 +23,55 @@ illegibility behind four competing affordances on a 64px row.
 - [x] `TodayCard.tsx` — drop focus, guard watch, remove NextStepFeed, fix dividers
 - [x] Delete NextStepFeed / useNextSteps / useNextStepPeek / nextSteps(.test) / skills
 - [x] Update `useBriefing.ts` response type
-- [x] Fix stale NextStepFeed comment in `DashboardLayout.tsx:141`
-
-## Follow-ups (not in this change)
-- [ ] Undeploy the live `next-step-peek` edge function (manual, Supabase dashboard)
+- [x] Fix stale NextStepFeed comment in `DashboardLayout.tsx`
 - [x] CLAUDE.md: "Seven edge functions" -> six
 - [x] `docs/legal-review-log.md`: log the removed AI surface
 
-## QA round 1 — Fix-required, in progress
-- [ ] Guard `JSON.parse` returning a bare `null`/array — currently a 500 that
-      wipes the whole briefing region off Home. Risk raised by the new prompt
-      telling the model null is the expected default.
-- [ ] No-data early return fires on a rolling 48h window, so an established
-      parent who skips a weekend gets "Welcome! Start logging…" — the exact
+## QA round 1 — Fix-required, all resolved
+- [x] Guard `JSON.parse` returning a bare `null`/array — was a 500 that wiped
+      the whole briefing region off Home. Risk raised by the new prompt telling
+      the model null is the expected default.
+- [x] No-data early return fired on a rolling 48h window, so an established
+      parent who skipped a weekend got "Welcome! Start logging…" — the exact
       nag this change forbids the model from writing
-- [ ] `status` still asserts raw counts as fact ("a solid day!") — the same
+- [x] `status` asserted raw counts as fact ("a solid day!") — the same
       logging-gap-as-finding defect, relocated into the headline
-- [ ] Bound the `illness_logs` query — an unclosed illness would pin a warning
-      to Home forever, now the dominant failure mode for `watch`
-- [ ] Scrub stale `next-step-peek` mentions in `_shared/childContext.ts`
+- [x] Bound the `illness_logs` query to 21 days — an unclosed illness would
+      have pinned a warning to Home forever, now the dominant `watch` trigger
+- [x] Scrub stale `next-step-peek` mentions in `_shared/childContext.ts`
 
 Resolved on review: QA flagged a missing legal-review-log entry, but it landed
 in 5e0c5a5 alongside the page edits; QA reviewed a pre-commit snapshot.
 
-## Deployment — gates the whole change
-The frontend tolerates the old response shape silently: `TodayCard` ignores an
-extra `focus` key and renders any non-empty `watch`. So merging without
-redeploying `briefing` ships an app that *looks* fixed while still printing
-the reported defect behind "More on today", with no type error or test to
-catch it. Redeploy `briefing` and confirm the ACTIVE version incremented.
-
 ## Review
-_(filled in when the work lands)_
+
+Merged to main as #233. The card goes from five stacked blocks to two on a
+typical day: the `status` headline and the "This week" collapsible, with
+`watch` appearing only when it names something the parent can act on.
+
+The finding worth remembering is that **two of the five QA fixes were the same
+defect in our own deterministic copy** that the change existed to remove from
+the model's. We wrote a prompt rule forbidding the model to ask a parent to log
+more, while our own no-data string said "Welcome! Start logging Maya's
+activities" to anyone with a quiet 48 hours — and we reframed `watch` off
+raw-count assertions while leaving `status` asserting them in the more
+prominent line. Writing a rule for the model is not the same as applying it.
+
+## Outstanding — manual, gates the user-visible fix
+
+1. **Redeploy `briefing`.** The frontend tolerates the old response shape
+   silently: `TodayCard` ignores an extra `focus` key and renders any non-empty
+   `watch`. Until the function is redeployed, production still prints the
+   original sleep line behind "More on today" — with no type error and no
+   failing test to catch it.
+2. **Undeploy `next-step-peek`.** Deleting it from the repo does not undeploy
+   it; it stays ACTIVE and keeps accepting authenticated requests against a
+   disclosure that no longer covers it. Dashboard only — there is no MCP delete
+   tool for edge functions. Precedent: `parse-voice-log` (2026-08-28),
+   `detect-milestone` (2026-06-21).
+
+## Deferred, raised not actioned
+
+`weekly-insights/index.ts` has a similar rolling-window empty state ("Start
+logging {name}'s sleep to see weekly patterns here"). Milder than the briefing
+string was, different surface, out of scope for this change.

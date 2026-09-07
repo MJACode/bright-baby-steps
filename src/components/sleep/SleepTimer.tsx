@@ -157,7 +157,7 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual, ch
       <div className="flex flex-col items-center gap-2 py-4">
         <div
           className={cn(
-            "relative flex items-center justify-center w-56 h-56 rounded-full mx-auto bg-sleep-bg/60 ring-1 ring-inset ring-sleep/15",
+            "relative flex select-none items-center justify-center w-56 h-56 rounded-full mx-auto bg-sleep-bg/60 ring-1 ring-inset ring-sleep/15",
             isRunning && "before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-sleep/10 motion-safe:before:animate-ping",
           )}
         >

@@ -13,6 +13,13 @@
  * quoted two different hunger times. Anything that predicts a nap calls
  * `predictNextNap`; anything that predicts a feed calls `predictNextFeed`;
  * nothing recomputes either.
+ *
+ * Agreeing on the time was only half of it. When the Feed Coach card is on
+ * Home, the band and the card were both printing the same hunger moment one
+ * scroll apart, in two separate blurred panels — a repetitive paywall rather
+ * than a valuable one. So the band now yields the hunger slot: `pickBandEvent`
+ * drops the feed side whenever the card is rendered, and the band falls back to
+ * the nap or shows nothing.
  */
 
 export interface PredictedEvent {
@@ -31,4 +38,21 @@ export function pickNextEvent(
   if (napAt) return { type: "nap", at: napAt };
   if (feedAt) return { type: "feed", at: feedAt };
   return null;
+}
+
+/**
+ * What the band shows, given whether the Feed Coach card is also on the screen.
+ *
+ * One hunger claim per screen, and the richer surface owns it: the card carries
+ * the confidence dot, the reason, the cues and the elapsed state, so when it is
+ * rendered the band drops the feed entirely rather than restating it. With the
+ * card hidden — a parent can turn it off in Customize Home — the band is the
+ * only hunger surface left and keeps predicting feeds.
+ */
+export function pickBandEvent(
+  napAt: Date | null,
+  feedAt: Date | null,
+  feedCoachVisible: boolean,
+): PredictedEvent | null {
+  return pickNextEvent(napAt, feedCoachVisible ? null : feedAt);
 }

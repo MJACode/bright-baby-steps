@@ -163,6 +163,27 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* iOS WKWebView treats the text inside a control as selectable, so a press
+     that runs a shade long or drifts a few pixels — how a one-handed, tired
+     parent actually taps — starts a text selection and pops the
+     Copy / Look Up / Translate callout instead of firing the click. The tap is
+     swallowed entirely: the nursing timer kept running with the callout bar
+     sitting on top of the pause button. touch-action also drops the ~300ms
+     double-tap-zoom wait that makes a first tap feel dead.
+     Scoped to controls, so inputs, textareas and the body copy around them —
+     legal pages, log notes, AI output — stay selectable and copyable.
+     `manipulation` still permits pan and pinch, so the scroll-snap wheel
+     columns in MobileDateTimePicker keep scrolling.
+     Wrapped in :where() so the whole rule carries zero specificity: any
+     control that genuinely needs selectable text opts back out with a plain
+     `select-text` utility, with no !important and no edit to this file. */
+  :where(button, [role="button"], a.touch-target) {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
   /* Applied to the tab bar nav itself so it clears the home indicator */
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
