@@ -245,6 +245,7 @@ function RecorderView({
   return (
     <div className="rounded-3xl border border-border bg-card p-8 flex flex-col items-center gap-6">
       <button
+        type="button"
         onClick={isRec ? onStop : onStart}
         aria-label={isRec ? "Stop" : "Start"}
         className={cn(
