@@ -603,12 +603,15 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       </div>
 
 
-      {/* Feed Coach — hunger-cue reminder, escalates to "consider a feed" once
-          it's been longer than the age-typical interval since the last feed. */}
+      {/* Feed Coach — the predicted hunger window over the hunger-cue reminder,
+          which escalates to "consider a feed" once it's been longer than the
+          age-typical interval. First thing under the header, the same place the
+          Sleep tab puts its coach strip. */}
       <FeedCoachCard
         activeChild={activeChild}
         lastFeedAt={lastFeedAt}
         feedInProgress={!!pageActiveFeed}
+        variant="strip"
       />
 
       {/* 7-Day Trends Chart */}

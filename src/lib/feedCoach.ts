@@ -1,4 +1,7 @@
-import { differenceInMinutes } from "date-fns";
+import { addMinutes, differenceInMinutes, format } from "date-fns";
+
+import { formatApproxClock } from "@/lib/gentleTime";
+import { sampleConfidence } from "@/lib/sleepPatterns";
 
 // Age-based feeding guidance grounded in AAP / healthychildren.org demand-feeding
 // advice. Infant feeding is on-demand — these intervals are the *typical upper
@@ -20,6 +23,13 @@ export interface FeedGuidance {
   ageLabel: string;
   /** Typical feeding cadence copy, e.g. "every 2–3 hours". */
   typicalCadence: string;
+  /**
+   * The midpoint of `typicalCadence`, in minutes — the interval the prediction
+   * falls back to before there are enough logged feeds to read a pattern.
+   * Derived from the same range the copy prints so the two can't drift; the
+   * 12mo+ bracket has no hourly range to mirror, so it takes `thresholdHours`.
+   */
+  typicalIntervalMinutes: number;
   /** Hours since the last feed after which we suggest considering a feed. */
   thresholdHours: number;
   /** Optional extra note for this bracket (e.g. newborn overnight wake advice). */
@@ -97,6 +107,7 @@ export function feedGuidanceForAge(
       bracket: "newborn",
       ageLabel: "newborn",
       typicalCadence: "every 2–3 hours (8–12 feeds a day)",
+      typicalIntervalMinutes: 150,
       thresholdHours: 3,
       note: "Newborns usually shouldn't go longer than about 4 hours between feeds, even overnight.",
       wakeToFeedOvernight,
@@ -114,6 +125,7 @@ export function feedGuidanceForAge(
       bracket: "1-3mo",
       ageLabel: "baby",
       typicalCadence: "every 3–4 hours (about 5–7 feeds a day)",
+      typicalIntervalMinutes: 210,
       thresholdHours: 4,
       note: "Most babies this age still feed every 3–4 hours, including overnight. Longer stretches are fine once your pediatrician is happy with weight gain.",
       wakeToFeedOvernight,
@@ -131,6 +143,7 @@ export function feedGuidanceForAge(
       bracket: "3-6mo",
       ageLabel: "baby",
       typicalCadence: "every 3–4 hours (about 5–7 feeds a day)",
+      typicalIntervalMinutes: 210,
       thresholdHours: 4,
       wakeToFeedOvernight,
       typicalNightFeeds: "0–2 feeds overnight",
@@ -145,6 +158,7 @@ export function feedGuidanceForAge(
       bracket: "6-12mo",
       ageLabel: "older baby",
       typicalCadence: "every 4–5 hours, alongside solids (about 4–5 milk feeds a day)",
+      typicalIntervalMinutes: 270,
       thresholdHours: 5,
       note: "Around this age, breast milk or formula stays the main source of nutrition while solids are introduced.",
       wakeToFeedOvernight,
@@ -159,6 +173,7 @@ export function feedGuidanceForAge(
     bracket: "12mo+",
     ageLabel: "toddler",
     typicalCadence: "3 meals and 2 snacks a day, alongside about 2–3 milk feeds",
+    typicalIntervalMinutes: 300,
     thresholdHours: 5,
     note: "Around this age, milk sits alongside meals and snacks rather than leading them.",
     wakeToFeedOvernight,
@@ -572,4 +587,194 @@ export function formatHoursSince(hours: number): string {
   if (h <= 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
+}
+
+/**
+ * A predicted hunger window: when the next feed is likely to land, given how
+ * this baby has actually been feeding.
+ *
+ * Mirrors `predictNextNap` — same window shape, same confidence ladder — so the
+ * two coach cards read as one system.
+ */
+export interface FeedPrediction {
+  windowStart: Date;
+  windowEnd: Date;
+  confidence: "high" | "medium" | "low";
+  reason: string;
+}
+
+// Feeds are fuzzier than naps: a bottle can be offered half an hour early with
+// no consequence, so the window is ±20 minutes where `predictNextNap` uses ±15.
+export const FEED_WINDOW_PAD_MIN = 20;
+
+// Below this a "gap" is a logging artefact rather than a new interval — a
+// cluster-feed top-up or a side switch logged as its own row. Above it, the
+// feed that would have closed the gap was never logged at all.
+const MIN_USABLE_FEED_INTERVAL_MIN = 20;
+const MAX_USABLE_FEED_INTERVAL_MIN = 8 * 60;
+
+// Used only when no night window is resolved (surfaces with no child schedule
+// context). Same band `predictNextNap` suppresses against.
+const FALLBACK_NIGHT_START_MIN = 20 * 60;
+const FALLBACK_MORNING_END_MIN = 6 * 60;
+
+interface NightClockBand {
+  startMin: number;
+  endMin: number;
+}
+
+function clockMinutesOf(d: Date): number {
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+/**
+ * The family's night as a recurring clock band, so a single resolved window can
+ * classify feeds from any of the trailing 14 days. Anchored on `nightOpensAt`
+ * rather than the nominal start: that is the instant the card itself starts
+ * calling it night, and the hour between them is prime cluster-feed time.
+ *
+ * A band that doesn't wrap past midnight is incoherent for our purposes (a
+ * lead-in can push the opening past midnight, leaving start < end), so it falls
+ * back to the generic hours rather than inverting the test.
+ */
+function nightClockBand(night?: FeedNightWindow | null): NightClockBand {
+  const fallback = {
+    startMin: FALLBACK_NIGHT_START_MIN,
+    endMin: FALLBACK_MORNING_END_MIN,
+  };
+  if (!night) return fallback;
+  const startMin = clockMinutesOf(night.nightOpensAt);
+  const endMin = clockMinutesOf(night.morningEndsAt);
+  return startMin > endMin ? { startMin, endMin } : fallback;
+}
+
+function isNightInstant(d: Date, band: NightClockBand): boolean {
+  const m = clockMinutesOf(d);
+  return m >= band.startMin || m < band.endMin;
+}
+
+function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+/**
+ * When the next feed is likely to land, projected from the median DAYTIME
+ * interval between recent feeds.
+ *
+ * Two rules do the real work here:
+ *
+ * Daytime only. An interval with either end inside the night is dropped. The
+ * overnight gap is a different regime — six hours between the bedtime feed and
+ * the morning one is the goal past the newborn weeks, not the cadence — and
+ * averaging it into the daytime interval inflates it and pushes "likely hungry"
+ * an hour or more late. This is the same mistake the nap side made until
+ * 2026-08-30, when the band's mean-of-every-sleep-gap was retired in favour of
+ * `predictNextNap`.
+ *
+ * Median, not mean. One cluster-feeding evening of 40-minute gaps drags a mean
+ * down for the rest of the fortnight; the median shrugs it off. Same choice
+ * `predictNextNap` makes for wake windows.
+ */
+export function predictNextFeed(opts: {
+  ageMonths: number;
+  /** Trailing ~14 days of feeds, any order. */
+  feeds: { logged_at: string }[];
+  isPremature?: boolean | null;
+  /** Omitted on surfaces with no night context — falls back to 20:00–06:00. */
+  night?: FeedNightWindow | null;
+  now?: Date;
+}): FeedPrediction | null {
+  const guidance = feedGuidanceForAge(Math.max(0, opts.ageMonths), {
+    isPremature: opts.isPremature,
+  });
+  const band = nightClockBand(opts.night);
+
+  const times = opts.feeds
+    .map((f) => new Date(f.logged_at))
+    .filter((d) => !Number.isNaN(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  const lastFeed = times[times.length - 1];
+  if (!lastFeed) return null;
+
+  const intervals: number[] = [];
+  for (let i = 1; i < times.length; i++) {
+    const from = times[i - 1];
+    const to = times[i];
+    if (isNightInstant(from, band) || isNightInstant(to, band)) continue;
+    const minutes = differenceInMinutes(to, from);
+    if (minutes < MIN_USABLE_FEED_INTERVAL_MIN) continue;
+    if (minutes > MAX_USABLE_FEED_INTERVAL_MIN) continue;
+    intervals.push(minutes);
+  }
+
+  // One interval is an anecdote, not a pattern — the age-typical cadence is the
+  // better guess until there are two to take a median of.
+  const personal = intervals.length >= 2 ? medianOf(intervals) : null;
+  const interval = personal ?? guidance.typicalIntervalMinutes;
+  const confidence = sampleConfidence(intervals.length);
+
+  const center = addMinutes(lastFeed, interval);
+  const windowStart = addMinutes(center, -FEED_WINDOW_PAD_MIN);
+  const windowEnd = addMinutes(center, FEED_WINDOW_PAD_MIN);
+
+  // Never point a parent at a sleeping baby. Read from the same two signals
+  // `deriveFeedCoachState` branches on, not from the clock alone: a running
+  // night timer puts the baby down before the boundary, and `nightOpensAt` is
+  // clamped so a timer can only ever open the night LATER than the clock would.
+  // The band by itself therefore leaves the whole bedtime lead-in as a hole,
+  // where the card's own state says "Overnight" while this line says "feed now".
+  //
+  // The exception is the wake-to-feed brackets — newborns, and preemies under
+  // 3 months corrected — where feeding overnight IS the guidance, so the window
+  // is exactly what the parent needs.
+  const asleep = !!opts.night && (opts.night.nightSleepInProgress || opts.night.isNightNow);
+  if (!guidance.wakeToFeedOvernight && (asleep || isNightInstant(windowStart, band))) {
+    return null;
+  }
+
+  // A window that has already closed is a stale clock time. The card's elapsed
+  // state ("It's been 4h 20m — consider a feed") is the live surface by then,
+  // and `pickNextEvent` always takes the EARLIER instant — so a window left in
+  // the past would outrank every future nap and pin the Home band to "likely
+  // hungry anytime now" for the rest of the day.
+  if (opts.now && opts.now > windowEnd) return null;
+
+  return {
+    windowStart,
+    windowEnd,
+    confidence,
+    reason:
+      confidence === "high"
+        ? `Based on ${intervals.length} daytime gaps between feeds over the last 2 weeks.`
+        : confidence === "medium"
+          ? "Based on a few recent feeds — improving with more data."
+          : "Age-typical timing — this sharpens as feeds get logged.",
+  };
+}
+
+/**
+ * The headline for a live prediction.
+ *
+ * A closed window has no headline at all, but that is `predictNextFeed`'s call,
+ * not this one's — it returns null once `now` is past `windowEnd`, so every
+ * prediction that reaches here is still ahead of or inside its window. A second
+ * copy of that rule down here would be a branch no caller can reach.
+ *
+ * Lives in the lib rather than in the card so it goes through the same copy
+ * discipline as `feedCoachCopy`.
+ */
+export function feedPredictionHeadline(opts: {
+  prediction: FeedPrediction;
+  now: Date;
+  calmMode: boolean;
+}): string {
+  const { prediction, now, calmMode } = opts;
+  if (now >= prediction.windowStart) return "Likely hungry any time now";
+  const clock = calmMode
+    ? formatApproxClock(prediction.windowStart)
+    : format(prediction.windowStart, "h:mm a");
+  return `Likely hungry around ${clock}`;
 }

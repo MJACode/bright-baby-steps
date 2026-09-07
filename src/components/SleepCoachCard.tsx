@@ -11,6 +11,7 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { useToast } from "@/hooks/use-toast";
 import { formatApproxClock } from "@/lib/gentleTime";
+import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
 import { PremiumGate } from "@/components/PremiumGate";
@@ -120,11 +121,7 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
   const state = deriveCoachState(now, pred.windowStart, pred.windowEnd, calmMode);
   if (!state) return null;
 
-  const confidenceTone = {
-    high: "bg-primary",
-    medium: "bg-accent",
-    low: "bg-muted-foreground",
-  }[pred.confidence];
+  const confidenceTone = CONFIDENCE_DOT_CLASS[pred.confidence];
 
   const pill = (() => {
     if (calmMode) {
