@@ -51,7 +51,7 @@ export default function Dashboard() {
 
       {/* "What's next" glance strip — predicted nap/feed from recent patterns.
           Renders nothing until there's enough log history to predict from. */}
-      <NextEventBand activeChild={activeChild} />
+      <NextEventBand activeChild={activeChild} feedCoachVisible={isVisible("feedCoach")} />
 
       {/* One "Today" card: AI briefing headline → ranked Next steps → condensed
           this-week line. The briefing and this-week regions gate on their
