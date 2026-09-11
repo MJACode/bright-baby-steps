@@ -19,8 +19,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import SleepTimer from "@/components/sleep/SleepTimer";
-import { SleepTodoCard } from "@/components/sleep/SleepTodoCard";
-import { TodayRhythmCard } from "@/components/sleep/TodayRhythmCard";
 import { SleepWeekCard } from "@/components/sleep/SleepWeekCard";
 import { FerberCheckInTimer } from "@/components/sleep/FerberCheckInTimer";
 import { ChairStageCard } from "@/components/sleep/ChairStageCard";
@@ -269,20 +267,6 @@ export default function SleepPage() {
           {showChairCard && savedPlan && <ChairStageCard childId={activeChild.id} plan={savedPlan} />}
         </CardContent>
       </Card>
-
-      <TodayRhythmCard
-        days={sleepWindow.days}
-        coverage={sleepWindow.coverage}
-        schedule={sleepWindow.schedule}
-        ageMonths={ageMonths}
-        isLoading={sleepWindow.isLoading}
-      />
-
-      <SleepTodoCard
-        childId={activeChild.id}
-        ageMonths={ageMonths}
-        childName={activeChild.name ?? "your baby"}
-      />
 
       <SleepWeekCard
         days={sleepWindow.days}

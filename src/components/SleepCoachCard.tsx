@@ -99,9 +99,9 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
   const handleStartNap = async () => {
     try {
       // Quick-starting inside the night window logs a night sleep, not a nap,
-      // so the Today's Sleep Plan card doesn't anchor a fresh day off it.
-      // Resolve against the saved plan like useSleepTodo does — a family
-      // bedtime later than the bracket default must not classify as night.
+      // so the day's rollups don't anchor a fresh day off it. Resolve against
+      // the saved plan — a family bedtime later than the bracket default must
+      // not classify as night.
       const nightStartMin = resolveNightStartMin(
         plan ?? null,
         getAgeBucket(data?.ageMonths ?? 0),
