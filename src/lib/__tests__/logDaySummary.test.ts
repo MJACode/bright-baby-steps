@@ -3,6 +3,7 @@ import {
   spokenSummary,
   summarizeDiaperDay,
   summarizeFeedingDay,
+  summarizeSleepDayStats,
   summarizeSleepDay,
 } from "@/lib/logDaySummary";
 
@@ -142,5 +143,16 @@ describe("spokenSummary", () => {
   it("leaves counts and ounces alone", () => {
     expect(spokenSummary("8 changes · 6 wet · 2 dirty")).toBe("8 changes · 6 wet · 2 dirty");
     expect(spokenSummary("9 feeds · 22 oz")).toBe("9 feeds · 22 oz");
+  });
+});
+
+describe("summarizeSleepDayStats", () => {
+  it("reads the same clipped numbers as the Sleep tab row", () => {
+    expect(summarizeSleepDayStats({ totalMin: 580, nightMin: 350, napCount: 5 }, true)).toBe(
+      "9h 40m total so far · 5h 50m at night · 5 naps",
+    );
+    expect(summarizeSleepDayStats({ totalMin: 90, nightMin: 0, napCount: 1 })).toBe(
+      "1h 30m total · 1 nap",
+    );
   });
 });

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { CloudMoon, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { ChevronRight, CloudMoon, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -27,7 +28,10 @@ import { LoggedByChip } from "@/components/LoggedByChip";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { formatDurationShort } from "@/lib/sessionAnchor";
-import { summarizeSleepDay } from "@/lib/logDaySummary";
+import { summarizeSleepDay, summarizeSleepDayStats } from "@/lib/logDaySummary";
+import { segmentSleepForDay, sleepDayStats } from "@/lib/sleepPatterns";
+import { dayLabel } from "@/lib/dayLabel";
+import { trackingDayDate } from "@/lib/trackingDay";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -37,6 +41,10 @@ export default function SleepHistoryPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  // Set when the parent tapped one day on the Sleep tab — show just that day.
+  const rawDay = searchParams.get("day");
+  const focusDay = rawDay && /^\d{4}-\d{2}-\d{2}$/.test(rawDay) ? rawDay : null;
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -52,6 +60,19 @@ export default function SleepHistoryPage() {
     childId: activeChild?.id,
     dateColumn: "started_at",
   });
+
+  // A single day uses the Sleep tab's rule — every session that overlaps the
+  // day, totals clipped at the boundary — so last night's sleep appears under
+  // Today and the header matches the row the parent tapped.
+  const focus = useMemo(() => {
+    if (!focusDay) return null;
+    const blocks = segmentSleepForDay(history.logs, focusDay, history.schedule);
+    const ids = new Set(blocks.map((b) => b.logId));
+    return {
+      logs: history.logs.filter((l) => ids.has(l.id)),
+      stats: sleepDayStats(blocks),
+    };
+  }, [focusDay, history.logs, history.schedule]);
 
   const loggedByNames = useLoggedByNames(history.logs.map((l) => l.parent_id));
 
@@ -162,7 +183,14 @@ export default function SleepHistoryPage() {
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
           <Moon className="w-7 h-7 text-sleep" /> Sleep history
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">Every nap and night sleep for {activeChild.name}.</p>
+        <p className="text-muted-foreground text-sm mt-1">
+          {focusDay
+            ? `Naps and night sleep for ${activeChild.name} · ${dayLabel(
+                parseISO(focusDay),
+                trackingDayDate(new Date(), history.schedule) ?? new Date(),
+              )}`
+            : `Every nap and night sleep for ${activeChild.name}.`}
+        </p>
       </div>
 
       <Button
@@ -175,7 +203,9 @@ export default function SleepHistoryPage() {
       </Button>
 
       <GroupedLogList<SleepLogRow>
-        logs={history.logs}
+        key={focusDay ?? "all"}
+        focusDayKey={focusDay ?? undefined}
+        logs={focus ? focus.logs : history.logs}
         isLoading={history.isLoading}
         isError={history.isError}
         hasEarlier={history.hasEarlier}
@@ -184,7 +214,11 @@ export default function SleepHistoryPage() {
         onRetry={history.refetch}
         getDate={(log) => log.started_at}
         schedule={history.schedule}
-        summarize={summarizeSleepDay}
+        summarize={
+          focus
+            ? (_dayLogs, isToday) => summarizeSleepDayStats(focus.stats, isToday)
+            : summarizeSleepDay
+        }
         labels={{ unit: "sleep", unitPlural: "sleeps" }}
         renderRow={(log) => {
           const minutes = log.duration_minutes || 0;
@@ -235,6 +269,15 @@ export default function SleepHistoryPage() {
           </Card>
         }
       />
+
+      {focusDay && (
+        <Link
+          to="/dashboard/sleep/history"
+          className="inline-flex items-center gap-1 min-h-[48px] text-sm font-semibold text-sleep"
+        >
+          See all sleep <ChevronRight aria-hidden className="w-4 h-4" />
+        </Link>
+      )}
 
       <Dialog
         open={editDialogOpen}
