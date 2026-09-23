@@ -31,7 +31,7 @@ import { formatDurationShort } from "@/lib/sessionAnchor";
 import { summarizeSleepDay, summarizeSleepDayStats } from "@/lib/logDaySummary";
 import { segmentSleepForDay, sleepDayStats } from "@/lib/sleepPatterns";
 import { dayLabel } from "@/lib/dayLabel";
-import { trackingDayDate } from "@/lib/trackingDay";
+import { trackingDayDate, trackingDayKey } from "@/lib/trackingDay";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -69,7 +69,11 @@ export default function SleepHistoryPage() {
     const blocks = segmentSleepForDay(history.logs, focusDay, history.schedule);
     const ids = new Set(blocks.map((b) => b.logId));
     return {
-      logs: history.logs.filter((l) => ids.has(l.id)),
+      // Rows the segmenter skips (no end time, zero length) add nothing to the
+      // totals but still need fixing — keep them on the day they started.
+      logs: history.logs.filter(
+        (l) => ids.has(l.id) || trackingDayKey(l.started_at, history.schedule) === focusDay,
+      ),
       stats: sleepDayStats(blocks),
     };
   }, [focusDay, history.logs, history.schedule]);
