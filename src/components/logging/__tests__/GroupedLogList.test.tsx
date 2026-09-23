@@ -77,3 +77,27 @@ describe("GroupedLogList default expansion", () => {
     );
   });
 });
+
+describe("GroupedLogList focusDayKey", () => {
+  const yesterdayKey = format(subDays(new Date(), 1), "yyyy-MM-dd");
+
+  it("renders the given rows as the focused day, opened, with no footer", () => {
+    // The page picks the rows — a night that started the evening before still
+    // belongs to this day — so the list must not regroup them by start date.
+    setup({ logs: [at(1, 9), at(2, 21)], hasEarlier: true, focusDayKey: yesterdayKey });
+
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /Yesterday/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(at(1, 9).id)).toBeInTheDocument();
+    expect(screen.getByText(at(2, 21).id)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show earlier days" })).not.toBeInTheDocument();
+  });
+
+  it("renders an empty focused day rather than the whole-list empty state", () => {
+    setup({ logs: [], focusDayKey: yesterdayKey });
+
+    expect(screen.getByRole("button", { name: /Yesterday/ })).toBeInTheDocument();
+    expect(screen.getByText("Naps you log for this day will show up here.")).toBeInTheDocument();
+    expect(screen.queryByText("Tap to log a nap.")).not.toBeInTheDocument();
+  });
+});

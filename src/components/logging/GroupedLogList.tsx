@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { parseISO } from "date-fns";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,6 +32,11 @@ interface GroupedLogListProps<T> {
   schedule?: TrackingSchedule;
   onShowEarlier: () => void;
   onRetry: () => void;
+  // Render `logs` as one tracking day ("yyyy-MM-dd"), opened, with no "Show
+  // earlier days" footer — the target of tapping a day summary elsewhere. The
+  // page picks the rows (a sleep that crosses the day boundary belongs to both
+  // days it touches) and owns the way back to the full list.
+  focusDayKey?: string;
 }
 
 export function GroupedLogList<T>({
@@ -47,6 +53,7 @@ export function GroupedLogList<T>({
   schedule = DEFAULT_TRACKING_SCHEDULE,
   onShowEarlier,
   onRetry,
+  focusDayKey,
 }: GroupedLogListProps<T>) {
   // "Today" is the tracking day we're inside right now, which with a 07:00 day
   // start is still yesterday's date at 3 AM — the hour a parent is most likely
@@ -55,9 +62,13 @@ export function GroupedLogList<T>({
 
   // Deterministic on every mount — deliberately not persisted. Today open,
   // every past day closed.
-  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set([todayKey]));
+  const [openKeys, setOpenKeys] = useState<Set<string>>(() => new Set([focusDayKey ?? todayKey]));
 
   const groups = useMemo(() => {
+    if (focusDayKey) {
+      const date = parseISO(focusDayKey);
+      return Number.isNaN(date.getTime()) ? [] : [{ key: focusDayKey, date, logs }];
+    }
     const grouped = groupLogsByDay(logs, getDate, schedule);
     if (!grouped.some((g) => g.key === todayKey)) {
       grouped.push({
@@ -71,7 +82,7 @@ export function GroupedLogList<T>({
     }
     return grouped;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [logs, todayKey, schedule]);
+  }, [logs, todayKey, schedule, focusDayKey]);
 
   // Appending days silently is invisible to assistive tech — move focus to the
   // first header that wasn't there before.
@@ -123,7 +134,7 @@ export function GroupedLogList<T>({
 
   // A parent whose last log predates the window still needs the way back to it,
   // so "nothing here yet" is only true when there's nothing earlier either.
-  if (logs.length === 0 && !hasEarlier) return <>{emptyState}</>;
+  if (focusDayKey ? groups.length === 0 : logs.length === 0 && !hasEarlier) return <>{emptyState}</>;
 
   return (
     <div className="space-y-3">
@@ -188,7 +199,9 @@ export function GroupedLogList<T>({
                   group.logs.map((log) => renderRow(log))
                 ) : (
                   <p className="px-3 py-2 text-sm text-muted-foreground">
-                    Today's {labels.unitPlural} will show up here.
+                    {isToday
+                      ? `Today's ${labels.unitPlural} will show up here.`
+                      : `${labels.unitPlural[0].toUpperCase()}${labels.unitPlural.slice(1)} you log for this day will show up here.`}
                   </p>
                 )}
               </div>
@@ -197,7 +210,7 @@ export function GroupedLogList<T>({
         );
       })}
 
-      {truncated ? (
+      {focusDayKey ? null : truncated ? (
         <p className="px-3 py-2 text-sm text-muted-foreground">
           Showing your most recent {daysShown} {daysShown === 1 ? "day" : "days"}.
         </p>

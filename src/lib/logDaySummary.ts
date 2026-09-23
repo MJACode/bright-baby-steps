@@ -50,6 +50,19 @@ export function summarizeSleepDay(logs: SleepSummaryLog[], isToday = false): str
   return join(parts, isToday);
 }
 
+// For a day's sleep as the Sleep tab measures it: sessions clipped at the day
+// boundary, so a single-day view reads the same numbers as the row that led to it.
+export function summarizeSleepDayStats(
+  stats: { totalMin: number; nightMin: number; napCount: number },
+  isToday = false,
+): string {
+  const parts: string[] = [];
+  if (stats.totalMin > 0) parts.push(`${formatSummaryDuration(stats.totalMin)} total`);
+  if (stats.nightMin > 0) parts.push(`${formatSummaryDuration(stats.nightMin)} at night`);
+  if (stats.napCount > 0) parts.push(plural(stats.napCount, "nap", "naps"));
+  return join(parts, isToday);
+}
+
 export function summarizeFeedingDay(logs: FeedingSummaryLog[], isToday = false): string {
   const solids = logs.filter((l) => l.feeding_type === "solid");
   const feeds = logs.filter((l) => l.feeding_type !== "solid");

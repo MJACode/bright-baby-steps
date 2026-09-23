@@ -31,6 +31,7 @@ import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
 import {
+  trackingDayDate,
   trackingDayKey,
   trackingWindowStart,
   type TrackingSchedule,
@@ -315,11 +316,11 @@ export default function SleepPage() {
           <ul className="space-y-2">
             {recentDays.map((day) => {
               const parsed = parseISO(day.dayKey);
-              const label = Number.isNaN(parsed.getTime()) ? day.dayKey : dayLabel(parsed);
+              const label = Number.isNaN(parsed.getTime()) ? day.dayKey : dayLabel(parsed, trackingDayDate(new Date(), sleepWindow.schedule) ?? new Date());
               return (
                 <li key={day.dayKey}>
                   <Link
-                    to="/dashboard/sleep/history"
+                    to={`/dashboard/sleep/history?day=${day.dayKey}`}
                     className="w-full min-h-[48px] rounded-2xl bg-sleep-bg p-3 flex items-center justify-between gap-3 transition-colors motion-reduce:transition-none hover:bg-sleep/10"
                   >
                     <span className="min-w-0">
