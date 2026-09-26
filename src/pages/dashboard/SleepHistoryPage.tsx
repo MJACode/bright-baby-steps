@@ -27,7 +27,7 @@ import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { LoggedByChip } from "@/components/LoggedByChip";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
-import { formatDurationShort } from "@/lib/sessionAnchor";
+import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { summarizeSleepDay, summarizeSleepDayStats } from "@/lib/logDaySummary";
 import { segmentSleepForDay, sleepDayStats } from "@/lib/sleepPatterns";
 import { dayLabel } from "@/lib/dayLabel";
@@ -227,12 +227,17 @@ export default function SleepHistoryPage() {
         renderRow={(log) => {
           const minutes = log.duration_minutes || 0;
           const typeLabel = log.sleep_type === "nap" ? "nap" : "night sleep";
+          // Timer sessions have a real end, so show the whole window.
+          const time =
+            log.source === "timer" && log.ended_at
+              ? formatOverlapRange(new Date(log.started_at), new Date(log.ended_at))
+              : format(new Date(log.started_at), "h:mm a");
           return (
             <Card key={log.id} className="border-0 bg-sleep-bg">
               <button
                 type="button"
                 onClick={() => openEdit(log)}
-                aria-label={`Edit ${typeLabel}, ${minutes} minutes, ${format(new Date(log.started_at), "h:mm a")}`}
+                aria-label={`Edit ${typeLabel}, ${minutes} minutes, ${time}`}
                 className="touch-target w-full rounded-2xl p-3 flex items-center justify-between gap-3 text-left transition-colors hover:bg-sleep/10 motion-reduce:transition-none"
               >
                 <span className="flex items-center gap-3 min-w-0">
@@ -244,7 +249,7 @@ export default function SleepHistoryPage() {
                       {formatDurationShort(minutes)}
                     </span>
                     <span className="block text-xs text-foreground/75">
-                      {format(new Date(log.started_at), "h:mm a")}
+                      {time}
                     </span>
                     <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
                   </span>
