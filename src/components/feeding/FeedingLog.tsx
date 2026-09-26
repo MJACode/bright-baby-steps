@@ -39,6 +39,7 @@ import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { useLogHistory } from "@/hooks/useLogHistory";
 import { summarizeFeedingDay } from "@/lib/logDaySummary";
+import { deriveEnd, formatOverlapRange } from "@/lib/sessionAnchor";
 import type { Tables } from "@/integrations/supabase/types";
 
 type FeedingLogRow = Tables<"feeding_logs">;
@@ -643,7 +644,14 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
             ]
               .filter(Boolean)
               .join(" ");
-            const time = format(new Date(log.logged_at), "h:mm a");
+            // Timer feeds store start + duration, so the end is derived.
+            const time =
+              log.source === "timer" && log.duration_minutes
+                ? formatOverlapRange(
+                    new Date(log.logged_at),
+                    deriveEnd(new Date(log.logged_at), log.duration_minutes),
+                  )
+                : format(new Date(log.logged_at), "h:mm a");
             return (
               <Card key={log.id} className="border-0 bg-feeding-bg">
                 <button
