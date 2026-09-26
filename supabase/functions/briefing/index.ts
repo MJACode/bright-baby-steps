@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
-import { humanizeSlug, loadChildCore } from "../_shared/childContext.ts";
+import { formatCorrectedAgeSuffix, humanizeSlug, loadChildCore } from "../_shared/childContext.ts";
 
 // EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
 // Deno's lib types.
@@ -161,7 +161,7 @@ serve(async (req) => {
       );
     }
 
-    let contextBlock = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
+    let contextBlock = `Child: ${core.name}, ${core.ageString}${formatCorrectedAgeSuffix(core)}.
 What the parent recorded in the last 48 hours (this is a log of what they happened to enter, not a full account of the child's day):
 ${recordedLines.join("\n")}`;
 

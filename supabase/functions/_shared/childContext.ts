@@ -20,6 +20,14 @@ type SupabaseClient = any;
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DAYS_PER_MONTH = 30.44;
 
+/**
+ * Premature-age correction stops at 24 months CHRONOLOGICAL age (AAP/CDC
+ * practice). Mirrors `PREMATURE_CORRECTION_CUTOFF_MONTHS` /
+ * `getAgeAnchorDate` in src/hooks/useChildren.tsx — Deno functions can't
+ * import from src/, so keep the two in sync by hand.
+ */
+const PREMATURE_CORRECTION_CUTOFF_MONTHS = 24;
+
 export interface ChildCore {
   id: string;
   name: string;
@@ -32,8 +40,13 @@ export interface ChildCore {
   ageMonths: number;
   /** Canonical human-readable age — see formatAgeString. */
   ageString: string;
-  /** Corrected (adjusted) age in months; null unless premature with a due_date. */
+  /**
+   * Corrected (adjusted) age in months. Non-null ONLY when the correction is
+   * actually applied: premature + due_date + chronological age < 24 months.
+   */
   correctedAgeMonths: number | null;
+  /** formatAgeString() of the corrected age; null whenever correctedAgeMonths is null. */
+  correctedAgeString: string | null;
   nextAppointment: string | null;
   interests: string[];
   temperament: string | null;
@@ -51,6 +64,40 @@ export function formatAgeString(ageDays: number): string {
   if (ageMonths < 3) return `${ageWeeks} weeks old`;
   if (ageMonths < 24) return `${ageMonths} months old`;
   return `${Math.floor(ageMonths / 12)} years ${ageMonths % 12} months old`;
+}
+
+/**
+ * Parse a DB date. Date-only "YYYY-MM-DD" strings become the calendar date at
+ * UTC midnight (the edge runtime has no user time zone, so UTC calendar dates
+ * stand in for the frontend's local-calendar parsing — at most a one-day skew
+ * around the boundary). Anything else goes through `new Date`.
+ */
+function parseCalendarDate(s: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return new Date(s);
+}
+
+/**
+ * Whole calendar months from `from` to `to` (UTC components), matching
+ * date-fns `differenceInMonths` for the `from <= to` case the cutoff needs.
+ */
+function calendarMonthsBetween(from: Date, to: Date): number {
+  let months = (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+    (to.getUTCMonth() - from.getUTCMonth());
+  if (months > 0 && to.getUTCDate() < from.getUTCDate()) months -= 1;
+  return months;
+}
+
+/**
+ * Prompt suffix for the "Child: <name>, <age>" line. Empty unless the
+ * premature correction is actually applied, so a 3-year-old ex-preemie (or a
+ * premature child with no due_date on file) carries no premature / corrected-
+ * age wording into the payload.
+ */
+export function formatCorrectedAgeSuffix(core: ChildCore): string {
+  if (core.correctedAgeString === null) return "";
+  return ` (born premature — corrected age ${core.correctedAgeString.replace(/ old$/, "")}; use the corrected age for developmental expectations)`;
 }
 
 /** 'water_play' → 'water play', 'slow_to_warm' → 'slow to warm'. */
@@ -99,20 +146,29 @@ export async function loadChildCore(
   }
   if (!child) return null;
 
-  const now = Date.now();
-  const ageDays = Math.floor(
-    (now - new Date(child.date_of_birth).getTime()) / MS_PER_DAY,
-  );
+  const nowDate = new Date();
+  const now = nowDate.getTime();
+  const birthDate = parseCalendarDate(child.date_of_birth);
+  const ageDays = Math.floor((now - birthDate.getTime()) / MS_PER_DAY);
   const ageWeeks = Math.floor(ageDays / 7);
   const ageMonths = Math.floor(ageDays / DAYS_PER_MONTH);
   const isPremature = Boolean(child.is_premature);
 
+  // Correct only while chronological age < 24 calendar months (same rule as
+  // the frontend's getAgeAnchorDate); past that, age is plain DOB-based.
   let correctedAgeMonths: number | null = null;
-  if (isPremature && child.due_date) {
-    const correctedDays = Math.floor(
-      (now - new Date(child.due_date).getTime()) / MS_PER_DAY,
+  let correctedAgeString: string | null = null;
+  if (
+    isPremature &&
+    child.due_date &&
+    calendarMonthsBetween(birthDate, nowDate) < PREMATURE_CORRECTION_CUTOFF_MONTHS
+  ) {
+    const correctedDays = Math.max(
+      Math.floor((now - parseCalendarDate(child.due_date).getTime()) / MS_PER_DAY),
+      0,
     );
-    correctedAgeMonths = Math.floor(Math.max(correctedDays, 0) / DAYS_PER_MONTH);
+    correctedAgeMonths = Math.floor(correctedDays / DAYS_PER_MONTH);
+    correctedAgeString = formatAgeString(correctedDays);
   }
 
   return {
@@ -127,6 +183,7 @@ export async function loadChildCore(
     ageMonths,
     ageString: formatAgeString(ageDays),
     correctedAgeMonths,
+    correctedAgeString,
     nextAppointment: child.next_appointment ?? null,
     interests: Array.isArray(child.interests) ? child.interests : [],
     temperament: child.temperament ?? null,

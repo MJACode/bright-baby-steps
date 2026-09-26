@@ -26,7 +26,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { loadMemoryContext } from "../_shared/memory.ts";
-import { loadChildCore } from "../_shared/childContext.ts";
+import { formatCorrectedAgeSuffix, loadChildCore } from "../_shared/childContext.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -298,7 +298,7 @@ serve(async (req) => {
     );
 
     const lines: string[] = [
-      `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature — consider corrected age)" : ""}.`,
+      `Child: ${core.name}, ${core.ageString}${formatCorrectedAgeSuffix(core)}.`,
       // Legal review 2026-07-02 (LOW, data minimization): doctor_name is
       // deliberately excluded from the Anthropic payload — third-party
       // personal data with near-zero model value, and PrivacyPage § 4 will

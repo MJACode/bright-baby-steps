@@ -5,6 +5,7 @@ import {
   WAKE_WINDOW_BY_BRACKET,
   NAPS_BY_BRACKET,
   BEDTIME_RANGE_BY_BRACKET,
+  defaultNapDurationMin,
   parseHHmm,
 } from "@/lib/sleepPlan";
 
@@ -40,14 +41,6 @@ export interface SleepTodoPlanLike {
   wake_window_high_min: number | null;
   nap_count: number | null;
   overrides?: { nap_count?: boolean } | null;
-}
-
-// Typical realized nap duration by bucket (minutes). Mirrors the sample-day
-// numbers in buildSleepPlan so the live plan and the static preview agree.
-function typicalNapDuration(bucket: AgeBucket): number {
-  if (bucket === "3-6mo") return 75;
-  if (bucket === "6-9mo" || bucket === "9-12mo") return 90;
-  return 120;
 }
 
 // Apply an HH:mm clock to the same calendar day as `dayRef` (local time).
@@ -116,6 +109,9 @@ export function buildSleepTodo(opts: {
   // The family's own night boundary, when they've set one. Minutes since
   // midnight; null/undefined falls back to plan → age bracket.
   familyNightStartMin?: number | null;
+  // Realized nap length. Mirrors the sample day in buildSleepPlan: pass the
+  // nap length the plan's sample day used, or omit for the age default.
+  napDurationMin?: number;
 }): { items: SleepTodoItem[]; wakeAnchor: Date; allDone: boolean } {
   const { now, ageMonths, plan, todayLogs, completedItems } = opts;
   const overrides = opts.overrides ?? {};
@@ -129,7 +125,7 @@ export function buildSleepTodo(opts: {
   const bedEarliest = plan?.bedtime_earliest ?? BEDTIME_RANGE_BY_BRACKET[bucket].earliest;
   const bedLatest = plan?.bedtime_latest ?? BEDTIME_RANGE_BY_BRACKET[bucket].latest;
   const wakeClock = plan?.wake_time ?? "07:00";
-  const napDur = typicalNapDuration(bucket);
+  const napDur = opts.napDurationMin ?? defaultNapDurationMin(bucket);
 
   const nightStartMin = resolveNightStartMin(plan, bucket, opts.familyNightStartMin);
   const dayStart = startOfDay(now);

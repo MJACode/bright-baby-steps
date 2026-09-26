@@ -286,7 +286,8 @@ describe("predictNextNap reads the shared wake-window engine", () => {
       sleeps: [sleep(at(2026, 9, 3, 7, 30), null)],
       now: at(2026, 9, 3, 8, 0),
       lastWake: null,
-      expected: { start: at(2026, 9, 3, 10, 30), end: at(2026, 9, 3, 11, 0), confidence: "low" },
+      // 6-9mo plan low end (120 min) from now, window opening 30 min early.
+      expected: { start: at(2026, 9, 3, 9, 30), end: at(2026, 9, 3, 10, 0), confidence: "low" },
     },
     {
       name: "suggests nothing when the window would open at night",

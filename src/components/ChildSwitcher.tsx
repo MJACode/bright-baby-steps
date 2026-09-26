@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useChildren, getAge } from "@/hooks/useChildren";
+import { useChildren, getAge, isAgeCorrected } from "@/hooks/useChildren";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import {
@@ -90,7 +90,7 @@ export function ChildSwitcher({ externalOpen, onExternalOpenChange }: { external
                       <p className="text-xs text-muted-foreground">
                         {isExpected
                           ? ageStr
-                          : `${ageStr} old${child.is_premature ? " (adjusted)" : ""}`}
+                          : `${ageStr} old${isAgeCorrected(child.date_of_birth, child.is_premature, child.due_date) ? " (adjusted)" : ""}`}
                       </p>
                     </div>
                     {child.id === activeChild.id && (

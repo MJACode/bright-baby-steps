@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { format, parseISO } from "date-fns";
 import { getAge, getAgeInMonths } from "@/hooks/useChildren";
+import { isAgeCorrected } from "@/lib/childAge";
 import { getVocabBenchmark, benchmarkAgeLabel } from "@/lib/vocabBenchmarks";
 
 /** A Word Journal row. `word_or_sound` is the original column name from the
@@ -207,7 +208,9 @@ function renderWordJournal(h: PdfHelpers, data: ReportData) {
     data.child.due_date,
   );
   const benchmark = getVocabBenchmark(ageMonths);
-  const ageNote = data.child.is_premature ? " (corrected age)" : "";
+  const ageNote = isAgeCorrected(data.child.date_of_birth, data.child.is_premature, data.child.due_date)
+    ? " (corrected age)"
+    : "";
 
   if (distinctAllTime !== null) {
     h.bodyText(`Distinct words logged (all time): ${distinctAllTime}`);

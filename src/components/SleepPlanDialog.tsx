@@ -17,10 +17,11 @@ import {
   Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
+import { sleepAgeMonthsAt } from "@/hooks/useSleepCoach";
 import { buildSleepPlan, NAPS_BY_BRACKET, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
 import { useSaveSleepPlan, useSleepPlan, type FerberSchedule, type SleepPlanOverrides } from "@/hooks/useSleepPlan";
 import { SleepMethodPicker } from "@/components/SleepMethodPicker";
@@ -58,6 +59,9 @@ interface SleepPlanDialogProps {
   childId: string;
   childName: string;
   ageMonths: number;
+  // The child's age fields, so the plan can find the day the next age
+  // bracket starts by the same rule that produced ageMonths.
+  ageChild?: { date_of_birth: string; is_premature?: boolean | null; due_date?: string | null };
   ageDays?: number;
   logs: PlanLog[];
 }
@@ -90,6 +94,7 @@ export function SleepPlanDialog({
   childId,
   childName,
   ageMonths,
+  ageChild,
   ageDays,
   logs,
 }: SleepPlanDialogProps) {
@@ -146,10 +151,19 @@ export function SleepPlanDialog({
     overrides: local.overrides,
   };
 
+  const dob = ageChild?.date_of_birth;
+  const isPremature = ageChild?.is_premature;
+  const dueDate = ageChild?.due_date;
   const plan = useMemo(
-    () => buildSleepPlan({ ageMonths, logs, savedPlan: savedForBuild }),
+    () =>
+      buildSleepPlan({
+        ageMonths,
+        logs,
+        savedPlan: savedForBuild,
+        ageMonthsAt: dob ? sleepAgeMonthsAt(dob, isPremature, dueDate) : undefined,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ageMonths, logs, local],
+    [ageMonths, dob, isPremature, dueDate, logs, local],
   );
 
   const showObserved = plan.observed.hasEnoughSignal && plan.observed.totalHours !== null;
@@ -305,6 +319,17 @@ export function SleepPlanDialog({
         </div>
 
         <div className="px-6 pb-6 space-y-4">
+          {plan.upcomingChange && (
+            <div className="flex items-start gap-2 rounded-lg bg-sleep/10 p-3">
+              <Info className="w-4 h-4 text-sleep shrink-0 mt-0.5" />
+              <p className="text-sm text-foreground/85 leading-relaxed">
+                Heads-up: your plan updates on {format(plan.upcomingChange.date, "MMM d")} as
+                your baby moves into {plan.upcomingChange.bucketLabel} —{" "}
+                {plan.upcomingChange.summary}.
+              </p>
+            </div>
+          )}
+
           {/* Tonight at a glance */}
           <Card className="border-0 bg-sleep-bg">
             <CardContent className="p-4 space-y-2">

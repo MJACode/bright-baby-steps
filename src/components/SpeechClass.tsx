@@ -31,6 +31,8 @@ interface SpeechClassProps {
   childName: string;
   ageMonths: number; // already corrected for prematurity by getAgeInMonths
   isPremature: boolean;
+  // True only while ageMonths is counted from the due date (see isAgeCorrected).
+  ageCorrected: boolean;
 }
 
 const VERDICT_COPY: Record<SpeechClassPlan["ageCheck"]["verdict"], string> = {
@@ -41,7 +43,7 @@ const VERDICT_COPY: Record<SpeechClassPlan["ageCheck"]["verdict"], string> = {
 
 const DAYS = [1, 2, 3, 4, 5, 6, 7];
 
-export function SpeechClass({ childId, childName, ageMonths, isPremature }: SpeechClassProps) {
+export function SpeechClass({ childId, childName, ageMonths, isPremature, ageCorrected }: SpeechClassProps) {
   const { user } = useAuth();
   const { data: row, isLoading } = useSpeechClass(childId);
   const generate = useGenerateSpeechClass();
@@ -71,7 +73,7 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature }: Spee
         childName,
         ageMonths,
         isPremature,
-        correctedAgeMonths: isPremature ? ageMonths : undefined,
+        correctedAgeMonths: ageCorrected ? ageMonths : undefined,
         recentWords: recentWords ?? [],
       },
       {
@@ -202,7 +204,7 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature }: Spee
                 {VERDICT_COPY[plan.ageCheck.verdict] ?? "Age check"}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {ageMonths}mo{isPremature ? " (adjusted)" : ""} · typical {plan.ageCheck.typicalWindow}
+                {ageMonths}mo{ageCorrected ? " (adjusted)" : ""} · typical {plan.ageCheck.typicalWindow}
               </span>
             </div>
             <p className="text-[10px] text-muted-foreground">

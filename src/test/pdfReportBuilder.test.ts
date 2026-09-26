@@ -57,6 +57,7 @@ const baseData: ReportData = {
 };
 
 beforeEach(() => vi.clearAllMocks());
+afterEach(() => vi.useRealTimers());
 
 // ── generatePediatricianReport ────────────────────────────────────────────────
 
@@ -148,6 +149,7 @@ describe("generatePediatricianReport", () => {
   });
 
   it("marks the benchmark age as corrected for a premature child", () => {
+    vi.setSystemTime(new Date(2025, 5, 1));
     generatePediatricianReport(
       {
         ...baseData,
@@ -159,6 +161,21 @@ describe("generatePediatricianReport", () => {
     );
     const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
     expect(flat).toContain("Age benchmark (corrected age) at 18 months: 10–20 words typical");
+  });
+
+  it("drops the corrected-age label once a premature child is 24 months chronological", () => {
+    vi.setSystemTime(new Date(2026, 0, 15));
+    generatePediatricianReport(
+      {
+        ...baseData,
+        child: { ...baseChild, is_premature: true, due_date: "2024-04-01" },
+        words: [{ word_or_sound: "mama", entry_date: "2024-06-04", context: null }],
+        wordsDistinctAllTime: 1,
+      },
+      new Set(["words"]),
+    );
+    const flat = mockDoc.text.mock.calls.flatMap((c) => (Array.isArray(c[0]) ? c[0] : [c[0]]));
+    expect(flat).toContain("Age benchmark at 18 months: 10–20 words typical");
   });
 
   it("omits the all-time line when the count query failed rather than printing 0", () => {

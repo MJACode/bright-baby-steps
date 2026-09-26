@@ -1,3 +1,5 @@
+import { isAgeCorrected, parseChildDate } from "@/lib/childAge";
+
 // WHO Child Growth Standards (2006) — LMS parameters for ages 0–24 months.
 // Source: https://www.who.int/tools/child-growth-standards/standards
 //
@@ -348,6 +350,7 @@ export function correctedAgeMonths(
   isPremature: boolean | null,
   asOf: string | Date,
 ): number {
-  const useDue = isPremature && dueDate;
-  return ageMonths(useDue ? dueDate : dateOfBirth, asOf);
+  const asOfDate = typeof asOf === "string" ? parseChildDate(asOf) : asOf;
+  const useDue = isAgeCorrected(dateOfBirth, isPremature, dueDate, asOfDate);
+  return ageMonths(useDue && dueDate ? dueDate : dateOfBirth, asOf);
 }

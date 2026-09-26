@@ -33,6 +33,8 @@ interface ActivityPlanProps {
   childName: string;
   ageMonths: number; // already corrected for prematurity by getAgeInMonths
   isPremature: boolean;
+  // True only while ageMonths is counted from the due date (see isAgeCorrected).
+  ageCorrected: boolean;
   interests: string[];
   temperament: string | null;
 }
@@ -52,6 +54,7 @@ export function ActivityPlan({
   childName,
   ageMonths,
   isPremature,
+  ageCorrected,
   interests,
   temperament,
 }: ActivityPlanProps) {
@@ -78,7 +81,7 @@ export function ActivityPlan({
         childName,
         ageMonths,
         isPremature,
-        correctedAgeMonths: isPremature ? ageMonths : undefined,
+        correctedAgeMonths: ageCorrected ? ageMonths : undefined,
         interests,
         temperament,
         recentlyTried,
@@ -226,7 +229,7 @@ export function ActivityPlan({
                 {VERDICT_COPY[plan.ageCheck.verdict] ?? "Age check"}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {ageMonths}mo{isPremature ? " (adjusted)" : ""} · typical {plan.ageCheck.typicalWindow}
+                {ageMonths}mo{ageCorrected ? " (adjusted)" : ""} · typical {plan.ageCheck.typicalWindow}
               </span>
             </div>
           </div>

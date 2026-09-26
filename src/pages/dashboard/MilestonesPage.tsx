@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useChildren, getAgeInMonths, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
+import { useChildren, getAgeInMonths, isAgeCorrected, isInRetroactiveGracePeriod } from "@/hooks/useChildren";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -251,7 +251,7 @@ export default function MilestonesPage() {
           <Star className="w-7 h-7 text-milestones" /> Milestones
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {activeChild ? `${activeChild.name} • ${ageMonths}mo ${activeChild.is_premature ? "(adjusted)" : ""}` : "Add a child to track milestones."}
+          {activeChild ? `${activeChild.name} • ${ageMonths}mo ${isAgeCorrected(activeChild.date_of_birth, activeChild.is_premature, activeChild.due_date) ? "(adjusted)" : ""}` : "Add a child to track milestones."}
         </p>
       </div>
 
@@ -493,6 +493,7 @@ export default function MilestonesPage() {
                     childName={activeChild.name}
                     ageMonths={ageMonths}
                     isPremature={activeChild.is_premature ?? false}
+                    ageCorrected={isAgeCorrected(activeChild.date_of_birth, activeChild.is_premature, activeChild.due_date)}
                   />
                 </PremiumGate>
               )}

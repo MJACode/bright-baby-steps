@@ -8,7 +8,7 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { PremiumGate } from "@/components/PremiumGate";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { useChildren, getAgeInMonths } from "@/hooks/useChildren";
+import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
 import { useSignProgress, useSetSignStatus, type ChildSignRow, type SignStatus } from "@/hooks/useSignProgress";
 import {
   SIGN_STAGES,
@@ -178,7 +178,7 @@ export default function SignsPage() {
           </Badge>
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {activeChild.name} • {ageMonths}mo {activeChild.is_premature ? "(adjusted)" : ""}
+          {activeChild.name} • {ageMonths}mo {isAgeCorrected(activeChild.date_of_birth, activeChild.is_premature, activeChild.due_date) ? "(adjusted)" : ""}
         </p>
       </div>
 
