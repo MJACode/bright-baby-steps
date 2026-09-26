@@ -1,4 +1,4 @@
-import { format, subDays } from "date-fns";
+import { addDays, format, startOfDay, subDays } from "date-fns";
 import { getAgeBucket, type AgeBucket, type MethodFlavor } from "@/lib/sleepTriage";
 
 // Evidence-based sleep plan generator. All clinical numbers come from the
@@ -56,6 +56,12 @@ export interface SleepPlanSource {
   url?: string;
 }
 
+export interface UpcomingBracketChange {
+  date: Date;
+  bucketLabel: string;
+  summary: string;
+}
+
 export interface SleepPlan {
   bucket: AgeBucket;
   bucketLabel: string;
@@ -97,6 +103,10 @@ export interface SleepPlan {
   // and a fixed clock would be misleading. Render `newbornNote` instead.
   sampleDay: SampleDayEntry[];
   newbornNote: string | null;
+  // Set when the next age bracket starts within UPCOMING_CHANGE_LEAD_DAYS. The
+  // bracket numbers are cited per bracket, so we flag the jump rather than
+  // interpolating between them.
+  upcomingChange: UpcomingBracketChange | null;
   sources: SleepPlanSource[];
 }
 
@@ -351,9 +361,91 @@ interface BuildSleepPlanArgs {
   logs: PlanLog[];
   methodFlavor?: MethodFlavor;
   savedPlan?: SavedSleepPlan | null;
+  // The child's age in months on any date, by the same rule that produced
+  // `ageMonths`. Needed for the heads-up: a preemie's age jumps when correction
+  // stops at 24 months chronological, so the anchor can't be projected forward.
+  ageMonthsAt?: (d: Date) => number;
+  now?: Date;
 }
 
-export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArgs): SleepPlan {
+export const UPCOMING_CHANGE_LEAD_DAYS = 14;
+
+export function defaultNapDurationMin(bucket: AgeBucket): number {
+  if (bucket === "3-6mo") return 75;
+  if (bucket === "6-9mo" || bucket === "9-12mo") return 90;
+  return 120;
+}
+
+export const OBSERVED_NAP_MIN_COUNT = 3;
+export const OBSERVED_NAP_CLAMP_MIN = { low: 20, high: 180 };
+
+/** Median logged nap length over the last 14 days, or null under 3 naps. */
+export function observedNapDurationMin(logs: PlanLog[], now: Date): number | null {
+  const since = subDays(now, 14);
+  const durations = logs
+    .filter(
+      (l) =>
+        l.sleep_type === "nap" &&
+        new Date(l.started_at) >= since &&
+        typeof l.duration_minutes === "number" &&
+        l.duration_minutes > 0,
+    )
+    .map((l) => l.duration_minutes as number);
+  if (durations.length < OBSERVED_NAP_MIN_COUNT) return null;
+  const m = median(durations) as number;
+  return Math.round(Math.min(OBSERVED_NAP_CLAMP_MIN.high, Math.max(OBSERVED_NAP_CLAMP_MIN.low, m)));
+}
+
+export function upcomingBracketChange(opts: {
+  ageMonthsAt: (d: Date) => number;
+  now: Date;
+  napCountOverridden?: boolean;
+}): UpcomingBracketChange | null {
+  const bucket = getAgeBucket(opts.ageMonthsAt(opts.now));
+  let date: Date | null = null;
+  let next: AgeBucket = bucket;
+  for (let i = 1; i <= UPCOMING_CHANGE_LEAD_DAYS; i++) {
+    const day = startOfDay(addDays(opts.now, i));
+    const b = getAgeBucket(opts.ageMonthsAt(day));
+    if (b !== bucket) {
+      date = day;
+      next = b;
+      break;
+    }
+  }
+  if (date === null) return null;
+
+  const parts: string[] = [];
+  const wwNow = WAKE_WINDOW_BY_BRACKET[bucket];
+  const wwNext = WAKE_WINDOW_BY_BRACKET[next];
+  if (wwNow.low !== wwNext.low || wwNow.high !== wwNext.high) {
+    parts.push(`wake windows move to ${wwNext.display}`);
+  }
+  const napsNow = NAPS_BY_BRACKET[bucket].typical;
+  const napsNext = NAPS_BY_BRACKET[next].typical;
+  if (!opts.napCountOverridden && napsNow !== napsNext) {
+    parts.push(
+      napsNext === 0
+        ? "the sample day stops scheduling a nap"
+        : `naps go from ${napsNow} to ${napsNext}`,
+    );
+  }
+  if (parts.length === 0) return null;
+
+  return {
+    date,
+    bucketLabel: BUCKET_LABEL[next],
+    summary: parts.join(" and "),
+  };
+}
+
+export function buildSleepPlan({
+  ageMonths,
+  logs,
+  savedPlan,
+  ageMonthsAt,
+  now = new Date(),
+}: BuildSleepPlanArgs): SleepPlan {
   const bucket = getAgeBucket(ageMonths);
   const totalSleep = TOTAL_SLEEP_BY_BRACKET[bucket];
   const defaultNaps = NAPS_BY_BRACKET[bucket];
@@ -386,7 +478,7 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
     : defaultNaps;
 
   // Observed values from the last 14 days of logs.
-  const fourteenAgo = subDays(new Date(), 14);
+  const fourteenAgo = subDays(now, 14);
   const recent = logs.filter((l) => new Date(l.started_at) >= fourteenAgo);
   const nightLogs = recent.filter((l) => l.sleep_type === "night");
   const nightWithEnd = nightLogs.filter((l) => l.ended_at);
@@ -400,7 +492,7 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
   const observedWakeTime = medianWake !== null && nightWithEnd.length >= 3 ? formatHHmm(medianWake) : null;
 
   // Observed total sleep — last 7 days, mean night minutes per day + mean nap minutes per day.
-  const sevenAgo = subDays(new Date(), 7);
+  const sevenAgo = subDays(now, 7);
   const last7 = logs.filter((l) => new Date(l.started_at) >= sevenAgo && typeof l.duration_minutes === "number");
   const dayKey = (d: Date) => format(d, "yyyy-MM-dd");
   const nightByDay = new Map<string, number>();
@@ -454,26 +546,32 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
     sampleDay.push({ time: cursor, activity: "Wake + bright light" });
 
     const napCount = naps.typical;
-    const napDurationMin = bucket === "3-6mo" ? 75 : bucket === "6-9mo" || bucket === "9-12mo" ? 90 : 120;
+    const buildNaps = (napDurationMin: number) => {
+      const entries: SampleDayEntry[] = [];
+      let t = parseHHmm(wakeAnchor);
+      for (let i = 1; i <= Math.min(napCount, 3); i++) {
+        t += wwLow;
+        entries.push({ time: formatHHmm(t), activity: `Nap ${i}` });
+        t += i === 3 ? Math.min(45, napDurationMin) : napDurationMin;
+        entries.push({ time: formatHHmm(t), activity: `Wake from nap ${i}` });
+      }
+      return { entries, endMin: t };
+    };
 
-    if (napCount >= 1) {
-      cursor = addMinutes(cursor, wwLow);
-      sampleDay.push({ time: cursor, activity: "Nap 1" });
-      cursor = addMinutes(cursor, napDurationMin);
-      sampleDay.push({ time: cursor, activity: "Wake from nap 1" });
-    }
-    if (napCount >= 2) {
-      cursor = addMinutes(cursor, wwLow);
-      sampleDay.push({ time: cursor, activity: "Nap 2" });
-      cursor = addMinutes(cursor, napDurationMin);
-      sampleDay.push({ time: cursor, activity: "Wake from nap 2" });
-    }
-    if (napCount >= 3) {
-      cursor = addMinutes(cursor, wwLow);
-      sampleDay.push({ time: cursor, activity: "Nap 3" });
-      cursor = addMinutes(cursor, Math.min(45, napDurationMin));
-      sampleDay.push({ time: cursor, activity: "Wake from nap 3" });
-    }
+    // A long observed nap applied to every nap can push the day past the
+    // bedtime routine. Fall back to the age default then — unless the default
+    // runs even later, which would only make the overrun worse.
+    const defaultNapDay = buildNaps(defaultNapDurationMin(bucket));
+    const observedNapMin = observedNapDurationMin(logs, now);
+    const observedNapDay = observedNapMin === null ? null : buildNaps(observedNapMin);
+    const routineStartMin = parseHHmm(bedtimeAnchor) - 30;
+    const napDay =
+      observedNapDay &&
+      (observedNapDay.endMin + wwLow <= routineStartMin || observedNapDay.endMin <= defaultNapDay.endMin)
+        ? observedNapDay
+        : defaultNapDay;
+    sampleDay.push(...napDay.entries);
+    cursor = formatHHmm(napDay.endMin);
 
     if (bedtimeOverride && bedtimeOverride.earliest && bedtimeOverride.earliest === bedtimeOverride.latest) {
       predictedBedtimeTime = bedtimeOverride.earliest;
@@ -519,6 +617,13 @@ export function buildSleepPlan({ ageMonths, logs, savedPlan }: BuildSleepPlanArg
     adjustmentTip,
     sampleDay,
     newbornNote,
+    upcomingChange: ageMonthsAt
+      ? upcomingBracketChange({
+          ageMonthsAt,
+          now,
+          napCountOverridden: napCountOverride !== null,
+        })
+      : null,
     sources: SOURCES,
   };
 }

@@ -1,4 +1,5 @@
-import { getAge, getAgeInMonths } from "@/hooks/useChildren";
+import { getAge, getAgeAnchorDate, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
+import { correctedAgeMonths } from "@/lib/growthPercentiles";
 
 // Mock heavy dependencies that are imported at module level but not used by
 // the pure getAge / getAgeInMonths functions.
@@ -86,5 +87,57 @@ describe("getAgeInMonths", () => {
 
   it("falls back to dob when dueDate is null for premature babies", () => {
     expect(getAgeInMonths("2024-01-15", true, null)).toBe(6);
+  });
+});
+
+// ── Premature correction stops at 24 months chronological ────────────────────
+
+describe("premature age correction cutoff", () => {
+  it("still corrects a preemie at 23 months chronological", () => {
+    // dob 2022-08-15 (23mo chronological), due 2022-10-15 → 21mo corrected
+    expect(getAgeInMonths("2022-08-15", true, "2022-10-15")).toBe(21);
+    expect(getAge("2022-08-15", true, "2022-10-15")).toBe("21mo");
+    expect(getAgeAnchorDate("2022-08-15", true, "2022-10-15")).toEqual(new Date(2022, 9, 15));
+  });
+
+  it("uses dob once a preemie reaches 24 months chronological", () => {
+    // dob 2022-07-15 (exactly 24mo chronological), due 2022-09-15
+    expect(getAgeInMonths("2022-07-15", true, "2022-09-15")).toBe(24);
+    expect(getAge("2022-07-15", true, "2022-09-15")).toBe("2y 0mo");
+    expect(getAgeAnchorDate("2022-07-15", true, "2022-09-15")).toEqual(new Date(2022, 6, 15));
+  });
+
+  it("uses dob well past 24 months chronological", () => {
+    expect(getAgeInMonths("2021-05-15", true, "2021-07-15")).toBe(38);
+  });
+});
+
+describe("isAgeCorrected", () => {
+  it("is true only while the due-date anchor is in use", () => {
+    expect(isAgeCorrected("2022-08-15", true, "2022-10-15")).toBe(true);
+    expect(isAgeCorrected("2022-07-15", true, "2022-09-15")).toBe(false);
+    expect(isAgeCorrected("2024-01-15", true, null)).toBe(false);
+    expect(isAgeCorrected("2024-01-15", false, "2024-03-15")).toBe(false);
+  });
+
+  it("honours an explicit as-of date", () => {
+    expect(isAgeCorrected("2022-07-15", true, "2022-09-15", new Date(2024, 6, 14))).toBe(true);
+    expect(isAgeCorrected("2022-07-15", true, "2022-09-15", new Date(2024, 6, 15))).toBe(false);
+  });
+});
+
+describe("date-only strings are local dates", () => {
+  it("anchors a DOB at local midnight, not UTC midnight", () => {
+    expect(getAgeAnchorDate("2024-01-15")).toEqual(new Date(2024, 0, 15));
+    expect(getAgeAnchorDate("2024-01-15", true, "2024-03-01")).toEqual(new Date(2024, 2, 1));
+  });
+});
+
+describe("growth corrected age stops at 24 months chronological", () => {
+  it("uses the due date at 23 months chronological and the DOB at 24", () => {
+    const at23 = correctedAgeMonths("2022-01-01", "2022-03-01", true, new Date(2023, 11, 15));
+    const at24 = correctedAgeMonths("2022-01-01", "2022-03-01", true, new Date(2024, 0, 15));
+    expect(Math.floor(at23)).toBe(21);
+    expect(Math.floor(at24)).toBe(24);
   });
 });

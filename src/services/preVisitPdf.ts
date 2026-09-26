@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { supabase } from "@/integrations/supabase/client";
+import { getAgeAnchorDate, parseChildDate } from "@/lib/childAge";
 
 export interface PreVisitChild {
   id: string;
@@ -57,9 +58,8 @@ const VISIT_TYPE_LABELS: Record<string, string> = {
 };
 
 function ageAt(dob: string, atDate: Date, isPremature: boolean | null, dueDate: string | null) {
-  const birth = new Date(dob);
-  if (birth > atDate) return "Not yet born";
-  const adjusted = isPremature && dueDate ? new Date(dueDate) : birth;
+  if (parseChildDate(dob) > atDate) return "Not yet born";
+  const adjusted = getAgeAnchorDate(dob, isPremature, dueDate, atDate);
   const months = differenceInMonths(atDate, adjusted);
   const weeks = differenceInWeeks(atDate, adjusted);
   const days = differenceInDays(atDate, adjusted);

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { getAgeInMonths } from "@/hooks/useChildren";
+import { ageInMonthsAt, getAgeInMonths } from "@/hooks/useChildren";
 import { predictNextNap, type NapPrediction } from "@/lib/sleepCoach";
 import type { SleepLogRow } from "@/lib/sleepPatterns";
 
@@ -17,6 +17,15 @@ interface ChildLite {
  */
 export function sleepAgeMonths(child: ChildLite): number {
   return Math.max(0, getAgeInMonths(child.date_of_birth, child.is_premature ?? false, child.due_date));
+}
+
+/** `sleepAgeMonths` on any date — for projecting a future bracket change. */
+export function sleepAgeMonthsAt(
+  dob: string,
+  isPremature: boolean | null | undefined,
+  dueDate: string | null | undefined,
+): (d: Date) => number {
+  return (d) => Math.max(0, ageInMonthsAt(dob, isPremature ?? false, dueDate, d));
 }
 
 export interface SleepCoachData {

@@ -1,5 +1,6 @@
 import { differenceInWeeks } from "date-fns";
 import { getAgeInMonths } from "@/hooks/useChildren";
+import { getAgeAnchorDate, parseChildDate } from "@/lib/childAge";
 
 export type DevDomain = "motor" | "sensory" | "language" | "cognitive" | "social" | "feeding";
 
@@ -349,15 +350,14 @@ export function getDevelopmentContentForChild(
   if (!child) return null;
 
   // Expected (not-yet-born) babies have no "this week" content yet.
-  if (new Date(child.date_of_birth) > new Date()) return null;
+  if (parseChildDate(child.date_of_birth) > new Date()) return null;
 
   const isPremature = child.is_premature ?? false;
   // Weeks must follow the same prematurity convention as getAgeInMonths (correct
   // only when is_premature), so the week→month bucket handoff stays consistent.
   // The shared getAgeInWeeks in useChildren prefers due_date unconditionally —
   // that's the leaps (Wonder Weeks) convention, not this one.
-  const adjustedDate =
-    isPremature && child.due_date ? new Date(child.due_date) : new Date(child.date_of_birth);
+  const adjustedDate = getAgeAnchorDate(child.date_of_birth, isPremature, child.due_date);
   const weeks = Math.max(0, differenceInWeeks(new Date(), adjustedDate));
   const months = getAgeInMonths(child.date_of_birth, isPremature, child.due_date);
 

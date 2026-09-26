@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { differenceInMonths, differenceInWeeks, differenceInDays } from "date-fns";
+import { ageInMonthsAt, getAgeAnchorDate, parseChildDate } from "@/lib/childAge";
 
 export function useChildren() {
   const { user } = useAuth();
@@ -70,8 +71,15 @@ export function useChildren() {
   return { children: children ?? [], isLoading, isFetching, addChild, updateChild, activeChild, setSelectedChildId };
 }
 
-export function getAge(dob: string, isPremature?: boolean, dueDate?: string | null) {
-  const birthDate = new Date(dob);
+export {
+  PREMATURE_CORRECTION_CUTOFF_MONTHS,
+  ageInMonthsAt,
+  getAgeAnchorDate,
+  isAgeCorrected,
+} from "@/lib/childAge";
+
+export function getAge(dob: string, isPremature?: boolean | null, dueDate?: string | null) {
+  const birthDate = parseChildDate(dob);
   const now = new Date();
 
   // Future date = expected baby
@@ -82,7 +90,7 @@ export function getAge(dob: string, isPremature?: boolean, dueDate?: string | nu
     return `Due in ${weeksUntil}w`;
   }
 
-  const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
+  const adjustedDate = getAgeAnchorDate(dob, isPremature, dueDate, now);
   const months = differenceInMonths(now, adjustedDate);
   const weeks = differenceInWeeks(now, adjustedDate);
   const days = differenceInDays(now, adjustedDate);
@@ -92,24 +100,19 @@ export function getAge(dob: string, isPremature?: boolean, dueDate?: string | nu
   return `${Math.floor(months / 12)}y ${months % 12}mo`;
 }
 
-export function getAgeInMonths(dob: string, isPremature?: boolean, dueDate?: string | null) {
-  const birthDate = new Date(dob);
-  const now = new Date();
-  // Return 0 for expected babies (not yet born)
-  if (birthDate > now) return 0;
-  const adjustedDate = isPremature && dueDate ? new Date(dueDate) : birthDate;
-  return differenceInMonths(now, adjustedDate);
+export function getAgeInMonths(dob: string, isPremature?: boolean | null, dueDate?: string | null) {
+  return ageInMonthsAt(dob, isPremature, dueDate, new Date());
 }
 
 // Developmental leaps are timed from the DUE DATE, not the birth date — so this
 // prefers dueDate whenever it's present, regardless of the isPremature flag
 // (unlike getAge/getAgeInMonths, which only correct for prematurity).
 export function getAgeInWeeks(dob: string, isPremature?: boolean, dueDate?: string | null): number {
-  const birthDate = new Date(dob);
+  const birthDate = parseChildDate(dob);
   const now = new Date();
   // Return 0 for expected babies (not yet born)
   if (birthDate > now) return 0;
-  const adjustedDate = dueDate ? new Date(dueDate) : birthDate;
+  const adjustedDate = dueDate ? parseChildDate(dueDate) : birthDate;
   return Math.max(0, differenceInWeeks(now, adjustedDate));
 }
 

@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
-import { loadChildCore } from "../_shared/childContext.ts";
+import { formatCorrectedAgeSuffix, loadChildCore } from "../_shared/childContext.ts";
 
 // EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
 // Deno's lib types.
@@ -149,7 +149,7 @@ serve(async (req) => {
     }
 
     // Build context for LLM
-    let context = `Child: ${core.name}, ${core.ageString}${core.isPremature ? " (premature)" : ""}.
+    let context = `Child: ${core.name}, ${core.ageString}${formatCorrectedAgeSuffix(core)}.
 Weekly summary (last 7 days):
 - Sleep: ${avgSleepHrs}h/day average, ${totalSleepMin} total minutes, ${napCount} naps, ${nightCount} night sleeps
 - Feeding: ${avgFeedsPerDay} feeds/day (${feedCount} total), types: ${feedTypes.join(", ") || "none"}${avgOz ? `, avg bottle: ${avgOz} oz` : ""}

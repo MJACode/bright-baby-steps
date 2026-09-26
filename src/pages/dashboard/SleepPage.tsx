@@ -346,7 +346,8 @@ export default function SleepPage() {
         onOpenChange={setPlanOpen}
         childId={activeChild.id}
         childName={activeChild.name ?? "your baby"}
-        ageMonths={coach?.ageMonths ?? ageMonths}
+        ageMonths={ageMonths}
+        ageChild={activeChild}
         ageDays={ageDays}
         logs={coach?.logs ?? []}
       />

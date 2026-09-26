@@ -1,6 +1,8 @@
 import { addMinutes, getHours } from "date-fns";
 
+import { WAKE_WINDOW_BY_BRACKET } from "@/lib/sleepPlan";
 import { sampleConfidence, wakeWindowSamples } from "@/lib/sleepPatterns";
+import { getAgeBucket } from "@/lib/sleepTriage";
 
 interface Sleep { started_at: string; ended_at: string | null; sleep_type?: string | null; }
 
@@ -11,8 +13,10 @@ export interface NapPrediction {
   reason: string;
 }
 
-const AGE_DEFAULTS_MIN = (ageMo: number): number =>
-  ageMo < 1 ? 60 : ageMo < 3 ? 90 : ageMo < 6 ? 120 : ageMo < 12 ? 180 : 300;
+// Low end of the plan's wake window, matching the plan's sample day, so the
+// coach and the plan never disagree before there are logs to learn from.
+export const ageDefaultWakeWindowMin = (ageMo: number): number =>
+  WAKE_WINDOW_BY_BRACKET[getAgeBucket(ageMo)].low;
 
 function bucket(hour: number): "morning" | "midday" | "afternoon" | "evening" {
   if (hour < 11) return "morning";
@@ -40,7 +44,7 @@ export function predictNextNap(opts: {
 
   const lastWake = [...completed].sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
   if (!lastWake) {
-    const target = AGE_DEFAULTS_MIN(opts.ageMonths);
+    const target = ageDefaultWakeWindowMin(opts.ageMonths);
     const start = addMinutes(now, target - 30);
     if (isNightHour(start)) return null;
     return {
@@ -65,7 +69,7 @@ export function predictNextNap(opts: {
     return s[Math.floor(s.length / 2)];
   };
 
-  const personal = median(sameBucket) ?? median(samples) ?? AGE_DEFAULTS_MIN(opts.ageMonths);
+  const personal = median(sameBucket) ?? median(samples) ?? ageDefaultWakeWindowMin(opts.ageMonths);
   const confidence: NapPrediction["confidence"] = sampleConfidence(sameBucket.length);
 
   const center = addMinutes(lastWake, personal);

@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
+import { isAgeCorrected } from "@/hooks/useChildren";
 import { usePremium } from "@/hooks/usePremium";
 import { PremiumGate } from "@/components/PremiumGate";
 import { useActivityCompletions, useToggleActivityTried } from "@/hooks/useActivityCompletions";
@@ -80,6 +81,7 @@ export function ActivitiesSection({
     childName: child.name,
     ageMonths,
     isPremature: child.is_premature ?? false,
+    ageCorrected: isAgeCorrected(child.date_of_birth, child.is_premature, child.due_date),
     interests: child.interests ?? [],
     temperament: child.temperament ?? null,
   };

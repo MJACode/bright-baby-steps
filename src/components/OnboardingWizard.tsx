@@ -499,7 +499,7 @@ export function OnboardingWizard() {
         <div className="flex flex-col flex-1">
           <h2 className="font-display text-2xl font-bold mb-2">Was {firstName} born early?</h2>
           <p className="text-muted-foreground text-sm mb-8">
-            If {firstName} was premature, we use corrected age for all milestone guidance — the way pediatricians do.
+            If {firstName} was premature, we use corrected age for milestone guidance until age 2 — the way pediatricians do.
           </p>
           <div className="grid grid-cols-2 gap-3 mb-6">
             <button onClick={() => setState((s) => ({ ...s, isPremature: true }))}
