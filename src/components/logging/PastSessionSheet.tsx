@@ -256,8 +256,14 @@ export function PastSessionSheet({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[88vh] overflow-y-auto">
-        <div className="px-4 pb-4 space-y-4">
+      {/* vaul pins `touch-action: none` on DrawerContent itself (to own the
+          swipe-to-dismiss gesture), so making DrawerContent the scroller leaves
+          iOS unable to pan it — once "Ended" expands and the body outgrows the
+          sheet, the parent is stuck with Save out of reach. The body scrolls
+          on its own element, which keeps the default touch-action, and the
+          footer sits beside it rather than sticking inside it. */}
+      <DrawerContent className="max-h-[88dvh]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 space-y-4">
           <DrawerHeader className="px-0 pb-0 pt-2 text-left">
             <DrawerTitle
               ref={titleRef}
@@ -464,9 +470,9 @@ export function PastSessionSheet({
 
         {/* Why Save is disabled has to travel with Save. Both date-time pickers
             open at once are taller than the drawer, so a message left in the
-            scrolling body sits below the fold while the sticky footer stays
+            scrolling body sits below the fold while the footer stays
             visible — the parent taps a dead button and sees no reason for it. */}
-        <div className="sticky bottom-0 space-y-2 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 space-y-2 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {error && (
             <p id={errorId} role="alert" className="text-sm text-destructive">
               {error.message}

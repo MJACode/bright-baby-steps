@@ -206,3 +206,18 @@ describe("PastSessionSheet validation visibility", () => {
     expect(helper.parentElement).toContainElement(save);
   });
 });
+
+// vaul sets `touch-action: none` on the drawer element, so on iOS the drawer
+// itself can't be panned. With both pickers open the body outgrows the sheet;
+// if the drawer were the scroller the parent would be stuck above Save.
+describe("PastSessionSheet scrolling", () => {
+  it("scrolls an inner body, not the vaul drawer element", () => {
+    const { baseElement } = setup();
+    const drawer = baseElement.querySelector("[data-vaul-drawer]") as HTMLElement;
+    expect(drawer.className).not.toMatch(/overflow-y-auto/);
+    const scroller = drawer.querySelector(".overflow-y-auto");
+    expect(scroller).not.toBeNull();
+    expect(scroller).toContainElement(screen.getByText("Started"));
+    expect(scroller).not.toContainElement(screen.getByRole("button", { name: "Save nap" }));
+  });
+});
