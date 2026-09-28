@@ -257,6 +257,16 @@ your-project/                       Project root for Claude Code
 
 ---
 
+## Spec-Driven Development — GitHub Spec Kit
+
+[Spec Kit](https://github.com/github/spec-kit) v1.0.12 is installed (`.specify/` + `.claude/skills/speckit-*`). Flow: `/speckit-constitution` → `/speckit-specify` → (`/speckit-clarify`) → `/speckit-plan` → `/speckit-tasks` → (`/speckit-analyze`) → `/speckit-implement`. Specs land in `specs/NNN-feature-name/`.
+
+- `.specify/memory/constitution.md` is still the **unfilled template** — run `/speckit-constitution` (founder approves) before the first spec. It must restate, not override, the rules in this file.
+- Where a Spec Kit template conflicts with CLAUDE.md (reuse-first, agent routing, QA-after-every-update, Legal Review, Mobbin rule), CLAUDE.md wins.
+- Upgrade: `uvx --from git+https://github.com/github/spec-kit.git@<tag> specify init --here --force --non-interactive --integration claude --script sh`.
+
+---
+
 ## Specialist Agents — Frontend / Backend / QA
 
 Three subagents in `.claude/agents/` carry the bulk of the implementation work. Each maintains its own lessons library so corrections persist across sessions.
