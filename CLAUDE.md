@@ -208,7 +208,7 @@ When Claude opens a pull request in this repo, Claude **merges it without waitin
 
 1. The PR is targeting `main`.
 2. The PR was authored by Claude in the current session (not a human contributor's PR, not a stale Claude PR from an old session).
-3. CI is green (every check run has `conclusion: success` or is not required).
+3. CI is green (every check run has `conclusion: success` or is not required). This must include the `CI` workflow (type-check, tests, lint baseline); a Vercel preview alone is not enough.
 4. There are no unresolved review comments / threads.
 5. The change has no obviously destructive side effects beyond what Claude described in the PR body (no dropped tables, no force-push to other branches, no deleted production data).
 
