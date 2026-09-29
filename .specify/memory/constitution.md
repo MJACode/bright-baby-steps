@@ -144,4 +144,4 @@ locally but not live.
 - Review the constitution whenever a feature is killed or a lesson recurs a third time. Both are
   signs a principle is missing or not being applied.
 
-**Version**: 1.0.0 | **Ratified**: TODO(RATIFICATION_DATE): set on founder approval | **Last Amended**: 2026-09-29
+**Version**: 1.0.0 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29
