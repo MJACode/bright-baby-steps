@@ -20,10 +20,10 @@
 
 **Purpose**: Shared helpers and folders that every story uses. Ships at the start of PR-A.
 
-- [ ] T001 Create `src/assets/signs/` with a `README.md` that points to `specs/001-baby-signs-v2/contracts/illustration-asset-spec.md` and states the naming rule `{slug}.svg` *(frontend)*
-- [ ] T002 [P] Create `src/lib/planWeek.ts` exporting `planWeekStart(date: Date = new Date()): string`, which returns `format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd")` (research R4) *(frontend)*
-- [ ] T003 [P] Add `src/test/planWeek.test.ts`: Monday stays the same, Sunday maps to the previous Monday, and a DST-transition week returns the correct Monday *(frontend)*
-- [ ] T004 Switch `src/hooks/useActivityPlan.tsx` (line ~92) and `src/hooks/useSpeechClass.tsx` (line ~94) from their inline `startOfWeek` calls to `planWeekStart()`. This is a zero-behavior-change refactor (Principle V); remove unused imports *(frontend)*
+- [X] T001 Create `src/assets/signs/` with a `README.md` that points to `specs/001-baby-signs-v2/contracts/illustration-asset-spec.md` and states the naming rule `{slug}.svg` *(frontend)*
+- [X] T002 [P] Create `src/lib/planWeek.ts` exporting `planWeekStart(date: Date = new Date()): string`, which returns `format(startOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd")` (research R4) *(frontend)*
+- [X] T003 [P] Add `src/test/planWeek.test.ts`: Monday stays the same, Sunday maps to the previous Monday, and a DST-transition week returns the correct Monday *(frontend)*
+- [X] T004 Switch `src/hooks/useActivityPlan.tsx` (line ~92) and `src/hooks/useSpeechClass.tsx` (line ~94) from their inline `startOfWeek` calls to `planWeekStart()`. This is a zero-behavior-change refactor (Principle V); remove unused imports *(frontend)*
 
 ---
 
@@ -33,17 +33,17 @@
 
 **⚠️ CRITICAL**: No story work can start until this phase is done.
 
-- [ ] T005 Extend `Sign` in `src/data/signLibrary.ts` with `steps: { model: string; prompt: string; celebrate: string }` and `stuckTip: string` (data-model "Sign"). Keep all existing fields and v1 program constants unchanged (FR-008) *(frontend)*
-- [ ] T006 Write the `steps` and `stuckTip` copy for all 20 signs in `src/data/signLibrary.ts`. Rules: Model always says the word aloud; Prompt never withholds the item; Celebrate counts approximations; no diagnostic, delay, "should", or guilt wording (FR-006, FR-007, Principle I). **Route the draft through the `slp` agent for review before commit** *(frontend + slp)*
-- [ ] T007 [P] Create `src/lib/signProgress.ts` with pure functions and no React or Supabase imports. They take `now` and a `TrackingSchedule` as parameters (data-model "Derived values"):
+- [X] T005 Extend `Sign` in `src/data/signLibrary.ts` with `steps: { model: string; prompt: string; celebrate: string }` and `stuckTip: string` (data-model "Sign"). Keep all existing fields and v1 program constants unchanged (FR-008) *(frontend)*
+- [X] T006 Write the `steps` and `stuckTip` copy for all 20 signs in `src/data/signLibrary.ts`. Rules: Model always says the word aloud; Prompt never withholds the item; Celebrate counts approximations; no diagnostic, delay, "should", or guilt wording (FR-006, FR-007, Principle I). **Route the draft through the `slp` agent for review before commit** *(frontend + slp)*
+- [X] T007 [P] Create `src/lib/signProgress.ts` with pure functions and no React or Supabase imports. They take `now` and a `TrackingSchedule` as parameters (data-model "Derived values"):
   - `weeklyPracticeDays(practiceRows, weekStart)`: distinct `practiced_on` in [weekStart, weekStart+6]
   - `readyForNewSigns(focusRows, now)`: all focus rows `emerging|signing`, OR earliest `focus_since` ≥ 14 days ago
   - `practiceDays4w(practiceRows, today)`: per slug, distinct days in the last 28 tracking days
   - `stalled(focusRows, practiceDays4w, now)`: focus ≥ 14 days AND status `introduced` AND ≥ 1 practice day
 
   No streak or consecutive-day function may exist (FR-016). *(frontend)*
-- [ ] T008 [P] Add `src/test/signProgress.test.ts` covering each function, including a DST week and a child with `day_start_time = '07:00'` *(frontend)*
-- [ ] T009 [P] Add `src/test/signLibrary.content.test.ts`. It asserts that:
+- [X] T008 [P] Add `src/test/signProgress.test.ts` covering each function, including a DST week and a child with `day_start_time = '07:00'` *(frontend)*
+- [X] T009 [P] Add `src/test/signLibrary.content.test.ts`. It asserts that:
   - every sign has non-empty `steps.model/prompt/celebrate` and `stuckTip`
   - no copy in `signLibrary.ts` matches `/streak|in a row|missed|haven't|behind|delay|should/i`
   - slugs are unique kebab-case
@@ -62,7 +62,7 @@
 
 ### Tests for US1
 
-- [ ] T010 [P] [US1] Add `src/test/signMedia.test.ts`. It asserts that:
+- [X] T010 [P] [US1] Add `src/test/signMedia.test.ts`. It asserts that:
   - every `SIGN_LIBRARY` slug has a `SIGN_MEDIA` entry with non-empty `illustrationAlt`
   - every bundled SVG (read through `import.meta.glob('/src/assets/signs/*.svg', { query: '?raw', eager: true })`) contains no `<script`, no `on\w+=` attribute, no `<image`, and no external `href`
   - every SVG has `viewBox="0 0 400 300"`
@@ -71,22 +71,22 @@
 
 ### Implementation for US1
 
-- [ ] T011 [P] [US1] Add 20 placeholder SVGs, one per slug (`milk.svg` … `hurt.svg`), to `src/assets/signs/`. Each uses `viewBox="0 0 400 300"` and a simple outline with classes `sign-line`, `sign-ghost`, and `sign-motion` per the asset spec §3. They get replaced one-for-one when the designer's files arrive *(frontend)*
-- [ ] T012 [US1] Create `src/data/signMedia.ts`. It exports `type SignMedia = { illustration: string | null; illustrationAlt: string; video?: string; videoPoster?: string }` and `SIGN_MEDIA: Record<string, SignMedia>`. Illustrations are imported with `?raw`, and `illustrationAlt` is written from each sign's `howTo` (FR-002, FR-003, data-model "SignMedia") *(frontend)*
-- [ ] T013 [US1] Create `src/components/signs/SignIllustration.tsx`, which renders in this order:
+- [X] T011 [P] [US1] Add 20 placeholder SVGs, one per slug (`milk.svg` … `hurt.svg`), to `src/assets/signs/`. Each uses `viewBox="0 0 400 300"` and a simple outline with classes `sign-line`, `sign-ghost`, and `sign-motion` per the asset spec §3. They get replaced one-for-one when the designer's files arrive *(frontend)*
+- [X] T012 [US1] Create `src/data/signMedia.ts`. It exports `type SignMedia = { illustration: string | null; illustrationAlt: string; video?: string; videoPoster?: string }` and `SIGN_MEDIA: Record<string, SignMedia>`. Illustrations are imported with `?raw`, and `illustrationAlt` is written from each sign's `howTo` (FR-002, FR-003, data-model "SignMedia") *(frontend)*
+- [X] T013 [US1] Create `src/components/signs/SignIllustration.tsx`, which renders in this order:
   1. if `media.video`: `<video muted loop playsInline autoPlay={false} poster>` with the illustration as fallback (FR-005)
   2. otherwise, if `media.illustration`: inline SVG in a `role="img"` wrapper with `aria-label={illustrationAlt}`
   3. otherwise: the sign's emoji at large size
 
   The container uses `bg-milestones-bg rounded-xl aspect-[4/3]` *(frontend)*
-- [ ] T014 [US1] Add scoped CSS for the illustration classes in `src/index.css`, using tokens only (no hex):
+- [X] T014 [US1] Add scoped CSS for the illustration classes in `src/index.css`, using tokens only (no hex):
   - `.sign-illustration .sign-line { stroke: hsl(var(--foreground)) }`
   - `.sign-ghost { stroke: hsl(var(--foreground)); opacity: .35 }`
   - `.sign-motion { stroke: hsl(var(--accent)); fill: hsl(var(--accent)) }`
   - `.sign-fill { fill: hsl(var(--milestones) / .12) }`
 
   *(frontend)*
-- [ ] T015 [US1] Create `src/components/signs/SignDetailSheet.tsx` using the existing shadcn `Sheet` (bottom). Layout, per research R9 (Bevel/Hevy pattern):
+- [X] T015 [US1] Create `src/components/signs/SignDetailSheet.tsx` using the existing shadcn `Sheet` (bottom). Layout, per research R9 (Bevel/Hevy pattern):
   - `SignIllustration` at the top
   - Quicksand title
   - How / When text from v1
@@ -95,8 +95,8 @@
   - the v1 3-state status buttons, moved over unchanged from `SignCard` with their `useSetSignStatus` wiring
 
   All controls are ≥ 48px. How-to text renders even if the media fails (FR-004) *(frontend)*
-- [ ] T016 [US1] Update `src/pages/dashboard/SignsPage.tsx` so each library row opens `SignDetailSheet` instead of the inline `Collapsible` accordion. Keep the stage grouping, the progress summary line, `PremiumGate` (`baby-signs`), and every v1 footer constant with its Early Intervention link. Delete the now-unused `SignCard` *(frontend)*
-- [ ] T017 [US1] Invoke the **`qa`** agent on the PR-A diff. Focus: brand tokens, 48px targets, inline-SVG safety, v1 copy unchanged, and the zero-behavior-change `planWeekStart` refactor. Fix and re-run until Pass *(qa)*
+- [X] T016 [US1] Update `src/pages/dashboard/SignsPage.tsx` so each library row opens `SignDetailSheet` instead of the inline `Collapsible` accordion. Keep the stage grouping, the progress summary line, `PremiumGate` (`baby-signs`), and every v1 footer constant with its Early Intervention link. Delete the now-unused `SignCard` *(frontend)*
+- [x] T017 [US1] Invoke the **`qa`** agent on the PR-A diff. Focus: brand tokens, 48px targets, inline-SVG safety, v1 copy unchanged, and the zero-behavior-change `planWeekStart` refactor. Fix and re-run until Pass *(qa)*
 - [ ] T018 [US1] Run the local gate, open PR-A, and merge per the CLAUDE.md auto-merge policy. **Launch gate**: the designer's files (SC-001) replace the placeholders in a follow-up PR that changes only `src/assets/signs/*.svg` *(parent)*
 
 **Checkpoint**: US1 is fully usable with placeholders and complete once the designer's files arrive.

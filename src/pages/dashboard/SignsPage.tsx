@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
-import { Hand, Sparkles, ChevronDown } from "lucide-react";
+import { useState } from "react";
+import { Hand, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { PremiumGate } from "@/components/PremiumGate";
+import { SignDetailSheet } from "@/components/signs/SignDetailSheet";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
@@ -23,89 +25,37 @@ import {
   type Sign,
 } from "@/data/signLibrary";
 
-const STATUS_OPTIONS: { value: SignStatus; label: string }[] = [
-  { value: "introduced", label: "We're using it" },
-  { value: "emerging", label: "Trying it" },
-  { value: "signing", label: "Signs it!" },
-];
-
 const STATUS_CHIP: Record<SignStatus, string> = {
   introduced: "Using it",
   emerging: "Trying it",
   signing: "Signs it!",
 };
 
-function SignCard({
-  sign,
-  row,
-  disabled,
-  onSetStatus,
-}: {
-  sign: Sign;
-  row: ChildSignRow | undefined;
-  disabled: boolean;
-  onSetStatus: (sign: Sign, next: SignStatus) => void;
-}) {
+function SignRow({ sign, row, onOpen }: { sign: Sign; row: ChildSignRow | undefined; onOpen: (sign: Sign) => void }) {
   const status = row?.status as SignStatus | undefined;
 
   return (
-    <Card className="border-0 bg-milestones-bg/60">
-      <Collapsible>
-        <CollapsibleTrigger className="w-full text-left touch-target group">
-          <CardContent className="p-3 flex items-center gap-3">
-            <span className="text-2xl shrink-0" aria-hidden>
-              {sign.emoji}
-            </span>
-            <p className="flex-1 min-w-0 text-sm font-semibold">{sign.label}</p>
-            {status && (
-              <span
-                className={cn(
-                  "text-xs font-semibold px-2 py-0.5 rounded-full shrink-0",
-                  status === "signing" ? "bg-milestones text-white" : "bg-milestones/15 text-milestones",
-                )}
-              >
-                {STATUS_CHIP[status]}
-              </span>
-            )}
-            <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180 shrink-0" />
-          </CardContent>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <div className="px-3 pb-3 space-y-3">
-            <div className="space-y-1.5 text-sm leading-relaxed">
-              <p>
-                <span className="font-semibold">How: </span>
-                {sign.howTo}
-              </p>
-              <p>
-                <span className="font-semibold">When: </span>
-                {sign.whenToUse}
-              </p>
-              {sign.tip && <p className="text-xs text-muted-foreground leading-relaxed">{sign.tip}</p>}
-            </div>
-            <div className="grid grid-cols-3 gap-2" role="group" aria-label={`Progress for ${sign.label}`}>
-              {STATUS_OPTIONS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  type="button"
-                  disabled={disabled}
-                  aria-pressed={status === value}
-                  onClick={() => onSetStatus(sign, value)}
-                  className={cn(
-                    "min-h-[48px] rounded-xl px-2 text-sm font-semibold leading-tight transition-colors disabled:opacity-50",
-                    status === value
-                      ? "bg-milestones text-white"
-                      : "bg-milestones/10 text-milestones hover:bg-milestones/20",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-    </Card>
+    <button
+      type="button"
+      onClick={() => onOpen(sign)}
+      className="flex w-full items-center gap-3 rounded-lg bg-milestones-bg/60 p-3 text-left touch-target card-hover"
+    >
+      <span className="text-2xl shrink-0" aria-hidden>
+        {sign.emoji}
+      </span>
+      <span className="flex-1 min-w-0 text-sm font-semibold">{sign.label}</span>
+      {status && (
+        <span
+          className={cn(
+            "text-xs font-semibold px-2 py-0.5 rounded-full shrink-0",
+            status === "signing" ? "bg-milestones text-white" : "bg-milestones/15 text-milestones",
+          )}
+        >
+          {STATUS_CHIP[status]}
+        </span>
+      )}
+      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
+    </button>
   );
 }
 
@@ -113,6 +63,8 @@ export default function SignsPage() {
   const { activeChild } = useChildren();
   const { data: progress, isLoading: progressLoading } = useSignProgress(activeChild?.id);
   const setStatus = useSetSignStatus();
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   if (!activeChild) {
     return (
@@ -166,6 +118,13 @@ export default function SignsPage() {
       },
     );
   };
+
+  const openSign = (sign: Sign) => {
+    setSelectedSlug(sign.slug);
+    setSheetOpen(true);
+  };
+
+  const selectedSign = SIGN_LIBRARY.find((s) => s.slug === selectedSlug) ?? null;
 
   return (
     <div className="space-y-5">
@@ -230,18 +189,26 @@ export default function SignsPage() {
               <p className="text-xs text-muted-foreground">{stage.subtitle}</p>
               <div className="space-y-2">
                 {getSignsForStage(stage.id).map((sign) => (
-                  <SignCard
+                  <SignRow
                     key={sign.slug}
                     sign={sign}
                     row={progress?.[sign.slug]}
-                    disabled={progressLoading || setStatus.isPending}
-                    onSetStatus={handleSetStatus}
+                    onOpen={openSign}
                   />
                 ))}
               </div>
             </div>
           ))}
         </div>
+
+        <SignDetailSheet
+          sign={selectedSign}
+          row={selectedSlug ? progress?.[selectedSlug] : undefined}
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          disabled={progressLoading || setStatus.isPending}
+          onSetStatus={handleSetStatus}
+        />
       </PremiumGate>
 
       <div className="space-y-2 pt-1">

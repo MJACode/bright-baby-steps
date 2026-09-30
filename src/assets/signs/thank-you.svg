@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <circle class="sign-fill" cx="200" cy="105" r="45"/>
+  <circle class="sign-line" cx="200" cy="105" r="45"/>
+  <path class="sign-line" d="M184 148v48M216 148v48M88 300c8-74 52-104 112-104s104 30 112 104"/>
+  <circle class="sign-ghost" cx="205" cy="150" r="18"/>
+  <circle class="sign-line" cx="290" cy="190" r="18"/>
+  <line class="sign-motion" x1="225" y1="159" x2="256" y2="174"/>
+  <polygon class="sign-motion" stroke-width="2" points="268,180 253,180 259,167"/>
+</svg>
