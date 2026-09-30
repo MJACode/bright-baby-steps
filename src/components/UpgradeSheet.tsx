@@ -14,34 +14,34 @@ interface UpgradeSheetProps {
 const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = {
   "ai-insights": {
     headline: "Want a daily briefing tailored to your baby?",
-    sub: "Flare+ analyzes the last 14 days and tells you what's normal, what to watch, and what's next.",
+    sub: "Flare+ reads your recent logs and gives you a quick daily read on sleep, feeding, and what's coming up.",
   },
   "predictions": {
     headline: "Know when she'll need her next nap.",
-    sub: "Predictive scheduling from your real data — accurate to within ~15 min after a week of logs.",
+    sub: "Your baby's next nap and feed, estimated from your own logs. The more you log, the sharper it gets.",
   },
   "cry-analysis": {
     headline: "What is she trying to tell you?",
-    sub: "Cry & sound analysis flags hunger vs tired vs discomfort with 87% accuracy.",
+    sub: "Hints from the sound of your baby's cry — could be hunger, tiredness, or discomfort. You know your baby best.",
   },
   "growth-analytics": {
     headline: "Full WHO percentile charts.",
-    sub: "Trend flags, projections, and pediatrician-ready PDFs.",
+    sub: "WHO growth percentiles (birth–2 yrs), growth trends, and PDFs to share at checkups.",
   },
   "multi-caregiver": {
     headline: "Bring your partner and your sitter in.",
     sub: "Flare+ adds two more people to your account — co-parent, nanny, or grandparent — synced in real time. Pause or remove anyone whenever you want.",
   },
   "expert-library": {
-    headline: "Pediatrician-vetted answers.",
-    sub: "Curated guides on sleep, feeding, milestones — searchable, ad-free.",
+    headline: "Guides for the questions you actually have.",
+    sub: "Sleep, feeding, and milestones — searchable, ad-free.",
   },
   "unlimited-history": {
     headline: "Every entry, forever.",
     sub: "Free tier keeps 30 days. Flare+ keeps everything.",
   },
   "exports": {
-    headline: "Doctor-ready in one tap.",
+    headline: "Checkup-ready in one tap.",
     sub: "Generate PDF reports for pediatrician visits with all logs and notes.",
   },
   "speech-class": {
@@ -63,9 +63,9 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
 };
 
 const PERKS = [
-  { i: Sparkles, t: "Daily AI briefings & predictions" },
+  { i: Sparkles, t: "Daily AI briefings + nap & feed predictions" },
   { i: Stethoscope, t: "AI visit prep for every checkup" },
-  { i: Activity, t: "Cry & sound analysis" },
+  { i: Activity, t: "Cry clues" },
   { i: BarChart3, t: "Growth analytics + PDF exports" },
   { i: Users, t: "Add 2 more caregivers, synced live" },
 ];
@@ -112,7 +112,7 @@ export function UpgradeSheet({ open, onOpenChange, feature = "ai-insights" }: Up
             Try Flare+ free for 7 days
           </Button>
           <p className="text-center text-[11px] text-muted-foreground mt-3">
-            No charge today · Cancel anytime · {PREMIUM_FEATURES[feature]} included
+            No charge today · {PREMIUM_FEATURES[feature]} included
           </p>
         </div>
       </DrawerContent>

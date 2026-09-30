@@ -5,11 +5,11 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const PERKS = [
-  { i: Sparkles, t: "Predictive AI Coach", s: "Forecasts naps, fussiness, growth windows" },
-  { i: Stethoscope, t: "AI pediatrician visit prep", s: "Questions drafted from your baby's real data, every visit" },
-  { i: Activity, t: "Cry & sound analysis", s: "Hungry vs tired vs uncomfortable" },
+  { i: Sparkles, t: "Nap & feed predictions", s: "Next nap and feed, learned from your own logs." },
+  { i: Stethoscope, t: "Checkup question prep", s: "Questions for your pediatrician, drafted from your baby's real sleep, feeding, and growth logs." },
+  { i: Activity, t: "Cry clues", s: "On-device hints: could be hunger, tiredness, or discomfort." },
   { i: Users, t: "Multi-caregiver sync", s: "Real-time for parents, sitters, grandparents" },
-  { i: BarChart3, t: "Growth analytics + PDF reports", s: "WHO percentiles, trend flags, doctor-ready" },
+  { i: BarChart3, t: "Growth analytics + PDF reports", s: "WHO growth percentiles (birth–2 yrs), growth trends, PDFs to share at checkups." },
 ];
 
 /**
@@ -46,7 +46,7 @@ export default function Upgrade() {
             <em className="text-warning not-italic font-display italic">that knows</em> your baby.
           </h1>
           <p className="text-sm opacity-70 mt-4 leading-relaxed">
-            Predictive insights from your real data. Vetted by pediatricians. Cancel anytime.
+            Predictions that learn from your own logs. Questions ready for every checkup. Try it free for 7 days.
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export default function Upgrade() {
             label="Yearly"
             price="$59.99"
             sub="$5/mo · billed yearly"
-            badge="SAVE 50%"
+            badge="SAVE 49%"
             onClick={() => setPlan("yearly")}
           />
         </div>
@@ -94,7 +94,7 @@ export default function Upgrade() {
           Start 7-day free trial
         </Button>
         <p className="text-center text-[11px] opacity-50 mt-3">
-          No charge today · Reminder before billing · Cancel in Settings
+          No charge today
         </p>
       </div>
     </div>
