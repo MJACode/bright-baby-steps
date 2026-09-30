@@ -2435,3 +2435,13 @@ only its duplicate on Home.**
 2. Confirm no out-of-repo surface (App Store / Play Store listing, marketing site,
    onboarding upsell, screenshots) advertises the Home "Next steps" feed — those live
    outside this repo and were not reviewable here.
+
+## 2026-09-30 — Unused `TRIAGE_CONTENT` sleep-guidance table deleted; birth-weight recovery copy limited to the first 4 weeks
+
+**Reviewer:** in-house (Claude pass, founder-approved in session). **Risk level:** Low. No new data flow, and no change to disclosures.
+
+**What changed:**
+- **Deleted from `src/lib/sleepTriage.ts`:** the `TRIAGE_CONTENT` table, `lookupContent`, and the `TriageContent` type (~940 lines). The 2026-08-28 entry above left this authored sleep-guidance copy in place pending "a product call". The founder made that call on 2026-09-30: delete it. It had no consumer and still pointed parents to the removed in-app chat ("Open the chat…"). It was never user-visible, so removing it changes nothing a parent sees and removes no escalation path.
+- **Changed in `GrowthPage.tsx`:** the "Back to birth weight" copy is now limited to the first 28 days after the date of birth, via `isInBirthWeightRecoveryWindow` in `src/lib/childAge.ts`. That covers the celebration banner, the goal progress card, and the "vs birth" sub-label. Outside the window the label reads "Since birth". The Growth setup prompt says "see growth since birth" instead. This fixes a 7-month-old being told "Back to birth weight — great job!"; the copy stays celebratory, not diagnostic.
+
+**Code refs:** branch `claude/growth-birth-weight-and-triage-cleanup`.
