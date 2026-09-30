@@ -11,7 +11,7 @@ export default function TermsPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Terms of Service</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: June 20, 2026
+          Effective: June 20, 2026 · Last reviewed: September 30, 2026
         </p>
       </div>
 
@@ -35,7 +35,8 @@ export default function TermsPage() {
         <section>
           <h2 className="font-semibold text-foreground mb-2">4. Not financial advice</h2>
           <p>Financial information provided by Grace Flare is for general informational purposes only and does not constitute personalised financial, tax, or legal advice, including any tax advice within the meaning of IRS Circular 230, nor a recommendation that any particular 529 plan, FSA, HSA, insurance product, or financial product is suitable for your circumstances. Consult a licensed financial advisor before making financial decisions.</p>
-          <p className="mt-2">Grace Flare may display paid sponsored content from financial firms, clearly labeled as advertising. Sponsored content is not a recommendation, endorsement, or solicitation by Grace Flare, and Grace Flare is not an investment adviser, broker-dealer, or insurance producer. We do not evaluate, vet, or guarantee any advertised product, and we receive compensation for displaying advertisements. Any transaction you enter with an advertiser is solely between you and that advertiser. Investing involves risk, including loss of principal.</p>
+          <p className="mt-2"><strong>Account finder.</strong> The Finance account finder suggests general types of accounts using only your child's birth date (or due date) and your answers to two questions. It does not consider your income, taxes, state of residence, existing savings, or risk tolerance, and it does not evaluate or recommend any specific plan, investment, or provider. Figures describe U.S. federal rules as we understand them for the year shown; rules change and state treatment varies, so confirm with the linked source before acting.</p>
+          <p className="mt-2">Grace Flare may display paid sponsored content from financial firms, clearly labeled as advertising. Sponsored content is not a recommendation, endorsement, or solicitation by Grace Flare, and Grace Flare is not an investment adviser, broker-dealer, or insurance producer. We do not evaluate, vet, or guarantee any advertised product, and we receive compensation for displaying advertisements or when you click them; we are not paid based on whether you open an account or how much you invest. Any transaction you enter with an advertiser is solely between you and that advertiser. Investing involves risk, including loss of principal.</p>
         </section>
 
         <section>

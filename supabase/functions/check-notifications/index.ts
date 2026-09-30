@@ -142,6 +142,9 @@ type NotificationPrefs = {
  *   reminders    — diaper_reminder, sleep_reminder, sleep_plan_winddown,
  *                  sleep_window_15min, sleep_window_exceeded, sleep_off_plan
  *   insights     — daily_briefing (deterministic morning nudge, this function)
+ *   finance      — finance_trump_claim, finance_529_newborn, finance_529_birthday
+ *                  (one-shot per child, owner only; see "Finance account
+ *                  reminders" below)
  *   reactivation — reactivation (created by reactivate-nudge/index.ts, not
  *                  here; listed so the category contract is complete and its
  *                  rows count toward the daily cap via the existing-today count)
@@ -160,6 +163,9 @@ const TYPE_CATEGORY: Record<string, string> = {
   sleep_window_exceeded: "reminders",
   sleep_off_plan: "reminders",
   daily_briefing: "insights",
+  finance_trump_claim: "finance",
+  finance_529_newborn: "finance",
+  finance_529_birthday: "finance",
   reactivation: "reactivation",
 };
 
@@ -173,7 +179,8 @@ function categoryOf(type: string): string {
  *       and are the only type allowed to exceed it)
  *   1 — time-sensitive sleep-plan nudges (stale in minutes, worthless later)
  *   2 — everything else (daily_briefing, milestone_age, weekly_development,
- *       diaper_reminder, sleep_reminder, unknown future types)
+ *       diaper_reminder, sleep_reminder, finance_* one-shots, unknown future
+ *       types)
  */
 function capPriority(type: string): number {
   if (type === "appointment_reminder") return 0;
@@ -277,6 +284,95 @@ function inQuietHours(minutesOfDay: number, startMin: number, endMin: number): b
   return minutesOfDay >= startMin || minutesOfDay < endMin;
 }
 
+// --- Finance account reminders ------------------------------------------------
+//
+// Three one-shot reminders about OPENING accounts (spec
+// specs/001-finance-account-finder FR-018..FR-021). Each fires at most once
+// per child, ever, only to the child's owner, and never once the matching
+// account is marked opened in public.child_account_status.
+// "Ever" relies on the earlier notifications row still existing: RLS lets a
+// user delete their own notifications via the API (no UI does today), which
+// would let that reminder fire again.
+
+// Trump Account $1,000 Treasury deposit: children born 2025-01-01 through
+// 2028-12-31, compared on the date_of_birth CALENDAR date (ISO string
+// compare — no Date/timezone conversion).
+// KEEP IN SYNC with src/lib/accountFinder.ts
+const TRUMP_BIRTH_START = "2025-01-01";
+const TRUMP_BIRTH_END = "2028-12-31";
+
+const FINANCE_REMINDER_TYPES = [
+  "finance_trump_claim",
+  "finance_529_newborn",
+  "finance_529_birthday",
+] as const;
+type FinanceReminderType = (typeof FINANCE_REMINDER_TYPES)[number];
+
+// Which child_account_status.account_key suppresses each type.
+const FINANCE_ACCOUNT_KEY: Record<FinanceReminderType, string> = {
+  finance_trump_claim: "trump",
+  finance_529_newborn: "529",
+  finance_529_birthday: "529",
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function dateKeyToUtcMs(key: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(key);
+  if (!m) return null;
+  return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/**
+ * Finance reminder types a born child is eligible for on `todayKey`
+ * ("YYYY-MM-DD", the owner's local date). Pure calendar-day math:
+ *   finance_trump_claim  — DOB in [2025-01-01, 2028-12-31] and age >= 21 days
+ *   finance_529_newborn  — age >= 30 days and before the first birthday
+ *   finance_529_birthday — on/after the first birthday, within 30 days of it
+ * A Feb-29 DOB's first birthday rolls to Mar 1 (Date.UTC overflow).
+ * Returned in send-priority order (trump first). Caller filters expected /
+ * archived children, opened accounts, and prior sends.
+ */
+function financeReminderTypesFor(dob: string, todayKey: string): FinanceReminderType[] {
+  const dobMs = dateKeyToUtcMs(dob);
+  const todayMs = dateKeyToUtcMs(todayKey);
+  if (dobMs === null || todayMs === null || dobMs > todayMs) return [];
+  const ageDays = Math.round((todayMs - dobMs) / DAY_MS);
+  const d = new Date(dobMs);
+  const firstBirthdayMs = Date.UTC(d.getUTCFullYear() + 1, d.getUTCMonth(), d.getUTCDate());
+  const dobKey = dob.slice(0, 10);
+
+  const out: FinanceReminderType[] = [];
+  if (dobKey >= TRUMP_BIRTH_START && dobKey <= TRUMP_BIRTH_END && ageDays >= 21) {
+    out.push("finance_trump_claim");
+  }
+  if (todayMs >= firstBirthdayMs && todayMs < firstBirthdayMs + 30 * DAY_MS) {
+    out.push("finance_529_birthday");
+  } else if (ageDays >= 30 && todayMs < firstBirthdayMs) {
+    out.push("finance_529_newborn");
+  }
+  return out;
+}
+
+// Calm, non-judgmental copy (Constitution I): no "you haven't", no urgency.
+function financeReminderMessage(type: FinanceReminderType, name: string): string {
+  switch (type) {
+    case "finance_trump_claim":
+      return `If ${name} is a U.S. citizen, they may qualify for a $1,000 Trump Account deposit from the U.S. Treasury. Once their Social Security card arrives, see how to claim it in Finance.`;
+    case "finance_529_newborn":
+      return `When you're ready, a 529 is one way to save for ${name}'s schooling. See how it works in Finance.`;
+    case "finance_529_birthday":
+      return `Happy first birthday to ${name}! If family asks what to give, a 529 gift is one option. See how in Finance.`;
+  }
+}
+
+// PostgREST `.in()` filters travel in the URL; chunk long id lists.
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 function formatSleepDuration(totalMin: number): string {
   const h = Math.floor(totalMin / 60);
   const m = Math.round(totalMin % 60);
@@ -300,7 +396,7 @@ Deno.serve(async (req) => {
   // Get all children with their parent IDs
   const { data: children } = await supabase
     .from("children")
-    .select("id, name, parent_id, date_of_birth, next_appointment")
+    .select("id, name, parent_id, date_of_birth, next_appointment, is_expected")
     .is("archived_at", null);
 
   if (!children || children.length === 0) {
@@ -817,6 +913,7 @@ Deno.serve(async (req) => {
     parent_id: string;
     date_of_birth: string;
     next_appointment: string | null;
+    is_expected: boolean | null;
   };
 
   // (a) Household map: recipient -> children their briefing can draw on.
@@ -998,6 +1095,104 @@ Deno.serve(async (req) => {
       message,
       type: "daily_briefing",
     });
+  }
+
+  // (d2) Finance account reminders — one-shot, OWNER ONLY.
+  //
+  // Queued here, after the per-child loop, on purpose: the loop's partner
+  // fan-out copies every row queued for a child to active partners, and these
+  // must reach only the child's owner (spec FR-019). Queued after (b) so the
+  // "is it their first birthday yet" check uses the owner's local date.
+  //
+  // Two batched reads for all candidate children (no per-child queries):
+  //   - child_account_status rows (trump / 529) => account already opened
+  //   - ANY prior notifications row for (child_id, finance type), ever, for
+  //     any recipient => already sent once (the DB trigger
+  //     notifications_finance_once is the backstop for overlapping runs)
+  // If either read fails we skip finance for this run rather than risk a
+  // duplicate; the next tick retries.
+  //
+  // Pacing (Constitution I): at most ONE finance reminder per owner per run,
+  // and none if the owner got a finance reminder in the last 20h (20h, not
+  // 24h, so the same 3h-cron tick on the next day qualifies). Matters
+  // mainly at launch, when an existing child can qualify for two at once.
+  //
+  // Suppressed rows (mute / quiet hours / cap in (e)) are not inserted, so
+  // they re-qualify on a later tick — the one-shot contract is keyed on rows
+  // that actually landed.
+  {
+    const financeKids = (children as ChildRow[]).filter((c) => !c.is_expected);
+    const candidates: Array<{ child: ChildRow; type: FinanceReminderType }> = [];
+    for (const child of financeKids) {
+      const todayKey = localParts(now, prefsFor(child.parent_id).tz).dateKey;
+      for (const type of financeReminderTypesFor(child.date_of_birth, todayKey)) {
+        candidates.push({ child, type });
+      }
+    }
+
+    if (candidates.length > 0) {
+      const ids = [...new Set(candidates.map((c) => c.child.id))];
+      const opened = new Set<string>(); // `${child_id}:${account_key}`
+      const alreadySent = new Set<string>(); // `${child_id}:${type}`
+      const lastFinanceAtByUser = new Map<string, number>();
+      let readFailed = false;
+
+      for (const batch of chunk(ids, 200)) {
+        const [statusRes, sentRes] = await Promise.all([
+          supabase
+            .from("child_account_status")
+            .select("child_id, account_key")
+            .in("child_id", batch)
+            .in("account_key", ["trump", "529"]),
+          supabase
+            .from("notifications")
+            .select("child_id, user_id, type, created_at")
+            .in("child_id", batch)
+            .in("type", [...FINANCE_REMINDER_TYPES]),
+        ]);
+        if (statusRes.error || sentRes.error) {
+          console.error(
+            "finance reminders: read failed, skipping this run",
+            statusRes.error?.code ?? null,
+            sentRes.error?.code ?? null,
+          );
+          readFailed = true;
+          break;
+        }
+        for (const r of (statusRes.data || []) as Array<{ child_id: string; account_key: string }>) {
+          opened.add(`${r.child_id}:${r.account_key}`);
+        }
+        for (const r of (sentRes.data || []) as Array<{
+          child_id: string;
+          user_id: string;
+          type: string;
+          created_at: string;
+        }>) {
+          alreadySent.add(`${r.child_id}:${r.type}`);
+          const t = new Date(r.created_at).getTime();
+          if (t > (lastFinanceAtByUser.get(r.user_id) ?? 0)) lastFinanceAtByUser.set(r.user_id, t);
+        }
+      }
+
+      if (!readFailed) {
+        const pacingCutoff = now.getTime() - 20 * 60 * 60 * 1000;
+        const queuedFor = new Set<string>();
+        for (const { child, type } of candidates) {
+          const ownerId = child.parent_id;
+          if (queuedFor.has(ownerId)) continue;
+          if ((lastFinanceAtByUser.get(ownerId) ?? 0) > pacingCutoff) continue;
+          if (alreadySent.has(`${child.id}:${type}`)) continue;
+          if (opened.has(`${child.id}:${FINANCE_ACCOUNT_KEY[type]}`)) continue;
+          notifications.push({
+            user_id: ownerId,
+            child_id: child.id,
+            message: financeReminderMessage(type, child.name),
+            type,
+          });
+          queuedFor.add(ownerId);
+        }
+      }
+    }
   }
 
   // (e) Restraint filter — mutes, quiet hours, daily cap. Order per recipient:
