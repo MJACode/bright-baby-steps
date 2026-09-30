@@ -101,7 +101,7 @@ Once a week, a Flare+ parent taps "Build this week's sign plan". The coach looks
 - **Child older than the library** (e.g. 24+ months with all signs at "Signs it!"): Show a celebratory "You've worked through the whole library" state instead of empty focus slots. The coach doesn't invent new signs.
 - **All focus slots full**: "Make this a focus sign" explains that there are 3 focus signs already and offers to swap one out.
 - **Sign removed from focus**: Past ticks for that sign are kept and still count toward history, and the sign's 3-stage status is unchanged.
-- **Timezone and "today"**: A tick counts for the parent's local calendar day. A tick at 11:50 pm counts for that day, and the weekly total follows the same week boundary the rest of the app uses.
+- **Timezone and "today"**: A tick counts for the family's tracking day, the same "today" the rest of the app uses (it honors the child's day-start setting, which defaults to midnight). The weekly total uses the same Monday week boundary as the other weekly plans.
 - **Two caregivers tick the same sign on the same day**: It counts as one tick for that child and day, not two.
 - **Read-only viewer role**: Can see focus signs, ticks, and plans, but can't tick or generate. The controls are disabled with a short explanation.
 - **Flare+ lapses**: Existing progress, ticks, and past plans are kept (Principle IV). The guided view falls back to the free-tier teaser, and resubscribing restores everything.
@@ -184,7 +184,7 @@ Once a week, a Flare+ parent taps "Build this week's sign plan". The coach looks
 ## Assumptions
 
 - **Library size**: The existing 20 signs are enough for v2 (about 7–10 weeks of guided path). Expanding the library is a separate content decision.
-- **Illustration production**: The founder or a designer produces 20 illustrations in the brand's style before launch. Launch is gated on SC-001, and this is the main schedule risk. Video is filmed and added later with no code change beyond attaching the media.
+- **Illustration production** *(confirmed by founder 2026-09-30)*: The founder's designer produces all 20 illustrations in the brand's style, to a spec (format, dimensions, frames, alt text) delivered with the plan. Launch of Story 1 is gated on SC-001. Engineering builds against placeholder assets until delivery. Video is filmed and added later with no code change beyond attaching the media.
 - **Plan cadence**: One plan per child per calendar week, using the same week boundary as the existing Weekly Play Plan, generated only when the parent taps.
 - **Coach model and provider**: Same provider (Anthropic) and one-shot pattern as the Weekly Play Plan, under the existing DPA. No new subprocessor.
 - **Focus signs are per child, not per caregiver**: Everyone caring for the child works on the same signs, which is also the SLP-recommended practice (consistency across caregivers).
