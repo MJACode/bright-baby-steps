@@ -2590,6 +2590,6 @@ checklist) is saved at `docs/billing-launch-kit.md`.
 - Audit/metering: `rights_requests` (the request log itself), `voice_parse_events` (id + timestamp rate-limit counter).
 - `child_account_status.marked_by` / `child_finance_finder.updated_by` stay out, consistent with the 2026-09-30 finance entry.
 
-**Outstanding:** confirm against live schema that every listed table exists (a missing table now fails the whole export closed — `ai_memories` has no migration in the repo). Export includes rows RLS exposes via partner access (unchanged from before).
+**Verified 2026-09-30 against live (project ieuznbvvwdvhtirzwkly):** all 55 tables and every explicit select / filter / order column exist. **Outstanding:** `ai_memories` exists on live but has no migration in the repo; a missing table would fail the whole export closed. Export includes rows RLS exposes via partner access (unchanged from before).
 
 **Code refs:** branch `fix/export-and-finance-followups`.

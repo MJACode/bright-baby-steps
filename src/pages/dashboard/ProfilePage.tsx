@@ -86,7 +86,7 @@ export default function ProfilePage() {
         description:
           err instanceof ExportReadError
             ? `We couldn't read your ${err.failed.map((f) => f.label).join(", ")}, so nothing was downloaded. Check your connection and try again.`
-            : `${err instanceof Error ? err.message : "Something went wrong"}. Nothing was downloaded — try again.`,
+            : "Something went wrong, so nothing was downloaded. Try again.",
         variant: "destructive",
       });
     } finally {
