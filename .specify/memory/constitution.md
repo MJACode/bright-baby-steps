@@ -125,10 +125,13 @@ locally but not live.
   specify → plan → tasks → implement. Bug fixes, copy tweaks and refactors skip it.
 - **Constitution Check:** every `plan.md` lists each principle above as pass, fail, or not
   applicable. A fail needs a written justification and founder approval before tasks are generated.
-- **Local gate before every PR** (CI does not run these yet):
-  1. `npx tsc --noEmit` passes (the Vite build does not type-check).
+- **Quality gate on every PR** — run locally before pushing; the `CI` workflow
+  (`.github/workflows/ci.yml`) enforces it on every PR and push to `main`:
+  1. `npm run typecheck` passes (the Vite build does not type-check).
   2. `npm test` passes.
-  3. `npm run lint` adds no problems above the recorded baseline.
+  3. `npm run lint:baseline` passes: no lint problems above `.eslint-baseline.json`. When a
+     cleanup lowers the count, commit the lower baseline (`npm run lint:baseline -- --update`);
+     never raise it.
 - **Review:** the `qa` agent reviews every non-trivial change before commit. Corrections go into
   the relevant `tasks/lessons-*.md` file.
 - **Ownership:** routing to the `frontend` / `backend` / `qa` agents follows `CLAUDE.md`.
@@ -144,4 +147,4 @@ locally but not live.
 - Review the constitution whenever a feature is killed or a lesson recurs a third time. Both are
   signs a principle is missing or not being applied.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29
+**Version**: 1.0.1 | **Ratified**: 2026-09-29 | **Last Amended**: 2026-09-29

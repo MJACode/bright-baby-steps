@@ -1,6 +1,8 @@
+import { lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
@@ -19,7 +21,6 @@ import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
 
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
-import SignsPage from "./pages/dashboard/SignsPage";
 import ChildContextPage from "./pages/dashboard/ChildContextPage";
 import LeapsPage from "./pages/dashboard/LeapsPage";
 import GrowthPage from "./pages/dashboard/GrowthPage";
@@ -39,6 +40,44 @@ import FAQPage from "./pages/FAQPage";
 import VpcConfirmPage from "./pages/VpcConfirmPage";
 import SubprocessorsPage from "./pages/SubprocessorsPage";
 import RightsRequestPage from "./pages/RightsRequestPage";
+
+const CHUNK_RELOAD_KEY = "gf-chunk-reload";
+
+// After a deploy, an open tab's old chunk names 404; reload once to pick up the new build, then let ErrorBoundary show.
+async function importWithReload<T>(load: () => Promise<T>): Promise<T> {
+  try {
+    const mod = await load();
+    try {
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+    } catch {
+      // Storage unavailable (private mode, quota): nothing to clear.
+    }
+    return mod;
+  } catch (err) {
+    let alreadyReloaded = true;
+    try {
+      alreadyReloaded = sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1";
+      if (alreadyReloaded) sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      else sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+    } catch {
+      // Without storage there's no loop guard, so skip the reload and surface the error.
+    }
+    if (alreadyReloaded) throw err;
+    window.location.reload();
+    return new Promise<T>(() => {});
+  }
+}
+
+// Lazy so the bundled sign illustrations load with this route, not the app shell.
+const SignsPage = lazy(() => importWithReload(() => import("./pages/dashboard/SignsPage")));
+
+const SignsPageFallback = () => (
+  <div className="space-y-5" aria-busy="true">
+    <Skeleton className="h-8 w-48" />
+    <Skeleton className="h-28 w-full rounded-xl" />
+    <Skeleton className="h-5 w-64" />
+  </div>
+);
 
 const queryClient = new QueryClient();
 
@@ -67,7 +106,14 @@ const App = () => (
                 <Route path="feeding" element={<FeedingPage />} />
                 <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
                 <Route path="milestones" element={<MilestonesPage />} />
-                <Route path="signs" element={<SignsPage />} />
+                <Route
+                  path="signs"
+                  element={
+                    <Suspense fallback={<SignsPageFallback />}>
+                      <SignsPage />
+                    </Suspense>
+                  }
+                />
                 <Route path="child-context" element={<ChildContextPage />} />
                 <Route path="leaps" element={<LeapsPage />} />
                 <Route path="growth" element={<GrowthPage />} />

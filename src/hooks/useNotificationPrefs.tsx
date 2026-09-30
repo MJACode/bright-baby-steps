@@ -9,7 +9,8 @@ export type NotificationCategory =
   | "milestones"
   | "reminders"
   | "insights"
-  | "reactivation";
+  | "reactivation"
+  | "finance";
 
 export type NotificationPrefs = {
   tz: string | null;

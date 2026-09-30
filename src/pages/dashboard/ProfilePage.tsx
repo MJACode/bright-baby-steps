@@ -51,6 +51,11 @@ const MUTABLE_CATEGORIES = [
     label: "Welcome-back notes",
     description: "A friendly hello when you've been away",
   },
+  {
+    category: "finance",
+    label: "Finance",
+    description: "A heads-up when it's a good time to open an account",
+  },
 ] as const;
 
 export default function ProfilePage() {
@@ -81,6 +86,8 @@ export default function ProfilePage() {
         { data: illnessLogs },
         { data: medicationLogs },
         { data: chatConversations },
+        { data: financeFinder },
+        { data: accountStatus },
       ] = await Promise.all([
         supabase.from("children").select("*"),
         supabase.from("sleep_logs").select("*"),
@@ -91,6 +98,8 @@ export default function ProfilePage() {
         supabase.from("illness_logs").select("*"),
         supabase.from("medication_logs").select("*"),
         supabase.from("chat_conversations").select("id, title, created_at"),
+        supabase.from("child_finance_finder").select("child_id, goal, family_contributes, updated_at"),
+        supabase.from("child_account_status").select("child_id, account_key, opened_at"),
       ]);
 
       const exportPayload = {
@@ -105,6 +114,8 @@ export default function ProfilePage() {
         illnessLogs: illnessLogs ?? [],
         medicationLogs: medicationLogs ?? [],
         chatConversations: chatConversations ?? [],
+        financeFinder: financeFinder ?? [],
+        accountStatus: accountStatus ?? [],
       };
 
       const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });

@@ -1,7 +1,7 @@
 // Standalone route for the cry analyzer, gated by premium.
 //
 // Uses the existing "cry-analysis" feature key — its FEATURE_HOOK copy in
-// UpgradeSheet already has the right pitch ("hunger vs tired vs discomfort").
+// UpgradeSheet already has the right pitch ("hunger, tiredness, or discomfort").
 
 import { CryAnalyzer } from "@/components/CryAnalyzer";
 import { PremiumGate } from "@/components/PremiumGate";

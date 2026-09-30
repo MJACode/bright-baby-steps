@@ -13,6 +13,7 @@ import {
   elapsedSecondsBottle,
 } from "@/hooks/useActiveFeed";
 import { useLastLogged } from "@/hooks/useLastLogged";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import type {
   LastFeeding,
   LastSleep,
@@ -120,10 +121,12 @@ export function QuickNavGrid({ childId, prefs }: { childId: string | undefined; 
   const sleepElapsed = useElapsedSeconds(activeSleep);
   useSecondTicker(!!activeFeed && !!activeFeed.active_side);
   const last = useLastLogged(childId);
+  const { role, isResolved } = useCurrentRoleQuery(childId);
+  const hideFinance = isResolved && (role === "caregiver" || role === "viewer");
 
   const tiles = prefs.homeQuickTiles
     .map((id) => QUICK_TILES.find((t) => t.id === id))
-    .filter((t): t is QuickTile => !!t);
+    .filter((t): t is QuickTile => !!t && !(hideFinance && t.id === "financial"));
 
   const contentFor = (tile: QuickTile): CardContent => {
     switch (tile.id) {
