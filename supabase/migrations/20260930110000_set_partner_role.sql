@@ -53,10 +53,23 @@ END;
 $$;
 
 -- Owner-only by body (owner_id = auth.uid()); anon has no auth.uid() and would
--- always hit NOT FOUND, but there is no reason to expose it at all.
+-- always hit NOT FOUND, but there is no reason to expose it at all. PUBLIC and
+-- anon are both revoked because this project's pg_default_acl grants EXECUTE to
+-- anon directly (see 20260930090000). Asserted below.
 REVOKE EXECUTE ON FUNCTION public.set_partner_role(uuid, text) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.set_partner_role(uuid, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.set_partner_role(uuid, text) TO authenticated;
+
+DO $$
+BEGIN
+  IF has_function_privilege('anon', 'public.set_partner_role(uuid, text)'::regprocedure, 'EXECUTE') THEN
+    RAISE EXCEPTION 'set_partner_role: still executable by anon';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'public.set_partner_role(uuid, text)'::regprocedure, 'EXECUTE') THEN
+    RAISE EXCEPTION 'set_partner_role: not executable by authenticated';
+  END IF;
+END
+$$;
 
 COMMENT ON FUNCTION public.set_partner_role(uuid, text) IS
   'Owner-only role change for an additional user (coparent | caregiver | '

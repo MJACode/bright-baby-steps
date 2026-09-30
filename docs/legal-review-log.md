@@ -1983,6 +1983,8 @@ merge). `CLAUDE.md` "edge functions" line updated seven → six.
 
 ## 2026-08-28 — Additional users gated behind Flare+ + owner-controlled shut-off
 
+*Correction 2026-09-30: this migration was merged but never applied to live, so the behaviour below never shipped. See the 2026-09-30 entry "Additional users: free 1 / Flare+ 2".*
+
 **Scope reviewed:** `supabase/migrations/20260828100000_partner_seats_flare_plus.sql`
 (seat helpers, RLS access functions, seat triggers, `accept_partner_invitation`,
 `set_partner_access_paused`), `src/components/PartnerManagement.tsx`,
@@ -2169,6 +2171,7 @@ merge). `CLAUDE.md` gained a standing "no conversational AI" convention.
   **included by default with its own checkbox to exclude it** — opt-out, seeded
   on like the seven existing sections in `PediatricianExport.tsx` — and is
   omitted entirely when the child has no entries.
+- *(Correction 2026-09-30: not applied to live until the 2026-09-30 batch — see the 2026-09-30 "Additional users" entry.)*
 - **RLS fix — `public.speech_journal` moved onto the `child_id` access pivot**
   (`20260829000000_speech_journal_child_pivot_rls.sql`). This table was the last
   one still running the original 2026-03 `FOR ALL` policy pivoted on the
@@ -2438,85 +2441,142 @@ only its duplicate on Home.**
 
 ---
 
-## 2026-09-30 — Free tier gets one additional user; lapse keeps the longest-standing partner
+## 2026-09-30 — Additional users: free 1 / Flare+ 2 (first time any seat limit reaches live); lapse keeps the longest-standing partner
 
-**Scope reviewed:** `supabase/migrations/20260930100000_free_partner_seat.sql`
+**Reviewer:** in-house (Claude backend pass, QA Fix-required round addressed;
+founder-approved pricing decision). **Risk level:** Low — on live this is a
+narrowing, and nobody loses access at apply time.
+
+**Scope reviewed:** `supabase/migrations/20260828100000_partner_seats_flare_plus.sql`
+(applied for the first time in this batch — see below),
+`supabase/migrations/20260930100000_free_partner_seat.sql`
 (new `partner_within_entitlement()` helper; `partner_seat_limit`,
 `has_partner_access`, `partner_can_write`, `can_access_child`,
-`can_write_child`, both seat triggers, and `accept_partner_invitation`
-re-created). Supersedes the 2026-08-28 entry "Additional users gated behind
-Flare+ + owner-controlled shut-off". Founder-approved pricing decision.
+`can_write_child`, both seat triggers and `accept_partner_invitation`
+re-created; EXECUTE lock-down on every partner function),
+`supabase/migrations/20260930110000_set_partner_role.sql`,
+`supabase/functions/check-notifications/index.ts` (partner push fan-out).
 
-**What changed (product):** the free tier now includes **1 additional user**
-(the owner + 1, typically the co-parent); Flare+ stays at 2. A free-tier owner
-can therefore share their child's record — every table the partner RLS
-helpers cover — with one invited adult, where on 2026-08-28 they could share
-with nobody. When Flare+ lapses, the **longest-standing** partner (earliest
-`partner_access.created_at`, i.e. first acceptance; paused partners keep their
-place in that order) keeps access automatically and anyone beyond the free
-entitlement is suspended at the RLS layer until renewal. Nothing is deleted.
-Owner pause / un-pause and "a paused partner still occupies a seat" are
-unchanged.
+**Correction to the record — the 2026-08-28 entry described behaviour that
+never shipped.** `20260828100000_partner_seats_flare_plus.sql` was merged to
+`main` on 2026-08-28 but was **never applied to the live database** (verified
+2026-09-30: none of `owner_has_plus`, `partner_seats_used`,
+`set_partner_access_paused` or `partner_access.paused_at` exist on live, and
+no matching version is in `supabase_migrations.schema_migrations`). So the
+2026-08-28 entry "Additional users gated behind Flare+ + owner-controlled
+shut-off" never took effect for any user: there was **no seat limit and no
+Flare+ gate on live at any point**, and free-tier accounts could, and did,
+share with any number of invited adults. It is applied now, in the same batch
+as and immediately before `20260930100000`, which supersedes its pricing rule.
+
+**What changes on live (the effective diff):** unlimited additional users →
+**free: 1** (the owner + 1, typically the co-parent) / **Flare+: 2**. That is a
+**narrowing** of who can be invited to see a child's record. When Flare+
+lapses, the **longest-standing** partner (earliest `partner_access.created_at`,
+i.e. first acceptance; paused partners keep their place in that order) keeps
+access and anyone beyond the free entitlement is suspended at the RLS layer
+until renewal. Nothing is deleted. Owners also gain, for the first time on
+live, a reversible Pause (a paused partner still occupies a seat) and an
+owner-only role change (`set_partner_role`).
+
+**Blast radius at apply time (read-only count on live, 2026-09-30):** 1 active
+`partner_access` row, whose owner holds an active Flare+ subscription (1 of 2
+seats used — unaffected), and 1 pending invitation that has already expired
+(grants nothing; does not count toward a seat). **Nobody is suspended and no
+existing access changes when this batch lands.** No owner is over the new
+limit.
 
 **Why this is a legal-log item.** `accept_partner_invitation` — the RPC that
-stamps `partner_access.consent_acknowledged_at` (T3, 2026-05-07) — was
-modified, and the set of people who can read a child's record widens on the
-free tier.
+stamps `partner_access.consent_acknowledged_at` (T3, 2026-05-07) — is
+re-created, and the set of people who can read a child's record changes.
 
-**Consent flow — unchanged and verified.** The only edit to
-`accept_partner_invitation` is deletion of the owner-must-have-Flare+ check
-(`FLARE_PLUS_REQUIRED`). The rest of the body is identical to the 2026-08-28
-version (diffed): the invitee still checks the Privacy/Terms consent box in
-`AcceptInvite.tsx`, and the RPC still stamps `consent_acknowledged_at = now()`
-on insert and preserves any earlier stamp via `COALESCE` on the conflict path.
-Seat limits are still enforced by the `partner_access` trigger inside the same
-transaction. No consent moment was removed, weakened, or moved. The owner's
-act of inviting is still the sharing decision; the direct notice at Add Child
-already discloses sharing with "co-parents or caregivers you explicitly invite".
+**Consent flow — unchanged and verified.** Relative to what is on live, the
+only behavioural addition to `accept_partner_invitation` is that the
+`partner_access` insert now passes the seat trigger (`SEAT_LIMIT_REACHED:` on
+an over-limit accept, rolling back in the same transaction — the invitation
+returns to pending). The Flare+-required check that `20260828100000` adds is
+removed again by `20260930100000`. The invitee still checks the Privacy/Terms
+consent box in `AcceptInvite.tsx`; the RPC still stamps
+`consent_acknowledged_at = now()` on insert and preserves an earlier stamp via
+`COALESCE` on the conflict path. No consent moment is removed, weakened, or
+moved. The direct notice at Add Child already discloses sharing with
+"co-parents or caregivers you explicitly invite". Anonymous callers can no
+longer execute `accept_partner_invitation` (it always required a signed-in
+user; the grant was simply never revoked).
 
-**Data-minimisation direction — widens on the free tier, by design.** Free
-accounts can now share with one invited adult. This restores the pre-2026-08-28
-position for the first partner (before August, free accounts had no seat cap
-at all), so it is still narrower than the original v1 posture reviewed in May.
-On lapse the change is also a widening relative to August (one partner keeps
-access instead of none); the owner can still pause or remove that partner at
-any time. Reads and writes now suspend together: `can_write_child` was not
-covered by the 2026-08-28 lapse rule, so an over-entitlement partner could
-still write to child-pivoted log tables while unable to read — that gap is
-closed here.
+**Data-minimisation direction — narrows on live.** Unlimited → 1 (free) or 2
+(Flare+). Reads and writes suspend together on lapse: `can_write_child` is
+brought under the same entitlement rule as the read helpers, so an
+over-entitlement partner can neither read nor write. `can_access_child` gains
+the `_user_id = auth.uid()` guard `can_write_child` already had, so a signed-in
+user can no longer call it over PostgREST to probe whether *another* user can
+see a given child (all 95 live RLS policies that call these helpers already
+pass `auth.uid()`; verified read-only). The internal seat / subscription
+helpers (`owner_has_plus`, `partner_seats_used`, `partner_seat_limit`,
+`partner_within_entitlement`) are not executable by anon or signed-in users —
+they take an arbitrary user id and would otherwise disclose a stranger's
+subscription status and caregiver count.
+
+**Push notifications match access.** `check-notifications` previously (in the
+repo, never deployed with this logic — live runs an older build) skipped
+partner pushes unless the owner had Flare+. It now fans out only to partners
+for whom `partner_within_entitlement(owner, partner)` is true — the same rule
+RLS uses — so a suspended partner gets no push and the retained partner still
+does. **Not deployed in this change**; ships with the next check-notifications
+deploy.
+
+**Same batch — two other merged-but-unapplied migrations, and what users
+experienced meanwhile.** The frontend has depended on all three since late
+August, so between merge and this apply:
+- **`20260828100000` (partner seats / pause):** owners tapping **Pause** got an
+  error (the `set_partner_access_paused` RPC did not exist), and **Remove
+  partner** failed too — the client's revoke UPDATE writes `paused_at`, a column
+  that did not exist on live, so PostgREST rejected the whole update. Partners
+  kept their access throughout; nobody could be removed from the app UI (the
+  owner could not revoke access in-app during this window).
+- **`20260829000000_speech_journal_child_pivot_rls.sql`:** the 2026-08-29 entry
+  above records this RLS fix as done; it was not live. Meanwhile Word Journal
+  entries written by a co-parent were **invisible to the child's owner**, and a
+  **read-only viewer could create, edit and delete** Word Journal entries
+  (the old `FOR ALL` policy reused USING as WITH CHECK). Live exposure is small:
+  one `speech_journal` row exists, authored by the child's own owner; no
+  partner-authored rows. Applied in this batch.
+- **`20260830000000_child_tracking_schedule.sql`:** the "day starts at" / night
+  start setting **would not save** (the `day_start_time` / `night_start_time`
+  columns did not exist); totals stayed on the midnight default. No personal
+  data implication. Applied in this batch.
 
 **Policy-vs-code grep (Privacy / Terms / FAQ):** searched `PrivacyPage.tsx`,
 `TermsPage.tsx`, `FAQPage.tsx` for `partner`, `co-parent`, `caregiver`,
-`additional user`, `invite`, `Flare+`, `premium`, `subscription`. **No
-Flare+-only partner language found.** Privacy § 5 ("Co-parents or caregivers
-you explicitly invite via the Partner Access feature"), Terms § 6 ("any
-partners you invite") and FAQ ("Can I share access with my partner or
-caregiver? Yes…") are all tier-agnostic and remain accurate. Every Flare+
-mention in those three pages concerns AI features (Speech Class, Weekly Play
-Plan), not sharing. No policy-page edit required.
+`additional user`, `invite`, `Flare+`, `premium`, `subscription`. **No seat-count
+or Flare+-only partner language found.** Privacy § 5 ("Co-parents or caregivers
+you explicitly invite via the Partner Access feature"), Terms § 6 ("any partners
+you invite") and FAQ ("Can I share access with my partner or caregiver? Yes…")
+are tier- and count-agnostic and remain accurate. No policy-page edit required.
 
-**Retention / deletion promises — unaffected.** No rows deleted, no new
-columns, no new personal data, no new subprocessor or egress, no AI data-flow
-change. `partner_access` still cascades from `auth.users`; `_purge_user_data()`
-is untouched — **Privacy § 8 deletion language remains accurate.**
+**Retention / deletion promises — unaffected.** No rows deleted, one new
+nullable column (`partner_access.paused_at`), no new personal data, no new
+subprocessor or egress, no AI data-flow change. `partner_access` still cascades
+from `auth.users`; `_purge_user_data()` is untouched — **Privacy § 8 deletion
+language remains accurate.**
 
-**Owner-only role change (`20260930110000_set_partner_role.sql`).** New RPC
+**Owner-only role change (`20260930110000_set_partner_role.sql`).**
 `set_partner_role(_partner_id, _role)` lets the owner move a seat-holding
 (active or paused) partner between coparent / caregiver / viewer. Owner-scoped
-by `owner_id = auth.uid()`; role validated against the `partner_role` enum.
-It does not touch `consent_acknowledged_at`, status, or seat seniority — a role
-change is not a new sharing grant (the same adult keeps the same read access),
-so no new consent moment is required. Demoting to viewer removes write access
-immediately. The owner could already do this via a direct table UPDATE under
-the existing owner UPDATE policy; the RPC is the validated path and widens
-nothing.
+by `owner_id = auth.uid()`; role validated against the `partner_role` enum; not
+executable by anon. It does not touch `consent_acknowledged_at`, status, or seat
+seniority — a role change is not a new sharing grant (the same adult keeps the
+same read access), so no new consent moment is required. Demoting to viewer
+removes write access immediately. The owner could already do this via a direct
+table UPDATE under the existing owner UPDATE policy; the RPC widens nothing.
+
+**Apply order (one batch, in version order):** `20260828100000` →
+`20260829000000` → `20260830000000` → `20260930100000` → `20260930110000`.
 
 **Outstanding (not legal-blocking):**
-1. `supabase/functions/check-notifications/index.ts` still gates partner push
-   fan-out on `owner_has_plus`, so free-tier partners get no pushes and, after a
-   lapse, the retained partner gets none either. Should switch to
-   `partner_within_entitlement(owner, partner)` (EXECUTE granted to
-   service_role) so push recipients match RLS exactly.
+1. Deploy `check-notifications` (after the batch lands — it calls
+   `partner_within_entitlement`). Diff the live source first: live is an older
+   build than the repo.
 2. Client copy/seat math (`src/lib/partnerInvite.ts` `limit = isPremium ? 2 : 0`,
    `describePartnerError`, `PartnerManagement.tsx` free-tier teaser and lapsed
    banner, `Upgrade.tsx` "Multi-caregiver sync") still describes sharing as

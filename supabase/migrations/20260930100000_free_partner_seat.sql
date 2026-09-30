@@ -76,10 +76,19 @@ COMMENT ON FUNCTION public.partner_seat_limit(uuid) IS
 -- account, pausing the oldest partner does NOT promote the second one.
 -- Pending invitations are not ranked — they grant no access.
 --
--- Not guarded by `_user_id = auth.uid()`: it is not callable by anon /
--- authenticated (see grants below) and is only reached from inside the
--- SECURITY DEFINER helpers, which carry their own guards. service_role gets
--- EXECUTE so check-notifications can apply the same rule to push fan-out.
+-- NOT guarded by `_user_id = auth.uid()` — it answers for any (owner, user)
+-- pair — so it must never be directly callable by anon / authenticated.
+-- The EXECUTE lock-down is in section 7 and asserted there.
+--
+-- Who reaches it:
+--   * The four RLS helpers in section 4. Each pins the user argument to the
+--     caller: has_partner_access, can_access_child and can_write_child via their
+--     own `_user_id = auth.uid()` guard, partner_can_write by passing auth.uid()
+--     directly. They are SECURITY DEFINER owned by postgres, so the inner call
+--     is privilege-checked against postgres, not the end user — the revoke does
+--     not break RLS.
+--   * service_role directly: check-notifications filters push fan-out through
+--     it so recipients match exactly who RLS lets open the child.
 CREATE OR REPLACE FUNCTION public.partner_within_entitlement(_owner_id uuid, _user_id uuid)
 RETURNS boolean
 LANGUAGE sql
@@ -111,28 +120,21 @@ COMMENT ON FUNCTION public.partner_within_entitlement(uuid, uuid) IS
   'lapse the longest-standing partner keeps access; the rest are suspended '
   'until renewal. Nothing is deleted.';
 
--- Supabase grants EXECUTE on new public functions to anon / authenticated
--- directly (not just via PUBLIC), so revoking from PUBLIC alone would leave
--- this callable over PostgREST. Revoke from all three.
-REVOKE EXECUTE ON FUNCTION public.partner_within_entitlement(uuid, uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.partner_within_entitlement(uuid, uuid) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.partner_within_entitlement(uuid, uuid) FROM authenticated;
-GRANT EXECUTE ON FUNCTION public.partner_within_entitlement(uuid, uuid) TO service_role;
-
--- Same reasoning for the Aug seat helper re-created above: 20260828100000 only
--- revoked from PUBLIC, which does not remove Supabase's direct anon /
--- authenticated grants. No client code calls it (the client derives seat math
--- from usePremium + its own partner_access rows).
-REVOKE EXECUTE ON FUNCTION public.partner_seat_limit(uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.partner_seat_limit(uuid) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.partner_seat_limit(uuid) FROM authenticated;
-
 -- ---------------------------------------------------------------------------
 -- 4. RLS helpers — swap the Flare+ check for the entitlement check
 -- ---------------------------------------------------------------------------
 -- Replaces the 20260828100000 definitions of has_partner_access,
 -- partner_can_write and can_access_child, and the 20260820000000 definition of
--- can_write_child. Signatures, guards and role sets are unchanged.
+-- can_write_child. Signatures and role sets are unchanged.
+--
+-- can_access_child gains the `_user_id = auth.uid()` guard that has_partner_access
+-- and can_write_child already carry. Without it, any signed-in user could call
+-- POST /rest/v1/rpc/can_access_child with someone else's uuid and learn whether
+-- that person can see a given child. Safe for every existing caller: all 95
+-- RLS policies on live that call has_partner_access / can_access_child /
+-- can_write_child pass auth.uid() as the user argument (verified read-only
+-- against pg_policies 2026-09-30), and no client, edge function or SQL
+-- function calls can_access_child any other way.
 
 CREATE OR REPLACE FUNCTION public.has_partner_access(_user_id uuid, _owner_id uuid)
 RETURNS boolean
@@ -179,19 +181,27 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.children
-    WHERE id = _child_id AND parent_id = _user_id
+  SELECT _user_id = auth.uid() AND (
+    EXISTS (
+      SELECT 1 FROM public.children
+      WHERE id = _child_id AND parent_id = _user_id
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.children c
+      JOIN public.partner_access pa ON pa.owner_id = c.parent_id
+      WHERE c.id = _child_id
+        AND pa.partner_id = _user_id
+        AND pa.status = 'active'
+        AND public.partner_within_entitlement(c.parent_id, _user_id)
+    )
   )
-  OR EXISTS (
-    SELECT 1 FROM public.children c
-    JOIN public.partner_access pa ON pa.owner_id = c.parent_id
-    WHERE c.id = _child_id
-      AND pa.partner_id = _user_id
-      AND pa.status = 'active'
-      AND public.partner_within_entitlement(c.parent_id, _user_id)
-  );
 $$;
+
+COMMENT ON FUNCTION public.can_access_child(uuid, uuid) IS
+  'True when _user_id owns _child_id, or holds an active partner_access row '
+  '(any role) to that child''s owner that is within the owner''s seat '
+  'entitlement (partner_within_entitlement). Guarded by _user_id = auth.uid() '
+  'so it cannot be used to probe another user''s access.';
 
 CREATE OR REPLACE FUNCTION public.can_write_child(_user_id uuid, _child_id uuid)
 RETURNS boolean
@@ -369,3 +379,85 @@ COMMENT ON COLUMN public.partner_access.status IS
   'active | paused | revoked. active and paused both occupy a seat (free 1, '
   'Flare+ 2) and hold their seniority; revoked frees one. Only active rows '
   'within the entitlement resolve as having access.';
+
+-- ---------------------------------------------------------------------------
+-- 7. EXECUTE lock-down for every partner function (20260828100000 + this file)
+-- ---------------------------------------------------------------------------
+-- On this project pg_default_acl grants EXECUTE on every new public function
+-- DIRECTLY to anon, authenticated and service_role, so REVOKE ... FROM PUBLIC
+-- removes nothing (see 20260930090000_lock_down_admin_rpcs.sql). Three tiers:
+--
+--   internal   — take an arbitrary owner/user id with no auth.uid() guard, or
+--                are trigger functions. anon + authenticated revoked.
+--                service_role keeps EXECUTE only where an edge function calls
+--                it (owner_has_plus, partner_within_entitlement); service_role
+--                is never revoked (it is fully trusted and bypasses RLS anyway).
+--   rls_helper — called by RLS policies that apply TO public (anon included).
+--                KEEP anon + authenticated: a policy expression is
+--                privilege-checked as the querying role, so revoking anon would
+--                turn every anonymous read of children / log tables from "0 rows"
+--                into "permission denied for function" (verified locally) — a
+--                behaviour change for any pre-auth request, for no gain.
+--                Each is guarded by auth.uid() (anon => NULL => no access), so
+--                calling it directly over PostgREST reveals nothing.
+--   client_rpc — owner/invitee RPCs the app calls with a session. Body requires
+--                auth.uid(); no anon use case. anon revoked, authenticated kept.
+--
+-- Trigger functions do not need EXECUTE at fire time (only at CREATE TRIGGER),
+-- so revoking them does not stop the seat triggers firing (tested).
+--
+-- set_partner_role is created and asserted in 20260930110000.
+-- Idempotent: REVOKE/GRANT are no-ops on re-run. Hard assertion at the end.
+DO $$
+DECLARE
+  _spec record;
+  _fn regprocedure;
+BEGIN
+  FOR _spec IN
+    SELECT * FROM (VALUES
+      -- sig                                              tier          service_role must have EXECUTE
+      ('public.owner_has_plus(uuid)',                        'internal',   true),
+      ('public.partner_seat_limit(uuid)',                    'internal',   false),
+      ('public.partner_seats_used(uuid)',                    'internal',   false),
+      ('public.partner_within_entitlement(uuid, uuid)',      'internal',   true),
+      ('public.enforce_partner_seat_limit()',                'internal',   false),
+      ('public.enforce_invite_seat_limit()',                 'internal',   false),
+      ('public.has_partner_access(uuid, uuid)',              'rls_helper', true),
+      ('public.partner_can_write(uuid)',                     'rls_helper', true),
+      ('public.can_access_child(uuid, uuid)',                'rls_helper', true),
+      ('public.can_write_child(uuid, uuid)',                 'rls_helper', true),
+      ('public.accept_partner_invitation(text)',             'client_rpc', true),
+      ('public.set_partner_access_paused(uuid, boolean)',    'client_rpc', true)
+    ) AS t(sig, tier, svc)
+  LOOP
+    _fn := to_regprocedure(_spec.sig);
+    IF _fn IS NULL THEN
+      RAISE EXCEPTION 'free_partner_seat: % missing — apply 20260828100000 first', _spec.sig;
+    END IF;
+
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC', _fn);
+    IF _spec.tier = 'internal' THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM anon, authenticated', _fn);
+    ELSIF _spec.tier = 'rls_helper' THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO anon, authenticated', _fn);
+    ELSE
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM anon', _fn);
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated', _fn);
+    END IF;
+    IF _spec.svc THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', _fn);
+    END IF;
+
+    -- Assertions
+    IF has_function_privilege('anon', _fn, 'EXECUTE') <> (_spec.tier = 'rls_helper') THEN
+      RAISE EXCEPTION 'free_partner_seat: anon EXECUTE on % is wrong for tier %', _spec.sig, _spec.tier;
+    END IF;
+    IF has_function_privilege('authenticated', _fn, 'EXECUTE') <> (_spec.tier <> 'internal') THEN
+      RAISE EXCEPTION 'free_partner_seat: authenticated EXECUTE on % is wrong for tier %', _spec.sig, _spec.tier;
+    END IF;
+    IF _spec.svc AND NOT has_function_privilege('service_role', _fn, 'EXECUTE') THEN
+      RAISE EXCEPTION 'free_partner_seat: % is not executable by service_role', _spec.sig;
+    END IF;
+  END LOOP;
+END
+$$;
