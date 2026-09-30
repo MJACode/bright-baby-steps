@@ -40,7 +40,7 @@ export function FinancialTab() {
       onUndo={() => finance.unmarkOpened.mutate(key)}
       sponsor={finance.sponsors.get(key)}
       sponsorsSettled={finance.sponsorsSettled}
-      highlight={key === "trump" && trumpEligible ? "May qualify for a $1,000 Treasury deposit" : undefined}
+      highlight={key === "trump" && trumpEligible ? "U.S.-citizen children may qualify for a $1,000 Treasury deposit" : undefined}
       recommendation={recommendation}
     />
   );

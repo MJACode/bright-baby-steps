@@ -2454,7 +2454,7 @@ only its duplicate on Home.**
 - P0: Sponsors allowed on the Trump Account card (free government deposit; FTC § 5 / Impersonation Rule, 16 CFR Part 461). Resolved: UI guard + `CHECK (account_key <> 'trump')`; copy now states no paid firm is needed to claim.
 - P0: 529 copy said $95,000 five-year gift election needs no gift-tax paperwork (it requires Form 709). Resolved: corrected.
 - P0: New finance data missing from Privacy § 2, the COPPA direct notice, and Export My Data. Resolved: § 2 bullet, direct-notice enumeration, and export of both tables added.
-- P1: Trump "why"/highlight/reminder omitted the U.S.-citizen condition. Resolved: "may qualify" plus citizen condition.
+- P1: Trump "why"/highlight/reminder omitted the U.S.-citizen condition. Resolved: "may qualify" plus the U.S.-citizen condition in all three (why text, list-card highlight, `finance_trump_claim` reminder).
 - P1: Finder framing ("Find the right accounts" / "Open these accounts") read as personalized advice. Resolved: "Accounts to look into", on-screen basis ("based only on birthday and your two answers — not your income, taxes or state"), "Educational, not financial or tax advice" moved above the cards. Spec copy updated to match.
 - P1: 529 "strongest tax break" superlative and unconditioned $35,000 Roth rollover. Resolved: softened; conditions stated.
 - P1: 529 "How to open" pointed at a commercial site (savingforcollege.com) despite the non-commercial rule. Resolved: College Savings Plans Network.

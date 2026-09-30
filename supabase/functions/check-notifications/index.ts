@@ -290,6 +290,9 @@ function inQuietHours(minutesOfDay: number, startMin: number, endMin: number): b
 // specs/001-finance-account-finder FR-018..FR-021). Each fires at most once
 // per child, ever, only to the child's owner, and never once the matching
 // account is marked opened in public.child_account_status.
+// "Ever" relies on the earlier notifications row still existing: RLS lets a
+// user delete their own notifications via the API (no UI does today), which
+// would let that reminder fire again.
 
 // Trump Account $1,000 Treasury deposit: children born 2025-01-01 through
 // 2028-12-31, compared on the date_of_birth CALENDAR date (ISO string
@@ -355,7 +358,7 @@ function financeReminderTypesFor(dob: string, todayKey: string): FinanceReminder
 function financeReminderMessage(type: FinanceReminderType, name: string): string {
   switch (type) {
     case "finance_trump_claim":
-      return `${name} may qualify for a $1,000 Trump Account deposit from the U.S. Treasury. Once their Social Security card arrives, see how to claim it in Finance.`;
+      return `If ${name} is a U.S. citizen, they may qualify for a $1,000 Trump Account deposit from the U.S. Treasury. Once their Social Security card arrives, see how to claim it in Finance.`;
     case "finance_529_newborn":
       return `When you're ready, a 529 is one way to save for ${name}'s schooling. See how it works in Finance.`;
     case "finance_529_birthday":

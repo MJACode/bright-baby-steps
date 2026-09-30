@@ -85,7 +85,8 @@ export function AccountCard({
           </div>
         )}
 
-        {!opened && sponsorsSettled && <OpenAction option={option} sponsor={recommendation ? undefined : sponsor} />}
+        {/* The neutral link always shows (FR-017); the sponsor only on list cards, before the account is opened (FR-017a). */}
+        <OpenAction option={option} sponsor={!recommendation && !opened && sponsorsSettled ? sponsor : undefined} />
 
         {opened ? (
           <Button
