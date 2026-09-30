@@ -24,16 +24,19 @@ const FORBIDDEN_WORDS = new Set([
   "deallocate", "set", "reset", "listen", "notify", "unlisten", "discard",
   "security", "into", "import", "load", "begin", "commit", "rollback",
   "savepoint", "release", "checkpoint", "nothing",
+  // Row locks (FOR SHARE / FOR KEY SHARE); FOR UPDATE is caught by `update`.
+  "share", "nowait", "locked",
+  // Secrets: never auto-approve reads that could put keys in the transcript.
+  "vault", "decrypted_secrets", "encrypted_password", "current_setting",
 ]);
 
 // SQL keywords that are legitimately followed by "(" and aren't function calls.
 const PAREN_KEYWORDS = new Set([
   "select", "from", "join", "where", "and", "or", "not", "in", "exists", "any",
-  "all", "some", "as", "on", "using", "over", "filter", "within", "values",
+  "all", "some", "as", "on", "using", "values",
   "when", "then", "else", "case", "is", "distinct", "by", "having", "lateral",
   "union", "intersect", "except", "with", "array", "row", "between", "like",
-  "ilike", "similar", "partition", "order", "group", "limit", "offset",
-  "materialized", "recursive", "cast", "extract", "interval", "varchar",
+  "ilike", "similar", "order", "group", "limit", "offset", "cast", "extract", "interval", "varchar",
   "char", "numeric", "decimal", "timestamp", "timestamptz", "time", "bit",
 ]);
 
@@ -55,17 +58,21 @@ const SAFE_FUNCTIONS = new Set([
   "json_object_agg", "jsonb_object_agg", "array_length", "array_to_string",
   "cardinality", "unnest", "generate_series", "round", "floor", "ceil", "abs",
   "percentile_cont", "percentile_disc", "row_number", "rank", "dense_rank",
-  "lag", "lead", "first_value", "last_value", "current_setting",
+  "lag", "lead", "first_value", "last_value", "to_regclass", "current_database",
+  "date", "pg_get_function_identity_arguments",
   "pg_get_functiondef", "pg_get_function_arguments", "pg_get_function_result",
   "pg_get_viewdef", "pg_get_constraintdef", "pg_get_triggerdef",
   "pg_get_indexdef", "pg_get_expr", "pg_get_userbyid", "pg_size_pretty",
   "pg_total_relation_size", "pg_relation_size", "pg_table_size",
   "pg_indexes_size", "pg_database_size", "format_type", "obj_description",
   "col_description", "has_table_privilege", "has_function_privilege",
-  "has_schema_privilege", "pg_has_role", "version", "uid", "role", "jwt",
+  "has_schema_privilege", "pg_has_role", "version",
 ]);
-// Schemas whose functions we allow when the bare name is in SAFE_FUNCTIONS.
-const SAFE_SCHEMAS = new Set(["pg_catalog", "auth"]);
+// Unreserved keywords that are only safe right after ")" — e.g. count(*) FILTER (...),
+// row_number() OVER (...). Anywhere else they could name a user-defined function.
+const AFTER_PAREN_KEYWORDS = new Set(["filter", "over", "within"]);
+// Schema-qualified calls allowed: pg_catalog.<SAFE_FUNCTIONS> and these auth helpers.
+const SAFE_AUTH_FUNCTIONS = new Set(["uid", "role", "jwt"]);
 
 function readInput() {
   try {
@@ -75,42 +82,34 @@ function readInput() {
   }
 }
 
-// Strip comments and string/identifier literals. Returns null if anything is
-// unterminated — we can't reason about SQL we can't tokenize.
+// Strip line comments and plain '...' / "..." literals. Returns null (→ prompt)
+// for anything where our tokenizer could disagree with Postgres's lexer:
+// backslashes (E'\'' escapes), any `$` (dollar quotes vs `$` inside identifiers),
+// block comments (Postgres nests them), and prefixed literals (E'', U&'', N'').
+// Read-only QA queries essentially never need these, so failing closed is cheap.
 function stripLiterals(sql) {
+  if (/[\\$]|\/\*/.test(sql)) return null;
   let out = "";
   let i = 0;
   while (i < sql.length) {
     const c = sql[i];
-    const next = sql[i + 1];
-    if (c === "-" && next === "-") {
+    if (c === "-" && sql[i + 1] === "-") {
       const end = sql.indexOf("\n", i);
       i = end === -1 ? sql.length : end + 1;
       out += " ";
-    } else if (c === "/" && next === "*") {
-      const end = sql.indexOf("*/", i + 2);
-      if (end === -1) return null;
-      i = end + 2;
-      out += " ";
     } else if (c === "'" || c === '"') {
+      if (i > 0 && /[A-Za-z0-9_&]/.test(sql[i - 1])) return null; // E'..', U&'..'
       let j = i + 1;
       for (;;) {
         if (j >= sql.length) return null;
         if (sql[j] === c) {
-          if (sql[j + 1] === c) { j += 2; continue; } // escaped quote
+          if (sql[j + 1] === c) { j += 2; continue; } // doubled quote
           break;
         }
         j++;
       }
       i = j + 1;
       out += c === "'" ? " '' " : " _ident_ ";
-    } else if (c === "$") {
-      const m = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
-      if (!m) { out += c; i++; continue; }
-      const end = sql.indexOf(m[0], i + m[0].length);
-      if (end === -1) return null;
-      i = end + m[0].length;
-      out += " '' ";
     } else {
       out += c;
       i++;
@@ -137,14 +136,18 @@ export function isReadOnly(sql) {
   }
 
   // Every "name(" must be a keyword or a known-safe function.
-  for (const m of clean.matchAll(/([a-z_][a-z0-9_$]*(?:\s*\.\s*[a-z_][a-z0-9_$]*)*)\s*\(/g)) {
+  for (const m of clean.matchAll(/([a-z_][a-z0-9_]*(?:\s*\.\s*[a-z_][a-z0-9_]*)*)\s*\(/g)) {
     const parts = m[1].split(".").map((p) => p.trim());
     const name = parts[parts.length - 1];
     if (parts.length === 1) {
-      if (!PAREN_KEYWORDS.has(name) && !SAFE_FUNCTIONS.has(name)) return false;
-    } else if (!(parts.length === 2 && SAFE_SCHEMAS.has(parts[0]) && SAFE_FUNCTIONS.has(name))) {
+      if (PAREN_KEYWORDS.has(name) || SAFE_FUNCTIONS.has(name)) continue;
+      if (AFTER_PAREN_KEYWORDS.has(name) && /\)\s*$/.test(clean.slice(0, m.index))) continue;
       return false;
     }
+    const ok = parts.length === 2 &&
+      ((parts[0] === "pg_catalog" && SAFE_FUNCTIONS.has(name)) ||
+       (parts[0] === "auth" && SAFE_AUTH_FUNCTIONS.has(name)));
+    if (!ok) return false;
   }
   return true;
 }
