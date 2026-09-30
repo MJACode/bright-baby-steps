@@ -108,7 +108,7 @@ const INTEREST_OPTIONS: { id: PrimaryInterest; label: string; preview: string }[
   { id: "developmental", label: "Developmental milestones",
     preview: "Map every milestone by age, see what's coming next, and get expert guidance when you need it." },
   { id: "speech", label: "Speech and language",
-    preview: "The Word Journal tracks language development from first words to sentences, with SLP-backed context." },
+    preview: "The Word Journal tracks language development from first words to sentences." },
   { id: "financial", label: "Financial planning",
     preview: "Answer two quick questions and see which accounts to open for your baby — and how to open them." },
 ];
@@ -123,8 +123,8 @@ const INTEREST_CTA: Record<PrimaryInterest, { label: string; route: string }> = 
 const INTEREST_FEATURES: Record<PrimaryInterest, string[]> = {
   sleep_feeding: ["Feeding tracker with pattern analysis", "Sleep log with wake window guidance", "Diaper tracker"],
   developmental: ["Milestone tracker by age", "Developmental advisor (AI)", "Upcoming milestone alerts"],
-  speech: ["Word Journal", "Speech-Language Pathologist advisor", "Language milestone tracking"],
-  financial: ["Which accounts to open for your baby", "Claim the $1,000 Trump Account deposit", "529 and custodial accounts, explained"],
+  speech: ["Word Journal", "Speech and language insights (AI)", "Language milestone tracking"],
+  financial: ["Which accounts to open for your baby", "See if your baby qualifies for the $1,000 Trump Account deposit", "529 and custodial accounts, explained"],
 };
 
 function computeAge(dob: string): string | null {

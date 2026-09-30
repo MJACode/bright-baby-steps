@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { startOfWeek, format } from "date-fns";
+import { planWeekStart } from "@/lib/planWeek";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
@@ -91,7 +91,7 @@ export function useGenerateSpeechClass() {
 
       const plan = data as SpeechClassPlan;
 
-      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const weekStart = planWeekStart();
       const { error: upsertError } = await supabase
         .from("speech_practice_plans")
         .upsert(

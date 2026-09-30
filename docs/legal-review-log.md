@@ -2436,6 +2436,105 @@ only its duplicate on Home.**
    onboarding upsell, screenshots) advertises the Home "Next steps" feed — those live
    outside this repo and were not reviewable here.
 
+## 2026-09-30 — Unused `TRIAGE_CONTENT` sleep-guidance table deleted; birth-weight recovery copy limited to the first 4 weeks
+
+**Reviewer:** in-house (Claude pass, founder-approved in session). **Risk level:** Low. No new data flow, and no change to disclosures.
+
+**What changed:**
+- **Deleted from `src/lib/sleepTriage.ts`:** the `TRIAGE_CONTENT` table, `lookupContent`, and the `TriageContent` type (~940 lines). The 2026-08-28 entry above left this authored sleep-guidance copy in place pending "a product call". The founder made that call on 2026-09-30: delete it. It had no consumer and still pointed parents to the removed in-app chat ("Open the chat…"). It was never user-visible, so removing it changes nothing a parent sees and removes no escalation path.
+- **Changed in `GrowthPage.tsx`:** the "Back to birth weight" copy is now limited to the first 28 days after the date of birth, via `isInBirthWeightRecoveryWindow` in `src/lib/childAge.ts`. That covers the celebration banner, the goal progress card, and the "vs birth" sub-label. Outside the window the label reads "Since birth". The Growth setup prompt says "see growth since birth" instead. This fixes a 7-month-old being told "Back to birth weight — great job!"; the copy stays celebratory, not diagnostic.
+
+**Code refs:** branch `claude/growth-birth-weight-and-triage-cleanup`.
+
+## 2026-09-30 — Flare+ paywall: unsubstantiated claims removed
+
+**Reviewer:** in-house (Claude legal pre-review, founder-approved).
+
+**Scope:** `src/pages/Upgrade.tsx` (subhead, perk list, yearly-plan badge, footer
+under the trial CTA), `src/components/UpgradeSheet.tsx` (`FEATURE_HOOK` copy, perk
+list, footer), `src/components/OnboardingWizard.tsx` (speech-interest preview and
+step-7 feature list). Copy only — no layout, pricing, gating, or checkout-stub change.
+
+**Trigger:** in-house pre-review of the Flare+ paywall ahead of paid checkout. The
+paywall made objective, verifiable claims — clinical review, accuracy percentages,
+a timing tolerance — for which no substantiation exists. Under FTC Act § 5 an
+objective claim needs a reasonable basis *before* it is made; a health-adjacent
+claim aimed at parents of infants is read strictly. The facts that make these
+claims unsupportable:
+- **No pediatrician has reviewed any content.** The only "pediatrician" reviewer is
+  an AI dev-agent persona (`.claude/agents/pediatrician.md`).
+- **No accuracy evaluation exists** for cry analysis or for nap/feed predictions —
+  no labelled dataset, no test harness, no measured error.
+- **Predictions are deterministic heuristics** (`NextEventBand`, `feedCoach.ts`,
+  sleep coach — pure local math, no LLM call), so "AI Coach" misdescribes them.
+- **"AI pediatrician"** implies an AI is a licensed clinician — the strongest
+  implied-medical-advice claim on the surface, and at odds with our own
+  "not medical advice" disclaimers.
+
+**Risk level:** High → **resolved for the copy.** Billing-side exposure remains open;
+see the outstanding list below.
+
+**Claims changed (old → new, and why):**
+
+| Surface | Old | New | Why |
+|---|---|---|---|
+| Upgrade subhead | "Predictive insights from your real data. Vetted by pediatricians. Cancel anytime." | "Predictions that learn from your own logs. Questions ready for every checkup. Try it free for 7 days." | No pediatrician review exists. "Cancel anytime" promises a cancel flow that does not exist yet. |
+| Upgrade perk | "Predictive AI Coach — Forecasts naps, fussiness, growth windows" | "Nap & feed predictions — Next nap and feed, learned from your own logs." | Predictions are heuristics, not AI; the product does not forecast fussiness or growth windows. |
+| Upgrade perk | "AI pediatrician visit prep — Questions drafted from your baby's real data, every visit" | "Checkup question prep — Questions for your pediatrician, drafted from your baby's real sleep, feeding, and growth logs." | "AI pediatrician" implies an AI clinician. |
+| Upgrade perk | "Cry & sound analysis — Hungry vs tired vs uncomfortable" | "Cry clues — On-device hints: could be hunger, tiredness, or discomfort." | Categorical "X vs Y" framing implies a classification we have not validated; hedged to hints. On-device is accurate (`cryFeatures.ts`, no network). |
+| Upgrade perk | "Growth analytics + PDF reports — WHO percentiles, trend flags, doctor-ready" | "…— WHO growth percentiles (birth–2 yrs), growth trends, PDFs to share at checkups." | No "trend flag" feature exists; "doctor-ready" implies clinical fitness. The age range matches the WHO 0–24-month tables in `growthPercentiles.ts`. |
+| Upgrade yearly badge | "SAVE 50%" | "SAVE 49%" | $59.99 vs 12 × $9.99 = $119.88 is a 49.96% saving; a rounded-up savings claim overstates it. |
+| Upgrade footer | "No charge today · Reminder before billing · Cancel in Settings" | "No charge today" | No trial-ending reminder email and no in-app cancel flow exist yet. Restore both phrases when they ship. |
+| UpgradeSheet `predictions` | "Predictive scheduling from your real data — accurate to within ~15 min after a week of logs." | "Your baby's next nap and feed, estimated from your own logs. The more you log, the sharper it gets." | No measured error; "~15 min" is an unsubstantiated accuracy claim. |
+| UpgradeSheet `cry-analysis` | "…flags hunger vs tired vs discomfort with 87% accuracy." | "Hints from the sound of your baby's cry — could be hunger, tiredness, or discomfort. You know your baby best." | "87% accuracy" has no evaluation behind it. Neutral "your baby" because the string is static and cannot know the child's gender. |
+| UpgradeSheet `growth-analytics` | "Trend flags, projections, and pediatrician-ready PDFs." | "WHO growth percentiles (birth–2 yrs), growth trends, and PDFs to share at checkups." | No trend-flag or projection feature exists; aligned to the Upgrade row. |
+| UpgradeSheet `expert-library` | "Pediatrician-vetted answers." | "Guides for the questions you actually have." (sub: "Sleep, feeding, and milestones — searchable, ad-free.") | No pediatrician review exists. |
+| UpgradeSheet `exports` | "Doctor-ready in one tap." | "Checkup-ready in one tap." | "Doctor-ready" implies clinical fitness. |
+| UpgradeSheet perks | "Daily AI briefings & predictions" / "Cry & sound analysis" | "Daily AI briefings + nap & feed predictions" / "Cry clues" | Stops predictions reading as AI; matches the Upgrade page names. |
+| UpgradeSheet footer | "No charge today · Cancel anytime · … included" | "No charge today · … included" | No cancel flow exists yet. |
+| Onboarding speech preview | "…from first words to sentences, with SLP-backed context." | "…from first words to sentences." | No speech-language pathologist has reviewed any content. |
+| Onboarding step-7 feature list | "Speech-Language Pathologist advisor" | "Speech and language insights (AI)" | Implies an AI is a licensed SLP — the same problem as "AI pediatrician". |
+
+**`src/data/signLibrary.ts` "SLP-vetted":** checked. It appears only in code comments
+(file header and the `howTo` field's doc comment) and is **not user-visible**, so no
+copy change was needed. The comments do describe a review that did not happen, so they
+should not be cited as evidence of one.
+
+**Outstanding before paid checkout ships:**
+1. **Auto-renewal disclosure directly above the CTA** — price, billing interval,
+   that it renews until cancelled, and how to cancel, clear and conspicuous before
+   billing info is collected (ROSCA, 15 U.S.C. § 8403; Cal. Bus. & Prof. Code
+   §§ 17600–17606, including the affirmative-consent and acknowledgement rules).
+2. **Terms of Service subscriptions section** — `TermsPage.tsx` has none. It needs
+   pricing, trial-to-paid conversion, renewal, cancellation, and refund terms.
+3. **Trial-ending reminder email** before the first charge (Cal. B&P § 17602(a)(3)
+   for trials; also the promise the old footer made).
+4. **In-app cancel / manage-subscription flow** — California requires online
+   cancellation for subscriptions bought online (§ 17602(d)). Once it exists,
+   "Cancel anytime" can come back.
+5. **In-product cry confidence:** `CryAnalyzer.tsx` shows "About {pct}% confident".
+   The number is a heuristic score from the rule-based `classify()`
+   (`cryFeatures.ts`), capped at 0.85, not a calibrated probability. Reword it
+   (e.g. "Strong / Some / Weak match") before any cry marketing leans on it.
+6. **Recommend adding "paid billing goes live" to the outside-counsel trigger list**
+   (alongside fund-raise, EU/UK launch, EHR integration, and material breach).
+   Automatic-renewal law is state-by-state and enforcement-heavy.
+
+**Also noted (not changed in this pass):** some paywall headlines still use "she/her"
+in static strings ("Know when she'll need her next nap.", "What is she trying to
+tell you?", "tuned to her age"). These are not substantiation issues. They are a
+gender-assumption copy fix for a follow-up.
+
+**Code refs:** branch `claude/paywall-claims-legal-fix`.
+
+**QA follow-up, same day:** the `PREMIUM_FEATURES` labels shown in paywall footers
+and PremiumGate cards were aligned with the new perk names: "AI Coach insights" →
+"Daily AI briefings", "Predictive next-event" → "Nap & feed predictions", "Cry &
+sound analysis" → "Cry clues", "Expert content library" → "Guides library". The
+`ai-insights` hook sub claimed "analyzes the last 14 days", but `briefing` uses a
+48-hour window and `weekly-insights` uses 7 days. It now reads "reads your recent
+logs". The draft billing launch kit (auto-renewal disclosure, Terms § 14, emails,
+checklist) is saved at `docs/billing-launch-kit.md`.
 ---
 
 ## 2026-09-30 — Finance Account Finder: old Finance tab replaced; new per-child finance data, Finance reminders, sponsored "Open with" links
