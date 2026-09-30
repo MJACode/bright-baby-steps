@@ -2575,3 +2575,21 @@ checklist) is saved at `docs/billing-launch-kit.md`.
 - Trump Account figures and claim mechanics to be re-verified against Treasury/IRS guidance at each rule change (auto-enrollment proposal pending).
 - Pre-existing: Export My Data omits most tracking tables (allergen, milestone, temperature, supplements, activities, signs, etc.). Separate P0 to close the Privacy § 8 portability promise.
 - Yearly figures refresh (gift exclusion, IRA limit, Trump contribution indexing) by PR in `accountOptions.ts`.
+
+---
+
+## 2026-09-30 — Export My Data: every user/child table, fail-closed on any read error
+
+**Trigger:** P0 carried from the Finance Account Finder entry above — Export My Data omitted most tracking tables (Privacy § 8 "download a copy of your data"; COPPA 16 CFR § 312.6(a) parent review) and swallowed read errors with an empty `catch {}`, so a failed read silently exported an empty list (Constitution VI).
+
+**Change:** export logic moved from `ProfilePage.tsx` to `src/lib/exportUserData.ts`, with one declarative `EXPORT_TABLES` list (55 tables). Every read checks `{ error }`; if any table fails, nothing downloads and the toast names the data that couldn't be read. Reads page until an empty page so the PostgREST max-rows cap can't truncate a table silently. Existing top-level JSON keys unchanged. File renamed `grace-flare-export-YYYY-MM-DD.json` (was `baby-steps-export-…`).
+
+**Excluded, with reasons:**
+- Credentials: `mcp_access_tokens`, `mcp_authorization_grants`, `mcp_clients`; `profiles.vpc_second_token` / `vpc_second_token_expires_at`; `partner_invitations.invite_code`.
+- Reference/content (no user data): `allergens`, `speech`, `speech_categories`, `financial_checklist_items`, `finance_account_sponsors`.
+- Audit/metering: `rights_requests` (the request log itself), `voice_parse_events` (id + timestamp rate-limit counter).
+- `child_account_status.marked_by` / `child_finance_finder.updated_by` stay out, consistent with the 2026-09-30 finance entry.
+
+**Outstanding:** confirm against live schema that every listed table exists (a missing table now fails the whole export closed — `ai_memories` has no migration in the repo). Export includes rows RLS exposes via partner access (unchanged from before).
+
+**Code refs:** branch `fix/export-and-finance-followups`.
