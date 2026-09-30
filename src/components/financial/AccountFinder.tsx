@@ -52,15 +52,16 @@ export function AccountFinder({
   if (answers) {
     const keys = recommend({ eligibilityDate, goal: answers.goal });
     return (
-      <section className="space-y-3" aria-label="Your recommended accounts">
+      <section className="space-y-3" aria-label="Accounts to look into">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display font-bold text-lg">Open these accounts</h2>
+            <h2 className="font-display font-bold text-lg">Accounts to look into</h2>
             <p className="text-sm text-muted-foreground">
               {isExpected
-                ? "Based on your answers. You can open these once your baby is born."
-                : `Based on ${childName}'s birthday and your answers.`}
+                ? "Based only on your due date and your two answers. You can open these once your baby is born."
+                : `Based only on ${childName}'s birthday and your two answers, not your income, taxes or state.`}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{NOT_ADVICE}</p>
           </div>
           <Button
             variant="ghost"
@@ -95,7 +96,7 @@ export function AccountFinder({
     <Card className="border-0 bg-finance-bg">
       <CardContent className="p-4 space-y-3">
         <div>
-          <h2 className="font-display font-bold text-lg">Find the right accounts</h2>
+          <h2 className="font-display font-bold text-lg">Find accounts to look into</h2>
           <p className="text-xs text-muted-foreground">Question {draftGoal ? 2 : 1} of 2</p>
         </div>
 

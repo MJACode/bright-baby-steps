@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { AccountOption } from "@/lib/accountOptions";
 import type { FinanceSponsor } from "@/hooks/useFinanceAccounts";
 
-export const NOT_ADVICE = "Educational, not financial advice.";
+export const NOT_ADVICE = "Educational, not financial or tax advice.";
 
 interface AccountCardProps {
   option: AccountOption;
@@ -85,7 +85,7 @@ export function AccountCard({
           </div>
         )}
 
-        {!opened && sponsorsSettled && <OpenAction option={option} sponsor={sponsor} />}
+        {!opened && sponsorsSettled && <OpenAction option={option} sponsor={recommendation ? undefined : sponsor} />}
 
         {opened ? (
           <Button
@@ -160,22 +160,29 @@ function ExplainerRow({ label, children }: { label: string; children: ReactNode 
 }
 
 // The sponsor URL is used verbatim: nothing about the child, the account or the
-// device is appended (spec FR-016).
+// device is appended (spec FR-016). The Trump Account never carries a sponsor:
+// the deposit is free to claim from the government.
 function OpenAction({ option, sponsor }: { option: AccountOption; sponsor: FinanceSponsor | undefined }) {
-  if (!sponsor) {
-    return (
-      <Button asChild variant="secondary" className="w-full touch-target">
-        <a href={option.howToOpen.url} target="_blank" rel="noopener noreferrer">
-          How to open <ExternalLink />
-        </a>
-      </Button>
-    );
-  }
+  const howToOpen = (
+    <Button asChild variant="secondary" className="w-full touch-target">
+      <a href={option.howToOpen.url} target="_blank" rel="noopener noreferrer">
+        How to open <ExternalLink />
+      </a>
+    </Button>
+  );
+  if (!sponsor || option.key === "trump") return howToOpen;
+
+  const firm = sponsor.firm_name;
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Button asChild className="flex-1 min-w-0 touch-target">
-          <a href={sponsor.cta_url} target="_blank" rel="noopener noreferrer sponsored">
+        <Button asChild variant="outline" className="flex-1 min-w-0 touch-target">
+          <a
+            href={sponsor.cta_url}
+            target="_blank"
+            rel="noopener noreferrer sponsored"
+            aria-label={`${sponsor.cta_label}, ad, opens ${firm} website`}
+          >
             <span className="truncate">{sponsor.cta_label}</span> <ExternalLink />
           </a>
         </Button>
@@ -184,10 +191,10 @@ function OpenAction({ option, sponsor }: { option: AccountOption; sponsor: Finan
         </span>
       </div>
       <p className="text-xs text-muted-foreground leading-snug">
-        {sponsor.disclosure ??
-          `Paid placement by ${sponsor.firm_name}. Grace Flare may be paid if you tap, and hasn't evaluated ${sponsor.firm_name}. Investing involves risk, including possible loss of principal.`}{" "}
-        Ads never change which accounts we suggest.
+        {`Paid ad from ${firm}. Grace Flare is paid for this placement and hasn't reviewed ${firm} or its products. Investing involves risk, including possible loss of money. Ads never change which accounts we suggest.` +
+          (sponsor.disclosure ? " " + sponsor.disclosure : "")}
       </p>
+      {howToOpen}
     </div>
   );
 }

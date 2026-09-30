@@ -2435,3 +2435,44 @@ only its duplicate on Home.**
 2. Confirm no out-of-repo surface (App Store / Play Store listing, marketing site,
    onboarding upsell, screenshots) advertises the Home "Next steps" feed — those live
    outside this repo and were not reviewable here.
+
+---
+
+## 2026-09-30 — Finance Account Finder: old Finance tab replaced; new per-child finance data, Finance reminders, sponsored "Open with" links
+
+**Scope:** `src/lib/accountOptions.ts` (all account copy + 2026 figures), `src/lib/accountFinder.ts` (rule), `src/components/financial/AccountFinder.tsx`, `src/components/financial/AccountCard.tsx` (sponsor CTA + "Ad" label + disclosure), `src/components/records/FinancialTab.tsx` (Trump highlight), `supabase/functions/check-notifications/index.ts` (`finance_trump_claim`, `finance_529_newborn`, `finance_529_birthday`), `supabase/migrations/20260930000000_finance_account_finder.sql` + `20260930020000_finance_sponsors_no_trump.sql`, `src/pages/PrivacyPage.tsx` §§ 2, 3, 6, `src/pages/TermsPage.tsx` § 4, `src/pages/FAQPage.tsx`, `src/components/CoppaDirectNotice.tsx`, `src/pages/dashboard/ProfilePage.tsx` (export). Spec: `specs/001-finance-account-finder/` (T020/T021).
+**Trigger:** Founder decision (2026-09-30) to replace the Finance tab with a two-question account-type finder. The change adds per-child finance data, a mutable "Finance" reminder category sent to all owners of eligible children, and first-party sponsored "Open with [Firm]" buttons per account type. Legacy finance tables are left in place and no longer read (no data deleted).
+
+**Data added (per child, owner + active co-parent only, RLS keyed on child_id, ON DELETE CASCADE from children):**
+- `child_finance_finder`: goal (education / anything / not_sure), family_contributes (bool), updated_by, updated_at.
+- `child_account_status`: account_key, opened_at, marked_by. A `trump` row implies U.S. citizenship + SSN (CPRA sensitive-PI inference): used only to suppress the matching reminder; never exported to analytics, sponsors, or AI.
+- No SSN, account number, balance, or income is collected (FR-022). `finance_account_sponsors` holds no user or child data.
+
+**Risk levels surfaced:**
+- P0: Sponsored CTA rendered inside finder result cards (child-DOB-driven placement), contradicting the direct notice ("not … for advertising") and the 2026-07-04 rule excluding sponsors from editorial recommendations; it also couples a personalized account-type suggestion to a paid firm (Advisers Act § 202(a)(11) / *Lowe*). Resolved: sponsors suppressed on recommendation cards; sponsors appear only in the static account list, identical for every parent.
+- P0: Sponsor-supplied `disclosure` replaced the default ad disclosure (16 CFR § 255.5). Resolved: default disclosure always renders; sponsor text is appended.
+- P0: Sponsors allowed on the Trump Account card (free government deposit; FTC § 5 / Impersonation Rule, 16 CFR Part 461). Resolved: UI guard + `CHECK (account_key <> 'trump')`; copy now states no paid firm is needed to claim.
+- P0: 529 copy said $95,000 five-year gift election needs no gift-tax paperwork (it requires Form 709). Resolved: corrected.
+- P0: New finance data missing from Privacy § 2, the COPPA direct notice, and Export My Data. Resolved: § 2 bullet, direct-notice enumeration, and export of both tables added.
+- P1: Trump "why"/highlight/reminder omitted the U.S.-citizen condition. Resolved: "may qualify" plus citizen condition.
+- P1: Finder framing ("Find the right accounts" / "Open these accounts") read as personalized advice. Resolved: "Accounts to look into", on-screen basis ("based only on birthday and your two answers — not your income, taxes or state"), "Educational, not financial or tax advice" moved above the cards. Spec copy updated to match.
+- P1: 529 "strongest tax break" superlative and unconditioned $35,000 Roth rollover. Resolved: softened; conditions stated.
+- P1: 529 "How to open" pointed at a commercial site (savingforcollege.com) despite the non-commercial rule. Resolved: College Savings Plans Network.
+- P1: HYSA "Safe" + unqualified FDIC line next to potential fintech sponsors (12 CFR Part 328 subpart B). Resolved: "insured" + bank-only caveat.
+- P1: Privacy § 6 / Terms § 4 updated: sponsors never in finder results, never targeted with child data, cannot change suggestions; compensation is flat-fee or per-click only, never per account opened or amount invested. Terms § 4 adds account-finder scope paragraph. Treated as clarifying, non-material under Terms § 10 (see Outstanding).
+- P2: Reminder copy de-claimed ("easy", "popular", "future"). In-app only; CAN-SPAM analysis required before any email channel.
+- P2: UGMA transfer age (up to 25 in some states), Coverdell "most families", Trump "Contributions open July 4, 2026" tense, Trump employer cap is per employee, FAQ additions ("Does Grace Flare give financial advice?", "Why are there ads in Finance?"), partner-role FAQ line.
+- P2: `marked_by` / `updated_by` retain a deleted co-parent's UUID: accepted as de minimis — opaque UUID only, no FK, not exported.
+- Accepted: ad hidden once an account is marked opened (child data suppresses, never selects, an ad). `rel="noopener noreferrer sponsored"`, verbatim `cta_url`, no identifiers appended (FR-016) verified.
+- Source verification: every figure checked against IRS / Treasury / FDIC / Savingforcollege secondary sources on 2026-09-30; irs.gov, trumpaccounts.gov and fdic.gov were blocked by the build environment's proxy, so URLs were confirmed via search index, not loaded.
+
+**SubprocessorsPage.tsx:** unchanged. Sponsors receive no data and are not subprocessors (same position as 2026-06-20).
+
+**Code refs:** branch `feature/finance-account-finder` (PR #244).
+
+**Outstanding:**
+- OUTSIDE-COUNSEL GATE (carried from 2026-06-20, still open): no `finance_account_sponsors` row may be set `is_active = true` until securities counsel confirms (a) adviser / broker / Marketing Rule promoter / MSRB G-21 position for the finder + paid placement, (b) flat-fee / CPC-only contract terms, (c) sponsor addendum warranting compliance-approved copy and landing pages.
+- COPPA § 312.5(a)(1): confirm the new finance data + DOB-timed finance reminders are not a material change for previously consented parents. The direct notice is shown once per profile, so existing parents do not see the updated enumeration. If material: 30-day notice under Privacy § 11 and re-acknowledgement.
+- Trump Account figures and claim mechanics to be re-verified against Treasury/IRS guidance at each rule change (auto-enrollment proposal pending).
+- Pre-existing: Export My Data omits most tracking tables (allergen, milestone, temperature, supplements, activities, signs, etc.). Separate P0 to close the Privacy § 8 portability promise.
+- Yearly figures refresh (gift exclusion, IRA limit, Trump contribution indexing) by PR in `accountOptions.ts`.

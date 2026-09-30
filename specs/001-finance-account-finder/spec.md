@@ -16,9 +16,9 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Find the right accounts in a few taps (Priority: P1)
+### User Story 1 - Find accounts to look into in a few taps (Priority: P1)
 
-A parent opens Finance. Their child's birthdate is already known. They answer at most two quick questions (what the money is for; whether family will chip in) and see "Open these accounts" — one or two account types, each with a plain reason why, what they'll need to open it, and about how long it takes.
+A parent opens Finance. Their child's birthdate is already known. They answer at most two quick questions (what the money is for; whether family will chip in) and see "Accounts to look into" — one or two account types, each with a plain reason why, what they'll need to open it, and about how long it takes.
 
 **Why this priority**: This is the whole point of the section. Without it nothing else matters.
 
@@ -64,7 +64,7 @@ Below the finder, the parent can browse a short list — Trump Account, 529, cus
 **Acceptance Scenarios**:
 
 1. **Given** the Finance page, **When** it loads, **Then** "Other accounts" is collapsed by default.
-2. **Given** any account explainer, **When** expanded, **Then** it shows an "Educational, not financial advice" note and a source link.
+2. **Given** any account explainer, **When** expanded, **Then** it shows an "Educational, not financial or tax advice" note and a source link.
 
 ---
 
@@ -138,7 +138,7 @@ A parent who hasn't opened a key account gets a single, calm in-app reminder at 
 
 - **FR-009**: The account list MUST show Trump Account, 529, custodial UGMA/UTMA and high-yield savings; Coverdell ESA and custodial Roth IRA MUST be in a collapsed "Other accounts" group.
 - **FR-010**: Figures MUST reflect 2026 rules: 529 K-12 tuition withdrawals up to $20,000/yr; gift-tax annual exclusion $19,000 per donor; Trump Account $1,000 Treasury deposit for U.S.-citizen children with an SSN born 2025–2028, claimed via IRS Form 4547 or trumpaccounts.gov, with family contributions up to $5,000/yr. Each figure MUST cite a source.
-- **FR-011**: Every account explainer and the finder result MUST carry "Educational, not financial advice."
+- **FR-011**: Every account explainer and the finder result MUST carry "Educational, not financial or tax advice."
 
 **Opened status**
 
@@ -150,7 +150,8 @@ A parent who hasn't opened a key account gets a single, calm in-app reminder at 
 
 - **FR-015**: An account type MAY carry one sponsor with firm name, button label, destination URL and disclosure text, managed without an app release.
 - **FR-016**: Sponsored buttons MUST show an "Ad" label adjacent to the button and MUST NOT add any child, user, or device identifier to the destination.
-- **FR-017**: When no sponsor is set, a neutral "How to open" source link MUST be shown.
+- **FR-017**: A neutral "How to open" link MUST always be shown; a sponsor button, when set, is shown in addition.
+- **FR-017a**: Sponsored buttons MUST NOT appear on finder result cards or on the Trump Account; they appear only in the account list.
 
 **Reminders**
 

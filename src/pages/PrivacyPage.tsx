@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: September 7, 2026 ·{" "}
+          Effective: June 20, 2026 · Last reviewed: September 30, 2026 ·{" "}
           <Link to="/subprocessors" className="underline">Subprocessors</Link>
         </p>
       </div>
@@ -30,6 +30,7 @@ export default function PrivacyPage() {
             <li><strong>Child profile data:</strong> your child's name, date of birth, gender (optional), prematurity status, photo (optional), and optional interests and temperament you select from a fixed list.</li>
             <li><strong>AI memory:</strong> short factual notes about your child that our AI features save from your briefings and weekly insights (or that you add yourself) — for example routines, preferences, and things you're working on. You can view, edit, and delete these notes at any time in Profile → About your child.</li>
             <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, supplement, and body-temperature (fever) records that you choose to log.</li>
+            <li><strong>Finance planning data:</strong> for each child, your answers to the Finance account finder (what the savings are for, and whether family will contribute) and which account types you mark as opened. We never ask for or store Social Security numbers, account numbers, balances, or income.</li>
             <li><strong>Chat history (historical):</strong> Grace Flare previously offered an AI chat. That feature was removed on August 28, 2026 and no new chat data is created. Conversations saved before then are still stored in your account — you can export them at any time from Profile, and deleting your account deletes them.</li>
             <li><strong>Technical data:</strong> IP address, device type and operating system, browser type and version, app version, session identifiers, crash logs, and approximate location derived from your IP address (city-level only). We use first-party cookies and equivalent local-storage tokens strictly to keep you signed in and to remember your preferences. We do not use third-party advertising cookies or cross-site tracking pixels.</li>
             <li><strong>Feedback attachments:</strong> any screenshot you choose to upload with a feedback report.</li>
@@ -42,7 +43,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1 mt-1">
             <li>Provide the Grace Flare tracking and AI features.</li>
             <li>Generate daily briefings, weekly insights, and other AI suggestions using your child's logged activity.</li>
-            <li>Send you optional reminders and notifications.</li>
+            <li>Send you optional reminders and notifications, including a few one-time reminders about opening savings accounts for your child, timed from your child's date of birth. You can turn off Finance reminders in notification settings.</li>
             <li>Secure the service, prevent fraud and abuse, and produce aggregated, de-identified usage statistics to fix bugs and prioritise features. We do <strong>not</strong> use your child's tracking data, saved chat history, or photos for product analytics, A/B tests, or model evaluation.</li>
           </ul>
           <p className="mt-2">For users in the EU/EEA and UK, we rely on the following lawful bases under GDPR Art. 6(1): <strong>(a) performance of a contract</strong> — to operate your account, store your child's records, and deliver features you request; <strong>(b) consent</strong> — for AI-assisted guidance and any optional feature you opt into; <strong>(c) legitimate interest</strong> — for security, fraud prevention, and aggregated, de-identified product analytics, balanced against your rights and documented in an internal Legitimate Interests Assessment available on request.</p>
@@ -71,7 +72,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">6. Advertising and sponsored content</h2>
-          <p>Parts of Grace Flare, including the Finance section, may display sponsored content — clearly labeled advertisements that a third party pays us to show. This is first-party advertising: we choose what to display, and we do not share your or your child's personal information with advertisers, do not use advertising cookies or cross-site tracking pixels, and do not engage in cross-context behavioural advertising or "sharing" as defined under the CCPA/CPRA. Sponsored content is advertising, not a recommendation or endorsement by Grace Flare. We are paid whether or not you interact with it; we may be paid when you click. Clicking a sponsored link takes you to the advertiser's own site, governed by their privacy policy, not ours. We do not transmit any identifier that ties your click to your account or your child.</p>
+          <p>Parts of Grace Flare, including the Finance section, may display sponsored content: clearly labeled advertisements that a third party pays us to show. This is first-party advertising: we choose what to display, and we do not share your or your child's personal information with advertisers, do not use advertising cookies or cross-site tracking pixels, and do not engage in cross-context behavioural advertising or "sharing" as defined under the CCPA/CPRA. Sponsored links appear only in the general account list, where every parent who views a given account type sees the same sponsor; we never use your child's information to choose, target, or measure an ad, and sponsored links never appear in your account-finder results. The account finder's suggestions use only your child's birth date (or due date) and your two answers, and advertisers cannot pay to change which accounts we suggest or their order. Sponsored content is advertising, not a recommendation or endorsement by Grace Flare. We are paid a flat fee or per click; we are not paid based on whether you open an account or how much you invest. Clicking a sponsored link takes you to the advertiser's own site, governed by their privacy policy, not ours. We do not transmit any identifier that ties your click to your account or your child.</p>
         </section>
 
         <section>
