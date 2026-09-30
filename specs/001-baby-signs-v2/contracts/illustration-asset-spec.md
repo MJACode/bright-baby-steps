@@ -24,7 +24,7 @@ Each illustration is **one image per sign** that shows the whole sign: the start
 
 | Property | Requirement |
 |---|---|
-| Format | **SVG** (optimized, e.g. SVGO). No embedded raster images, fonts, `<script>`, or external references |
+| Format | **SVG**, optimized with SVGO (default preset). No `<?xml ?>` header, comments, `<style>` blocks, inline `style`/`stroke` attributes, embedded raster images, fonts, `<script>`, or external references. Colors come only from the classes in §3 |
 | Canvas | `viewBox="0 0 400 300"` (4:3). Keep all important content 16 units inside the edges |
 | Size | ≤ 40 KB per file after optimization |
 | Line weight | 3–4 units at the 400-wide canvas, consistent across all 20 |
