@@ -1,6 +1,8 @@
-import { differenceInMonths, parseISO } from "date-fns";
+import { differenceInCalendarDays, differenceInMonths, parseISO } from "date-fns";
 
 export const PREMATURE_CORRECTION_CUTOFF_MONTHS = 24;
+
+export const BIRTH_WEIGHT_RECOVERY_WINDOW_DAYS = 28;
 
 // `new Date("2024-01-15")` is UTC midnight, which is the previous evening in
 // the Americas; parseISO reads a date-only string as local midnight.
@@ -44,4 +46,19 @@ export function ageInMonthsAt(
 ): number {
   if (parseChildDate(dob) > at) return 0;
   return differenceInMonths(at, getAgeAnchorDate(dob, isPremature, dueDate, at));
+}
+
+/**
+ * True during the first 4 weeks of life, when "back to birth weight" is the
+ * growth question pediatricians are tracking. Counted from the real DOB, not
+ * the due date: regaining birth weight is about days since delivery.
+ */
+export function isInBirthWeightRecoveryWindow(
+  dob: string | null | undefined,
+  isExpected: boolean | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!dob || isExpected) return false;
+  const days = differenceInCalendarDays(now, parseChildDate(dob));
+  return days >= 0 && days <= BIRTH_WEIGHT_RECOVERY_WINDOW_DAYS;
 }
