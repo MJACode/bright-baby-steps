@@ -2575,3 +2575,42 @@ checklist) is saved at `docs/billing-launch-kit.md`.
 - Trump Account figures and claim mechanics to be re-verified against Treasury/IRS guidance at each rule change (auto-enrollment proposal pending).
 - Pre-existing: Export My Data omits most tracking tables (allergen, milestone, temperature, supplements, activities, signs, etc.). Separate P0 to close the Privacy § 8 portability promise.
 - Yearly figures refresh (gift exclusion, IRA limit, Trump contribution indexing) by PR in `accountOptions.ts`.
+
+## 2026-09-30 — SECURITY: admin database functions were callable with the public anon key; locked down
+
+**Reviewer:** in-house (Claude backend + QA passes, founder-approved apply). **Risk level:** High → resolved on live 2026-09-30.
+
+**What was exposed.** On this Supabase project, `pg_default_acl` grants EXECUTE on every new function in `public` directly to `anon` and `authenticated`. That means `REVOKE ... FROM PUBLIC` removes nothing. As a result, three SECURITY DEFINER functions could be called by anyone holding the public anon key, at `POST /rest/v1/rpc/<name>`:
+- `_purge_user_data(uuid)`: deletes every row for any user id, then the `auth.users` row. **Any account could be deleted by anyone.** Exposed since `20260507040000_inactive_account_purge.sql`, applied to live as `20260507151347`.
+- `purge_inactive_account(uuid)`: a wrapper around the function above. Same exposure.
+- `users_with_no_logs_since(timestamptz)`: returns the parent user id, child id and **child first name** for every child with no recent logs. Passing a future timestamp returns every child. Exposed since `20260502010000_reactivation_rpc.sql`.
+
+**Evidence of misuse.** Supabase log retention covers only about 24 hours, 2026-09-29T20:30Z to 2026-09-30T20:29Z. In that window:
+- There were no `/rest/v1/rpc/*` requests of any kind.
+- There were no mentions of the three functions in PostgREST or Postgres logs.
+- There were no user deletions in `auth_audit_logs`.
+
+Anything before that window **cannot be ruled in or out from logs.**
+
+**Fix.** Migration `20260930090000_lock_down_admin_rpcs.sql`, applied to live 2026-09-30:
+- REVOKE EXECUTE from PUBLIC, `anon` and `authenticated`, and GRANT to `service_role`.
+- The migration asserts the result and fails if any function is still executable.
+- Verified on live afterwards with `has_function_privilege`: anon=false, authenticated=false, service_role=true for all three.
+
+Legitimate callers keep working:
+- The `inactive-account-purge` and `reactivate-nudge` edge functions use the service-role key.
+- `delete_user_account()` is a postgres-owned SECURITY DEFINER function, so its call is checked as the owner.
+
+**Founder / counsel decision needed (not concluded here).** Is this a reportable security incident? Facts relevant to that call:
+- Children's names were exposed to unauthenticated callers for about 5 months, with no evidence of access in the one day of retained logs.
+- Account deletion was possible for the same period, with no deletions seen in that day.
+- Consider it against Privacy § 8 / § 10 commitments, state breach-notification statutes, and COPPA (16 CFR § 312.8, reasonable security).
+- CLAUDE.md lists "material breach" as a trigger for outside counsel.
+- Recommend counsel review whether the exposure alone, without evidence of access, triggers notice in any state where users live.
+
+**Follow-ups:**
+1. **Root cause still in place.** Default privileges keep granting EXECUTE on new public functions to anon and authenticated. Either change `ALTER DEFAULT PRIVILEGES` (this needs explicit grants for client RPCs going forward), or require every SECURITY DEFINER migration to revoke from anon and authenticated explicitly. Added to backend and QA lessons.
+2. The Supabase security advisor still flags as ERROR the view `public.family_moments`, which is defined SECURITY DEFINER and so bypasses the querier's RLS. Needs review.
+3. `delete_user_account()` is still anon-executable. It is guarded by `auth.uid()`, which is null for anon; confirm it no-ops safely.
+4. `can_access_child(uuid, uuid)` has no `auth.uid()` guard. Anyone can ask whether a given user can access a given child. This is fixed in the pending free-partner-seat migration.
+5. **Cron jobs failing.** `reactivate-nudge` and `inactive-account-purge` return 401 on every scheduled run, because the Vault service-role key is being rejected. **The 24-month inactive-account purge promised in Privacy § 8 is not running.** Fix is pending.
