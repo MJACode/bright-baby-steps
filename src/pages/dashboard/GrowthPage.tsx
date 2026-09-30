@@ -28,6 +28,7 @@ import {
   headPercentile,
   formatPercentile,
 } from "@/lib/growthPercentiles";
+import { isInBirthWeightRecoveryWindow } from "@/lib/childAge";
 
 // ── weight unit helpers ───────────────────────────────────────────────────────
 
@@ -312,6 +313,10 @@ export default function GrowthPage() {
   const dischargeOzVal = child?.discharge_weight_oz ?? null;
 
   const vsbirthPct = currentOz != null && birthOzVal ? pctChange(currentOz, birthOzVal) : null;
+  const inRecoveryWindow = isInBirthWeightRecoveryWindow(
+    activeChild?.date_of_birth,
+    activeChild?.is_expected,
+  );
   const goalReached = vsbirthPct != null && vsbirthPct >= 0;
 
   // Last pediatrician visit weight (most recent is_pediatrician_visit = true that has a weight)
@@ -469,7 +474,9 @@ export default function GrowthPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">Set birth &amp; discharge weights</p>
               <p className="text-xs text-muted-foreground">
-                Add baseline weights to track progress back to birth weight
+                {inRecoveryWindow
+                  ? "Add baseline weights to track progress back to birth weight"
+                  : "Add baseline weights to see growth since birth"}
               </p>
             </div>
             <Button size="sm" variant="outline" onClick={openSetup}>
@@ -541,11 +548,13 @@ export default function GrowthPage() {
                   : "—"
               }
               sub={
-                vsbirthPct != null
-                  ? goalReached
-                    ? "Back to birth weight"
-                    : `${displayWeight(birthOzVal)} goal`
-                  : displayWeight(birthOzVal)
+                vsbirthPct == null
+                  ? displayWeight(birthOzVal)
+                  : !inRecoveryWindow
+                    ? "Since birth"
+                    : goalReached
+                      ? "Back to birth weight"
+                      : `${displayWeight(birthOzVal)} goal`
               }
               delta={vsbirthPct}
               icon={<TrendingUp className="w-3.5 h-3.5" />}
@@ -567,8 +576,8 @@ export default function GrowthPage() {
         </div>
       )}
 
-      {/* Goal banner */}
-      {birthOzVal && currentOz && !goalReached && (
+      {/* Birth-weight recovery — first 4 weeks only */}
+      {inRecoveryWindow && birthOzVal && currentOz && !goalReached && (
         <Card className="border-0 bg-blue-50 dark:bg-blue-950/30">
           <CardContent className="p-4 space-y-2">
             <div className="flex justify-between items-center">
@@ -600,7 +609,7 @@ export default function GrowthPage() {
         </Card>
       )}
 
-      {goalReached && birthOzVal && (
+      {inRecoveryWindow && goalReached && birthOzVal && (
         <Card className="border-0 bg-green-50 dark:bg-green-950/30">
           <CardContent className="p-4 flex items-center gap-3">
             <TrendingUp className="w-5 h-5 text-green-600 shrink-0" />
