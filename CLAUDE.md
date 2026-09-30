@@ -261,7 +261,7 @@ your-project/                       Project root for Claude Code
 
 [Spec Kit](https://github.com/github/spec-kit) v1.0.12 is installed (`.specify/` + `.claude/skills/speckit-*`). Flow: `/speckit-constitution` → `/speckit-specify` → (`/speckit-clarify`) → `/speckit-plan` → `/speckit-tasks` → (`/speckit-analyze`) → `/speckit-implement`. Specs land in `specs/NNN-feature-name/`.
 
-- `.specify/memory/constitution.md` is **v1.0.0, ratified 2026-09-29**: eight principles, each backed by evidence from the app's history. Every `plan.md` runs a Constitution Check against it. Amendments go through `/speckit-constitution` and need founder approval. The constitution and this file must agree; if they conflict, raise it with the founder.
+- `.specify/memory/constitution.md` is **v1.0.1** (ratified 2026-09-29): eight principles, each backed by evidence from the app's history. Every `plan.md` runs a Constitution Check against it. Amendments go through `/speckit-constitution` and need founder approval. The constitution and this file must agree; if they conflict, raise it with the founder.
 - Where a Spec Kit template conflicts with CLAUDE.md (reuse-first, agent routing, QA-after-every-update, Legal Review, Mobbin rule), CLAUDE.md wins.
 - Upgrade: `uvx --from git+https://github.com/github/spec-kit.git@<tag> specify init --here --force --non-interactive --integration claude --script sh`.
 

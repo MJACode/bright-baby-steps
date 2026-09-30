@@ -37,6 +37,12 @@ if (current.errors > baseline.errors || current.warnings > baseline.warnings) {
   process.exit(1);
 }
 
+// Fail on a drop too, so the lower baseline is committed in the same PR. Otherwise the
+// headroom a cleanup frees would silently absorb new problems later.
 if (current.errors < baseline.errors || current.warnings < baseline.warnings) {
-  console.log("Lint problems went down — run `npm run lint:baseline -- --update` and commit the new baseline.");
+  console.error(
+    "Lint problems went down — nice. Run `npm run lint:baseline -- --update` and commit " +
+      ".eslint-baseline.json so the new, lower count is locked in.",
+  );
+  process.exit(1);
 }
