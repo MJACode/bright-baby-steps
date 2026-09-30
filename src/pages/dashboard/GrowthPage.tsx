@@ -442,7 +442,7 @@ export default function GrowthPage() {
   return (
     <div className="space-y-5 pb-24">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
             <Scale className="w-6 h-6 text-primary" /> Growth
@@ -450,11 +450,11 @@ export default function GrowthPage() {
           <p className="text-sm text-muted-foreground mt-0.5">{activeChild.name}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={openSetup}>
+          <Button variant="outline" size="sm" className="touch-target" onClick={openSetup}>
             <Pencil className="w-3.5 h-3.5 mr-1.5" />
             Baseline
           </Button>
-          <Button size="sm" onClick={() => setLogOpen(true)}>
+          <Button size="sm" className="touch-target" onClick={() => setLogOpen(true)}>
             <Plus className="w-4 h-4 mr-1.5" />
             Log measurement
           </Button>

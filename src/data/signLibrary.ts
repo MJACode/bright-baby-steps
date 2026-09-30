@@ -47,7 +47,7 @@ export const SIGNS_RED_FLAG =
   "Signing progress doesn't replace milestone checkpoints. If your baby isn't using any gestures (pointing, waving, reaching) by 12 months, has no spoken words by 16 months, or loses skills they had, request a free Early Intervention evaluation — no doctor's referral needed.";
 
 export const SIGNS_SPEECH_VS_LANGUAGE =
-  "Signing builds language — expressing wants and ideas. It doesn't change how clearly speech sounds come out; if you're worried about pronunciation, the speech chat can help.";
+  "Signing builds language — expressing wants and ideas. It doesn't change how clearly speech sounds come out; if you're worried about pronunciation, talk with your pediatrician or a speech-language pathologist.";
 
 export const SIGN_STAGES: SignStage[] = [
   {
