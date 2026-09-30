@@ -355,11 +355,11 @@ function financeReminderTypesFor(dob: string, todayKey: string): FinanceReminder
 function financeReminderMessage(type: FinanceReminderType, name: string): string {
   switch (type) {
     case "finance_trump_claim":
-      return `Once ${name}'s Social Security card arrives, you can claim their $1,000 Trump Account deposit. Open Finance to see how.`;
+      return `${name} may qualify for a $1,000 Trump Account deposit from the U.S. Treasury. Once their Social Security card arrives, see how to claim it in Finance.`;
     case "finance_529_newborn":
-      return `When you're ready, a 529 is an easy way to start saving for ${name}'s future. See if it fits in Finance.`;
+      return `When you're ready, a 529 is one way to save for ${name}'s schooling. See how it works in Finance.`;
     case "finance_529_birthday":
-      return `Happy first birthday to ${name}! Birthdays are a popular time for family to gift to a 529 — see how in Finance.`;
+      return `Happy first birthday to ${name}! If family asks what to give, a 529 gift is one option. See how in Finance.`;
   }
 }
 
