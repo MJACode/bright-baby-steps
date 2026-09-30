@@ -51,6 +51,11 @@ const MUTABLE_CATEGORIES = [
     label: "Welcome-back notes",
     description: "A friendly hello when you've been away",
   },
+  {
+    category: "finance",
+    label: "Finance",
+    description: "A heads-up when it's a good time to open an account",
+  },
 ] as const;
 
 export default function ProfilePage() {

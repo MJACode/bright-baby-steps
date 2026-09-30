@@ -11,6 +11,8 @@ import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkl
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
+import { useChildren } from "@/hooks/useChildren";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 
 interface ToolItem {
   label: string;
@@ -20,6 +22,7 @@ interface ToolItem {
   colorClass: string;
   iconClass: string;
   premium?: boolean;
+  parentsOnly?: boolean;
 }
 
 const tools: ToolItem[] = [
@@ -33,11 +36,12 @@ const tools: ToolItem[] = [
   },
   {
     label: "Financial",
-    description: "Insurance, savings, tax credits",
+    description: "Accounts for your kid",
     icon: DollarSign,
     path: "/dashboard/financial",
     colorClass: "bg-finance/10",
     iconClass: "text-finance",
+    parentsOnly: true,
   },
   {
     label: "Early Intervention",
@@ -92,6 +96,10 @@ const tools: ToolItem[] = [
 
 export default function MorePage() {
   const { isPremium } = usePremium();
+  const { activeChild } = useChildren();
+  const { role, isResolved } = useCurrentRoleQuery(activeChild?.id);
+  const hideParentsOnly = isResolved && (role === "caregiver" || role === "viewer");
+  const visibleTools = hideParentsOnly ? tools.filter((t) => !t.parentsOnly) : tools;
 
   return (
     <div className="space-y-5 pb-24">
@@ -101,7 +109,7 @@ export default function MorePage() {
       </div>
 
       <div className="space-y-2">
-        {tools.map((tool) => {
+        {visibleTools.map((tool) => {
           const Icon = tool.icon;
           return (
             <Card key={tool.path} className="border-0 bg-card">

@@ -41,7 +41,7 @@ const RECORD_SECTIONS: Record<RecordSection, SectionMeta> = {
     title: "Financial",
     icon: DollarSign,
     iconClass: "text-finance",
-    emptyHint: "Add a child to start the financial checklist.",
+    emptyHint: "Add a child to find the right accounts.",
   },
   ei: {
     title: "Early Intervention",
