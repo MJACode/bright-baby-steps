@@ -56,12 +56,12 @@ export function usePremium() {
  * to the paywall (or remove it during a promo) without grepping the codebase.
  */
 export const PREMIUM_FEATURES = {
-  "ai-insights": "AI Coach insights",
-  "predictions": "Predictive next-event",
-  "cry-analysis": "Cry & sound analysis",
+  "ai-insights": "Daily AI briefings",
+  "predictions": "Nap & feed predictions",
+  "cry-analysis": "Cry clues",
   "growth-analytics": "Detailed growth analytics",
   "multi-caregiver": "Partner & caregiver access",
-  "expert-library": "Expert content library",
+  "expert-library": "Guides library",
   "unlimited-history": "Unlimited log history",
   "exports": "PDF reports & exports",
   "speech-class": "Speech Class — guided weekly practice",
