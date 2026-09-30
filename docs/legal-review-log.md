@@ -2435,3 +2435,89 @@ only its duplicate on Home.**
 2. Confirm no out-of-repo surface (App Store / Play Store listing, marketing site,
    onboarding upsell, screenshots) advertises the Home "Next steps" feed — those live
    outside this repo and were not reviewable here.
+
+---
+
+## 2026-09-30 — Free tier gets one additional user; lapse keeps the longest-standing partner
+
+**Scope reviewed:** `supabase/migrations/20260930100000_free_partner_seat.sql`
+(new `partner_within_entitlement()` helper; `partner_seat_limit`,
+`has_partner_access`, `partner_can_write`, `can_access_child`,
+`can_write_child`, both seat triggers, and `accept_partner_invitation`
+re-created). Supersedes the 2026-08-28 entry "Additional users gated behind
+Flare+ + owner-controlled shut-off". Founder-approved pricing decision.
+
+**What changed (product):** the free tier now includes **1 additional user**
+(the owner + 1, typically the co-parent); Flare+ stays at 2. A free-tier owner
+can therefore share their child's record — every table the partner RLS
+helpers cover — with one invited adult, where on 2026-08-28 they could share
+with nobody. When Flare+ lapses, the **longest-standing** partner (earliest
+`partner_access.created_at`, i.e. first acceptance; paused partners keep their
+place in that order) keeps access automatically and anyone beyond the free
+entitlement is suspended at the RLS layer until renewal. Nothing is deleted.
+Owner pause / un-pause and "a paused partner still occupies a seat" are
+unchanged.
+
+**Why this is a legal-log item.** `accept_partner_invitation` — the RPC that
+stamps `partner_access.consent_acknowledged_at` (T3, 2026-05-07) — was
+modified, and the set of people who can read a child's record widens on the
+free tier.
+
+**Consent flow — unchanged and verified.** The only edit to
+`accept_partner_invitation` is deletion of the owner-must-have-Flare+ check
+(`FLARE_PLUS_REQUIRED`). The rest of the body is identical to the 2026-08-28
+version (diffed): the invitee still checks the Privacy/Terms consent box in
+`AcceptInvite.tsx`, and the RPC still stamps `consent_acknowledged_at = now()`
+on insert and preserves any earlier stamp via `COALESCE` on the conflict path.
+Seat limits are still enforced by the `partner_access` trigger inside the same
+transaction. No consent moment was removed, weakened, or moved. The owner's
+act of inviting is still the sharing decision; the direct notice at Add Child
+already discloses sharing with "co-parents or caregivers you explicitly invite".
+
+**Data-minimisation direction — widens on the free tier, by design.** Free
+accounts can now share with one invited adult. This restores the pre-2026-08-28
+position for the first partner (before August, free accounts had no seat cap
+at all), so it is still narrower than the original v1 posture reviewed in May.
+On lapse the change is also a widening relative to August (one partner keeps
+access instead of none); the owner can still pause or remove that partner at
+any time. Reads and writes now suspend together: `can_write_child` was not
+covered by the 2026-08-28 lapse rule, so an over-entitlement partner could
+still write to child-pivoted log tables while unable to read — that gap is
+closed here.
+
+**Policy-vs-code grep (Privacy / Terms / FAQ):** searched `PrivacyPage.tsx`,
+`TermsPage.tsx`, `FAQPage.tsx` for `partner`, `co-parent`, `caregiver`,
+`additional user`, `invite`, `Flare+`, `premium`, `subscription`. **No
+Flare+-only partner language found.** Privacy § 5 ("Co-parents or caregivers
+you explicitly invite via the Partner Access feature"), Terms § 6 ("any
+partners you invite") and FAQ ("Can I share access with my partner or
+caregiver? Yes…") are all tier-agnostic and remain accurate. Every Flare+
+mention in those three pages concerns AI features (Speech Class, Weekly Play
+Plan), not sharing. No policy-page edit required.
+
+**Retention / deletion promises — unaffected.** No rows deleted, no new
+columns, no new personal data, no new subprocessor or egress, no AI data-flow
+change. `partner_access` still cascades from `auth.users`; `_purge_user_data()`
+is untouched — **Privacy § 8 deletion language remains accurate.**
+
+**Owner-only role change (`20260930110000_set_partner_role.sql`).** New RPC
+`set_partner_role(_partner_id, _role)` lets the owner move a seat-holding
+(active or paused) partner between coparent / caregiver / viewer. Owner-scoped
+by `owner_id = auth.uid()`; role validated against the `partner_role` enum.
+It does not touch `consent_acknowledged_at`, status, or seat seniority — a role
+change is not a new sharing grant (the same adult keeps the same read access),
+so no new consent moment is required. Demoting to viewer removes write access
+immediately. The owner could already do this via a direct table UPDATE under
+the existing owner UPDATE policy; the RPC is the validated path and widens
+nothing.
+
+**Outstanding (not legal-blocking):**
+1. `supabase/functions/check-notifications/index.ts` still gates partner push
+   fan-out on `owner_has_plus`, so free-tier partners get no pushes and, after a
+   lapse, the retained partner gets none either. Should switch to
+   `partner_within_entitlement(owner, partner)` (EXECUTE granted to
+   service_role) so push recipients match RLS exactly.
+2. Client copy/seat math (`src/lib/partnerInvite.ts` `limit = isPremium ? 2 : 0`,
+   `describePartnerError`, `PartnerManagement.tsx` free-tier teaser and lapsed
+   banner, `Upgrade.tsx` "Multi-caregiver sync") still describes sharing as
+   Flare+-only; frontend follow-up.
