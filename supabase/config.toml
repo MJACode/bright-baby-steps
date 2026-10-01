@@ -1,1 +1,54 @@
 project_id = "ieuznbvvwdvhtirzwkly"
+# JWT verification per edge function. CI deploys every function in
+# supabase/functions/ and reads these settings, so a deploy never changes a
+# function's auth mode. Values match production as of 2026-09-30. A function
+# with verify_jwt = false authenticates callers itself (user JWT via
+# auth.getUser, or a service-role check for cron/internal callers).
+# A new function defaults to verify_jwt = true unless listed here.
+
+[functions.briefing]
+verify_jwt = false
+
+[functions.chat]
+verify_jwt = false
+
+[functions.check-notifications]
+verify_jwt = true
+
+[functions.delete-account]
+verify_jwt = true
+
+[functions.extract-memory]
+verify_jwt = false
+
+[functions.generate-activity-plan]
+verify_jwt = true
+
+[functions.generate-speech-class]
+verify_jwt = true
+
+[functions.inactive-account-purge]
+verify_jwt = false
+
+[functions.mcp]
+verify_jwt = false
+
+[functions.reactivate-nudge]
+verify_jwt = false
+
+# Not yet deployed as of 2026-09-30. Called by check-notifications with the
+# service-role key and checks the role claim itself (index.ts ~L177-200).
+[functions.send-visit-reminder-email]
+verify_jwt = false
+
+[functions.send-vpc-email]
+verify_jwt = false
+
+# Not yet deployed as of 2026-09-30. Called from the app via
+# supabase.functions.invoke with the parent's JWT; same mode as the other
+# user-invoked Flare+ generators.
+[functions.visit-prep-questions]
+verify_jwt = true
+
+[functions.weekly-insights]
+verify_jwt = false

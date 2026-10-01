@@ -2446,6 +2446,21 @@ only its duplicate on Home.**
 
 **Code refs:** branch `claude/growth-birth-weight-and-triage-cleanup`.
 
+## 2026-09-30 — Production audit: three retired AI functions still ACTIVE; two repo functions never deployed
+
+**Reviewer:** in-house (Claude pass, founder session). **Risk level:** P1 until the retired functions are deleted.
+
+**Finding (live `list_edge_functions`, project `ieuznbvvwdvhtirzwkly`, 2026-09-30):**
+- `detect-milestone` (retired 2026-06-21), `parse-voice-log` (retired 2026-08-28) and `next-step-peek` (retired 2026-09-07) are all still **ACTIVE**. Each sends child data to Anthropic, and none is disclosed in Privacy § 4 or `/subprocessors` any more. The app no longer calls them, but the endpoints still accept requests. This closes nothing from the 2026-06-21, 2026-08-28 and 2026-09-07 entries: their "delete the deployed function" follow-ups are still open.
+- `visit-prep-questions` and `send-visit-reminder-email` exist in the repo but were **never deployed**. Visit Prep (called from `useVisitPrepQuestions`) therefore cannot work in production, and visit reminder emails from `check-notifications` fail. These are availability bugs, not disclosure gaps: both flows are already disclosed.
+- Root cause: `deploy-functions.yml` listed 7 of 14 functions by hand, and nothing removed retired ones.
+
+**What changed in this PR:** CI now deploys every function in `supabase/functions/`, with each function's `verify_jwt` pinned in `supabase/config.toml` to its live value. `CLAUDE.md` now lists all seven functions that call Anthropic, including `extract-memory`, and records that the three retired functions were still live.
+
+**Outstanding:**
+1. Delete `detect-milestone`, `parse-voice-log` and `next-step-peek` from production (founder approval required; deletion is irreversible).
+2. Deploy the repo's functions once the founder has reviewed what changes for the functions whose live copy is older than the repo.
+
 ## 2026-09-30 — Flare+ paywall: unsubstantiated claims removed
 
 **Reviewer:** in-house (Claude legal pre-review, founder-approved).
