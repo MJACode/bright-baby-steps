@@ -29,6 +29,7 @@ import { TrackingScheduleSettings } from "@/components/TrackingScheduleSettings"
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { exportUserData, ExportReadError } from "@/lib/exportUserData";
 
 const MUTABLE_CATEGORIES = [
   {
@@ -76,58 +77,18 @@ export default function ProfilePage() {
     if (!user) return;
     setExportingData(true);
     try {
-      const [
-        { data: childrenData },
-        { data: sleepLogs },
-        { data: feedingLogs },
-        { data: diaperLogs },
-        { data: milestones },
-        { data: speechJournal },
-        { data: illnessLogs },
-        { data: medicationLogs },
-        { data: chatConversations },
-        { data: financeFinder },
-        { data: accountStatus },
-      ] = await Promise.all([
-        supabase.from("children").select("*"),
-        supabase.from("sleep_logs").select("*"),
-        supabase.from("feeding_logs").select("*"),
-        supabase.from("diaper_logs").select("*"),
-        supabase.from("child_speech").select("*"),
-        supabase.from("speech_journal").select("*"),
-        supabase.from("illness_logs").select("*"),
-        supabase.from("medication_logs").select("*"),
-        supabase.from("chat_conversations").select("id, title, created_at"),
-        supabase.from("child_finance_finder").select("child_id, goal, family_contributes, updated_at"),
-        supabase.from("child_account_status").select("child_id, account_key, opened_at"),
-      ]);
-
-      const exportPayload = {
-        exportedAt: new Date().toISOString(),
-        account: { email: user.email, id: user.id },
-        children: childrenData ?? [],
-        sleepLogs: sleepLogs ?? [],
-        feedingLogs: feedingLogs ?? [],
-        diaperLogs: diaperLogs ?? [],
-        milestones: milestones ?? [],
-        speechJournal: speechJournal ?? [],
-        illnessLogs: illnessLogs ?? [],
-        medicationLogs: medicationLogs ?? [],
-        chatConversations: chatConversations ?? [],
-        financeFinder: financeFinder ?? [],
-        accountStatus: accountStatus ?? [],
-      };
-
-      const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `baby-steps-export-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast({ title: "Data exported successfully." });
-    } catch {
-      toast({ title: "Export failed", description: "Please try again.", variant: "destructive" });
+      await exportUserData(user);
+      toast({ title: "Your data is downloading." });
+    } catch (err) {
+      console.error("Export My Data failed", err);
+      toast({
+        title: "Export didn't finish",
+        description:
+          err instanceof ExportReadError
+            ? `We couldn't read your ${err.failed.map((f) => f.label).join(", ")}, so nothing was downloaded. Check your connection and try again.`
+            : "Something went wrong, so nothing was downloaded. Try again.",
+        variant: "destructive",
+      });
     } finally {
       setExportingData(false);
     }
@@ -444,7 +405,7 @@ export default function ProfilePage() {
             <Button
               variant="outline"
               size="sm"
-              className="text-xs h-8 gap-1.5"
+              className="text-sm touch-target gap-1.5"
               onClick={handleExportData}
               disabled={exportingData}
             >

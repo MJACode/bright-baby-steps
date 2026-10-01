@@ -2614,3 +2614,21 @@ Legitimate callers keep working:
 3. `delete_user_account()` is still anon-executable. It is guarded by `auth.uid()`, which is null for anon; confirm it no-ops safely.
 4. `can_access_child(uuid, uuid)` has no `auth.uid()` guard. Anyone can ask whether a given user can access a given child. This is fixed in the pending free-partner-seat migration.
 5. **Cron jobs failing.** `reactivate-nudge` and `inactive-account-purge` return 401 on every scheduled run, because the Vault service-role key is being rejected. **The 24-month inactive-account purge promised in Privacy § 8 is not running.** Fix is pending.
+
+---
+
+## 2026-09-30 — Export My Data: every user/child table, fail-closed on any read error
+
+**Trigger:** P0 carried from the Finance Account Finder entry above — Export My Data omitted most tracking tables (Privacy § 8 "download a copy of your data"; COPPA 16 CFR § 312.6(a) parent review) and swallowed read errors with an empty `catch {}`, so a failed read silently exported an empty list (Constitution VI).
+
+**Change:** export logic moved from `ProfilePage.tsx` to `src/lib/exportUserData.ts`, with one declarative `EXPORT_TABLES` list (55 tables). Every read checks `{ error }`; if any table fails, nothing downloads and the toast names the data that couldn't be read. Reads page until an empty page so the PostgREST max-rows cap can't truncate a table silently. Existing top-level JSON keys unchanged. File renamed `grace-flare-export-YYYY-MM-DD.json` (was `baby-steps-export-…`).
+
+**Excluded, with reasons:**
+- Credentials: `mcp_access_tokens`, `mcp_authorization_grants`, `mcp_clients`; `profiles.vpc_second_token` / `vpc_second_token_expires_at`; `partner_invitations.invite_code`.
+- Reference/content (no user data): `allergens`, `speech`, `speech_categories`, `financial_checklist_items`, `finance_account_sponsors`.
+- Audit/metering: `rights_requests` (the request log itself), `voice_parse_events` (id + timestamp rate-limit counter).
+- `child_account_status.marked_by` / `child_finance_finder.updated_by` stay out, consistent with the 2026-09-30 finance entry.
+
+**Verified 2026-09-30 against live (project ieuznbvvwdvhtirzwkly):** all 55 tables and every explicit select / filter / order column exist. **Outstanding:** `ai_memories` exists on live but has no migration in the repo; a missing table would fail the whole export closed. Export includes rows RLS exposes via partner access (unchanged from before).
+
+**Code refs:** branch `fix/export-and-finance-followups`.
