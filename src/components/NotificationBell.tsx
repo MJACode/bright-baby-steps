@@ -73,10 +73,16 @@ export function NotificationBell() {
     sleep_off_plan: "🧭",
     weekly_development: "📚",
     daily_briefing: "🌅",
+    finance_trump_claim: "🏦",
+    finance_529_newborn: "🏦",
+    finance_529_birthday: "🎂",
   };
 
   const typeRoute: Record<string, string> = {
     daily_briefing: "/dashboard",
+    finance_trump_claim: "/dashboard/financial",
+    finance_529_newborn: "/dashboard/financial",
+    finance_529_birthday: "/dashboard/financial",
   };
 
   return (

@@ -108,23 +108,23 @@ const INTEREST_OPTIONS: { id: PrimaryInterest; label: string; preview: string }[
   { id: "developmental", label: "Developmental milestones",
     preview: "Map every milestone by age, see what's coming next, and get expert guidance when you need it." },
   { id: "speech", label: "Speech and language",
-    preview: "The Word Journal tracks language development from first words to sentences, with SLP-backed context." },
+    preview: "The Word Journal tracks language development from first words to sentences." },
   { id: "financial", label: "Financial planning",
-    preview: "Walk through 529s, the Child Tax Credit, dependent care FSAs, and childcare cost planning — step by step." },
+    preview: "Answer two quick questions and see which accounts to open for your baby — and how to open them." },
 ];
 
 const INTEREST_CTA: Record<PrimaryInterest, { label: string; route: string }> = {
   sleep_feeding: { label: "Log first feed", route: "/dashboard/feeding" },
   developmental: { label: "See milestones", route: "/dashboard/milestones" },
   speech: { label: "Open Word Journal", route: "/dashboard/milestones" },
-  financial: { label: "Open Financial Checklist", route: "/dashboard/financial" },
+  financial: { label: "Find accounts for your kid", route: "/dashboard/financial" },
 };
 
 const INTEREST_FEATURES: Record<PrimaryInterest, string[]> = {
   sleep_feeding: ["Feeding tracker with pattern analysis", "Sleep log with wake window guidance", "Diaper tracker"],
   developmental: ["Milestone tracker by age", "Developmental advisor (AI)", "Upcoming milestone alerts"],
-  speech: ["Word Journal", "Speech-Language Pathologist advisor", "Language milestone tracking"],
-  financial: ["529 setup checklist", "Child Tax Credit guide", "Dependent care FSA and childcare cost planning"],
+  speech: ["Word Journal", "Speech and language insights (AI)", "Language milestone tracking"],
+  financial: ["Which accounts to open for your baby", "See if your baby qualifies for the $1,000 Trump Account deposit", "529 and custodial accounts, explained"],
 };
 
 function computeAge(dob: string): string | null {

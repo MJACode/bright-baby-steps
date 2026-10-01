@@ -228,3 +228,27 @@
     display: none;
   }
 }
+/* Baby Signs illustrations (contracts/illustration-asset-spec.md §3). The
+   bundled SVGs carry class names instead of colors so light and dark mode
+   restyle them from the theme tokens. */
+@layer components {
+  .sign-illustration svg {
+    @apply block h-full w-full;
+  }
+  .sign-illustration .sign-line {
+    stroke: hsl(var(--foreground));
+    fill: none;
+  }
+  .sign-illustration .sign-ghost {
+    stroke: hsl(var(--foreground));
+    fill: none;
+    opacity: 0.35;
+  }
+  .sign-illustration .sign-motion {
+    stroke: hsl(var(--accent));
+    fill: hsl(var(--accent));
+  }
+  .sign-illustration .sign-fill {
+    fill: hsl(var(--milestones) / 0.12);
+  }
+}
