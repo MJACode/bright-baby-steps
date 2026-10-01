@@ -2632,3 +2632,21 @@ Legitimate callers keep working:
 **Verified 2026-09-30 against live (project ieuznbvvwdvhtirzwkly):** all 55 tables and every explicit select / filter / order column exist. **Outstanding:** `ai_memories` exists on live but has no migration in the repo; a missing table would fail the whole export closed. Export includes rows RLS exposes via partner access (unchanged from before).
 
 **Code refs:** branch `fix/export-and-finance-followups`.
+
+---
+
+## 2026-10-01 — Production catch-up: partner seats require Flare+; partner access ends when Flare+ lapses
+
+**Reviewer:** in-house (Claude pass, founder-approved "fix the call outs" in session). **Risk level:** Medium (partner/caregiver access to child data).
+
+**What went live:** migrations `20260828100000_partner_seats_flare_plus`, `20260829000000_speech_journal_child_pivot_rls` and `20260830000000_child_tracking_schedule` had been merged to `main` in August but never applied to production. They were applied on 2026-09-30/10-01 after a destructiveness check. Effects:
+- Inviting a partner requires an active Flare+ subscription, and an existing partner's read access stops automatically if the owner's Flare+ lapses (`has_partner_access`, `partner_can_write`, `can_access_child` check `owner_has_plus`). At apply time production had one active partner, whose owner is on Flare+, so no one lost access.
+- `speech_journal` RLS moved from one `FOR ALL` policy to four per-command policies keyed on the child. One row on live; no one was locked out.
+- `children.day_start_time` / `night_start_time` added; tracking-schedule saves, which had been failing in production, now work.
+
+**Security fix:** the seat helpers (`owner_has_plus`, `partner_seat_limit`, `partner_seats_used`) were executable by `anon` and `authenticated` because Supabase's default privileges grant client roles directly. Any caller could have checked a stranger's subscription status. `20260830010000_partner_seat_helpers_revoke_client_roles.sql` revokes those grants (service_role keeps `owner_has_plus`). Applied to live and verified.
+
+**Outstanding:**
+- `can_write_child` was not updated with the Flare+ check, so a partner of a lapsed owner loses read access but child-scoped write policies may still allow inserts/updates. Founder decision pending; fix belongs in a follow-up migration.
+- Partner-facing copy (Terms, FAQ, partner invite screens) should say that partner access depends on the owner's Flare+ subscription. Not yet updated.
+- Orphan edge functions `parse-voice-log`, `detect-milestone`, `next-step-peek` are still ACTIVE on live despite retirement (Constitution II requires undeploying them).
