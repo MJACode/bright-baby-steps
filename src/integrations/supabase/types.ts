@@ -726,6 +726,7 @@ export type Database = {
           child_id: string
           created_at: string
           first_signed_at: string | null
+          focus_since: string | null
           id: string
           parent_id: string
           sign_slug: string
@@ -736,6 +737,7 @@ export type Database = {
           child_id: string
           created_at?: string
           first_signed_at?: string | null
+          focus_since?: string | null
           id?: string
           parent_id: string
           sign_slug: string
@@ -746,6 +748,7 @@ export type Database = {
           child_id?: string
           created_at?: string
           first_signed_at?: string | null
+          focus_since?: string | null
           id?: string
           parent_id?: string
           sign_slug?: string
