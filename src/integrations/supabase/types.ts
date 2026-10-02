@@ -3531,6 +3531,10 @@ export type Database = {
         Args: { _partner_id: string; _paused: boolean }
         Returns: undefined
       }
+      set_partner_role: {
+        Args: { _partner_id: string; _role: string }
+        Returns: undefined
+      }
       purge_inactive_account: {
         Args: { _target_uid: string }
         Returns: undefined

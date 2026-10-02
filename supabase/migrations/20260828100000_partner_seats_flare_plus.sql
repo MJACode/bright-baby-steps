@@ -98,9 +98,14 @@ COMMENT ON FUNCTION public.partner_seats_used(uuid) IS
 -- helpers below call them from inside SECURITY DEFINER bodies (evaluated as
 -- the definer, so the grant doesn't matter there), and the client gets its
 -- seat math from usePremium + its own partner_access rows.
-REVOKE EXECUTE ON FUNCTION public.owner_has_plus(uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.partner_seat_limit(uuid) FROM PUBLIC;
-REVOKE EXECUTE ON FUNCTION public.partner_seats_used(uuid) FROM PUBLIC;
+--
+-- On this project pg_default_acl ALSO grants EXECUTE on new public functions
+-- directly to anon and authenticated, so revoking from PUBLIC alone removes
+-- nothing. Revoke from all three. (Hardened 2026-09-30 before first apply;
+-- 20260930100000 re-asserts the final ACL for every partner function.)
+REVOKE EXECUTE ON FUNCTION public.owner_has_plus(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.partner_seat_limit(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.partner_seats_used(uuid) FROM PUBLIC, anon, authenticated;
 
 -- check-notifications runs on the service role and needs the subscription
 -- check to decide whether to fan a push out to an owner's partners.
@@ -340,6 +345,8 @@ BEGIN
 END;
 $$;
 
+-- Owner-only by body (owner_id = auth.uid()); no anon use case.
+REVOKE EXECUTE ON FUNCTION public.set_partner_access_paused(uuid, boolean) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.set_partner_access_paused(uuid, boolean) TO authenticated;
 
 COMMENT ON FUNCTION public.set_partner_access_paused(uuid, boolean) IS
