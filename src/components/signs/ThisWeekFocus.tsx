@@ -13,7 +13,7 @@ import { readyForNewSigns } from "@/lib/signProgress";
 import type { TrackingSchedule } from "@/lib/trackingDay";
 
 export const FOCUS_VIEW_ONLY_HELP =
-  "Only parents and caregivers who can edit can change this week's signs.";
+  "Only parents and caregivers who can edit can change signs or this week's signs.";
 
 const glossList = (slugs: string[]) =>
   slugs

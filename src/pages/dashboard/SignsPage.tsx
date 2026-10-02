@@ -111,8 +111,11 @@ export default function SignsPage() {
     }
     setFocusBusy(true);
     try {
-      for (const step of steps) {
-        // A failed step has already toasted via the hook's onError, with what to do next.
+      for (const [index, step] of steps.entries()) {
+        // A failed first step has already toasted via the hook's onError. Once
+        // an earlier step has landed, the hook stays quiet and we say the
+        // change only partly saved.
+        const partial = index > 0;
         const ok = await setFocus
           .mutateAsync({
             childId: activeChild.id,
@@ -120,12 +123,22 @@ export default function SignsPage() {
             signSlug: step.slug,
             focus: step.focus,
             schedule,
+            quiet: partial,
           })
           .then(
             () => true,
             () => false,
           );
-        if (!ok) return;
+        if (!ok) {
+          if (partial) {
+            toast({
+              title: "Some of this week's signs didn't save.",
+              description: "Their progress is safe — pick your signs again from All signs.",
+              variant: "destructive",
+            });
+          }
+          return;
+        }
       }
       toast({ title: successTitle });
     } finally {
@@ -273,7 +286,7 @@ export default function SignsPage() {
           disabled={progressLoading || setStatus.isPending}
           onSetStatus={handleSetStatus}
           focusSigns={focusSigns}
-          canEditFocus={canEditFocus}
+          canEdit={canEditFocus}
           showViewerHelp={showViewerHelp}
           focusBusy={focusBusy || progressLoading}
           onFocus={focusSign}

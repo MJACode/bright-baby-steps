@@ -19,6 +19,21 @@ export interface ChildSignRow {
   updated_at: string;
 }
 
+/**
+ * A write that didn't land: 0 rows back, or a policy violation. Several causes
+ * look identical from here (no edit access, the owner's Flare+ lapsed, or the
+ * row changed on another device), so the copy stays neutral.
+ */
+class SignPermissionError extends Error {}
+
+const SIGN_PERMISSION_MESSAGE =
+  "That change didn't save — you may not have edit access to this child right now, or it was just changed on another device. Refresh and try again, or ask the parent who shared it with you.";
+
+function isRlsError(err: unknown): boolean {
+  const message = (err as { message?: string } | null)?.message;
+  return typeof message === "string" && message.toLowerCase().includes("row-level security");
+}
+
 /** Per-child sign progress, keyed by sign slug. */
 export function useSignProgress(childId: string | undefined) {
   return useQuery({
@@ -81,9 +96,7 @@ export function useSetSignStatus() {
         // An RLS-blocked delete returns 0 rows with no error — surface it
         // instead of silently no-oping and letting the chip revert on refetch.
         if (!data || data.length === 0) {
-          throw new Error(
-            "That sign couldn't be cleared — you may not have permission to change it.",
-          );
+          throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
         }
         return;
       }
@@ -103,26 +116,43 @@ export function useSetSignStatus() {
         current?.first_signed_at ??
         (status === "signing" ? format(new Date(), "yyyy-MM-dd") : null);
 
-      const { error } = await supabase.from("child_signs").upsert(
-        {
-          child_id: childId,
-          parent_id: childOwnerId,
-          sign_slug: signSlug,
-          status,
-          first_signed_at: firstSignedAt,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "child_id,sign_slug" },
-      );
-      if (error) throw error;
+      const { data, error } = await supabase
+        .from("child_signs")
+        .upsert(
+          {
+            child_id: childId,
+            parent_id: childOwnerId,
+            sign_slug: signSlug,
+            status,
+            first_signed_at: firstSignedAt,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "child_id,sign_slug" },
+        )
+        .select();
+      if (error) {
+        if (isRlsError(error)) throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
+        throw error;
+      }
+      if (!data || data.length === 0) throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["child-signs"] });
     },
     onError: (err) => {
+      // Show the real current state if the row changed elsewhere.
+      if (err instanceof SignPermissionError) {
+        queryClient.invalidateQueries({ queryKey: ["child-signs"] });
+      }
+      const message = (err as { message?: string } | null)?.message;
       toast({
         title: "Couldn't save that sign",
-        description: err instanceof Error ? err.message : "Please try again.",
+        description:
+          err instanceof SignPermissionError
+            ? err.message
+            : message
+              ? `${message} Check your connection and try again.`
+              : "Check your connection and try again.",
         variant: "destructive",
       });
     },
@@ -136,9 +166,6 @@ class FocusLimitError extends Error {
     super(FOCUS_LIMIT_MESSAGE);
   }
 }
-
-/** A 0-row write: RLS refused it silently. The message already says what to do. */
-class FocusPermissionError extends Error {}
 
 function isFocusLimitError(err: unknown): boolean {
   const { message, code, details } = (err ?? {}) as { message?: string; code?: string; details?: string };
@@ -162,6 +189,11 @@ export function useSetSignFocus() {
       focus,
       schedule,
     }: {
+      /**
+       * Skip this hook's error toast: a multi-step change (swap, next set)
+       * shows one "partly saved" message instead once an earlier step landed.
+       */
+      quiet?: boolean;
       childId: string;
       /** children.parent_id — the child OWNER; see useSetSignStatus. */
       childOwnerId: string;
@@ -176,11 +208,12 @@ export function useSetSignFocus() {
           .eq("child_id", childId)
           .eq("sign_slug", signSlug)
           .select();
-        if (error) throw error;
+        if (error) {
+          if (isRlsError(error)) throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
+          throw error;
+        }
         if (!data || data.length === 0) {
-          throw new FocusPermissionError(
-            "That sign couldn't be removed from this week. Ask the parent who shared it with you for edit access.",
-          );
+          throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
         }
         return;
       }
@@ -212,18 +245,21 @@ export function useSetSignFocus() {
         .select();
       if (error) {
         if (isFocusLimitError(error)) throw new FocusLimitError();
+        if (isRlsError(error)) throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
         throw error;
       }
       if (!data || data.length === 0) {
-        throw new FocusPermissionError(
-          "That sign couldn't be added to this week. Ask the parent who shared it with you for edit access.",
-        );
+        throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["child-signs"] });
     },
-    onError: (err) => {
+    onError: (err, variables) => {
+      if (variables.quiet) {
+        queryClient.invalidateQueries({ queryKey: ["child-signs"] });
+        return;
+      }
       if (err instanceof FocusLimitError) {
         toast({ title: FOCUS_LIMIT_MESSAGE });
         // Another caregiver may have filled the slots — refetch so the swap
@@ -231,7 +267,7 @@ export function useSetSignFocus() {
         queryClient.invalidateQueries({ queryKey: ["child-signs"] });
         return;
       }
-      if (err instanceof FocusPermissionError) {
+      if (err instanceof SignPermissionError) {
         toast({ title: "Couldn't update this week's signs", description: err.message, variant: "destructive" });
         return;
       }

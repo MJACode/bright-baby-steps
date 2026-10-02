@@ -153,7 +153,7 @@
 - [x] T027 [US2] Add "Make this a focus sign" and "Remove from focus" to `src/components/signs/SignDetailSheet.tsx`. When 3 focus signs already exist, show a swap picker listing the current 3 (spec edge case "All focus slots full"). When clearing the status of a focus sign, first show an `AlertDialog` confirmation ("This also removes it from this week's signs") (data-model state transitions) *(frontend)*
 - [x] T028 [US2] Restructure `src/pages/dashboard/SignsPage.tsx` inside `PremiumGate`: `ThisWeekFocus` first, then the "All signs" library (stage-grouped rows from US1) *(frontend)*
 - [x] T029 [US2] Read-only viewer handling: disable the focus controls, with the helper text "Only parents and caregivers who can edit can change this week's signs." Use the existing role hook (`useCurrentRole`) (FR-018) *(frontend)*
-- [ ] T030 [US2] Invoke **`qa`** on the PR-B frontend: owner-keyed writes, 0-row checks, query keys, the no-auto-advance rule, and viewer gating matching RLS *(qa)*
+- [x] T030 [US2] Invoke **`qa`** on the PR-B frontend: owner-keyed writes, 0-row checks, query keys, the no-auto-advance rule, and viewer gating matching RLS *(qa)*
 - [ ] T031 [US2] Run the local gate and the quickstart §3 steps, then open and merge PR-B. The migration must already be confirmed live (T020) *(parent)*
 
 **Checkpoint**: US1 and US2 both work independently.

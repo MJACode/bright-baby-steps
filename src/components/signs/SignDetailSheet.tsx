@@ -36,7 +36,7 @@ export function SignDetailSheet({
   disabled,
   onSetStatus,
   focusSigns,
-  canEditFocus,
+  canEdit,
   showViewerHelp,
   focusBusy,
   onFocus,
@@ -51,7 +51,7 @@ export function SignDetailSheet({
   onSetStatus: (sign: Sign, next: SignStatus) => void;
   /** This week's focus signs, in display order. */
   focusSigns: Sign[];
-  canEditFocus: boolean;
+  canEdit: boolean;
   showViewerHelp: boolean;
   focusBusy: boolean;
   onFocus: (sign: Sign) => void;
@@ -69,7 +69,7 @@ export function SignDetailSheet({
   const status = row?.status as SignStatus | undefined;
   const isFocus = !!row?.focus_since;
   const slotsFull = !isFocus && focusSigns.length >= MAX_FOCUS_SIGNS;
-  const focusDisabled = !canEditFocus || focusBusy;
+  const focusDisabled = !canEdit || focusBusy;
 
   const handleStatusTap = (target: Sign, value: SignStatus) => {
     if (status === value && isFocus) {
@@ -163,7 +163,7 @@ export function SignDetailSheet({
                 <button
                   key={value}
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || !canEdit}
                   aria-pressed={status === value}
                   onClick={() => handleStatusTap(sign, value)}
                   className={cn(
