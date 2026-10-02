@@ -8,7 +8,7 @@ const PERKS = [
   { i: Sparkles, t: "Nap & feed predictions", s: "Next nap and feed, learned from your own logs." },
   { i: Stethoscope, t: "Checkup question prep", s: "Questions for your pediatrician, drafted from your baby's real sleep, feeding, and growth logs." },
   { i: Activity, t: "Cry clues", s: "On-device hints: could be hunger, tiredness, or discomfort." },
-  { i: Users, t: "Multi-caregiver sync", s: "Real-time for parents, sitters, grandparents" },
+  { i: Users, t: "Add a second caregiver", s: "Free includes 1 extra person; Flare+ adds a second — co-parent, sitter, or grandparent, synced live." },
   { i: BarChart3, t: "Growth analytics + PDF reports", s: "WHO growth percentiles (birth–2 yrs), growth trends, PDFs to share at checkups." },
 ];
 

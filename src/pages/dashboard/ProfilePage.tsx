@@ -20,16 +20,17 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon, Sun, SunMoon, Monitor, Sparkles, ChevronRight } from "lucide-react";
+import { User, LogOut, Baby, ClipboardList, ChevronDown, Bell, HelpCircle, Shield, Download, Trash2, Moon, Sun, SunMoon, Monitor, Sparkles, ChevronRight, Users } from "lucide-react";
 import PediatricianExport from "@/components/PediatricianExport";
 import ExportHistory from "@/components/ExportHistory";
-import PartnerManagement from "@/components/PartnerManagement";
 import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
 import { TrackingScheduleSettings } from "@/components/TrackingScheduleSettings";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { exportUserData, ExportReadError } from "@/lib/exportUserData";
+import { useTeam } from "@/hooks/useTeam";
+import { teamSummaryLine } from "@/lib/partnerInvite";
 
 const MUTABLE_CATEGORIES = [
   {
@@ -195,8 +196,7 @@ export default function ProfilePage() {
       {/* Export History */}
       <ExportHistory />
 
-      {/* Partner Management */}
-      <PartnerManagement />
+      <TeamRow isOwner={!activeChild || activeChild.parent_id === user?.id} />
 
       {/* Connect to Claude (MCP) */}
       <ConnectClaudeSettings />
@@ -474,5 +474,28 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function TeamRow({ isOwner }: { isOwner: boolean }) {
+  const { members, pending, isLoading, isError } = useTeam();
+  const sub = !isOwner
+    ? "See who's on the team"
+    : isLoading || isError
+      ? "Who can see and log for your family"
+      : teamSummaryLine(members.length, pending.length);
+  return (
+    <Card className="border-0 bg-muted/50">
+      <CardContent className="p-0">
+        <Link to="/dashboard/team" className="flex items-center gap-3 p-4 touch-target">
+          <Users className="w-4 h-4 text-primary shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block text-sm font-semibold">Your team</span>
+            <span className="block text-xs text-muted-foreground mt-0.5">{sub}</span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+        </Link>
+      </CardContent>
+    </Card>
   );
 }

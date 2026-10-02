@@ -31,11 +31,17 @@ export function useCurrentRoleQuery(childId?: string): { role: Role; isResolved:
       if (!user || !childId) return "owner";
       const { data: child } = await supabase.from("children")
         .select("parent_id").eq("id", childId).maybeSingle();
-      if (child?.parent_id === user.id) return "owner";
+      // A partner whose seat is on hold (Flare+ lapsed, ranked beyond the free
+      // limit) can't read the child row at all — can_access_child applies the
+      // seat rule — so an unreadable child must never fall through to the
+      // partner_access row's role. Partners can only read their own row, so
+      // the client couldn't rank it anyway.
+      if (!child) return "viewer";
+      if (child.parent_id === user.id) return "owner";
       // status matters: a paused or revoked row still exists, and reading its
       // role would hand a shut-off partner co-parent controls in the UI.
       const { data: access } = await supabase.from("partner_access")
-        .select("role").eq("partner_id", user.id).eq("owner_id", child?.parent_id ?? "")
+        .select("role").eq("partner_id", user.id).eq("owner_id", child.parent_id)
         .eq("status", "active")
         .maybeSingle();
       return (access?.role as Role) ?? "viewer";

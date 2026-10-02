@@ -26,7 +26,7 @@ const FAQS = [
   },
   {
     q: "Can I share access with my partner or caregiver?",
-    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. Depending on the role you choose, they can view or log activity for your child. Finance is shared with co-parents only. You can revoke their access at any time from the same section.",
+    a: "Yes. You can invite a co-parent or caregiver from Your team (More → Your team). The free plan includes one extra person; Flare+ includes two. Depending on the role you choose, they can view or log activity for your child. Finance is shared with co-parents only. You can pause or remove their access at any time from the same page.",
   },
   {
     q: "How do I delete my account and data?",

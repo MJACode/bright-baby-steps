@@ -7,7 +7,7 @@
 // surface, reached from Profile and from the AI surfaces that use it.
 
 import { Link } from "react-router-dom";
-import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Stethoscope, TrendingUp, User } from "lucide-react";
+import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Stethoscope, TrendingUp, User, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -16,7 +16,7 @@ import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 
 interface ToolItem {
   label: string;
-  description: string;
+  description: string | ((babyName: string) => string);
   icon: typeof FileText;
   path: string;
   colorClass: string;
@@ -85,8 +85,16 @@ const tools: ToolItem[] = [
     iconClass: "text-accent-foreground",
   },
   {
+    label: "Your team",
+    description: (babyName) => `Who can see and log for ${babyName}`,
+    icon: Users,
+    path: "/dashboard/team",
+    colorClass: "bg-primary/10",
+    iconClass: "text-primary",
+  },
+  {
     label: "Profile",
-    description: "Children, partners, account",
+    description: "Children, settings, account",
     icon: User,
     path: "/dashboard/profile",
     colorClass: "bg-muted",
@@ -99,6 +107,7 @@ export default function MorePage() {
   const { activeChild } = useChildren();
   const { role, isResolved } = useCurrentRoleQuery(activeChild?.id);
   const hideParentsOnly = isResolved && (role === "caregiver" || role === "viewer");
+  const babyName = activeChild?.name.split(" ")[0] ?? "your baby";
   const visibleTools = hideParentsOnly ? tools.filter((t) => !t.parentsOnly) : tools;
 
   return (
@@ -131,7 +140,9 @@ export default function MorePage() {
                         </span>
                       )}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{tool.description}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {typeof tool.description === "function" ? tool.description(babyName) : tool.description}
+                    </p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                 </Link>

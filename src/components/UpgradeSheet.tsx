@@ -29,8 +29,8 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     sub: "WHO growth percentiles (birth–2 yrs), growth trends, and PDFs to share at checkups.",
   },
   "multi-caregiver": {
-    headline: "Bring your partner and your sitter in.",
-    sub: "Flare+ adds two more people to your account — co-parent, nanny, or grandparent — synced in real time. Pause or remove anyone whenever you want.",
+    headline: "Bring your sitter in too.",
+    sub: "Free includes 1 extra person. Flare+ adds a second — co-parent, sitter, or grandparent — synced live. Pause or remove anyone whenever you want.",
   },
   "expert-library": {
     headline: "Guides for the questions you actually have.",
@@ -67,7 +67,7 @@ const PERKS = [
   { i: Stethoscope, t: "AI visit prep for every checkup" },
   { i: Activity, t: "Cry clues" },
   { i: BarChart3, t: "Growth analytics + PDF exports" },
-  { i: Users, t: "Add 2 more caregivers, synced live" },
+  { i: Users, t: "Add a second caregiver, synced live" },
 ];
 
 export function UpgradeSheet({ open, onOpenChange, feature = "ai-insights" }: UpgradeSheetProps) {

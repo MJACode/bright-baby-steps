@@ -8,13 +8,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Users, CheckCircle, XCircle, Loader2, ShieldCheck } from "lucide-react";
-import { ROLE_COPY, describePartnerError, type PartnerRole } from "@/lib/partnerInvite";
+import { ROLE_COPY, describePartnerError, isSeatLimitError, type PartnerRole } from "@/lib/partnerInvite";
 
 export default function AcceptInvite() {
   const { code } = useParams<{ code: string }>();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<"loading" | "ready" | "accepted" | "error" | "expired" | "self">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "accepted" | "error" | "expired" | "self" | "full">("loading");
+  const [ownerName, setOwnerName] = useState<string | null>(null);
   const [invite, setInvite] = useState<any>(null);
   const [accepting, setAccepting] = useState(false);
   const [consentAcknowledged, setConsentAcknowledged] = useState(false);
@@ -63,6 +64,15 @@ export default function AcceptInvite() {
 
     setInvite(invite);
     setStatus("ready");
+
+    // Only personalises the "team is full" message; profiles RLS may hide the
+    // owner's row from an invitee, so a miss falls back to "Their team".
+    const { data: owner } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", invite.owner_id)
+      .maybeSingle();
+    setOwnerName(owner?.full_name?.trim().split(" ")[0] || null);
   };
 
   const acceptInvite = async () => {
@@ -78,13 +88,16 @@ export default function AcceptInvite() {
       if (error) throw error;
 
       setStatus("accepted");
-      toast({ title: "You're now connected as a partner! 🎉" });
+      toast({ title: "You're on the team" });
       setTimeout(() => navigate("/dashboard"), 2000);
     } catch (err) {
       console.error(err);
-      // Seat-limit and lapsed-subscription rejections come back from the RPC
-      // with machine-readable prefixes — the invitee should see why, not a
-      // generic failure.
+      // A full team (or one whose Flare+ lapsed after the invite went out) is
+      // something only the owner can fix — say so instead of a failure.
+      if (isSeatLimitError(err)) {
+        setStatus("full");
+        return;
+      }
       const message = describePartnerError(err, "Failed to accept invite");
       setErrorMessage(message);
       toast({ title: message, variant: "destructive" });
@@ -177,7 +190,7 @@ export default function AcceptInvite() {
 
           {status === "accepted" && (
             <div className="flex flex-col items-center gap-2 py-4">
-              <CheckCircle className="w-12 h-12 text-green-500" />
+              <CheckCircle className="w-12 h-12 text-success" />
               <p className="text-sm font-semibold">You're connected!</p>
               <p className="text-xs text-muted-foreground">Redirecting to dashboard...</p>
             </div>
@@ -186,8 +199,28 @@ export default function AcceptInvite() {
           {status === "expired" && (
             <div className="flex flex-col items-center gap-2 py-4">
               <XCircle className="w-12 h-12 text-muted-foreground" />
-              <p className="text-sm">This invite has expired or already been used.</p>
-              <Button variant="outline" onClick={() => navigate("/dashboard")}>Go to Dashboard</Button>
+              <p className="text-sm font-semibold">This invite has expired</p>
+              <p className="text-sm text-muted-foreground text-left">
+                Invite links work for 7 days. Ask the person who invited you to send a new one — it
+                only takes them a few seconds.
+              </p>
+              <Button variant="outline" className="touch-target" onClick={() => navigate("/dashboard")}>
+                Go to Dashboard
+              </Button>
+            </div>
+          )}
+
+          {status === "full" && (
+            <div className="flex flex-col items-center gap-2 py-4">
+              <XCircle className="w-12 h-12 text-muted-foreground" />
+              <p className="text-sm font-semibold">This invite is on hold</p>
+              <p className="text-sm text-muted-foreground text-left">
+                {ownerName ? `${ownerName}'s team` : "Their team"} is full right now. Ask them to
+                open Your team in Grace Flare.
+              </p>
+              <Button variant="outline" className="touch-target" onClick={() => navigate("/dashboard")}>
+                Go to Dashboard
+              </Button>
             </div>
           )}
 

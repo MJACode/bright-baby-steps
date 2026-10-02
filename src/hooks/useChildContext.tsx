@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { format, subHours } from "date-fns";
+import { usePremium } from "@/hooks/usePremium";
+import { entitledRows } from "@/lib/partnerInvite";
 
 export interface ChildContext {
   childName: string;
@@ -17,9 +19,10 @@ export interface ChildContext {
 
 export function useChildContext(childId?: string) {
   const { user } = useAuth();
+  const { isPremium } = usePremium();
 
   return useQuery({
-    queryKey: ["child-context", childId, user?.id],
+    queryKey: ["child-context", childId, user?.id, isPremium],
     queryFn: async (): Promise<ChildContext | null> => {
       if (!childId || !user) return null;
 
@@ -37,12 +40,20 @@ export function useChildContext(childId?: string) {
       let partnerIds: string[] = [];
       let twoCaregiversActive = false;
 
-      // Find partners who have access to this child's owner
-      const { data: partnerAccess } = await supabase
+      // Find partners who have access to this child's owner. Paused rows are
+      // fetched only so seniority ranks match the server's seat rule; an
+      // active row ranked beyond the owner's limit is on hold, not access.
+      // A partner can only read their own row, which always ranks 1.
+      const { data: seatRows } = await supabase
         .from("partner_access")
-        .select("partner_id, owner_id")
-        .eq("status", "active")
+        .select("id, partner_id, owner_id, status, created_at")
+        .in("status", ["active", "paused"])
         .or(`owner_id.eq.${ownerId},partner_id.eq.${ownerId}`);
+      const ownersRows = (seatRows ?? []).filter((r) => r.owner_id === ownerId);
+      const partnerAccess = [
+        ...entitledRows(ownersRows, user.id === ownerId && isPremium),
+        ...(seatRows ?? []).filter((r) => r.owner_id !== ownerId && r.status === "active"),
+      ];
 
       if (partnerAccess && partnerAccess.length > 0) {
         twoCaregiversActive = true;

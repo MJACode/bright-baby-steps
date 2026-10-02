@@ -11,8 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { PartnerRolePicker, type SyncChoice } from "@/components/onboarding/PartnerRolePicker";
 import { InviteShareSheet } from "@/components/onboarding/InviteShareSheet";
-import { UpgradeSheet } from "@/components/UpgradeSheet";
-import { MAX_ADDITIONAL_USERS } from "@/lib/partnerInvite";
+import { FREE_SEATS, PLUS_SEATS } from "@/lib/partnerInvite";
 import { checkAndRequestVpc, type VpcGateStatus } from "@/lib/vpcGate";
 import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
@@ -165,7 +164,6 @@ export function OnboardingWizard() {
   const [partnerChoice, setPartnerChoice] = useState<SyncChoice | null>(null);
   const [partnerSheetOpen, setPartnerSheetOpen] = useState(false);
   const [partnerInviteSent, setPartnerInviteSent] = useState(false);
-  const [partnerUpgradeOpen, setPartnerUpgradeOpen] = useState(false);
   const hasPartnerStampedRef = useRef(false);
 
   // Steps 1–5 are the pre-completion inputs (step 4 is optional child
@@ -304,7 +302,7 @@ export function OnboardingWizard() {
       console.error("has_partner update failed", error);
       toast({
         title: "Couldn't save your partner setting",
-        description: "Your invite still works — manage it anytime from Profile → Partner Access.",
+        description: "Your invite still works — manage it anytime in More → Your team.",
         variant: "destructive",
       });
     }
@@ -371,7 +369,7 @@ export function OnboardingWizard() {
           <div className="w-full max-w-xs rounded-2xl border border-primary/30 bg-primary/5 px-4 py-3.5 text-left mb-8">
             <p className="text-sm font-semibold text-primary">Invite sent</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              The link is also saved in Profile → Partner Access if you need it again.
+              The link is also saved in More → Your team if you need it again.
             </p>
           </div>
         ) : partnerCardOpen ? (
@@ -388,31 +386,23 @@ export function OnboardingWizard() {
                   setPartnerCardOpen(false);
                 }
               }}
-              babyName={firstName}
             />
           </div>
         ) : (
           <button
             type="button"
-            onClick={() => (isPremium ? setPartnerCardOpen(true) : setPartnerUpgradeOpen(true))}
+            onClick={() => setPartnerCardOpen(true)}
             className="w-full max-w-xs min-h-[48px] rounded-2xl border border-border bg-card px-4 py-3.5 text-left mb-8 flex items-start gap-3 transition-colors hover:bg-muted"
           >
             <span className="shrink-0 w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
               <UserPlus className="w-4 h-4" />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-foreground">Parenting with a partner?</span>
-                {!isPremium && (
-                  <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-foreground text-warning text-[9px] font-bold uppercase tracking-wider font-mono">
-                    Flare+
-                  </span>
-                )}
-              </span>
+              <span className="block text-sm font-semibold text-foreground">Parenting with a partner?</span>
               <span className="block text-xs text-muted-foreground mt-0.5">
                 {isPremium
-                  ? "Invite them to sync — you can also do this anytime from Profile → Partner Access."
-                  : `Flare+ adds up to ${MAX_ADDITIONAL_USERS} more people to your account, synced live.`}
+                  ? `Invite them to sync. Flare+ includes ${PLUS_SEATS} spots — manage them anytime in More → Your team.`
+                  : `Invite them to sync — your free plan includes ${FREE_SEATS} extra person. Flare+ adds a second.`}
               </span>
             </span>
           </button>
@@ -421,12 +411,6 @@ export function OnboardingWizard() {
         <Button className="w-full max-w-xs" onClick={handleFinish}>
           {cta.label}
         </Button>
-
-        <UpgradeSheet
-          open={partnerUpgradeOpen}
-          onOpenChange={setPartnerUpgradeOpen}
-          feature="multi-caregiver"
-        />
 
         {partnerChoice?.kind === "invite" && user && (
           <InviteShareSheet

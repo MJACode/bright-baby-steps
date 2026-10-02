@@ -29,6 +29,7 @@ const backTargets: Record<string, { to: string; label: string }> = {
   "/dashboard/sleep/history": { to: "/dashboard/sleep", label: "Sleep" },
   "/dashboard/profile": { to: "/dashboard", label: "Home" },
   "/dashboard/calendar": { to: "/dashboard", label: "Home" },
+  "/dashboard/team": { to: "/dashboard/more", label: "More" },
 };
 
 export default function DashboardLayout() {

@@ -14,7 +14,8 @@ export type SyncChoice =
 interface Props {
   value: SyncChoice | null;
   onChange: (v: SyncChoice) => void;
-  babyName: string;
+  /** Hide the "Just me for now" option (the team page's invite drawer). */
+  showSkip?: boolean;
 }
 
 const ROLE_ICON: Record<PartnerRole, React.ComponentType<{ className?: string }>> = {
@@ -23,7 +24,7 @@ const ROLE_ICON: Record<PartnerRole, React.ComponentType<{ className?: string }>
   viewer: Eye,
 };
 
-export function PartnerRolePicker({ value, onChange, babyName }: Props) {
+export function PartnerRolePicker({ value, onChange, showSkip = true }: Props) {
   const selectedRole =
     value?.kind === "invite" ? value.role : null;
   const skipped = value?.kind === "skip";
@@ -73,7 +74,7 @@ export function PartnerRolePicker({ value, onChange, babyName }: Props) {
               <p className="text-xs text-muted-foreground leading-snug">
                 {copy.desc}
               </p>
-              <p className="text-[10px] font-mono text-muted-foreground/80 mt-1.5 uppercase tracking-wide">
+              <p className="text-xs font-semibold text-muted-foreground mt-1.5">
                 {copy.sub}
               </p>
             </div>
@@ -81,22 +82,24 @@ export function PartnerRolePicker({ value, onChange, babyName }: Props) {
         );
       })}
 
-      <button
-        type="button"
-        onClick={() => onChange({ kind: "skip" })}
-        className={cn(
-          "w-full rounded-2xl border-2 border-dashed px-4 py-3 text-sm font-medium transition-colors",
-          skipped
-            ? "border-primary bg-primary/5 text-primary"
-            : "border-border text-muted-foreground"
-        )}
-      >
-        Just me for now
-      </button>
+      {showSkip && (
+        <button
+          type="button"
+          onClick={() => onChange({ kind: "skip" })}
+          className={cn(
+            "w-full min-h-[48px] rounded-2xl border-2 border-dashed px-4 py-3 text-sm font-medium transition-colors",
+            skipped
+              ? "border-primary bg-primary/5 text-primary"
+              : "border-border text-muted-foreground"
+          )}
+        >
+          Just me for now
+        </button>
+      )}
 
-      {skipped && (
-        <p className="text-[11px] text-muted-foreground px-1">
-          You can invite anyone later from {babyName}'s family page.
+      {showSkip && skipped && (
+        <p className="text-xs text-muted-foreground px-1">
+          You can invite anyone later from Your team in More.
         </p>
       )}
     </div>
