@@ -1983,7 +1983,7 @@ merge). `CLAUDE.md` "edge functions" line updated seven → six.
 
 ## 2026-08-28 — Additional users gated behind Flare+ + owner-controlled shut-off
 
-*Correction 2026-09-30: this migration was merged but never applied to live, so the behaviour below never shipped. See the 2026-09-30 entry "Additional users: free 1 / Flare+ 2".*
+*Correction: this migration was merged 2026-08-28 but not applied to live until 2026-09-30 23:45 UTC, and it was superseded on 2026-10-02. See the 2026-09-30 entry "Additional users: free 1 / Flare+ 2" for the real timeline.*
 
 **Scope reviewed:** `supabase/migrations/20260828100000_partner_seats_flare_plus.sql`
 (seat helpers, RLS access functions, seat triggers, `accept_partner_invitation`,
@@ -2448,7 +2448,7 @@ founder-approved pricing decision). **Risk level:** Low — on live this is a
 narrowing, and nobody loses access at apply time.
 
 **Scope reviewed:** `supabase/migrations/20260828100000_partner_seats_flare_plus.sql`
-(applied for the first time in this batch — see below),
+(applied to live 2026-09-30 by a separate session, unhardened; see the timeline below),
 `supabase/migrations/20260930100000_free_partner_seat.sql`
 (new `partner_within_entitlement()` helper; `partner_seat_limit`,
 `has_partner_access`, `partner_can_write`, `can_access_child`,
@@ -2457,17 +2457,23 @@ re-created; EXECUTE lock-down on every partner function),
 `supabase/migrations/20260930110000_set_partner_role.sql`,
 `supabase/functions/check-notifications/index.ts` (partner push fan-out).
 
-**Correction to the record — the 2026-08-28 entry described behaviour that
-never shipped.** `20260828100000_partner_seats_flare_plus.sql` was merged to
-`main` on 2026-08-28 but was **never applied to the live database** (verified
-2026-09-30: none of `owner_has_plus`, `partner_seats_used`,
-`set_partner_access_paused` or `partner_access.paused_at` exist on live, and
-no matching version is in `supabase_migrations.schema_migrations`). So the
-2026-08-28 entry "Additional users gated behind Flare+ + owner-controlled
-shut-off" never took effect for any user: there was **no seat limit and no
-Flare+ gate on live at any point**, and free-tier accounts could, and did,
-share with any number of invited adults. It is applied now, in the same batch
-as and immediately before `20260930100000`, which supersedes its pricing rule.
+**Correction to the record: what actually happened on live, from `supabase_migrations.schema_migrations`.**
+- **2026-08-28 → 2026-09-30 23:45 UTC:** `20260828100000_partner_seats_flare_plus.sql` was merged to `main` on 2026-08-28 but **not applied to live**. During that period there was **no seat limit and no Flare+ gate**. Any account could share with any number of invited adults. Partner Remove and Pause were broken in the app (Pause called a missing RPC; Remove wrote a missing `paused_at` column). So the 2026-08-28 entry describes behaviour that never shipped in that window.
+- **2026-09-30 23:45 UTC:** the **unhardened** version of `20260828100000` was applied to live by a separate Claude session, not this review's apply. It was recorded twice, as versions `20260930234524` and `20260930234538`. `20260829000000` and `20260830000000` went in alongside it (`20260930234601`, `20260930234610`), and both were re-applied as no-ops at 2026-10-01 10:58 UTC. Effects from that point:
+  - **Free accounts at 0 seats**, so `FLARE_PLUS_REQUIRED` blocked every free-tier invite and accept.
+  - `owner_has_plus`, `partner_seat_limit` and `partner_seats_used` were **callable by the anon key and signed-in users**. Anyone could look up any user's Flare+ status and caregiver count by uuid.
+  - `can_access_child` had **no `auth.uid()` guard**, so any caller could probe whether another user can see a given child.
+- **2026-10-01 11:00–11:02 UTC:** that same session revoked the three helpers from anon and authenticated (`partner_seat_helpers_revoke_client_roles`) and locked down the trigger functions and the anon grant on `set_partner_access_paused` (`partner_seat_trigger_fns_revoke`). The disclosure exposure closed at that point.
+- **2026-10-02:** this review applied `20260930100000` and `20260930110000`. They went in as three MCP migrations: `free_partner_seat_1_functions`, `free_partner_seat_2_index_and_acl` and `set_partner_role`. This replaced the Flare+-only rule with free 1 / Flare+ 2, added the entitlement rule, guarded `can_access_child`, and asserted the full EXECUTE matrix. Verified on live with `has_function_privilege`:
+  - internal helpers are not executable by anon or authenticated;
+  - client RPCs are executable by authenticated only;
+  - RLS helpers are pinned to `auth.uid()`.
+  The seat triggers kept their existing definitions and picked up the new function bodies, so no trigger was recreated.
+
+**Interim blast radius (2026-09-30 23:45 → 2026-10-02):**
+- 1 active partner, on a Flare+ owner, was within the limit throughout. **Nobody was suspended.**
+- No new invites were created. The only pending invite had already expired.
+- The anon-callable helpers returned only booleans and counts, not child data. There is no API log evidence of calls in the retained window, so this cannot be ruled in or out beyond about 24h.
 
 **What changes on live (the effective diff):** unlimited additional users →
 **free: 1** (the owner + 1, typically the co-parent) / **Flare+: 2**. That is a
