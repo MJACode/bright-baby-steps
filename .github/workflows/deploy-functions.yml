@@ -30,7 +30,12 @@ jobs:
       # never changes a function's auth mode. Previously this step listed 7 of
       # 14 functions by hand; the other 7 only reached production when someone
       # deployed them manually, and two never did.
+      #
+      # --prune deletes any deployed function that no longer has a folder here,
+      # so retiring a function is: delete its folder, update the disclosures,
+      # merge. Constitution Principle II: a feature is retired only once its
+      # function is undeployed. --yes answers the CLI's delete confirmation.
       - name: Deploy edge functions
-        run: supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: supabase functions deploy --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} --prune --yes
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
