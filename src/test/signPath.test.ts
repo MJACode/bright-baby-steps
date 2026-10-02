@@ -4,6 +4,7 @@ import {
   SIGN_PATH,
   SIGN_STAGES,
   getDefaultFocusSet,
+  getNextFocusSet,
 } from "@/data/signLibrary";
 
 const allSigning = (): Record<string, string> =>
@@ -95,5 +96,65 @@ describe("getDefaultFocusSet", () => {
   it("does not skip ahead to a later set when an earlier set is not age-eligible", () => {
     const status = signingFor(["milk", "more", "all-done"]);
     expect(getDefaultFocusSet(6, status)).toEqual([]);
+  });
+});
+
+describe("getNextFocusSet", () => {
+  const firstSet = ["milk", "more", "all-done"];
+  const trying = (slugs: string[]): Record<string, string> =>
+    Object.fromEntries(slugs.map((slug) => [slug, "emerging"]));
+
+  it("moves past focus signs that are only at Trying it", () => {
+    expect(getDefaultFocusSet(8, trying(firstSet))).toEqual(firstSet);
+    expect(getNextFocusSet(8, trying(firstSet), firstSet)).toEqual({ kind: "set", signSlugs: ["eat", "water"] });
+  });
+
+  it("never offers a current focus sign", () => {
+    const status = { milk: "introduced", more: "introduced", "all-done": "introduced" };
+    const next = getNextFocusSet(8, status, firstSet);
+    expect(next).toEqual({ kind: "set", signSlugs: ["eat", "water"] });
+  });
+
+  it("prefers new signs over earlier signs already at Trying it", () => {
+    const status = { ...trying(firstSet), eat: "emerging", water: "emerging" };
+    expect(getNextFocusSet(8, status, ["eat", "water"])).toEqual({
+      kind: "set",
+      signSlugs: ["sleep", "bath", "change"],
+    });
+  });
+
+  it("only returns the new signs from a partly started set", () => {
+    const status = { ...trying(firstSet), eat: "introduced" };
+    expect(getNextFocusSet(8, status, firstSet)).toEqual({ kind: "set", signSlugs: ["water"] });
+  });
+
+  it("reports age-gated instead of skipping ahead", () => {
+    const status = trying([...firstSet, "eat", "water", "sleep", "bath", "change"]);
+    expect(getNextFocusSet(7, status, ["sleep", "bath", "change"])).toEqual({ kind: "age-gated" });
+    expect(getNextFocusSet(8, status, ["sleep", "bath", "change"])).toEqual({
+      kind: "set",
+      signSlugs: ["mommy", "daddy"],
+    });
+  });
+
+  it("falls back to unfinished signs once every sign has a status", () => {
+    const status: Record<string, string> = { ...allSigning(), milk: "emerging", dog: "introduced" };
+    expect(getNextFocusSet(24, status, ["dog"])).toEqual({ kind: "set", signSlugs: ["milk"] });
+  });
+
+  it("returns none when the only unfinished signs are the current focus signs", () => {
+    const status: Record<string, string> = { ...allSigning(), dog: "emerging", cat: "introduced" };
+    expect(getNextFocusSet(24, status, ["dog", "cat"])).toEqual({ kind: "none" });
+  });
+
+  it("returns none when every sign is signing", () => {
+    expect(getNextFocusSet(24, allSigning(), [])).toEqual({ kind: "none" });
+  });
+
+  it("never returns more than 3 signs", () => {
+    for (let age = 6; age <= 24; age++) {
+      const next = getNextFocusSet(age, {}, []);
+      if (next.kind === "set") expect(next.signSlugs.length).toBeLessThanOrEqual(3);
+    }
   });
 });

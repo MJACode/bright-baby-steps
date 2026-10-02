@@ -1,11 +1,26 @@
+import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SignIllustration } from "@/components/signs/SignIllustration";
+import { FOCUS_VIEW_ONLY_HELP } from "@/components/signs/ThisWeekFocus";
 import { cn } from "@/lib/utils";
 import { SIGN_STAGES, type Sign } from "@/data/signLibrary";
 import type { ChildSignRow, SignStatus } from "@/hooks/useSignProgress";
+
+const MAX_FOCUS_SIGNS = 3;
 
 const STATUS_OPTIONS: { value: SignStatus; label: string }[] = [
   { value: "introduced", label: "We're using it" },
@@ -20,6 +35,13 @@ export function SignDetailSheet({
   onOpenChange,
   disabled,
   onSetStatus,
+  focusSigns,
+  canEditFocus,
+  showViewerHelp,
+  focusBusy,
+  onFocus,
+  onUnfocus,
+  onSwap,
 }: {
   sign: Sign | null;
   row: ChildSignRow | undefined;
@@ -27,8 +49,35 @@ export function SignDetailSheet({
   onOpenChange: (open: boolean) => void;
   disabled: boolean;
   onSetStatus: (sign: Sign, next: SignStatus) => void;
+  /** This week's focus signs, in display order. */
+  focusSigns: Sign[];
+  canEditFocus: boolean;
+  showViewerHelp: boolean;
+  focusBusy: boolean;
+  onFocus: (sign: Sign) => void;
+  onUnfocus: (sign: Sign) => void;
+  onSwap: (out: Sign, into: Sign) => void;
 }) {
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState<SignStatus | null>(null);
+
+  useEffect(() => {
+    setSwapOpen(false);
+    setConfirmClear(null);
+  }, [sign?.slug, open]);
+
   const status = row?.status as SignStatus | undefined;
+  const isFocus = !!row?.focus_since;
+  const slotsFull = !isFocus && focusSigns.length >= MAX_FOCUS_SIGNS;
+  const focusDisabled = !canEditFocus || focusBusy;
+
+  const handleStatusTap = (target: Sign, value: SignStatus) => {
+    if (status === value && isFocus) {
+      setConfirmClear(value);
+      return;
+    }
+    onSetStatus(target, value);
+  };
   const stage = sign ? SIGN_STAGES.find((s) => s.id === sign.stageId) : undefined;
   const steps = sign
     ? [
@@ -116,7 +165,7 @@ export function SignDetailSheet({
                   type="button"
                   disabled={disabled}
                   aria-pressed={status === value}
-                  onClick={() => onSetStatus(sign, value)}
+                  onClick={() => handleStatusTap(sign, value)}
                   className={cn(
                     "min-h-[48px] rounded-xl px-2 text-sm font-semibold leading-tight transition-colors disabled:opacity-50",
                     status === value
@@ -128,8 +177,84 @@ export function SignDetailSheet({
                 </button>
               ))}
             </div>
+
+            <section className="space-y-2" aria-label="This week's signs">
+              {isFocus ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-[48px] w-full border-milestones/40 text-milestones hover:bg-milestones/10 hover:text-milestones"
+                  disabled={focusDisabled}
+                  onClick={() => onUnfocus(sign)}
+                >
+                  Remove from focus
+                </Button>
+              ) : slotsFull && swapOpen ? (
+                <div className="space-y-2 rounded-xl bg-milestones-bg p-4">
+                  <p className="text-sm leading-relaxed">
+                    You have 3 focus signs. Pick one to swap out for {sign.label.toUpperCase()}:
+                  </p>
+                  {focusSigns.map((out) => (
+                    <Button
+                      key={out.slug}
+                      type="button"
+                      variant="outline"
+                      className="min-h-[48px] w-full justify-start gap-3 bg-background"
+                      disabled={focusDisabled}
+                      onClick={() => onSwap(out, sign)}
+                    >
+                      <span aria-hidden className="text-xl">
+                        {out.emoji}
+                      </span>
+                      Swap out {out.label.toUpperCase()}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-[48px] w-full"
+                    onClick={() => setSwapOpen(false)}
+                  >
+                    Keep this week as is
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  className="min-h-[48px] w-full bg-milestones text-white hover:bg-milestones/90"
+                  disabled={focusDisabled}
+                  onClick={() => (slotsFull ? setSwapOpen(true) : onFocus(sign))}
+                >
+                  Make this a focus sign
+                </Button>
+              )}
+              {showViewerHelp && <p className="text-xs text-muted-foreground">{FOCUS_VIEW_ONLY_HELP}</p>}
+            </section>
           </div>
         )}
+
+        <AlertDialog open={confirmClear !== null} onOpenChange={(next) => !next && setConfirmClear(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">Clear this sign?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This also removes {sign?.label.toUpperCase()} from this week's signs.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="min-h-[48px]">Keep it</AlertDialogCancel>
+              <AlertDialogAction
+                className="min-h-[48px]"
+                onClick={() => {
+                  if (sign && confirmClear) onSetStatus(sign, confirmClear);
+                  setConfirmClear(null);
+                }}
+              >
+                Clear sign
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   );

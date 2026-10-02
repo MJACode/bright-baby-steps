@@ -528,3 +528,34 @@ export function getDefaultFocusSet(
   if (!next || next.fromMonths > ageMonths) return [];
   return next.signSlugs.filter((slug) => statusBySlug[slug] !== "signing");
 }
+
+export type NextFocusSet =
+  | { kind: "set"; signSlugs: string[] }
+  | { kind: "age-gated" }
+  | { kind: "none" };
+
+/**
+ * What "Ready for new signs?" moves on to. getDefaultFocusSet can't answer
+ * this: focus signs at "Trying it" aren't signing, so it would hand back the
+ * set the parent is moving on from. Prefers path sets with signs that have no
+ * status yet (genuinely new), then falls back to any sign that isn't signing
+ * and isn't a current focus sign. Never skips past an age-gated set.
+ */
+export function getNextFocusSet(
+  correctedAgeMonths: number,
+  statusBySlug: Record<string, string | undefined>,
+  focusSlugs: string[],
+): NextFocusSet {
+  const ageMonths = Math.max(correctedAgeMonths, 6);
+  const focused = new Set(focusSlugs);
+  const pick = (eligible: (slug: string) => boolean): NextFocusSet | null => {
+    const set = SIGN_PATH.find((s) => s.signSlugs.some(eligible));
+    if (!set) return null;
+    if (set.fromMonths > ageMonths) return { kind: "age-gated" };
+    return { kind: "set", signSlugs: set.signSlugs.filter(eligible) };
+  };
+  return (
+    pick((slug) => !focused.has(slug) && statusBySlug[slug] === undefined) ??
+    pick((slug) => !focused.has(slug) && statusBySlug[slug] !== "signing") ?? { kind: "none" }
+  );
+}

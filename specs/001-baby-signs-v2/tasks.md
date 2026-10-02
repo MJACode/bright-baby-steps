@@ -135,14 +135,14 @@
   - it returns an empty array when the whole library is signed
 
   *(frontend)*
-- [ ] T025 [US2] Add `useSetSignFocus()` to `src/hooks/useSignProgress.tsx` (contracts/client-data-hooks.md):
+- [x] T025 [US2] Add `useSetSignFocus()` to `src/hooks/useSignProgress.tsx` (contracts/client-data-hooks.md):
   - **focus** upserts `{ child_id, parent_id: childOwnerId, sign_slug, status: existing ?? 'introduced', focus_since: trackingDayKey(new Date(), resolveTrackingSchedule(child)) }` on `child_id,sign_slug`
   - **unfocus** runs `UPDATE focus_since = null … .select()` and treats 0 rows as an error (Principle VI)
   - error `focus_limit_reached` maps to the toast "You have 3 focus signs — swap one out first."
   - invalidates `["child-signs"]`
 
   Owner-keyed, the same as `useSetSignStatus` *(frontend)*
-- [ ] T026 [US2] Create `src/components/signs/ThisWeekFocus.tsx`:
+- [x] T026 [US2] Create `src/components/signs/ThisWeekFocus.tsx`:
   - header "This week"
   - one row per focus sign (emoji or thumbnail, label, status chip), per the Liven row pattern in research R9; tapping a row opens `SignDetailSheet`
   - when there are no focus signs, a single "Start with these signs" button that focuses the `getDefaultFocusSet` result
@@ -150,9 +150,9 @@
   - a celebratory "You've worked through the whole library" state when the path is exhausted
 
   *(frontend)*
-- [ ] T027 [US2] Add "Make this a focus sign" and "Remove from focus" to `src/components/signs/SignDetailSheet.tsx`. When 3 focus signs already exist, show a swap picker listing the current 3 (spec edge case "All focus slots full"). When clearing the status of a focus sign, first show an `AlertDialog` confirmation ("This also removes it from this week's signs") (data-model state transitions) *(frontend)*
-- [ ] T028 [US2] Restructure `src/pages/dashboard/SignsPage.tsx` inside `PremiumGate`: `ThisWeekFocus` first, then the "All signs" library (stage-grouped rows from US1) *(frontend)*
-- [ ] T029 [US2] Read-only viewer handling: disable the focus controls, with the helper text "Only parents and caregivers who can edit can change this week's signs." Use the existing role hook (`useCurrentRole`) (FR-018) *(frontend)*
+- [x] T027 [US2] Add "Make this a focus sign" and "Remove from focus" to `src/components/signs/SignDetailSheet.tsx`. When 3 focus signs already exist, show a swap picker listing the current 3 (spec edge case "All focus slots full"). When clearing the status of a focus sign, first show an `AlertDialog` confirmation ("This also removes it from this week's signs") (data-model state transitions) *(frontend)*
+- [x] T028 [US2] Restructure `src/pages/dashboard/SignsPage.tsx` inside `PremiumGate`: `ThisWeekFocus` first, then the "All signs" library (stage-grouped rows from US1) *(frontend)*
+- [x] T029 [US2] Read-only viewer handling: disable the focus controls, with the helper text "Only parents and caregivers who can edit can change this week's signs." Use the existing role hook (`useCurrentRole`) (FR-018) *(frontend)*
 - [ ] T030 [US2] Invoke **`qa`** on the PR-B frontend: owner-keyed writes, 0-row checks, query keys, the no-auto-advance rule, and viewer gating matching RLS *(qa)*
 - [ ] T031 [US2] Run the local gate and the quickstart §3 steps, then open and merge PR-B. The migration must already be confirmed live (T020) *(parent)*
 
