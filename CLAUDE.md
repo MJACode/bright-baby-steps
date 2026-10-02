@@ -38,8 +38,8 @@ Before creating a new component, hook, utility, or migration, check whether some
 - Supabase schema changes go in `supabase/migrations/` with a timestamp prefix
 - Preferences that don't need to sync across devices use `localStorage` via `usePreferences`
 - Streaming AI calls use SSE — never use `supabase.functions.invoke` for a streaming call; use `fetch` with a `ReadableStream` reader. The only streaming caller left is `SpeechInsightsPanel`.
-- There is **no conversational AI in the app.** The in-app chat was removed on 2026-08-28 (`AIChatWidget`, `chatOpener`, `useChatHistory`, `useChatUsage`). AI is one-shot only: briefings, weekly insights, Word & Sound Journal insights, Visit Prep, and the Flare+ plans. Do not add a chat surface, a message thread, or a free-text "ask" box back without an explicit product decision.
-- Onboarding is a deterministic 5-step wizard (`src/components/OnboardingWizard.tsx`) — no AI, no LLM calls. It creates the child row and writes `primary_interest` + `has_partner` + `onboarding_completed_at` to the `profiles` table on completion. Partner invites are generated via `partner_invitations` insert using the same pattern as `PartnerManagement.tsx`.
+- There is **no conversational AI in the app.** The in-app chat was removed on 2026-08-28 (`AIChatWidget`, `chatOpener`, `useChatHistory`, `useChatUsage`). AI is one-shot only: briefings, weekly insights, Word Journal insights, Visit Prep, and the Flare+ plans. Do not add a chat surface, a message thread, or a free-text "ask" box back without an explicit product decision.
+- Onboarding is a deterministic 5-step wizard (`src/components/OnboardingWizard.tsx`), plus two post-create screens (milestone catch-up, then welcome + partner invite; steps 6–7) — no AI, no LLM calls. It creates the child row and writes `primary_interest` + `has_partner` + `onboarding_completed_at` to the `profiles` table on completion. Partner invites are generated via `partner_invitations` insert using the same pattern as `PartnerManagement.tsx`.
 - There is no `onboarding` AI skill. The `:::CREATE_CHILD:::` marker pattern has been removed. Do not reintroduce it.
 
 ---
@@ -107,7 +107,7 @@ Outside counsel will be commissioned before any of: institutional fund-raise, EU
 **Locked decisions (May 2026):**
 - Legal entity: **Grace Flare LLC**, Delaware. Registered office c/o Northwest Registered Agent, 8 The Green, Suite A, Dover, DE 19901 — wired into `PrivacyPage.tsx` § 1 and `TermsPage.tsx` § 14.
 - COPPA Verifiable Parental Consent method: **email-plus**, no dwell. Three steps: signup-confirmation email (#1) → typed-name digital-signature direct-notice modal at Add Child → separately-actionable second confirmation email (#2). Implemented end-to-end across `vpcGate.ts`, `CoppaDirectNotice.tsx`, `send-vpc-email/index.ts` (v3 ACTIVE on live), and migrations `20260507000000_vpc_email_plus.sql` + `20260508010000_vpc_zero_dwell_and_attestation.sql`.
-- AI provider: **Anthropic, PBC**. Six edge functions invoke it: briefing, weekly-insights, generate-speech-class, visit-prep-questions, generate-activity-plan, and chat. (`chat` no longer backs a chat UI — since 2026-08-28 it serves one-shot Word & Sound Journal insights only; see its file header.) (The `detect-milestone` photo-milestone function was retired 2026-06-21 along with all milestone-photo features; `parse-voice-log` was retired 2026-08-28 along with log-by-voice; `next-step-peek` was retired 2026-09-07 along with the home-screen Next steps feed.) PrivacyPage § 4 + `/subprocessors` reflect this. **DPA still pending** — § 4 currently uses "we have requested a DPA we expect to confirm…" language; will be rewritten with "we have a written DPA" framing the day the executed PDF is in hand.
+- AI provider: **Anthropic, PBC**. Seven edge functions call it: briefing, weekly-insights, chat, extract-memory (fire-and-forget memory extraction after briefing / weekly-insights / chat), generate-speech-class, visit-prep-questions, and generate-activity-plan. (`chat` no longer backs a chat UI — since 2026-08-28 it serves one-shot Word Journal insights only. It still accepts a free-form `messages[]` array; narrowing it is an open P1 in the legal log, 2026-08-28.) Separately, the `mcp` function lets a parent's own Claude read their child's data through RLS-bound RPCs (Privacy § 4, `/subprocessors`). Retired: `detect-milestone` (2026-06-21, milestone photos), `parse-voice-log` (2026-08-28, log-by-voice), `next-step-peek` (2026-09-07, Next steps feed) — code removed from the repo, but **all three were still ACTIVE in production as of 2026-09-30** and must be undeployed (constitution Principle II). PrivacyPage § 4 + `/subprocessors` reflect the current set. **DPA accepted 2026-05-08** — § 4 says "we have a written Data Processing Addendum in place with Anthropic, accepted on May 8, 2026" (see the P0 entry below).
 - Liability cap: greater of $100 or fees paid in last 12 months (`TermsPage.tsx` § 9).
 - Governing law: Delaware (`TermsPage.tsx` § 12). Venue: New Castle County, DE.
 - Dispute resolution: AAA consumer arbitration with class-action waiver and 30-day opt-out (`TermsPage.tsx` § 11). Informal-resolution + opt-out emails go to `legal@graceflare.com`.
@@ -117,7 +117,7 @@ Outside counsel will be commissioned before any of: institutional fund-raise, EU
 
 **P0 follow-ups within 7 days (post badge-flip):**
 - ~~**Anthropic DPA execution**~~ ✅ **DONE 2026-05-08.** DPA accepted (template effective Feb 24, 2025). Audit findings logged in `docs/legal-review-log.md` (DPA entry): (a) no-training is implicit via § B.2 + Schedule 1 § B.5 purpose limitation — the explicit "no training" commitment lives in Anthropic's Commercial Terms / Usage Policy and is cited alongside the DPA in Privacy § 4; (b) the DPA does **not** state a 30-day abuse-monitoring cap — Privacy § 4 was softened to "limited period … per Anthropic's Usage Policy" rather than committing to a number we cannot back from contract; (c) SCCs 2021/914 Module Two + Module Three plus UK and Swiss addenda incorporated by reference (Schedule 3); (d) breach notification is **48h**, beating the 72h target. Executed PDF stored outside the repo (1Password / Google Drive).
-- **`delete_user_account()` Storage purge end-to-end test in dev.** Confirm `feedback-screenshots/{uid}/*` and `milestone-photos/{uid}/*` actually purge after the RPC. If Storage deletion silently fails on the project's tier, fix the path or soften PrivacyPage § 8 deletion language.
+- **Account-deletion Storage purge end-to-end test in dev.** Confirm `feedback-screenshots/{uid}/*` and `milestone-photos/{uid}/*` actually purge when the `delete-account` edge function runs (it purges Storage via the Storage API, then calls the RPC). If Storage deletion silently fails on the project's tier, fix the path or soften PrivacyPage § 8 deletion language.
 - **Verify Supabase backup retention** matches the "no longer than 30 days" policy line.
 
 **Production deploy status (May 7, 2026):**
@@ -140,10 +140,9 @@ After these three steps, the gate works as: signup → confirm email #1 (Supabas
 - **Partner-invitee consent moment** — implemented in `supabase/migrations/20260507020000_partner_invitee_consent.sql` + `src/pages/AcceptInvite.tsx`. The accept flow now requires the invitee to check a Privacy/Terms consent box and the `accept_partner_invitation` RPC stamps `partner_access.consent_acknowledged_at`. Existing `partner_access` rows are backfilled with `created_at`.
 - **Subprocessor list page** — `src/pages/SubprocessorsPage.tsx` is now live at `/subprocessors`, listing Supabase, Anthropic, and Resend. Update the file when subprocessors change and email subscribers 30 days in advance per Privacy § 5.
 - **Rights-request inbox + 30-day SLA** — `supabase/migrations/20260507030000_rights_requests.sql` adds the `rights_requests` audit table with public INSERT and per-requester SELECT RLS. `src/pages/RightsRequestPage.tsx` (linked from PrivacyPage § 7) is the public submit form. v1 triage uses the Supabase dashboard; a custom admin UI and automated acknowledgement email are follow-ups.
-- **Inactive-account auto-purge cron** — `supabase/migrations/20260507040000_inactive_account_purge.sql` refactors the deletion logic into a private `_purge_user_data(uid)` helper, adds the admin-only `purge_inactive_account(uid)` RPC, and schedules `inactive-account-purge-daily` via pg_cron at 02:30 UTC. Edge function `supabase/functions/inactive-account-purge/` runs the two-stage flow: warn at 24-month inactivity, purge 30 days after warning. **Deploy steps**: deploy the edge function and confirm `app.supabase_url` + `app.service_role_key` are set at the database level (same convention as `reactivate-nudge`).
-- **`delete_user_account()` audit** — addressed in `supabase/migrations/20260507010000_audit_delete_user_account.sql`. The RPC now deletes from every parent_id-referencing table (15 records-tables that previously would have caused FK violations on the final profiles delete), then purges Storage objects under `{uid}/` in `feedback-screenshots` and `milestone-photos`, then deletes `profiles` and `auth.users`. **Still pending**: end-to-end test asserting Storage deletion in dev, and confirmation with Supabase support that SECURITY DEFINER `auth.users` deletion is supported on the project's tier. Email-confirmation of completion (Privacy § 8 promise) requires a Resend send-email step from a follow-up edge function — not done yet.
+- **Inactive-account auto-purge cron** — `supabase/migrations/20260507040000_inactive_account_purge.sql` refactors the deletion logic into a private `_purge_user_data(uid)` helper, adds the admin-only `purge_inactive_account(uid)` RPC, and schedules `inactive-account-purge-daily` via pg_cron at 02:30 UTC. Edge function `supabase/functions/inactive-account-purge/` runs the two-stage flow: warn at 24-month inactivity, purge 30 days after warning. The cron reads `app_supabase_url` + `app_service_role_key` from Supabase Vault (migration `20260507050000_cron_jobs_use_vault.sql`); it also purges Storage for the account.
+- **`delete_user_account()` audit** — addressed in `supabase/migrations/20260507010000_audit_delete_user_account.sql`. The RPC now deletes from every parent_id-referencing table (15 records-tables that previously would have caused FK violations on the final profiles delete), then deletes `profiles` and `auth.users`. It deletes **database rows only**: the `storage.protect_delete()` trigger blocks SQL deletes from `storage.objects` (hotfix migration `20260509000000`), so Storage under `{uid}/` in `feedback-screenshots` and `milestone-photos` is purged by the `delete-account` edge function (user-initiated) and `inactive-account-purge` (cron). **Still pending**: end-to-end test asserting Storage deletion in dev, and confirmation with Supabase support that SECURITY DEFINER `auth.users` deletion is supported on the project's tier. Email-confirmation of completion (Privacy § 8 promise) requires a Resend send-email step from a follow-up edge function — not done yet.
 - **Geo-block EEA/UK at signup** — implemented in `src/lib/geoBlock.ts` + `src/hooks/useGeoBlock.ts`, surfaced in `src/pages/Auth.tsx`. Best-effort client-side IP geolocation via api.country.is. Blocks the signup form only; login still works for any pre-existing EEA/UK account so they can export and delete their data. PrivacyPage § 11 documents the position in plain text as a fallback.
-- **Anthropic DPA verification** — confirm executed DPA covers (a) no-training, (b) 30-day abuse-monitoring max, (c) SCCs (2021/914), (d) breach notification ≤72h. Store the executed PDF and log the date.
 
 ---
 
@@ -222,38 +221,31 @@ User can override per-PR by saying "don't merge" / "hold off" / similar.
 
 ## `.claude/` Folder Reference
 
-Canonical layout of every file Claude Code reads. CLAUDE.md is advisory; hooks are deterministic; skills load on demand.
+What is actually in this repo's `.claude/` (checked 2026-09-30). CLAUDE.md is advisory; hooks are deterministic; skills load on demand.
 
 ```
-your-project/                       Project root for Claude Code
-├── CLAUDE.md                       Project rules, < 200 lines
-├── CLAUDE.local.md                 Personal overrides, gitignored
-├── .gitignore                      Ignores *.local.* and secrets
+bright-baby-steps/
+├── CLAUDE.md                       Project rules (this file)
 ├── .mcp.json                       MCP servers, MUST be at root
-└── .claude/                        Where Claude Code looks first
-    ├── hooks/                      Deterministic, fires every time
-    │   ├── PostToolUse.sh          Auto-commit NM-XXX after edits
+└── .claude/
+    ├── hooks/
+    │   ├── PostToolUse.sh          Stages edited files (does not commit)
     │   ├── SessionStart.sh         Load project context on startup
     │   └── PreCompact.sh           Save state before compaction
-    ├── commands/                   Slash commands (legacy, still works)
-    │   └── ship.md                 Build, lint, deploy in one go
-    ├── skills/                     Canonical home, model-invokable
-    │   ├── carousel/               Auto-factory for IG carousels
-    │   └── drill/                  Generates pacing drills
-    ├── agents/                     Subagents, isolated context window
-    │   ├── code-reviewer.md        Reviews diffs, returns summary
-    │   ├── researcher.md           Web fetch and synthesis
-    │   └── log-analyzer.md         Parses errors and crash logs
-    ├── output-styles/              Custom response formats
-    │   └── terse.md                Code-only, no prose
-    ├── plugins/                    First-class in 2026, /plugin:command
-    │   └── vercel/                 Bundled commands, agents, MCP
-    ├── rules/                      Path-scoped, loads on glob match
-    │   └── api.md                  Loads only for src/api/**
+    ├── commands/ship.md            Build, lint, deploy in one go
+    ├── skills/                     carousel, drill, speckit-* (Spec Kit, 10 skills)
+    ├── agents/                     frontend, backend, qa (see below); ux, legal,
+    │                               code-reviewer, researcher, log-analyzer; advisors:
+    │                               pediatrician, sleep, nutrition, slp, developmental,
+    │                               financial, general
+    ├── output-styles/terse.md      Code-only, no prose
+    ├── plugins/vercel/             Placeholder README only — nothing loads from it
+    ├── rules/api.md                Scoped to src/api/**, which doesn't exist, so it never loads
     ├── statusline                  Bottom-bar display config
-    ├── settings.json               Permissions, model, hook registry
-    └── settings.local.json         Personal, gitignored
+    └── settings.json               Permissions, model, hook registry
 ```
+
+`CLAUDE.local.md` and `.claude/settings.local.json` are personal, gitignored overrides if you create them.
 
 ---
 
@@ -278,6 +270,8 @@ Three subagents in `.claude/agents/` carry the bulk of the implementation work. 
 | `qa` | Read-only QA reviewer. Runs after every non-trivial frontend or backend change. Holds read-only Supabase MCP tools to verify live schema against a diff | `tasks/lessons-qa.md` |
 
 **MCP tool grants are an allowlist.** A subagent only receives the tools named in its `tools:` frontmatter — naming a tool in the agent's prose does nothing. Two rules follow: (1) the server prefix must match the connector's actual name (`mcp__Supabase__*`, `mcp__Mobbin__*`) — a stale prefix silently yields "no such tool"; (2) `.claude/agents/*.md` is read at **session start**, so a newly-granted tool reaches the agent on the next session, not the current one. If an agent reports a tool is missing, check those two things before assuming the connector is down.
+
+**Read-only SQL is auto-approved; writes are not.** `mcp__Supabase__execute_sql` is deliberately *not* in the `settings.json` allowlist. Instead a PreToolUse hook (`.claude/hooks/sql-readonly-guard.mjs`) approves provably read-only queries (SELECT/WITH/EXPLAIN/SHOW with no write keywords and no unknown function calls) and lets everything else fall through to the founder's approval prompt. `apply_migration` always prompts. Don't add either tool to the allowlist — that removes the human gate on writes to live child data. If a legitimate read gets prompted, add the function to `SAFE_FUNCTIONS` in the hook rather than widening the rules.
 
 **Routing rule.** Before writing code, decide which specialist owns the surface area and invoke that agent. The parent Claude orchestrates — it does not write the code itself on tasks that have a clear specialist. Mixed-surface tasks (e.g. a feature with both a migration and a UI) split into two delegations (backend first to land the schema, then frontend to wire the UI), with QA between the two if the backend change is risky.
 
