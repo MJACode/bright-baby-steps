@@ -2446,6 +2446,21 @@ only its duplicate on Home.**
 
 **Code refs:** branch `claude/growth-birth-weight-and-triage-cleanup`.
 
+## 2026-09-30 — Production audit: three retired AI functions still ACTIVE; two repo functions never deployed
+
+**Reviewer:** in-house (Claude pass, founder session). **Risk level:** P1 until the retired functions are deleted.
+
+**Finding (live `list_edge_functions`, project `ieuznbvvwdvhtirzwkly`, 2026-09-30):**
+- `detect-milestone` (retired 2026-06-21), `parse-voice-log` (retired 2026-08-28) and `next-step-peek` (retired 2026-09-07) are all still **ACTIVE**. Each sends child data to Anthropic, and none is disclosed in Privacy § 4 or `/subprocessors` any more. The app no longer calls them, but the endpoints still accept requests. This closes nothing from the 2026-06-21, 2026-08-28 and 2026-09-07 entries: their "delete the deployed function" follow-ups are still open.
+- `visit-prep-questions` and `send-visit-reminder-email` exist in the repo but were **never deployed**. Visit Prep (called from `useVisitPrepQuestions`) therefore cannot work in production, and visit reminder emails from `check-notifications` fail. These are availability bugs, not disclosure gaps: both flows are already disclosed.
+- Root cause: `deploy-functions.yml` listed 7 of 14 functions by hand, and nothing removed retired ones.
+
+**What changed in this PR:** CI now deploys every function in `supabase/functions/`, with each function's `verify_jwt` pinned in `supabase/config.toml` to its live value. `CLAUDE.md` now lists all seven functions that call Anthropic, including `extract-memory`, and records that the three retired functions were still live.
+
+**Outstanding:**
+1. Delete `detect-milestone`, `parse-voice-log` and `next-step-peek` from production (founder approval required; deletion is irreversible).
+2. Deploy the repo's functions once the founder has reviewed what changes for the functions whose live copy is older than the repo.
+
 ## 2026-09-30 — Flare+ paywall: unsubstantiated claims removed
 
 **Reviewer:** in-house (Claude legal pre-review, founder-approved).
@@ -2535,3 +2550,128 @@ sound analysis" → "Cry clues", "Expert content library" → "Guides library". 
 48-hour window and `weekly-insights` uses 7 days. It now reads "reads your recent
 logs". The draft billing launch kit (auto-renewal disclosure, Terms § 14, emails,
 checklist) is saved at `docs/billing-launch-kit.md`.
+---
+
+## 2026-09-30 — Finance Account Finder: old Finance tab replaced; new per-child finance data, Finance reminders, sponsored "Open with" links
+
+**Scope:** `src/lib/accountOptions.ts` (all account copy + 2026 figures), `src/lib/accountFinder.ts` (rule), `src/components/financial/AccountFinder.tsx`, `src/components/financial/AccountCard.tsx` (sponsor CTA + "Ad" label + disclosure), `src/components/records/FinancialTab.tsx` (Trump highlight), `supabase/functions/check-notifications/index.ts` (`finance_trump_claim`, `finance_529_newborn`, `finance_529_birthday`), `supabase/migrations/20260930000000_finance_account_finder.sql` + `20260930020000_finance_sponsors_no_trump.sql`, `src/pages/PrivacyPage.tsx` §§ 2, 3, 6, `src/pages/TermsPage.tsx` § 4, `src/pages/FAQPage.tsx`, `src/components/CoppaDirectNotice.tsx`, `src/pages/dashboard/ProfilePage.tsx` (export). Spec: `specs/001-finance-account-finder/` (T020/T021).
+**Trigger:** Founder decision (2026-09-30) to replace the Finance tab with a two-question account-type finder. The change adds per-child finance data, a mutable "Finance" reminder category sent to all owners of eligible children, and first-party sponsored "Open with [Firm]" buttons per account type. Legacy finance tables are left in place and no longer read (no data deleted).
+
+**Data added (per child, owner + active co-parent only, RLS keyed on child_id, ON DELETE CASCADE from children):**
+- `child_finance_finder`: goal (education / anything / not_sure), family_contributes (bool), updated_by, updated_at.
+- `child_account_status`: account_key, opened_at, marked_by. A `trump` row implies U.S. citizenship + SSN (CPRA sensitive-PI inference): used only to suppress the matching reminder; never exported to analytics, sponsors, or AI.
+- No SSN, account number, balance, or income is collected (FR-022). `finance_account_sponsors` holds no user or child data.
+
+**Risk levels surfaced:**
+- P0: Sponsored CTA rendered inside finder result cards (child-DOB-driven placement), contradicting the direct notice ("not … for advertising") and the 2026-07-04 rule excluding sponsors from editorial recommendations; it also couples a personalized account-type suggestion to a paid firm (Advisers Act § 202(a)(11) / *Lowe*). Resolved: sponsors suppressed on recommendation cards; sponsors appear only in the static account list, identical for every parent.
+- P0: Sponsor-supplied `disclosure` replaced the default ad disclosure (16 CFR § 255.5). Resolved: default disclosure always renders; sponsor text is appended.
+- P0: Sponsors allowed on the Trump Account card (free government deposit; FTC § 5 / Impersonation Rule, 16 CFR Part 461). Resolved: UI guard + `CHECK (account_key <> 'trump')`; copy now states no paid firm is needed to claim.
+- P0: 529 copy said $95,000 five-year gift election needs no gift-tax paperwork (it requires Form 709). Resolved: corrected.
+- P0: New finance data missing from Privacy § 2, the COPPA direct notice, and Export My Data. Resolved: § 2 bullet, direct-notice enumeration, and export of both tables added.
+- P1: Trump "why"/highlight/reminder omitted the U.S.-citizen condition. Resolved: "may qualify" plus the U.S.-citizen condition in all three (why text, list-card highlight, `finance_trump_claim` reminder).
+- P1: Finder framing ("Find the right accounts" / "Open these accounts") read as personalized advice. Resolved: "Accounts to look into", on-screen basis ("based only on birthday and your two answers — not your income, taxes or state"), "Educational, not financial or tax advice" moved above the cards. Spec copy updated to match.
+- P1: 529 "strongest tax break" superlative and unconditioned $35,000 Roth rollover. Resolved: softened; conditions stated.
+- P1: 529 "How to open" pointed at a commercial site (savingforcollege.com) despite the non-commercial rule. Resolved: College Savings Plans Network.
+- P1: HYSA "Safe" + unqualified FDIC line next to potential fintech sponsors (12 CFR Part 328 subpart B). Resolved: "insured" + bank-only caveat.
+- P1: Privacy § 6 / Terms § 4 updated: sponsors never in finder results, never targeted with child data, cannot change suggestions; compensation is flat-fee or per-click only, never per account opened or amount invested. Terms § 4 adds account-finder scope paragraph. Treated as clarifying, non-material under Terms § 10 (see Outstanding).
+- P2: Reminder copy de-claimed ("easy", "popular", "future"). In-app only; CAN-SPAM analysis required before any email channel.
+- P2: UGMA transfer age (up to 25 in some states), Coverdell "most families", Trump "Contributions open July 4, 2026" tense, Trump employer cap is per employee, FAQ additions ("Does Grace Flare give financial advice?", "Why are there ads in Finance?"), partner-role FAQ line.
+- P2: `marked_by` / `updated_by` retain a deleted co-parent's UUID: accepted as de minimis — opaque UUID only, no FK, not exported.
+- Accepted: ad hidden once an account is marked opened (child data suppresses, never selects, an ad). `rel="noopener noreferrer sponsored"`, verbatim `cta_url`, no identifiers appended (FR-016) verified.
+- Source verification: every figure checked against IRS / Treasury / FDIC / Savingforcollege secondary sources on 2026-09-30; irs.gov, trumpaccounts.gov and fdic.gov were blocked by the build environment's proxy, so URLs were confirmed via search index, not loaded.
+
+**SubprocessorsPage.tsx:** unchanged. Sponsors receive no data and are not subprocessors (same position as 2026-06-20).
+
+**Code refs:** branch `feature/finance-account-finder` (PR #244).
+
+**Outstanding:**
+- OUTSIDE-COUNSEL GATE (carried from 2026-06-20, still open): no `finance_account_sponsors` row may be set `is_active = true` until securities counsel confirms (a) adviser / broker / Marketing Rule promoter / MSRB G-21 position for the finder + paid placement, (b) flat-fee / CPC-only contract terms, (c) sponsor addendum warranting compliance-approved copy and landing pages.
+- COPPA § 312.5(a)(1): confirm the new finance data + DOB-timed finance reminders are not a material change for previously consented parents. The direct notice is shown once per profile, so existing parents do not see the updated enumeration. If material: 30-day notice under Privacy § 11 and re-acknowledgement.
+- Trump Account figures and claim mechanics to be re-verified against Treasury/IRS guidance at each rule change (auto-enrollment proposal pending).
+- Pre-existing: Export My Data omits most tracking tables (allergen, milestone, temperature, supplements, activities, signs, etc.). Separate P0 to close the Privacy § 8 portability promise.
+- Yearly figures refresh (gift exclusion, IRA limit, Trump contribution indexing) by PR in `accountOptions.ts`.
+
+## 2026-09-30 — SECURITY: admin database functions were callable with the public anon key; locked down
+
+**Reviewer:** in-house (Claude backend + QA passes, founder-approved apply). **Risk level:** High → resolved on live 2026-09-30.
+
+**What was exposed.** On this Supabase project, `pg_default_acl` grants EXECUTE on every new function in `public` directly to `anon` and `authenticated`. That means `REVOKE ... FROM PUBLIC` removes nothing. As a result, three SECURITY DEFINER functions could be called by anyone holding the public anon key, at `POST /rest/v1/rpc/<name>`:
+- `_purge_user_data(uuid)`: deletes every row for any user id, then the `auth.users` row. **Any account could be deleted by anyone.** Exposed since `20260507040000_inactive_account_purge.sql`, applied to live as `20260507151347`.
+- `purge_inactive_account(uuid)`: a wrapper around the function above. Same exposure.
+- `users_with_no_logs_since(timestamptz)`: returns the parent user id, child id and **child first name** for every child with no recent logs. Passing a future timestamp returns every child. Exposed since `20260502010000_reactivation_rpc.sql`.
+
+**Evidence of misuse.** Supabase log retention covers only about 24 hours, 2026-09-29T20:30Z to 2026-09-30T20:29Z. In that window:
+- There were no `/rest/v1/rpc/*` requests of any kind.
+- There were no mentions of the three functions in PostgREST or Postgres logs.
+- There were no user deletions in `auth_audit_logs`.
+
+Anything before that window **cannot be ruled in or out from logs.**
+
+**Fix.** Migration `20260930090000_lock_down_admin_rpcs.sql`, applied to live 2026-09-30:
+- REVOKE EXECUTE from PUBLIC, `anon` and `authenticated`, and GRANT to `service_role`.
+- The migration asserts the result and fails if any function is still executable.
+- Verified on live afterwards with `has_function_privilege`: anon=false, authenticated=false, service_role=true for all three.
+
+Legitimate callers keep working:
+- The `inactive-account-purge` and `reactivate-nudge` edge functions use the service-role key.
+- `delete_user_account()` is a postgres-owned SECURITY DEFINER function, so its call is checked as the owner.
+
+**Founder / counsel decision needed (not concluded here).** Is this a reportable security incident? Facts relevant to that call:
+- Children's names were exposed to unauthenticated callers for about 5 months, with no evidence of access in the one day of retained logs.
+- Account deletion was possible for the same period, with no deletions seen in that day.
+- Consider it against Privacy § 8 / § 10 commitments, state breach-notification statutes, and COPPA (16 CFR § 312.8, reasonable security).
+- CLAUDE.md lists "material breach" as a trigger for outside counsel.
+- Recommend counsel review whether the exposure alone, without evidence of access, triggers notice in any state where users live.
+
+**Follow-ups:**
+1. **Root cause still in place.** Default privileges keep granting EXECUTE on new public functions to anon and authenticated. Either change `ALTER DEFAULT PRIVILEGES` (this needs explicit grants for client RPCs going forward), or require every SECURITY DEFINER migration to revoke from anon and authenticated explicitly. Added to backend and QA lessons.
+2. The Supabase security advisor still flags as ERROR the view `public.family_moments`, which is defined SECURITY DEFINER and so bypasses the querier's RLS. Needs review.
+3. `delete_user_account()` is still anon-executable. It is guarded by `auth.uid()`, which is null for anon; confirm it no-ops safely.
+4. `can_access_child(uuid, uuid)` has no `auth.uid()` guard. Anyone can ask whether a given user can access a given child. This is fixed in the pending free-partner-seat migration.
+5. **Cron jobs failing.** `reactivate-nudge` and `inactive-account-purge` return 401 on every scheduled run, because the Vault service-role key is being rejected. **The 24-month inactive-account purge promised in Privacy § 8 is not running.** Fix is pending.
+
+---
+
+## 2026-09-30 — Export My Data: every user/child table, fail-closed on any read error
+
+**Trigger:** P0 carried from the Finance Account Finder entry above — Export My Data omitted most tracking tables (Privacy § 8 "download a copy of your data"; COPPA 16 CFR § 312.6(a) parent review) and swallowed read errors with an empty `catch {}`, so a failed read silently exported an empty list (Constitution VI).
+
+**Change:** export logic moved from `ProfilePage.tsx` to `src/lib/exportUserData.ts`, with one declarative `EXPORT_TABLES` list (55 tables). Every read checks `{ error }`; if any table fails, nothing downloads and the toast names the data that couldn't be read. Reads page until an empty page so the PostgREST max-rows cap can't truncate a table silently. Existing top-level JSON keys unchanged. File renamed `grace-flare-export-YYYY-MM-DD.json` (was `baby-steps-export-…`).
+
+**Excluded, with reasons:**
+- Credentials: `mcp_access_tokens`, `mcp_authorization_grants`, `mcp_clients`; `profiles.vpc_second_token` / `vpc_second_token_expires_at`; `partner_invitations.invite_code`.
+- Reference/content (no user data): `allergens`, `speech`, `speech_categories`, `financial_checklist_items`, `finance_account_sponsors`.
+- Audit/metering: `rights_requests` (the request log itself), `voice_parse_events` (id + timestamp rate-limit counter).
+- `child_account_status.marked_by` / `child_finance_finder.updated_by` stay out, consistent with the 2026-09-30 finance entry.
+
+**Verified 2026-09-30 against live (project ieuznbvvwdvhtirzwkly):** all 55 tables and every explicit select / filter / order column exist. **Outstanding:** `ai_memories` exists on live but has no migration in the repo; a missing table would fail the whole export closed. Export includes rows RLS exposes via partner access (unchanged from before).
+
+**Code refs:** branch `fix/export-and-finance-followups`.
+
+---
+
+## 2026-10-01 — Production catch-up: partner seats require Flare+; partner access ends when Flare+ lapses
+
+**Reviewer:** in-house (Claude pass, founder-approved "fix the call outs" in session). **Risk level:** Medium (partner/caregiver access to child data).
+
+**What went live:** migrations `20260828100000_partner_seats_flare_plus`, `20260829000000_speech_journal_child_pivot_rls` and `20260830000000_child_tracking_schedule` had been merged to `main` in August but never applied to production. They were applied on 2026-09-30/10-01 after a destructiveness check. Effects:
+- Inviting a partner requires an active Flare+ subscription, and an existing partner's read access stops automatically if the owner's Flare+ lapses (`has_partner_access`, `partner_can_write`, `can_access_child` check `owner_has_plus`). At apply time production had one active partner, whose owner is on Flare+, so no one lost access.
+- `speech_journal` RLS moved from one `FOR ALL` policy to four per-command policies keyed on the child. One row on live; no one was locked out.
+- `children.day_start_time` / `night_start_time` added; tracking-schedule saves, which had been failing in production, now work.
+
+**Security fix:** the seat helpers (`owner_has_plus`, `partner_seat_limit`, `partner_seats_used`) were executable by `anon` and `authenticated` because Supabase's default privileges grant client roles directly. Any caller could have checked a stranger's subscription status. `20260830010000_partner_seat_helpers_revoke_client_roles.sql` revokes those grants (service_role keeps `owner_has_plus`). Applied to live and verified.
+
+**Outstanding:**
+- `can_write_child` was not updated with the Flare+ check, so a partner of a lapsed owner loses read access but child-scoped write policies may still allow inserts/updates. Founder decision pending; fix belongs in a follow-up migration.
+- Partner-facing copy (Terms, FAQ, partner invite screens) should say that partner access depends on the owner's Flare+ subscription. Not yet updated.
+- Orphan edge functions `parse-voice-log`, `detect-milestone`, `next-step-peek` are still ACTIVE on live despite retirement (Constitution II requires undeploying them).
+
+## 2026-10-02 — Partner write access now also ends when the owner's Flare+ lapses
+
+**Reviewer:** in-house (Claude pass + QA agent, founder-approved in session). **Risk level:** Low. Closes the first "Outstanding" item of the 2026-10-01 partner-seats entry.
+
+**What changed:** `can_write_child` now requires `owner_has_plus(owner)` for coparent/caregiver writes, matching `can_access_child`. Before, a partner of a lapsed owner lost read access but could still insert, update and delete that child's logs through the 54 RLS write policies. The owner's own write access is unchanged and never depends on Flare+. Applied to live 2026-10-02 (`20261001000000_can_write_child_requires_owner_plus.sql`) and verified; 0 users affected at apply time.
+
+**Follow-up found in review (not fixed here):** `weight_logs` is the only one of the 18 child-log tables whose INSERT policy omits `AND parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`.
+
+**Still outstanding from 2026-10-01:** partner-facing copy (Terms, FAQ, invite screens) should say partner access depends on the owner's Flare+; delete the three retired edge functions.

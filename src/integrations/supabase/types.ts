@@ -538,6 +538,35 @@ export type Database = {
           },
         ]
       }
+      child_account_status: {
+        Row: {
+          account_key: string
+          child_id: string
+          marked_by: string
+          opened_at: string
+        }
+        Insert: {
+          account_key: string
+          child_id: string
+          marked_by?: string
+          opened_at?: string
+        }
+        Update: {
+          account_key?: string
+          child_id?: string
+          marked_by?: string
+          opened_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_account_status_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       child_activities: {
         Row: {
           activity_slug: string
@@ -626,6 +655,38 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      child_finance_finder: {
+        Row: {
+          child_id: string
+          family_contributes: boolean
+          goal: string
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          child_id: string
+          family_contributes: boolean
+          goal: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Update: {
+          child_id?: string
+          family_contributes?: boolean
+          goal?: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_finance_finder_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
             referencedColumns: ["id"]
           },
         ]
@@ -1493,6 +1554,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      finance_account_sponsors: {
+        Row: {
+          account_key: string
+          cta_label: string
+          cta_url: string
+          disclosure: string | null
+          firm_name: string
+          id: string
+          is_active: boolean
+        }
+        Insert: {
+          account_key: string
+          cta_label: string
+          cta_url: string
+          disclosure?: string | null
+          firm_name: string
+          id?: string
+          is_active?: boolean
+        }
+        Update: {
+          account_key?: string
+          cta_label?: string
+          cta_url?: string
+          disclosure?: string | null
+          firm_name?: string
+          id?: string
+          is_active?: boolean
+        }
+        Relationships: []
       }
       financial_checklist_items: {
         Row: {
@@ -3239,6 +3330,10 @@ export type Database = {
       }
       can_access_child: {
         Args: { _child_id: string; _user_id: string }
+        Returns: boolean
+      }
+      can_manage_child_finance: {
+        Args: { p_child_id: string }
         Returns: boolean
       }
       complete_vpc_second_confirmation: {

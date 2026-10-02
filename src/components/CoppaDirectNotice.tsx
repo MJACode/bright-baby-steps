@@ -65,7 +65,8 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
             interests and temperament you choose from a fixed list, any tracking
             data you log (sleep, feeding, diaper, allergens, milestones, play
             activities you mark as tried, sign-language signs you mark as
-            introduced or used, illnesses, medications, supplements),
+            introduced or used, illnesses, medications, supplements), finance-planning
+            answers and which savings accounts you mark as opened,
             and short AI-generated notes
             about your child that you can review, edit, and delete.
           </p>
@@ -73,9 +74,10 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
         <div>
           <p className="font-medium text-foreground">How we use it</p>
           <p className="text-foreground/80">
-            To provide tracking features, generate AI-assisted briefings and insights
-            responses, and produce charts and milestone progress for you. We do
-            not use your child's data to train AI models or for advertising.
+            To provide tracking features, generate AI-assisted briefings and insights,
+            produce charts and milestone progress, and send optional reminders (for
+            example, about opening savings accounts for your child). We do not use
+            your child's data to train AI models or to choose or target ads.
           </p>
         </div>
         <div>

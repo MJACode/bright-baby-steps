@@ -26,11 +26,19 @@ const FAQS = [
   },
   {
     q: "Can I share access with my partner or caregiver?",
-    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. They will be able to view and log activity for your child. You can revoke their access at any time from the same section.",
+    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. Depending on the role you choose, they can view or log activity for your child. Finance is shared with co-parents only. You can revoke their access at any time from the same section.",
   },
   {
     q: "How do I delete my account and data?",
-    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our backup-rotation cycle (no longer than 30 days). Anthropic retains its copy of your AI inputs and outputs only for a limited period of safety and abuse review per its Usage Policy, then deletes them. This action cannot be undone. See § 8 of our Privacy Policy for full detail.",
+    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our backup-rotation cycle (no longer than 30 days). Anthropic retains its copy of your AI inputs and outputs only for a limited period of safety and abuse review per its Usage Policy, then deletes them. This action cannot be undone. See § 9 of our Privacy Policy for full detail.",
+  },
+  {
+    q: "Does Grace Flare give financial advice?",
+    a: "No. The Finance section explains common types of children's savings accounts and suggests which types to look into, using only your child's birth date and your two answers. It doesn't know your income, taxes, or state, and it doesn't recommend any specific plan, investment, or company. For advice about your situation, talk to a tax professional or a licensed financial adviser.",
+  },
+  {
+    q: "Why are there ads in Finance?",
+    a: "Some account cards may show an \"Open with\" button from a financial firm that pays us. These are always labeled \"Ad.\" Ads never change which accounts we suggest, never appear in your finder results, and we never send the firm anything about you or your child. We haven't reviewed the firm or its products. See § 6 of our Privacy Policy.",
   },
   {
     q: "Is Grace Flare suitable if my child has a diagnosed medical condition?",
