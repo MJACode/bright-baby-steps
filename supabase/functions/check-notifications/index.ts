@@ -412,19 +412,37 @@ Deno.serve(async (req) => {
   // don't re-query partner_access.
   const partnersByOwner = new Map<string, string[]>();
 
-  // Additional users are a Flare+ feature and are auto-suspended when the
-  // owner's subscription lapses (migration 20260828100000). This function runs
-  // on the service role, so RLS won't filter them out for us — check the same
-  // helper the RLS layer uses. Memoized: the owner loop revisits the same user
-  // once per child.
-  const plusByOwner = new Map<string, boolean>();
-  const ownerHasPlus = async (ownerId: string): Promise<boolean> => {
-    const cached = plusByOwner.get(ownerId);
+  // Additional users are entitled by seat: free 1, Flare+ 2, ranked by
+  // seniority (migration 20260930100000). On a Flare+ lapse the longest-standing
+  // partner keeps access and the rest are suspended. This function runs on the
+  // service role, so RLS won't filter anyone out for us — ask the SAME helper
+  // every partner RLS policy calls (partner_within_entitlement, EXECUTE granted
+  // to service_role only) so push recipients match who can actually open the
+  // child. Memoized per owner: the owner loop revisits the same user once per
+  // child.
+  const entitledPartnersByOwner = new Map<string, string[]>();
+  const entitledPartners = async (ownerId: string): Promise<string[]> => {
+    const cached = entitledPartnersByOwner.get(ownerId);
     if (cached !== undefined) return cached;
-    const { data } = await supabase.rpc("owner_has_plus", { _owner_id: ownerId });
-    const hasPlus = data === true;
-    plusByOwner.set(ownerId, hasPlus);
-    return hasPlus;
+    const { data: rows } = await supabase
+      .from("partner_access")
+      .select("partner_id")
+      .eq("owner_id", ownerId)
+      .eq("status", "active");
+    const candidates = (rows ?? []).map((p: { partner_id: string }) => p.partner_id);
+    const checks = await Promise.all(
+      candidates.map(async (partnerId: string) => {
+        const { data, error } = await supabase.rpc("partner_within_entitlement", {
+          _owner_id: ownerId,
+          _user_id: partnerId,
+        });
+        // Fail closed: an RPC error means we can't prove access, so no push.
+        return !error && data === true;
+      }),
+    );
+    const entitled = candidates.filter((_: string, i: number) => checks[i]);
+    entitledPartnersByOwner.set(ownerId, entitled);
+    return entitled;
   };
 
   for (const child of children) {
@@ -870,16 +888,13 @@ Deno.serve(async (req) => {
     }
 
     // Also notify partners — fans out every notif queued for this child in
-    // this iteration to each active partner. Mirrors the existing pattern;
+    // this iteration to each ENTITLED partner. Mirrors the existing pattern;
     // covers all 5 sleep-plan types plus the legacy 4 and the visit reminders.
-    // Skipped entirely when the owner isn't on Flare+: those partners can't
-    // open the child anyway, so a push would just be a dead-end tap.
-    const partners = (await ownerHasPlus(userId))
-      ? (await supabase
-          .from("partner_access")
-          .select("partner_id")
-          .eq("owner_id", userId)
-          .eq("status", "active")).data
+    // Partners outside the owner's seat entitlement are skipped: RLS won't let
+    // them open the child, so a push would just be a dead-end tap.
+    const partnerIds = await entitledPartners(userId);
+    const partners = partnerIds.length > 0
+      ? partnerIds.map((partner_id) => ({ partner_id }))
       : null;
 
     if (partners) {
