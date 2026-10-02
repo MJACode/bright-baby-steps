@@ -121,7 +121,8 @@
   *(backend)*
 - [x] T020 [US2] Apply the migration to **live** with the Supabase MCP `apply_migration`. Confirm with `list_migrations` and with `execute_sql` checks that the column exists and a 4th focus insert raises `focus_limit_reached` (Principle VIII; the v1 lesson that `main` auto-deploys) *(backend)*
 - [x] T021 [US2] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` so `child_signs` includes `focus_since`. Do not hand-patch *(backend)*
-- [ ] T022 [US2] Invoke **`qa`** on the migration: idempotency, trigger correctness on UPDATE (unfocus → focus doesn't count itself), and RLS unchanged *(qa)*
+- [x] T022 [US2] Invoke **`qa`** on the migration: idempotency, trigger correctness on UPDATE (unfocus → focus doesn't count itself), and RLS unchanged *(qa)*
+- [x] T022a [US2] Bind `child_signs` writes to the child's real owner (`supabase/migrations/20260930010000_child_signs_rls_bind_child.sql`): closes a v1 cross-tenant write hole that the focus limit turned into a lock-out. Applied live; verified with role-switched tests (stranger rejected both ways, owner 3 focus OK, 4th blocked, upsert at 3/3 OK) *(backend)*
 
 ### Frontend
 
@@ -176,13 +177,13 @@
   - `created_at timestamptz NOT NULL DEFAULT now()`
   - `CONSTRAINT child_sign_practice_once UNIQUE (child_id, sign_slug, practiced_on)`
   - index `(child_id, practiced_on)`
-  - RLS enabled, with SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)` and INSERT/DELETE through `auth.uid() = parent_id OR partner_can_write(parent_id)`; **no UPDATE policy**
+  - RLS enabled, with SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)` INSERT WITH CHECK through `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = child_sign_practice.child_id AND c.parent_id = child_sign_practice.parent_id)` (same owner binding as `child_signs` after T022a), and DELETE through `partner_can_write(parent_id)`; **no UPDATE policy**
   - `COMMENT ON TABLE` that includes "bounded slug — Do NOT widen to free text"
 
   *(backend)*
 - [ ] T033 [US3] Apply the migration to live with the MCP `apply_migration`. Confirm with `list_migrations`, and check the unique-constraint dedup and cascade on child delete with `execute_sql` in a transaction that is rolled back *(backend)*
 - [ ] T034 [US3] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` *(backend)*
-- [ ] T035 [US3] Invoke **`qa`** on the migration: RLS parity with `child_signs`, no UPDATE path, cascade on both FKs, and no free-text column *(qa)*
+- [ ] T035 [US3] Invoke **`qa`** on the migration: RLS parity with `child_signs` (including the owner-binding check, tested with a role-switched stranger insert), no UPDATE path, cascade on both FKs, and no free-text column *(qa)*
 
 ### Frontend
 
@@ -231,7 +232,7 @@
   - `week_start date NOT NULL`
   - `plan jsonb NOT NULL`
   - `created_at`, `updated_at`, with the `update_updated_at` trigger
-  - RLS: SELECT through `has_partner_access`; INSERT/UPDATE/DELETE through `partner_can_write`; all owner-keyed
+  - RLS: SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT and UPDATE WITH CHECK through `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = sign_plans.child_id AND c.parent_id = sign_plans.parent_id)` (owner binding, as in T022a); DELETE through `partner_can_write(parent_id)`; all owner-keyed
 
   *(backend)*
 - [ ] T044 [P] [US4] Create `supabase/functions/_shared/signSlugs.ts` exporting `SIGN_SLUGS` as a readonly array of the 20 slugs, in `src/data/signLibrary.ts` order (research R7) *(backend)*

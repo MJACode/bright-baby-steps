@@ -37,7 +37,7 @@ Each entry records the decision, the reasoning, and the alternatives we rejected
 
 ## R3. Where do practice ticks live?
 
-**Decision**: A new table `child_sign_practice` with one row per (child, sign, `practiced_on` date) and `UNIQUE (child_id, sign_slug, practiced_on)`. Ticking inserts a row and un-ticking deletes it. The table is owner-keyed on `parent_id` with the same RLS as `child_signs`, and cascades on child and user deletion.
+**Decision**: A new table `child_sign_practice` with one row per (child, sign, `practiced_on` date) and `UNIQUE (child_id, sign_slug, practiced_on)`. Ticking inserts a row and un-ticking deletes it. The table is owner-keyed on `parent_id` with the same RLS as `child_signs`, including the owner-binding `EXISTS` check added in `20260930010000_child_signs_rls_bind_child.sql` (see data-model.md), and cascades on child and user deletion.
 
 **Rationale**:
 - Toggles from two caregivers at the same time are safe with no read-modify-write. The unique constraint makes a duplicate tick a no-op (`ON CONFLICT DO NOTHING`), which satisfies the spec edge case "two caregivers → one tick".
@@ -64,7 +64,7 @@ Each entry records the decision, the reasoning, and the alternatives we rejected
 
 ## R5. Weekly sign plan storage and the one-per-week rule
 
-**Decision**: A new table `sign_plans` that mirrors `speech_practice_plans` and `activity_plans` (`UNIQUE (child_id)`, `week_start date`, `plan jsonb`, owner-keyed RLS) without `completed_days`, since ticks cover completion. The edge function enforces one plan per child per week before it calls Anthropic, then persists the row itself using the caller's JWT so RLS applies.
+**Decision**: A new table `sign_plans` that mirrors `speech_practice_plans` and `activity_plans` (`UNIQUE (child_id)`, `week_start date`, `plan jsonb`, owner-keyed RLS with the same owner-binding `EXISTS` check as `child_signs`) without `completed_days`, since ticks cover completion. The edge function enforces one plan per child per week before it calls Anthropic, then persists the row itself using the caller's JWT so RLS applies.
 
 **Rationale**:
 - It matches the established pattern and fits cleanly into React Query and RLS.
