@@ -97,7 +97,7 @@
   All controls are ≥ 48px. How-to text renders even if the media fails (FR-004) *(frontend)*
 - [X] T016 [US1] Update `src/pages/dashboard/SignsPage.tsx` so each library row opens `SignDetailSheet` instead of the inline `Collapsible` accordion. Keep the stage grouping, the progress summary line, `PremiumGate` (`baby-signs`), and every v1 footer constant with its Early Intervention link. Delete the now-unused `SignCard` *(frontend)*
 - [x] T017 [US1] Invoke the **`qa`** agent on the PR-A diff. Focus: brand tokens, 48px targets, inline-SVG safety, v1 copy unchanged, and the zero-behavior-change `planWeekStart` refactor. Fix and re-run until Pass *(qa)*
-- [ ] T018 [US1] Run the local gate, open PR-A, and merge per the CLAUDE.md auto-merge policy. **Launch gate**: the designer's files (SC-001) replace the placeholders in a follow-up PR that changes only `src/assets/signs/*.svg` *(parent)*
+- [x] T018 [US1] Run the local gate, open PR-A, and merge per the CLAUDE.md auto-merge policy. **Launch gate**: the designer's files (SC-001) replace the placeholders in a follow-up PR that changes only `src/assets/signs/*.svg` *(parent)*
 
 **Checkpoint**: US1 is fully usable with placeholders and complete once the designer's files arrive.
 
@@ -111,7 +111,7 @@
 
 ### Backend (first, then QA)
 
-- [ ] T019 [US2] Create `supabase/migrations/<timestamp>_child_signs_focus.sql`. It must:
+- [x] T019 [US2] Create `supabase/migrations/<timestamp>_child_signs_focus.sql`. It must:
   - run `ALTER TABLE public.child_signs ADD COLUMN IF NOT EXISTS focus_since date NULL`
   - add a partial index on `(child_id) WHERE focus_since IS NOT NULL`
   - add a `BEFORE INSERT OR UPDATE OF focus_since` trigger function `child_signs_focus_limit()`: when `NEW.focus_since IS NOT NULL` and the count of *other* rows for `NEW.child_id` with `focus_since IS NOT NULL` is ≥ 3, `RAISE EXCEPTION 'focus_limit_reached' USING ERRCODE = 'P0001'`
@@ -119,14 +119,15 @@
   - be idempotent (`CREATE OR REPLACE`, `DROP TRIGGER IF EXISTS`)
 
   *(backend)*
-- [ ] T020 [US2] Apply the migration to **live** with the Supabase MCP `apply_migration`. Confirm with `list_migrations` and with `execute_sql` checks that the column exists and a 4th focus insert raises `focus_limit_reached` (Principle VIII; the v1 lesson that `main` auto-deploys) *(backend)*
-- [ ] T021 [US2] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` so `child_signs` includes `focus_since`. Do not hand-patch *(backend)*
-- [ ] T022 [US2] Invoke **`qa`** on the migration: idempotency, trigger correctness on UPDATE (unfocus → focus doesn't count itself), and RLS unchanged *(qa)*
+- [x] T020 [US2] Apply the migration to **live** with the Supabase MCP `apply_migration`. Confirm with `list_migrations` and with `execute_sql` checks that the column exists and a 4th focus insert raises `focus_limit_reached` (Principle VIII; the v1 lesson that `main` auto-deploys) *(backend)*
+- [x] T021 [US2] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` so `child_signs` includes `focus_since`. Do not hand-patch *(backend)*
+- [x] T022 [US2] Invoke **`qa`** on the migration: idempotency, trigger correctness on UPDATE (unfocus → focus doesn't count itself), and RLS unchanged *(qa)*
+- [x] T022a [US2] Bind `child_signs` writes to the child's real owner (`supabase/migrations/20260930010000_child_signs_rls_bind_child.sql`): closes a v1 cross-tenant write hole that the focus limit turned into a lock-out. Applied live; verified with role-switched tests (stranger rejected both ways, owner 3 focus OK, 4th blocked, upsert at 3/3 OK) *(backend)*
 
 ### Frontend
 
-- [ ] T023 [P] [US2] Add `SIGN_PATH: { id: string; signSlugs: string[]; fromMonths: number }[]` to `src/data/signLibrary.ts`: about 7 sets of 2–3 slugs following stage order, the first set `["milk","more","all-done"]`. Also add a pure `getDefaultFocusSet(correctedAgeMonths, progressBySlug)` that returns the first age-appropriate set with any sign not at `signing` (FR-009) *(frontend)*
-- [ ] T024 [P] [US2] Add `src/test/signPath.test.ts`:
+- [x] T023 [P] [US2] Add `SIGN_PATH: { id: string; signSlugs: string[]; fromMonths: number }[]` to `src/data/signLibrary.ts`: about 7 sets of 2–3 slugs following stage order, the first set `["milk","more","all-done"]`. Also add a pure `getDefaultFocusSet(correctedAgeMonths, progressBySlug)` that returns the first age-appropriate set with any sign not at `signing` (FR-009) *(frontend)*
+- [x] T024 [P] [US2] Add `src/test/signPath.test.ts`:
   - every path slug exists in the library
   - no set has more than 3 slugs
   - `getDefaultFocusSet` for a 7-month-old with no progress returns the first set
@@ -134,14 +135,14 @@
   - it returns an empty array when the whole library is signed
 
   *(frontend)*
-- [ ] T025 [US2] Add `useSetSignFocus()` to `src/hooks/useSignProgress.tsx` (contracts/client-data-hooks.md):
+- [x] T025 [US2] Add `useSetSignFocus()` to `src/hooks/useSignProgress.tsx` (contracts/client-data-hooks.md):
   - **focus** upserts `{ child_id, parent_id: childOwnerId, sign_slug, status: existing ?? 'introduced', focus_since: trackingDayKey(new Date(), resolveTrackingSchedule(child)) }` on `child_id,sign_slug`
   - **unfocus** runs `UPDATE focus_since = null … .select()` and treats 0 rows as an error (Principle VI)
   - error `focus_limit_reached` maps to the toast "You have 3 focus signs — swap one out first."
   - invalidates `["child-signs"]`
 
   Owner-keyed, the same as `useSetSignStatus` *(frontend)*
-- [ ] T026 [US2] Create `src/components/signs/ThisWeekFocus.tsx`:
+- [x] T026 [US2] Create `src/components/signs/ThisWeekFocus.tsx`:
   - header "This week"
   - one row per focus sign (emoji or thumbnail, label, status chip), per the Liven row pattern in research R9; tapping a row opens `SignDetailSheet`
   - when there are no focus signs, a single "Start with these signs" button that focuses the `getDefaultFocusSet` result
@@ -149,10 +150,10 @@
   - a celebratory "You've worked through the whole library" state when the path is exhausted
 
   *(frontend)*
-- [ ] T027 [US2] Add "Make this a focus sign" and "Remove from focus" to `src/components/signs/SignDetailSheet.tsx`. When 3 focus signs already exist, show a swap picker listing the current 3 (spec edge case "All focus slots full"). When clearing the status of a focus sign, first show an `AlertDialog` confirmation ("This also removes it from this week's signs") (data-model state transitions) *(frontend)*
-- [ ] T028 [US2] Restructure `src/pages/dashboard/SignsPage.tsx` inside `PremiumGate`: `ThisWeekFocus` first, then the "All signs" library (stage-grouped rows from US1) *(frontend)*
-- [ ] T029 [US2] Read-only viewer handling: disable the focus controls, with the helper text "Only parents and caregivers who can edit can change this week's signs." Use the existing role hook (`useCurrentRole`) (FR-018) *(frontend)*
-- [ ] T030 [US2] Invoke **`qa`** on the PR-B frontend: owner-keyed writes, 0-row checks, query keys, the no-auto-advance rule, and viewer gating matching RLS *(qa)*
+- [x] T027 [US2] Add "Make this a focus sign" and "Remove from focus" to `src/components/signs/SignDetailSheet.tsx`. When 3 focus signs already exist, show a swap picker listing the current 3 (spec edge case "All focus slots full"). When clearing the status of a focus sign, first show an `AlertDialog` confirmation ("This also removes it from this week's signs") (data-model state transitions) *(frontend)*
+- [x] T028 [US2] Restructure `src/pages/dashboard/SignsPage.tsx` inside `PremiumGate`: `ThisWeekFocus` first, then the "All signs" library (stage-grouped rows from US1) *(frontend)*
+- [x] T029 [US2] Read-only viewer handling: disable the focus controls, with the helper text "Only parents and caregivers who can edit can change this week's signs." Use the existing role hook (`useCurrentRole`) (FR-018) *(frontend)*
+- [x] T030 [US2] Invoke **`qa`** on the PR-B frontend: owner-keyed writes, 0-row checks, query keys, the no-auto-advance rule, and viewer gating matching RLS *(qa)*
 - [ ] T031 [US2] Run the local gate and the quickstart §3 steps, then open and merge PR-B. The migration must already be confirmed live (T020) *(parent)*
 
 **Checkpoint**: US1 and US2 both work independently.
@@ -176,13 +177,13 @@
   - `created_at timestamptz NOT NULL DEFAULT now()`
   - `CONSTRAINT child_sign_practice_once UNIQUE (child_id, sign_slug, practiced_on)`
   - index `(child_id, practiced_on)`
-  - RLS enabled, with SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)` and INSERT/DELETE through `auth.uid() = parent_id OR partner_can_write(parent_id)`; **no UPDATE policy**
+  - RLS enabled, with SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)` INSERT WITH CHECK through `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = child_sign_practice.child_id AND c.parent_id = child_sign_practice.parent_id)` (same owner binding as `child_signs` after T022a), and DELETE through `partner_can_write(parent_id)`; **no UPDATE policy**
   - `COMMENT ON TABLE` that includes "bounded slug — Do NOT widen to free text"
 
   *(backend)*
 - [ ] T033 [US3] Apply the migration to live with the MCP `apply_migration`. Confirm with `list_migrations`, and check the unique-constraint dedup and cascade on child delete with `execute_sql` in a transaction that is rolled back *(backend)*
 - [ ] T034 [US3] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` *(backend)*
-- [ ] T035 [US3] Invoke **`qa`** on the migration: RLS parity with `child_signs`, no UPDATE path, cascade on both FKs, and no free-text column *(qa)*
+- [ ] T035 [US3] Invoke **`qa`** on the migration: RLS parity with `child_signs` (including the owner-binding check, tested with a role-switched stranger insert), no UPDATE path, cascade on both FKs, and no free-text column *(qa)*
 
 ### Frontend
 
@@ -231,7 +232,7 @@
   - `week_start date NOT NULL`
   - `plan jsonb NOT NULL`
   - `created_at`, `updated_at`, with the `update_updated_at` trigger
-  - RLS: SELECT through `has_partner_access`; INSERT/UPDATE/DELETE through `partner_can_write`; all owner-keyed
+  - RLS: SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT and UPDATE WITH CHECK through `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = sign_plans.child_id AND c.parent_id = sign_plans.parent_id)` (owner binding, as in T022a); DELETE through `partner_can_write(parent_id)`; all owner-keyed
 
   *(backend)*
 - [ ] T044 [P] [US4] Create `supabase/functions/_shared/signSlugs.ts` exporting `SIGN_SLUGS` as a readonly array of the 20 slugs, in `src/data/signLibrary.ts` order (research R7) *(backend)*
