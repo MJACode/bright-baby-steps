@@ -2665,3 +2665,13 @@ Legitimate callers keep working:
 - `can_write_child` was not updated with the Flare+ check, so a partner of a lapsed owner loses read access but child-scoped write policies may still allow inserts/updates. Founder decision pending; fix belongs in a follow-up migration.
 - Partner-facing copy (Terms, FAQ, partner invite screens) should say that partner access depends on the owner's Flare+ subscription. Not yet updated.
 - Orphan edge functions `parse-voice-log`, `detect-milestone`, `next-step-peek` are still ACTIVE on live despite retirement (Constitution II requires undeploying them).
+
+## 2026-10-02 — Partner write access now also ends when the owner's Flare+ lapses
+
+**Reviewer:** in-house (Claude pass + QA agent, founder-approved in session). **Risk level:** Low. Closes the first "Outstanding" item of the 2026-10-01 partner-seats entry.
+
+**What changed:** `can_write_child` now requires `owner_has_plus(owner)` for coparent/caregiver writes, matching `can_access_child`. Before, a partner of a lapsed owner lost read access but could still insert, update and delete that child's logs through the 54 RLS write policies. The owner's own write access is unchanged and never depends on Flare+. Applied to live 2026-10-02 (`20261001000000_can_write_child_requires_owner_plus.sql`) and verified; 0 users affected at apply time.
+
+**Follow-up found in review (not fixed here):** `weight_logs` is the only one of the 18 child-log tables whose INSERT policy omits `AND parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`.
+
+**Still outstanding from 2026-10-01:** partner-facing copy (Terms, FAQ, invite screens) should say partner access depends on the owner's Flare+; delete the three retired edge functions.
