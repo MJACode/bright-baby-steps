@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireCronKey } from "../_shared/requireCronKey.ts";
 
 interface StaleRow {
   user_id: string;
@@ -7,7 +8,12 @@ interface StaleRow {
   child_name: string;
 }
 
-serve(async () => {
+serve(async (req) => {
+  // pg_cron only. verify_jwt is off for this function (config.toml), so this
+  // is the only gate in front of a service-role run.
+  const denied = await requireCronKey(req);
+  if (denied) return denied;
+
   const sb = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,

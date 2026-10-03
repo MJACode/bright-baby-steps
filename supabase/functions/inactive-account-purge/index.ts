@@ -1,6 +1,8 @@
 // Inactive-account auto-purge per Privacy § 8 + COPPA § 312.10.
 //
-// Run daily by pg_cron (see 20260507040000_inactive_account_purge.sql).
+// Run daily by pg_cron (see 20260507040000_inactive_account_purge.sql;
+// headers since 20261003030000_cron_jobs_apikey_header.sql). Callers must send
+// the `cron` secret key on the apikey header (_shared/requireCronKey.ts).
 //
 // Two stages:
 //   Stage 1 — 24 months of no sign-in, never warned:
@@ -19,6 +21,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { requireCronKey } from "../_shared/requireCronKey.ts";
 
 const INACTIVE_THRESHOLD_DAYS = 730; // 24 months
 const WARNING_GRACE_DAYS = 30;
@@ -139,7 +142,12 @@ async function sendWarningEmail(args: {
   return true;
 }
 
-serve(async () => {
+serve(async (req) => {
+  // pg_cron only. verify_jwt is off for this function (config.toml), so this
+  // is the only gate in front of a service-role purge run.
+  const denied = await requireCronKey(req);
+  if (denied) return denied;
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

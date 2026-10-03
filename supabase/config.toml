@@ -12,8 +12,12 @@ verify_jwt = false
 [functions.chat]
 verify_jwt = false
 
+# pg_cron only. Since 2026-10-03 the cron job sends the `cron` secret key
+# (sb_secret_...) on the apikey header, which the platform JWT gate cannot
+# validate; the function checks it itself (_shared/requireCronKey.ts).
+# Manual deploy: supabase functions deploy check-notifications --no-verify-jwt
 [functions.check-notifications]
-verify_jwt = true
+verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = true
@@ -27,12 +31,14 @@ verify_jwt = true
 [functions.generate-speech-class]
 verify_jwt = true
 
+# pg_cron only; authorizes the `cron` secret key itself (requireCronKey.ts).
 [functions.inactive-account-purge]
 verify_jwt = false
 
 [functions.mcp]
 verify_jwt = false
 
+# pg_cron only; authorizes the `cron` secret key itself (requireCronKey.ts).
 [functions.reactivate-nudge]
 verify_jwt = false
 

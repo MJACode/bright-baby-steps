@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireCronKey } from "../_shared/requireCronKey.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -386,6 +387,12 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // pg_cron only, with the `cron` secret key on the apikey header. Deployed
+  // with verify_jwt = false (config.toml): the platform JWT gate cannot
+  // validate sb_secret_ keys, so this check is the gate.
+  const denied = await requireCronKey(req);
+  if (denied) return denied;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
