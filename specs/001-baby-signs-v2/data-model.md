@@ -35,7 +35,7 @@ An ordered array of sets: `{ id: string; signSlugs: string[] /* 2–3 */; fromMo
 
 ## Per-child records (Postgres)
 
-All tables key RLS on the **child owner** (`children.parent_id`), never on the writer. This is the owner-keyed pattern from `20260606030000_sleep_todo_owner_keyed.sql` and `child_signs` v1. Policies: SELECT uses `has_partner_access`; INSERT, UPDATE, and DELETE use `partner_can_write`.
+All tables key RLS on the **child owner** (`children.parent_id`), never on the writer. This is the owner-keyed pattern from `20260606030000_sleep_todo_owner_keyed.sql` and `child_signs` v1. Policies: SELECT uses `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; DELETE uses `partner_can_write(parent_id)`; INSERT and UPDATE WITH CHECK use `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = <table>.child_id AND c.parent_id = <table>.parent_id)`. The `EXISTS` clause binds `child_id` to its real owner. Without it, any signed-in user could write rows for another family's child by stamping their own uid as `parent_id` (the v1 hole fixed in `20260930010000_child_signs_rls_bind_child.sql`). Every new table in this feature MUST include it.
 
 ### `child_signs` (existing) — add one column
 

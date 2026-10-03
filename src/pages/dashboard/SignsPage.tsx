@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { Hand, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
+import { Hand, Sparkles, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,13 +8,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { PremiumGate } from "@/components/PremiumGate";
 import { SignDetailSheet } from "@/components/signs/SignDetailSheet";
-import { cn } from "@/lib/utils";
+import { SignRow } from "@/components/signs/SignRow";
+import { ThisWeekFocus } from "@/components/signs/ThisWeekFocus";
+import { resolveTrackingSchedule } from "@/lib/trackingDay";
+import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
 import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
-import { useSignProgress, useSetSignStatus, type ChildSignRow, type SignStatus } from "@/hooks/useSignProgress";
+import { useSignProgress, useSetSignStatus, useSetSignFocus, type SignStatus } from "@/hooks/useSignProgress";
 import {
   SIGN_STAGES,
   SIGN_LIBRARY,
+  SIGN_PATH,
   getSignsForStage,
   SIGNS_WHY,
   SIGNS_HOW_TO_TEACH,
@@ -25,46 +29,15 @@ import {
   type Sign,
 } from "@/data/signLibrary";
 
-const STATUS_CHIP: Record<SignStatus, string> = {
-  introduced: "Using it",
-  emerging: "Trying it",
-  signing: "Signs it!",
-};
-
-function SignRow({ sign, row, onOpen }: { sign: Sign; row: ChildSignRow | undefined; onOpen: (sign: Sign) => void }) {
-  const status = row?.status as SignStatus | undefined;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onOpen(sign)}
-      className="flex w-full items-center gap-3 rounded-lg bg-milestones-bg/60 p-3 text-left touch-target card-hover"
-    >
-      <span className="text-2xl shrink-0" aria-hidden>
-        {sign.emoji}
-      </span>
-      <span className="flex-1 min-w-0 text-sm font-semibold">{sign.label}</span>
-      {status && (
-        <span
-          className={cn(
-            "text-xs font-semibold px-2 py-0.5 rounded-full shrink-0",
-            status === "signing" ? "bg-milestones text-white" : "bg-milestones/15 text-milestones",
-          )}
-        >
-          {STATUS_CHIP[status]}
-        </span>
-      )}
-      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
-    </button>
-  );
-}
-
 export default function SignsPage() {
   const { activeChild } = useChildren();
   const { data: progress, isLoading: progressLoading } = useSignProgress(activeChild?.id);
   const setStatus = useSetSignStatus();
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const setFocus = useSetSignFocus();
+  const [focusBusy, setFocusBusy] = useState(false);
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
 
   if (!activeChild) {
     return (
@@ -119,6 +92,93 @@ export default function SignsPage() {
     );
   };
 
+  const canEditFocus = roleResolved && role !== "viewer";
+  const showViewerHelp = roleResolved && role === "viewer";
+  const schedule = resolveTrackingSchedule(activeChild);
+  const focusSlugs = SIGN_PATH.flatMap((set) => set.signSlugs).filter((slug) => !!progress?.[slug]?.focus_since);
+  const focusSigns = focusSlugs
+    .map((slug) => SIGN_LIBRARY.find((s) => s.slug === slug))
+    .filter((s): s is Sign => !!s);
+  const gloss = (slugs: string[]) =>
+    slugs.map((slug) => SIGN_LIBRARY.find((s) => s.slug === slug)?.label.toUpperCase() ?? slug).join(", ");
+
+  const runFocusSteps = async (steps: { slug: string; focus: boolean }[], successTitle: string) => {
+    try {
+      assertCanWrite(roleResolved, role);
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Try again in a moment." });
+      return;
+    }
+    setFocusBusy(true);
+    try {
+      for (const [index, step] of steps.entries()) {
+        // A failed first step has already toasted via the hook's onError. Once
+        // an earlier step has landed, the hook stays quiet and we say the
+        // change only partly saved.
+        const partial = index > 0;
+        const ok = await setFocus
+          .mutateAsync({
+            childId: activeChild.id,
+            childOwnerId: activeChild.parent_id,
+            signSlug: step.slug,
+            focus: step.focus,
+            schedule,
+            quiet: partial,
+          })
+          .then(
+            () => true,
+            () => false,
+          );
+        if (!ok) {
+          if (partial) {
+            toast({
+              title: "Some of this week's signs didn't save.",
+              description: "Their progress is safe — pick your signs again from All signs.",
+              variant: "destructive",
+            });
+          }
+          return;
+        }
+      }
+      toast({ title: successTitle });
+    } finally {
+      setFocusBusy(false);
+    }
+  };
+
+  const startFocus = (slugs: string[]) =>
+    runFocusSteps(
+      slugs.map((slug) => ({ slug, focus: true })),
+      `This week's signs: ${gloss(slugs)}`,
+    );
+
+  const advanceFocus = (unfocusSlugs: string[], focusSlugsNext: string[]) =>
+    runFocusSteps(
+      [
+        ...unfocusSlugs.map((slug) => ({ slug, focus: false })),
+        ...focusSlugsNext.map((slug) => ({ slug, focus: true })),
+      ],
+      `This week's signs: ${gloss(focusSlugsNext)}`,
+    );
+
+  const focusSign = (sign: Sign) =>
+    runFocusSteps([{ slug: sign.slug, focus: true }], `${sign.label.toUpperCase()} is a focus sign this week.`);
+
+  const unfocusSign = (sign: Sign) =>
+    runFocusSteps(
+      [{ slug: sign.slug, focus: false }],
+      `${sign.label.toUpperCase()} is off this week's list — its progress stays.`,
+    );
+
+  const swapFocus = (out: Sign, into: Sign) =>
+    runFocusSteps(
+      [
+        { slug: out.slug, focus: false },
+        { slug: into.slug, focus: true },
+      ],
+      `Swapped ${out.label.toUpperCase()} for ${into.label.toUpperCase()}.`,
+    );
+
   const openSign = (sign: Sign) => {
     setSelectedSlug(sign.slug);
     setSheetOpen(true);
@@ -170,6 +230,23 @@ export default function SignsPage() {
         description="The full ASL-based program — 20 signs in 5 stages, with per-sign progress tracking for your baby."
       >
         <div className="space-y-6">
+          <ThisWeekFocus
+            progress={progress}
+            focusSlugs={focusSlugs}
+            loading={progressLoading}
+            ageMonths={ageMonths}
+            firstName={firstName}
+            schedule={schedule}
+            canEdit={canEditFocus}
+            showViewerHelp={showViewerHelp}
+            busy={focusBusy}
+            onOpen={openSign}
+            onStart={startFocus}
+            onAdvance={advanceFocus}
+          />
+
+          <h2 className="font-display font-bold text-xl pt-2">All signs</h2>
+
           {progressLoading ? (
             <Skeleton className="h-5 w-64" />
           ) : (
@@ -181,7 +258,7 @@ export default function SignsPage() {
           {SIGN_STAGES.map((stage) => (
             <div key={stage.id} className="space-y-2">
               <div className="flex items-center gap-2">
-                <h2 className="font-display font-bold text-lg">{stage.title}</h2>
+                <h3 className="font-display font-bold text-lg">{stage.title}</h3>
                 <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-milestones/15 text-milestones">
                   from ~{stage.fromMonths}mo
                 </span>
@@ -208,6 +285,13 @@ export default function SignsPage() {
           onOpenChange={setSheetOpen}
           disabled={progressLoading || setStatus.isPending}
           onSetStatus={handleSetStatus}
+          focusSigns={focusSigns}
+          canEdit={canEditFocus}
+          showViewerHelp={showViewerHelp}
+          focusBusy={focusBusy || progressLoading}
+          onFocus={focusSign}
+          onUnfocus={unfocusSign}
+          onSwap={swapFocus}
         />
       </PremiumGate>
 

@@ -485,3 +485,77 @@ export const SIGN_LIBRARY: Sign[] = [
 export function getSignsForStage(stageId: string): Sign[] {
   return SIGN_LIBRARY.filter((s) => s.stageId === stageId);
 }
+
+export interface SignPathSet {
+  id: string;
+  signSlugs: string[];
+  fromMonths: number;
+}
+
+/**
+ * Default path through the library (FR-009), in stage order. Every library
+ * slug appears exactly once. First signs has four signs but the opening set
+ * is fixed at three, so EAT pairs with WATER (both mealtime) and that one set
+ * spans into Daily routines — its fromMonths is the later stage's.
+ */
+export const SIGN_PATH: SignPathSet[] = [
+  { id: "first-needs", signSlugs: ["milk", "more", "all-done"], fromMonths: 6 },
+  { id: "mealtime", signSlugs: ["eat", "water"], fromMonths: 7 },
+  { id: "care-routines", signSlugs: ["sleep", "bath", "change"], fromMonths: 7 },
+  { id: "family", signSlugs: ["mommy", "daddy"], fromMonths: 8 },
+  { id: "help-up", signSlugs: ["help", "up"], fromMonths: 8 },
+  { id: "animals", signSlugs: ["dog", "cat"], fromMonths: 9 },
+  { id: "play", signSlugs: ["book", "ball"], fromMonths: 9 },
+  { id: "feelings", signSlugs: ["happy", "gentle"], fromMonths: 10 },
+  { id: "manners", signSlugs: ["thank-you", "hurt"], fromMonths: 10 },
+];
+
+/**
+ * Slugs from the first path set that still has a sign not at "signing".
+ * Under-6-month-olds are treated as 6 so they still get first signs.
+ * If that next unfinished set isn't age-eligible yet, returns [] rather than
+ * skipping ahead — the UI shows a gentle "more signs soon" state. Also []
+ * when every sign is signing.
+ */
+export function getDefaultFocusSet(
+  correctedAgeMonths: number,
+  statusBySlug: Record<string, string | undefined>,
+): string[] {
+  const ageMonths = Math.max(correctedAgeMonths, 6);
+  const next = SIGN_PATH.find((set) =>
+    set.signSlugs.some((slug) => statusBySlug[slug] !== "signing"),
+  );
+  if (!next || next.fromMonths > ageMonths) return [];
+  return next.signSlugs.filter((slug) => statusBySlug[slug] !== "signing");
+}
+
+export type NextFocusSet =
+  | { kind: "set"; signSlugs: string[] }
+  | { kind: "age-gated" }
+  | { kind: "none" };
+
+/**
+ * What "Ready for new signs?" moves on to. getDefaultFocusSet can't answer
+ * this: focus signs at "Trying it" aren't signing, so it would hand back the
+ * set the parent is moving on from. Prefers path sets with signs that have no
+ * status yet (genuinely new), then falls back to any sign that isn't signing
+ * and isn't a current focus sign. Never skips past an age-gated set.
+ */
+export function getNextFocusSet(
+  correctedAgeMonths: number,
+  statusBySlug: Record<string, string | undefined>,
+  focusSlugs: string[],
+): NextFocusSet {
+  const ageMonths = Math.max(correctedAgeMonths, 6);
+  const focused = new Set(focusSlugs);
+  const pick = (eligible: (slug: string) => boolean): NextFocusSet | null => {
+    const set = SIGN_PATH.find((s) => s.signSlugs.some(eligible));
+    if (!set) return null;
+    if (set.fromMonths > ageMonths) return { kind: "age-gated" };
+    return { kind: "set", signSlugs: set.signSlugs.filter(eligible) };
+  };
+  return (
+    pick((slug) => !focused.has(slug) && statusBySlug[slug] === undefined) ??
+    pick((slug) => !focused.has(slug) && statusBySlug[slug] !== "signing") ?? { kind: "none" }
+  );
+}
