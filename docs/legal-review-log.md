@@ -2848,3 +2848,17 @@ Legitimate callers keep working:
 **Outstanding:**
 - Add monitoring so a failing cron job is noticed in days, not months (e.g. alert on any non-2xx in `net._http_response`).
 - Record in the deploy runbook that rotating Supabase API keys requires updating `app_service_role_key` in Vault.
+
+## 2026-10-03 — Retired AI functions deleted from production; all functions now deployed from CI
+
+**Reviewer:** in-house (Claude pass, founder-approved in session). **Risk level:** closes the P1 opened 2026-09-30.
+
+**What happened:**
+- Deploy run `37078010264` (2026-10-02, from #258) deployed every function in `supabase/functions/` for the first time. `visit-prep-questions` and `send-visit-reminder-email` are now live (Visit Prep and visit reminder emails work in production). `check-notifications`, `extract-memory`, `generate-speech-class`, `generate-activity-plan` and `send-vpc-email` now run `main`'s code. `verify_jwt` on every function matches `supabase/config.toml`.
+- Deploy run `37081200816` (2026-10-03, from #259) ran with `--prune` and **deleted `detect-milestone`, `parse-voice-log` and `next-step-peek`**. Verified with live `list_edge_functions`: production now runs exactly the 14 functions in the repo. The undisclosed child-data flows to Anthropic through those endpoints have ended.
+
+**Closes:** the "delete the deployed function" follow-ups in the 2026-06-21, 2026-08-28 and 2026-09-07 entries, and both outstanding items in the 2026-09-30 production-audit entry.
+
+**Process change:** `deploy-functions.yml` now prunes on every deploy, so retiring a function means deleting its folder in the same PR as the disclosure update. Hand-deploying is documented as off-limits in `supabase/functions/README.md`.
+
+**Still open:** partner-facing copy saying partner access depends on the owner's Flare+ (2026-10-01 entry); `weight_logs` INSERT policy missing `parent_id = auth.uid()` (2026-10-02 entry); `chat` still accepts free-form `messages[]` (2026-08-28 P1).
