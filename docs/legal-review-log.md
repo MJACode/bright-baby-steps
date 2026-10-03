@@ -2829,3 +2829,22 @@ Legitimate callers keep working:
 **Follow-up found in review (not fixed here):** `weight_logs` is the only one of the 18 child-log tables whose INSERT policy omits `AND parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`.
 
 **Still outstanding from 2026-10-01:** partner-facing copy (Terms, FAQ, invite screens) should say partner access depends on the owner's Flare+; delete the three retired edge functions.
+
+---
+
+## 2026-10-02 — Scheduled jobs restored (inactive-account purge, notifications, reactivation nudge)
+
+**Reviewer:** in-house (Claude pass; founder performed the secret rotation). **Risk level:** High while open (a Privacy § 8 promise was not being kept); resolved.
+
+**What happened:** the Vault secret `app_service_role_key`, which the three pg_cron jobs use to call their edge functions, had been stored on 2026-05-07 and was no longer valid. Every scheduled call returned HTTP 401 "Invalid API key". The last notification created by a scheduled job is dated 2026-06-10, so the jobs were failing from about June 2026 until 2026-10-02:
+- `inactive-account-purge-daily`: the 24-month inactive-account warning and purge promised in Privacy § 8 did not run.
+- `check-notifications-every-3h`: no in-app reminders, briefings, or (once deployed) finance reminders were created.
+- `reactivate-nudge-3x-daily`: no welcome-back notes.
+
+**Fix:** the founder replaced `app_service_role_key` in Supabase Vault with the current service-role key on 2026-10-02 23:09 UTC. Verified at the 2026-10-03 00:00 UTC run: both cron HTTP calls returned 200 (reactivate-nudge inserted 1 row; check-notifications processed normally, 7 rows held by quiet hours). `check-notifications` v28 (finance reminders, Flare+ partner gate, quiet hours/daily cap) was deployed to production on 2026-10-02.
+
+**Impact on the purge promise:** during the outage no account reached the 24-month inactivity threshold, because the oldest account on production was created 2026-04-24 (4 accounts total); no purge was missed. The purge job resumes at its next 02:30 UTC run.
+
+**Outstanding:**
+- Add monitoring so a failing cron job is noticed in days, not months (e.g. alert on any non-2xx in `net._http_response`).
+- Record in the deploy runbook that rotating Supabase API keys requires updating `app_service_role_key` in Vault.
