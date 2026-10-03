@@ -2843,7 +2843,7 @@ Legitimate callers keep working:
 
 **Fix:** the founder replaced `app_service_role_key` in Supabase Vault with the current service-role key on 2026-10-02 23:09 UTC. Verified at the 2026-10-03 00:00 UTC run: both cron HTTP calls returned 200 (reactivate-nudge inserted 1 row; check-notifications processed normally, 7 rows held by quiet hours). `check-notifications` v28 (finance reminders, Flare+ partner gate, quiet hours/daily cap) was deployed to production on 2026-10-02.
 
-**Impact on the purge promise:** during the outage no account reached the 24-month inactivity threshold, because the app's oldest accounts date from March 2026; no purge was missed. The purge job resumes at its next 02:30 UTC run.
+**Impact on the purge promise:** during the outage no account reached the 24-month inactivity threshold, because the oldest account on production was created 2026-04-24 (4 accounts total); no purge was missed. The purge job resumes at its next 02:30 UTC run.
 
 **Outstanding:**
 - Add monitoring so a failing cron job is noticed in days, not months (e.g. alert on any non-2xx in `net._http_response`).
