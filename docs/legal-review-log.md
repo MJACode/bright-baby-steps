@@ -2862,3 +2862,10 @@ Legitimate callers keep working:
 **Process change:** `deploy-functions.yml` now prunes on every deploy, so retiring a function means deleting its folder in the same PR as the disclosure update. Hand-deploying is documented as off-limits in `supabase/functions/README.md`.
 
 **Still open:** partner-facing copy saying partner access depends on the owner's Flare+ (2026-10-01 entry); `weight_logs` INSERT policy missing `parent_id = auth.uid()` (2026-10-02 entry); `chat` still accepts free-form `messages[]` (2026-08-28 P1).
+
+## 2026-10-05 — Corrections: weight_logs finding withdrawn; can_write_child migration order fixed
+
+**Reviewer:** in-house (Claude pass, founder session). **Risk level:** Low.
+
+- **`weight_logs` INSERT finding withdrawn.** The 2026-10-02 entry said `weight_logs` was the only child-log table whose INSERT policy omits `parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`. That is wrong: `weight_logs` has **no `parent_id` column** (columns verified live 2026-10-05: id, child_id, weight_oz, logged_at, is_pediatrician_visit, notes, created_at, length_cm, head_circumference_cm). Its INSERT check, `can_write_child(auth.uid(), child_id)`, is complete. No change needed.
+- **2026-10-02 entry superseded on the write rule.** That entry's migration (`20261001000000_can_write_child_requires_owner_plus.sql`) gated partner writes on `owner_has_plus()` alone. The founder-approved model from 2026-09-30 (free = 1 seat, Flare+ = 2, the longest-standing partner keeps access on lapse; `20260930100000_free_partner_seat.sql`) was applied to live afterwards and is what live runs. But by filename the 2026-10-01 file sorts last, so a replay of the repo migrations would have restored the Flare+-only rule and cut off a free account's one entitled partner. `20261005000000_can_write_child_entitlement_reassert.sql` re-states the entitlement version at the end of the chain. Applied to live 2026-10-05; no behavior change there.
