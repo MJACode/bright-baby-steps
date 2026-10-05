@@ -2869,3 +2869,23 @@ Legitimate callers keep working:
 
 - **`weight_logs` INSERT finding withdrawn.** The 2026-10-02 entry said `weight_logs` was the only child-log table whose INSERT policy omits `parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`. That is wrong: `weight_logs` has **no `parent_id` column** (columns verified live 2026-10-05: id, child_id, weight_oz, logged_at, is_pediatrician_visit, notes, created_at, length_cm, head_circumference_cm). Its INSERT check, `can_write_child(auth.uid(), child_id)`, is complete. No change needed.
 - **2026-10-02 entry superseded on the write rule.** That entry's migration (`20261001000000_can_write_child_requires_owner_plus.sql`) gated partner writes on `owner_has_plus()` alone. The founder-approved model from 2026-09-30 (free = 1 seat, Flare+ = 2, the longest-standing partner keeps access on lapse; `20260930100000_free_partner_seat.sql`) was applied to live afterwards and is what live runs. But by filename the 2026-10-01 file sorts last, so a replay of the repo migrations would have restored the Flare+-only rule and cut off a free account's one entitled partner. `20261005000000_can_write_child_entitlement_reassert.sql` re-states the entitlement version at the end of the chain. Applied to live 2026-10-05; no behavior change there.
+
+## 2026-10-05 — Partner-facing copy matches the free 1 / Flare+ 2 seat model; Terms gain a shared-access clause
+
+**Reviewer:** in-house (legal agent pre-review + QA agent, founder-approved in session). **Risk level:** closes the 2026-10-01 "partner-facing copy" item.
+
+**Why:** the 2026-09-30 model (free plan 1 additional person, Flare+ 2, earliest-joined partner keeps access on lapse) was live in the database, but the app still treated the free plan as 0 seats: free owners could not invite, onboarding pushed an upgrade, and the lapse banner said all shared access was on hold. The invitee screen and FAQ said nothing about plan dependence, and the Terms said nothing about shared access.
+
+**What changed:**
+- **Terms § 5** (Last reviewed → 2026-10-05): new "Shared access" paragraph: plan-dependent seat count, hold on lapse, owner can pause/remove anyone, invitee access ends if removed or the record/account is deleted, owner responsible for whom they invite.
+- **AcceptInvite (invitee notice, before the consent checkbox):** plan dependence, hold on lapse ("doesn't delete anything"), owner can pause/remove at any time, deletion of the child record or account ends access and deletes data. "Co-controller" replaced with "see (and, depending on your role, log)". Body text raised to 12px.
+- **FAQ:** same model; deleting a child or account deletes that data for everyone.
+- **Partner Management / onboarding:** free seat usable; "On hold" badge on partners beyond the free seat; banner CTA "Get Flare+" (covers owners who never subscribed); teaser no longer pitches pausing as a Flare+ perk and offers "remove someone" as an alternative.
+- **Errors:** the legacy FLARE_PLUS_REQUIRED copy no longer implies upgrading fixes it; invitees hitting a full account are told to ask the inviter, not to upgrade.
+
+**Redlines rejected:** none. An absolute "nothing is deleted" promise from the first draft was removed before ship.
+
+**Open (founder/counsel):**
+1. "Try free for 7 days" still appears in the Flare+ teaser while the pre-checkout ROSCA / Cal. B&P § 17602 items (auto-renewal disclosure, Terms subscriptions section, trial reminder, cancel flow) are open.
+2. Partners are not notified when they are paused, removed or put on hold.
+3. Verify that deleting a child also deletes entries a co-parent logged for that child (policy says yes).

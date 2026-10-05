@@ -29,8 +29,8 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     sub: "WHO growth percentiles (birth–2 yrs), growth trends, and PDFs to share at checkups.",
   },
   "multi-caregiver": {
-    headline: "Bring your partner and your sitter in.",
-    sub: "Flare+ adds two more people to your account — co-parent, nanny, or grandparent — synced in real time. Pause or remove anyone whenever you want.",
+    headline: "Bring your sitter in too.",
+    sub: "Your free plan includes one person beyond you. Flare+ makes room for two — co-parent, nanny, or grandparent — synced in real time.",
   },
   "expert-library": {
     headline: "Guides for the questions you actually have.",
