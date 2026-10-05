@@ -2832,6 +2832,46 @@ Legitimate callers keep working:
 
 ---
 
+## 2026-10-02 — Scheduled jobs restored (inactive-account purge, notifications, reactivation nudge)
+
+**Reviewer:** in-house (Claude pass; founder performed the secret rotation). **Risk level:** High while open (a Privacy § 8 promise was not being kept); resolved.
+
+**What happened:** the Vault secret `app_service_role_key`, which the three pg_cron jobs use to call their edge functions, had been stored on 2026-05-07 and was no longer valid. Every scheduled call returned HTTP 401 "Invalid API key". The last notification created by a scheduled job is dated 2026-06-10, so the jobs were failing from about June 2026 until 2026-10-02:
+- `inactive-account-purge-daily`: the 24-month inactive-account warning and purge promised in Privacy § 8 did not run.
+- `check-notifications-every-3h`: no in-app reminders, briefings, or (once deployed) finance reminders were created.
+- `reactivate-nudge-3x-daily`: no welcome-back notes.
+
+**Fix:** the founder replaced `app_service_role_key` in Supabase Vault with the current service-role key on 2026-10-02 23:09 UTC. Verified at the 2026-10-03 00:00 UTC run: both cron HTTP calls returned 200 (reactivate-nudge inserted 1 row; check-notifications processed normally, 7 rows held by quiet hours). `check-notifications` v28 (finance reminders, Flare+ partner gate, quiet hours/daily cap) was deployed to production on 2026-10-02.
+
+**Impact on the purge promise:** during the outage no account reached the 24-month inactivity threshold, because the oldest account on production was created 2026-04-24 (4 accounts total); no purge was missed. The purge job resumes at its next 02:30 UTC run.
+
+**Outstanding:**
+- Add monitoring so a failing cron job is noticed in days, not months (e.g. alert on any non-2xx in `net._http_response`).
+- Record in the deploy runbook that rotating Supabase API keys requires updating `app_service_role_key` in Vault.
+
+## 2026-10-03 — Retired AI functions deleted from production; all functions now deployed from CI
+
+**Reviewer:** in-house (Claude pass, founder-approved in session). **Risk level:** closes the P1 opened 2026-09-30.
+
+**What happened:**
+- Deploy run `37078010264` (2026-10-02, from #258) deployed every function in `supabase/functions/` for the first time. `visit-prep-questions` and `send-visit-reminder-email` are now live (Visit Prep and visit reminder emails work in production). `check-notifications`, `extract-memory`, `generate-speech-class`, `generate-activity-plan` and `send-vpc-email` now run `main`'s code. `verify_jwt` on every function matches `supabase/config.toml`.
+- Deploy run `37081200816` (2026-10-03, from #259) ran with `--prune` and **deleted `detect-milestone`, `parse-voice-log` and `next-step-peek`**. Verified with live `list_edge_functions`: production now runs exactly the 14 functions in the repo. The undisclosed child-data flows to Anthropic through those endpoints have ended.
+
+**Closes:** the "delete the deployed function" follow-ups in the 2026-06-21, 2026-08-28 and 2026-09-07 entries, and both outstanding items in the 2026-09-30 production-audit entry.
+
+**Process change:** `deploy-functions.yml` now prunes on every deploy, so retiring a function means deleting its folder in the same PR as the disclosure update. Hand-deploying is documented as off-limits in `supabase/functions/README.md`.
+
+**Still open:** partner-facing copy saying partner access depends on the owner's Flare+ (2026-10-01 entry); `weight_logs` INSERT policy missing `parent_id = auth.uid()` (2026-10-02 entry); `chat` still accepts free-form `messages[]` (2026-08-28 P1).
+
+## 2026-10-05 — Corrections: weight_logs finding withdrawn; can_write_child migration order fixed
+
+**Reviewer:** in-house (Claude pass, founder session). **Risk level:** Low.
+
+- **`weight_logs` INSERT finding withdrawn.** The 2026-10-02 entry said `weight_logs` was the only child-log table whose INSERT policy omits `parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`. That is wrong: `weight_logs` has **no `parent_id` column** (columns verified live 2026-10-05: id, child_id, weight_oz, logged_at, is_pediatrician_visit, notes, created_at, length_cm, head_circumference_cm). Its INSERT check, `can_write_child(auth.uid(), child_id)`, is complete. No change needed.
+- **2026-10-02 entry superseded on the write rule.** That entry's migration (`20261001000000_can_write_child_requires_owner_plus.sql`) gated partner writes on `owner_has_plus()` alone. The founder-approved model from 2026-09-30 (free = 1 seat, Flare+ = 2, the longest-standing partner keeps access on lapse; `20260930100000_free_partner_seat.sql`) was applied to live afterwards and is what live runs. But by filename the 2026-10-01 file sorts last, so a replay of the repo migrations would have restored the Flare+-only rule and cut off a free account's one entitled partner. `20261005000000_can_write_child_entitlement_reassert.sql` re-states the entitlement version at the end of the chain. Applied to live 2026-10-05; no behavior change there.
+
+---
+
 ## 2026-10-03 — Baby Signs v2 (PR-C): `child_sign_practice` practice-day data + direct-notice enumeration
 
 **Reviewer:** in-house (Claude `legal` pre-review of Baby Signs v2 PR-C, spec `specs/001-baby-signs-v2`, task T040). **Risk level:** Low (new parent-entered child-data field inside an existing consented category; no new egress, no new subprocessor).
@@ -2846,7 +2886,7 @@ Legitimate callers keep working:
 
 **Data minimization (COPPA 16 CFR § 312.7; spec FR-019):** the only child-specific values are which sign from the static library (`src/data/signLibrary.ts`) and which day. No free text, notes, photos, audio, or video; the table comment says "Do NOT widen to free text". No streak, consecutive-day, or missed-day value is computed or stored (FR-016); the UI shows only a positive weekly total, hidden at zero. `child_sign_practice.sign_slug` is also bounded at the DB by CHECK `child_sign_practice_slug_format` (`^[a-z][a-z0-9-]{0,39}$`), so the column cannot carry free text. One row per sign per day caps volume. There is no FK to `child_signs`, so practice history survives a cleared status (FR-029). This is a deliberate retention-of-history choice and stays within the account-lifetime retention in Privacy § 9.
 
-**RLS / owner binding:** PR-B closed a v1 cross-tenant write hole in `child_signs`. The old INSERT/UPDATE check (`auth.uid() = parent_id OR partner_can_write(parent_id)`) let any signed-in user stamp their own uid as `parent_id` on another family's `child_id`. Fixed by migration `20260930010000_child_signs_rls_bind_child.sql` (applied to live 2026-10-01; verified with role-switched tests: stranger rejected both ways). `child_sign_practice` ships with the same binding from day one: SELECT `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT `partner_can_write(parent_id) AND EXISTS (children c WHERE c.id = child_id AND c.parent_id = parent_id)`; DELETE `partner_can_write(parent_id)`; no UPDATE policy. Partner visibility follows existing Partner Access, including the Flare+-lapse cutoff (2026-10-01 / 2026-10-02 entries). Viewers can read but not tick (FR-018), enforced in RLS, not only in the UI.
+**RLS / owner binding:** PR-B closed a v1 cross-tenant write hole in `child_signs`. The old INSERT/UPDATE check (`auth.uid() = parent_id OR partner_can_write(parent_id)`) let any signed-in user stamp their own uid as `parent_id` on another family's `child_id`. Fixed by migration `20260930010000_child_signs_rls_bind_child.sql` (applied to live 2026-10-01; verified with role-switched tests: stranger rejected both ways). `child_sign_practice` ships with the same binding from day one: SELECT `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT `partner_can_write(parent_id) AND EXISTS (children c WHERE c.id = child_id AND c.parent_id = parent_id)`; DELETE `partner_can_write(parent_id)`; no UPDATE policy. Partner access follows the existing partner-seat entitlement rules (free = 1 seat, Flare+ = 2; see the 2026-10-05 correction entry). Viewers can read but not tick (FR-018), enforced in RLS, not only in the UI.
 
 **Retention / deletion:** same as other tracking logs. Kept for the account's lifetime; deleted when the child is deleted (`child_id ON DELETE CASCADE`) or the account is deleted (`parent_id ON DELETE CASCADE` from `auth.users`, reached by `delete_user_account()` / `_purge_user_data()`). No purge-function edit needed. Covered by Privacy § 9 (7-day primary-record deletion, ≤30-day backup rotation, 24-month inactivity purge). No Storage objects.
 
@@ -2859,6 +2899,6 @@ Legitimate callers keep working:
 **Follow-ups:**
 1. `child_signs.sign_slug` is still unconstrained `text`, so for that table the "no free text" promise is enforced only by the client. Add a CHECK matching `child_sign_practice_slug_format` (slug-format regex with a length cap) so the minimization claim holds server-side for both tables. P2.
 2. Privacy § 2 and the direct notice still omit Word Journal words and growth/weight records (mentioned only in § 4). Reconcile both lists against `EXPORT_TABLES`. P1.
-3. Inherited: 2026-09-30 follow-up #5 says the `inactive-account-purge` cron returns 401, so the 24-month purge in Privacy § 9 covers this table only once that is fixed. P0 if still open.
+3. ~~Inherited: `inactive-account-purge` cron returning 401.~~ Resolved 2026-10-02 (see "Scheduled jobs restored" entry); the 24-month purge now covers this table via the `auth.users` cascade.
 4. CLAUDE.md "Legal Review" still refers to retention as "PrivacyPage § 8"; the live page numbers it § 9. Fix references.
 5. PR-D: disclosure for practice-day counts to Anthropic, plus `sign_plans` in `EXPORT_TABLES`.
