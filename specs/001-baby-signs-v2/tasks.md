@@ -168,7 +168,7 @@
 
 ### Backend (first, then QA)
 
-- [ ] T032 [US3] Create `supabase/migrations/<timestamp>_child_sign_practice.sql` per data-model:
+- [x] T032 [US3] Create `supabase/migrations/<timestamp>_child_sign_practice.sql` per data-model:
   - `id uuid PK default gen_random_uuid()`
   - `child_id uuid NOT NULL REFERENCES children(id) ON DELETE CASCADE`
   - `parent_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE` (child **owner**)
@@ -187,7 +187,7 @@
 
 ### Frontend
 
-- [ ] T036 [P] [US3] Create `src/hooks/useSignPractice.tsx` (contracts/client-data-hooks.md):
+- [x] T036 [P] [US3] Create `src/hooks/useSignPractice.tsx` (contracts/client-data-hooks.md):
   - **`useSignPractice(childId)`** uses query key `["child-sign-practice", childId]`. It selects rows with `practiced_on >= today − 27` tracking days.
   - **`useToggleSignPractice()`**:
     - Tick: insert `{ child_id, parent_id: childOwnerId, sign_slug, practiced_on: todayKey }`. A duplicate-key error counts as success.
@@ -195,15 +195,15 @@
     - The toggle is optimistic, with rollback and an `onError` toast that explains what to do next (FR-017).
 
   *(frontend)*
-- [ ] T037 [US3] Add a 48px "Modeled today" check toggle to each row in `src/components/signs/ThisWeekFocus.tsx` (`aria-pressed`, label "Modeled {SIGN} today") *(frontend)*
-- [ ] T038 [US3] Add the weekly line to the `ThisWeekFocus` header: "You modeled signs on {n} day(s) this week", using `weeklyPracticeDays` with `planWeekStart`. **Render nothing when n = 0.** Never show a streak, gaps, day dots, or "missed" wording (FR-015, FR-016; research R9 anti-patterns) *(frontend)*
-- [ ] T039 [US3] Disable the tick for viewers, reusing the T029 helper text *(frontend)*
-- [ ] T040 [US3] **Disclosure (Principle II, same PR)**:
+- [x] T037 [US3] Add a 48px "Modeled today" check toggle to each row in `src/components/signs/ThisWeekFocus.tsx` (`aria-pressed`, label "Modeled {SIGN} today") *(frontend)*
+- [x] T038 [US3] Add the weekly line to the `ThisWeekFocus` header: "You modeled signs on {n} day(s) this week", using `weeklyPracticeDays` with `planWeekStart`. **Render nothing when n = 0.** Never show a streak, gaps, day dots, or "missed" wording (FR-015, FR-016; research R9 anti-patterns) *(frontend)*
+- [x] T039 [US3] Disable the tick for viewers, reusing the T029 helper text *(frontend)*
+- [x] T040 [US3] **Disclosure (Principle II, same PR)**:
   - update the child-data enumeration in `src/components/CoppaDirectNotice.tsx` (line ~67, "sign-language signs you mark as…") to add "and the days you mark a sign as practiced"
   - append a dated entry to `docs/legal-review-log.md` describing the new `child_sign_practice` data category, its retention (cascade with child or account), and that no AI flow reads it yet
 
   **Route both through the `legal` agent** *(frontend + legal)*
-- [ ] T041 [US3] Invoke **`qa`** on the PR-C frontend: the optimistic rollback, the tracking-day key, the n = 0 hidden state, and a copy audit (grep for `streak|missed|haven't|in a row` in `src/components/signs/**` and `src/data/signLibrary.ts`) *(qa)*
+- [x] T041 [US3] Invoke **`qa`** on the PR-C frontend: the optimistic rollback, the tracking-day key, the n = 0 hidden state, and a copy audit (grep for `streak|missed|haven't|in a row` in `src/components/signs/**` and `src/data/signLibrary.ts`) *(qa)*
 - [ ] T042 [US3] Run the local gate and the quickstart §4 steps, then open and merge PR-C *(parent)*
 
 **Checkpoint**: US1–US3 work. The coach can now read real practice data.
