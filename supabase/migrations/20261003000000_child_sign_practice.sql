@@ -6,8 +6,9 @@
 -- Design:
 --   * One row per (child, sign, tracking day). Insert = tick, delete =
 --     un-tick. There is no UPDATE path (no UPDATE policy), so a row is never
---     rewritten; the client inserts with ON CONFLICT DO NOTHING so a double
---     tap (or two caregivers ticking the same sign the same day) is a no-op.
+--     rewritten. The UNIQUE constraint makes a double tap (or two caregivers
+--     ticking the same sign the same day) a no-op: the client does a plain
+--     insert and treats the 23505 unique violation as success.
 --   * No FK to child_signs: practice history survives a cleared status
 --     (the v1 re-tap that deletes the child_signs row). FR-029.
 --   * sign_slug is a bounded slug referencing client-side static content
@@ -106,7 +107,7 @@ CREATE POLICY child_sign_practice_delete
 
 COMMENT ON TABLE public.child_sign_practice IS
   'Baby Signs practice ticks: one row per (child_id, sign_slug, practiced_on '
-  'tracking day). Insert = tick (ON CONFLICT DO NOTHING), delete = un-tick; '
+  'tracking day). Insert = tick (duplicate = no-op), delete = un-tick; '
   'no UPDATE policy. sign_slug is a bounded slug referencing client-side '
   'static content (src/data/signLibrary.ts) — Do NOT widen to free text '
   '(COPPA data minimization). No FK to child_signs so history survives a '
