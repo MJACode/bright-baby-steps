@@ -4,7 +4,7 @@ Items raised during the Finance Account Finder work and production catch-up (202
 
 ## Decisions waiting on the founder
 
-- [ ] **Lapsed Flare+ partners keep write access.** When an owner's Flare+ lapses, partners lose read access, but `can_write_child` was not updated, so child-scoped write policies may still let them insert/update logs. Option: add the `owner_has_plus` check to `can_write_child` in a follow-up migration so they lose both. *Recommendation: yes.* (Legal log 2026-10-01.)
+- [x] **Lapsed Flare+ partners keep write access.** *Done: reads and writes now share `partner_within_entitlement()` (20260930100000, re-asserted by 20261005000000).* When an owner's Flare+ lapses, partners lose read access, but `can_write_child` was not updated, so child-scoped write policies may still let them insert/update logs. Option: add the `owner_has_plus` check to `can_write_child` in a follow-up migration so they lose both. *Recommendation: yes.* (Legal log 2026-10-01.)
 - [ ] **Partner-facing copy for the Flare+ requirement.** Terms, FAQ, and the partner invite / accept screens don't say partner access depends on the owner's Flare+ subscription. *Recommendation: yes; route through legal review.*
 - [ ] **Undeploy retired edge functions.** `parse-voice-log`, `detect-milestone`, and `next-step-peek` are still ACTIVE in production even though the features were retired. Constitution Principle II requires undeploying them. *Recommendation: yes — low risk, nothing calls them.*
 - [ ] **Alert on failing scheduled jobs.** The pg_cron jobs failed silently from ~June to 2026-10-02 (stale Vault key). Add an alert on any non-2xx in `net._http_response` (or a daily health check). *Recommendation: yes.*
