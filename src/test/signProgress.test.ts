@@ -9,7 +9,7 @@ import {
   type SignFocusInput,
   type SignPracticeInput,
 } from "@/lib/signProgress";
-import type { TrackingSchedule } from "@/lib/trackingDay";
+import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
 
 const MIDNIGHT: TrackingSchedule = { dayStartMin: 0, nightStartMin: null };
 const SEVEN_AM: TrackingSchedule = { dayStartMin: 7 * 60, nightStartMin: null };
@@ -214,8 +214,25 @@ describe("across DST (America/New_York)", () => {
   it("rolls over at the real next day start on DST days", () => {
     expect(msUntilNextTrackingDay(at(2026, 3, 8, 0, 0), MIDNIGHT)).toBe(23 * HOUR_MS);
     expect(msUntilNextTrackingDay(at(2026, 11, 1, 0, 0), MIDNIGHT)).toBe(25 * HOUR_MS);
-    expect(msUntilNextTrackingDay(at(2026, 3, 8, 0, 30), SEVEN_AM)).toBe(5.5 * HOUR_MS);
-    expect(msUntilNextTrackingDay(at(2026, 11, 1, 0, 30), SEVEN_AM)).toBe(7.5 * HOUR_MS);
+  });
+
+  it("lands exactly where trackingDayKey flips, on DST days and others", () => {
+    const samples = [
+      at(2026, 3, 7, 23, 0),
+      at(2026, 3, 8, 0, 30),
+      at(2026, 3, 8, 12, 0),
+      at(2026, 10, 31, 23, 0),
+      at(2026, 11, 1, 0, 30),
+      at(2026, 11, 1, 12, 0),
+    ];
+    for (const schedule of [MIDNIGHT, SEVEN_AM]) {
+      for (const now of samples) {
+        const ms = msUntilNextTrackingDay(now, schedule);
+        const key = trackingDayKey(now, schedule);
+        expect(trackingDayKey(new Date(now.getTime() + ms - 1), schedule)).toBe(key);
+        expect(trackingDayKey(new Date(now.getTime() + ms), schedule)).not.toBe(key);
+      }
+    }
   });
 
   it("keeps a 28-day window across the fall-back night", () => {
