@@ -71,16 +71,24 @@ export function seatSummary(opts: {
  * something useful instead of "Something went wrong". Anything unrecognized
  * falls back to `fallback`.
  */
-export function describePartnerError(err: unknown, fallback: string): string {
+export function describePartnerError(
+  err: unknown,
+  fallback: string,
+  /** The invitee can't free a seat or upgrade, so they get different advice. */
+  audience: "owner" | "invitee" = "owner",
+): string {
   const message =
     typeof err === "string"
       ? err
       : ((err as { message?: string } | null)?.message ?? "");
 
   if (message.includes("FLARE_PLUS_REQUIRED")) {
-    return "This account needs an active Flare+ subscription to share access.";
+    return "This account can't add more people right now.";
   }
   if (message.includes("SEAT_LIMIT_REACHED")) {
+    if (audience === "invitee") {
+      return "This account has no free seats right now. Ask the person who invited you to free one up, then try the link again.";
+    }
     // The server says which plan's limit was hit; the free-plan message
     // mentions "free plan".
     return message.includes("free plan")

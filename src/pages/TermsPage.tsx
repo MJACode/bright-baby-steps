@@ -11,7 +11,7 @@ export default function TermsPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Terms of Service</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: September 30, 2026
+          Effective: June 20, 2026 · Last reviewed: October 5, 2026
         </p>
       </div>
 
@@ -42,6 +42,7 @@ export default function TermsPage() {
         <section>
           <h2 className="font-semibold text-foreground mb-2">5. Your account</h2>
           <p>You are responsible for maintaining the security of your account and password and for all activity that occurs under your account. Notify us at <a href="mailto:security@graceflare.com" className="text-primary underline">security@graceflare.com</a> if you suspect unauthorised access to your account.</p>
+          <p className="mt-2"><strong>Shared access.</strong> You may invite other adults to access your child's records. The number of people depends on your plan (currently one on the free plan, two on Flare+). If a paid plan ends, people beyond your current plan's allowance are put on hold until it resumes. You may pause or remove anyone at any time. If you are an invited user, your access depends on the inviting account and ends if that account removes you or deletes the record or account. You are responsible for whom you invite.</p>
         </section>
 
         <section>

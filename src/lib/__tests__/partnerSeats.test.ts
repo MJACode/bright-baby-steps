@@ -50,13 +50,23 @@ describe("seatSummary", () => {
 });
 
 describe("describePartnerError", () => {
-  it("explains a lapsed subscription", () => {
+  it("translates the legacy Flare+-required error without promising an upgrade fixes it", () => {
     const msg = describePartnerError(
       { message: "FLARE_PLUS_REQUIRED: additional users need an active Flare+ subscription" },
       "fallback"
     );
-    expect(msg).toContain("Flare+");
+    expect(msg).toContain("can't add more people");
     expect(msg).not.toContain("FLARE_PLUS_REQUIRED");
+  });
+
+  it("tells an invitee to ask the inviter, not to upgrade", () => {
+    const msg = describePartnerError(
+      { message: "SEAT_LIMIT_REACHED: the free plan includes 1 additional user; Flare+ includes 2" },
+      "fallback",
+      "invitee"
+    );
+    expect(msg).toContain("Ask the person who invited you");
+    expect(msg).not.toContain("upgrade");
   });
 
   it("explains a full Flare+ account", () => {

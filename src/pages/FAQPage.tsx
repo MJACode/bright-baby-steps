@@ -26,7 +26,7 @@ const FAQS = [
   },
   {
     q: "Can I share access with my partner or caregiver?",
-    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. The free plan includes one additional person; Flare+ includes two. Depending on the role you choose, they can view or log activity for your child. Finance is shared with co-parents only. If your Flare+ subscription ends, the person who joined first keeps access and anyone else is paused until you restart Flare+ — nothing is deleted. You can pause or remove anyone at any time from the same section.",
+    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. The free plan includes one additional person; Flare+ includes two. Depending on the role you choose, they can view or log activity for your child. Finance is shared with co-parents only. If your Flare+ subscription ends, the person who joined first keeps access and anyone else is put on hold until you restart Flare+. Going on hold doesn't delete anything. You can pause or remove anyone at any time from the same section. Deleting a child or your account deletes that data for everyone.",
   },
   {
     q: "How do I delete my account and data?",

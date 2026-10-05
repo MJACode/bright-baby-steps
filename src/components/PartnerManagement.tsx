@@ -211,11 +211,11 @@ export default function PartnerManagement() {
             <p className="text-xs font-semibold text-foreground">Some shared access is on hold</p>
             <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
               The free plan includes {FREE_ADDITIONAL_USERS} additional person — whoever joined first keeps
-              access. Everyone marked "On hold" is saved exactly as they were. Restart Flare+ and
-              they're back in instantly.
+              access. Everyone marked "On hold" is kept as they were. With Flare+ they're back right
+              away.
             </p>
             <Button size="sm" className="mt-2 h-8 rounded-full text-xs" onClick={() => setUpgradeOpen(true)}>
-              Restart Flare+
+              Get Flare+
             </Button>
           </div>
         )}
@@ -359,12 +359,12 @@ export default function PartnerManagement() {
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-4 h-4 text-primary" />
               <span className="text-xs font-bold uppercase tracking-wide text-primary">
-                Add up to {MAX_ADDITIONAL_USERS} people
+                Share with up to {MAX_ADDITIONAL_USERS} people
               </span>
             </div>
             <p className="text-sm text-foreground/80 leading-snug">
-              Your free seat is in use. Flare+ adds room for a sitter or grandparent too — same
-              logs, live sync, and you can pause anyone at any time.
+              Your free seat is in use. Flare+ adds a second seat for a sitter or grandparent. Or
+              remove someone above to free your seat.
             </p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
               Try free for 7 days <span aria-hidden>→</span>

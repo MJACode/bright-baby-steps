@@ -400,8 +400,8 @@ export function OnboardingWizard() {
                 <span className="text-sm font-semibold text-foreground">Parenting with a partner?</span>
               </span>
               <span className="block text-xs text-muted-foreground mt-0.5">
-                Invite them to sync — one partner is included free. You can also do this anytime from
-                Profile → Partner Access.
+                Invite them to sync. Your free plan includes one additional person. You can also do
+                this anytime from Profile → Partner Access.
               </span>
             </span>
           </button>
