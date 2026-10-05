@@ -1,6 +1,7 @@
 import * as signProgress from "@/lib/signProgress";
 import {
   practiceDays4w,
+  practiceWindowStart,
   readyForNewSigns,
   stalled,
   weeklyPracticeDays,
@@ -142,6 +143,21 @@ describe("stalled", () => {
   });
 });
 
+describe("practiceWindowStart", () => {
+  it("returns the first of 28 days ending today, inclusive", () => {
+    expect(practiceWindowStart("2026-10-05")).toBe("2026-09-08");
+  });
+
+  it("crosses a month boundary, including the end of February", () => {
+    expect(practiceWindowStart("2026-03-01")).toBe("2026-02-02");
+    expect(practiceWindowStart("2026-05-15")).toBe("2026-04-18");
+  });
+
+  it("crosses a year boundary", () => {
+    expect(practiceWindowStart("2026-01-10")).toBe("2025-12-14");
+  });
+});
+
 describe("across DST (America/New_York)", () => {
   const originalTz = process.env.TZ;
   beforeAll(() => {
@@ -169,6 +185,13 @@ describe("across DST (America/New_York)", () => {
     expect(readyForNewSigns(rows, at(2026, 3, 15, 0, 0), MIDNIGHT)).toBe(true);
     expect(readyForNewSigns(rows, at(2026, 3, 15, 6, 59), SEVEN_AM)).toBe(false);
     expect(readyForNewSigns(rows, at(2026, 3, 15, 7, 0), SEVEN_AM)).toBe(true);
+  });
+
+  it("starts the practice window 27 calendar days back across both DST nights", () => {
+    expect(practiceWindowStart("2026-03-08")).toBe("2026-02-09");
+    expect(practiceWindowStart("2026-03-20")).toBe("2026-02-21");
+    expect(practiceWindowStart("2026-11-01")).toBe("2026-10-05");
+    expect(practiceWindowStart("2026-11-20")).toBe("2026-10-24");
   });
 
   it("keeps a 28-day window across the fall-back night", () => {

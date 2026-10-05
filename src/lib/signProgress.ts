@@ -48,6 +48,11 @@ function daysInFocus(focusSince: string, now: Date, schedule: TrackingSchedule):
   return differenceInCalendarDays(todayDate(now, schedule), keyToDate(focusSince));
 }
 
+/** First tracking-day key of the 28-day practice window ending on `todayKey` (inclusive). */
+export function practiceWindowStart(todayKey: string): string {
+  return toKey(addDays(keyToDate(todayKey), -(PRACTICE_WINDOW_DAYS - 1)));
+}
+
 /** Distinct practice days in the plan week starting `weekStart` (inclusive, 7 days). */
 export function weeklyPracticeDays(practiceRows: SignPracticeInput[], weekStart: string): number {
   const weekEnd = toKey(addDays(keyToDate(weekStart), 6));
@@ -81,9 +86,8 @@ export function practiceDays4w(
   now: Date,
   schedule: TrackingSchedule,
 ): Record<string, number> {
-  const today = todayDate(now, schedule);
-  const todayKey = toKey(today);
-  const fromKey = toKey(addDays(today, -(PRACTICE_WINDOW_DAYS - 1)));
+  const todayKey = toKey(todayDate(now, schedule));
+  const fromKey = practiceWindowStart(todayKey);
   const daysBySlug: Record<string, Set<string>> = {};
   for (const row of practiceRows) {
     if (row.practiced_on < fromKey || row.practiced_on > todayKey) continue;

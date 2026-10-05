@@ -64,8 +64,9 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
             Your child's name, date of birth, optional gender and photo, optional
             interests and temperament you choose from a fixed list, any tracking
             data you log (sleep, feeding, diaper, allergens, milestones, play
-            activities you mark as tried, sign-language signs you mark as
-            introduced or used, illnesses, medications, supplements), finance-planning
+            activities you mark as tried, sign-language signs you choose to
+            focus on or mark as introduced or used, the days you mark a sign
+            as modeled, illnesses, medications, supplements), finance-planning
             answers and which savings accounts you mark as opened,
             and short AI-generated notes
             about your child that you can review, edit, and delete.
