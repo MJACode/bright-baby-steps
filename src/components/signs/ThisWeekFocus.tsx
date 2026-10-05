@@ -13,7 +13,7 @@ import type { ChildSignRow } from "@/hooks/useSignProgress";
 import type { SignPracticeRow } from "@/hooks/useSignPractice";
 import { planWeekStart } from "@/lib/planWeek";
 import { readyForNewSigns, weeklyPracticeDays } from "@/lib/signProgress";
-import { trackingDayDate, trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
+import { trackingDayDate, type TrackingSchedule } from "@/lib/trackingDay";
 import { cn } from "@/lib/utils";
 
 export const FOCUS_VIEW_ONLY_HELP =
@@ -39,7 +39,9 @@ export function ThisWeekFocus({
   busy,
   practiceRows,
   practiceLoading,
-  pendingPracticeSlug,
+  now,
+  todayKey,
+  pendingPracticeSlugs,
   onOpen,
   onStart,
   onAdvance,
@@ -57,8 +59,12 @@ export function ThisWeekFocus({
   busy: boolean;
   practiceRows: SignPracticeRow[] | undefined;
   practiceLoading: boolean;
-  /** Sign whose tick is saving right now, if any. */
-  pendingPracticeSlug: string | null;
+  /** The page's clock; refreshed at tracking-day rollover. */
+  now: Date;
+  /** Today's tracking-day key, derived from `now` — the key a tick writes. */
+  todayKey: string;
+  /** Signs whose tick is saving right now. */
+  pendingPracticeSlugs: string[];
   onOpen: (sign: Sign) => void;
   onStart: (slugs: string[]) => void;
   onAdvance: (unfocusSlugs: string[], focusSlugs: string[]) => void;
@@ -70,11 +76,9 @@ export function ThisWeekFocus({
     rows.map((r) => [r.sign_slug, r.status]),
   );
   const allSigning = SIGN_LIBRARY.every((s) => statusBySlug[s.slug] === "signing");
-  const ready = readyForNewSigns(focusRows, new Date(), schedule);
+  const ready = readyForNewSigns(focusRows, now, schedule);
   const actionsDisabled = !canEdit || busy || loading;
   const ageGatedLine = `More signs open up as ${firstName} grows — browse All signs anytime.`;
-  const now = new Date();
-  const todayKey = trackingDayKey(now, schedule);
   const practiceDays = weeklyPracticeDays(practiceRows ?? [], planWeekStart(trackingDayDate(now, schedule) ?? now));
   const modeledToday = new Set(
     (practiceRows ?? []).filter((r) => r.practiced_on === todayKey).map((r) => r.sign_slug),
@@ -185,7 +189,7 @@ export function ThisWeekFocus({
                       type="button"
                       aria-pressed={modeled}
                       aria-label={`Modeled ${sign.label} today`}
-                      disabled={!canEdit || practiceLoading || !todayKey || pendingPracticeSlug === sign.slug}
+                      disabled={!canEdit || practiceLoading || pendingPracticeSlugs.includes(sign.slug)}
                       onClick={() => onTogglePractice(sign, !modeled)}
                       className="touch-target flex shrink-0 items-center justify-center rounded-full disabled:opacity-50"
                     >

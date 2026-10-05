@@ -1,10 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { SignPermissionError, SIGN_PERMISSION_MESSAGE, isRlsError } from "@/hooks/useSignProgress";
 import { practiceWindowStart } from "@/lib/signProgress";
-import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
 
 export interface SignPracticeRow {
   id: string;
@@ -15,12 +13,16 @@ export interface SignPracticeRow {
 
 const UNIQUE_VIOLATION = "23505";
 
-/** Practice ticks for the last 28 tracking days (today included). */
-export function useSignPractice(childId: string | undefined, schedule: TrackingSchedule) {
+export const TOGGLE_SIGN_PRACTICE_KEY = ["toggle-sign-practice"] as const;
+
+/**
+ * Practice ticks for the 28 tracking days ending `todayKey`. The key is part of
+ * the query key so the window moves when the tracking day rolls over.
+ */
+export function useSignPractice(childId: string | undefined, todayKey: string) {
   return useQuery({
-    queryKey: ["child-sign-practice", childId],
+    queryKey: ["child-sign-practice", childId, todayKey],
     queryFn: async (): Promise<SignPracticeRow[]> => {
-      const todayKey = trackingDayKey(new Date(), schedule) ?? format(new Date(), "yyyy-MM-dd");
       const { data, error } = await supabase
         .from("child_sign_practice")
         .select("id, sign_slug, practiced_on")
@@ -33,12 +35,12 @@ export function useSignPractice(childId: string | undefined, schedule: TrackingS
   });
 }
 
-interface TogglePracticeVars {
+export interface TogglePracticeVars {
   childId: string;
   /** children.parent_id — the child OWNER, never the writer; see useSetSignStatus. */
   childOwnerId: string;
   signSlug: string;
-  /** Tracking-day key the tick belongs to. */
+  /** Today's tracking-day key — the same value `useSignPractice` was given. */
   practicedOn: string;
   practiced: boolean;
 }
@@ -48,6 +50,7 @@ export function useToggleSignPractice() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: TOGGLE_SIGN_PRACTICE_KEY,
     mutationFn: async ({ childId, childOwnerId, signSlug, practicedOn, practiced }: TogglePracticeVars) => {
       if (practiced) {
         const { error } = await supabase
@@ -75,28 +78,31 @@ export function useToggleSignPractice() {
       if (!data || data.length === 0) throw new SignPermissionError(SIGN_PERMISSION_MESSAGE);
     },
     onMutate: async ({ childId, signSlug, practicedOn, practiced }) => {
-      const queryKey = ["child-sign-practice", childId];
+      const queryKey = ["child-sign-practice", childId, practicedOn];
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<SignPracticeRow[]>(queryKey);
+      const isThisTick = (r: SignPracticeRow) => r.sign_slug === signSlug && r.practiced_on === practicedOn;
+      const previousRow = queryClient.getQueryData<SignPracticeRow[]>(queryKey)?.find(isThisTick);
       queryClient.setQueryData<SignPracticeRow[]>(queryKey, (rows = []) => {
-        const rest = rows.filter((r) => !(r.sign_slug === signSlug && r.practiced_on === practicedOn));
+        const rest = rows.filter((r) => !isThisTick(r));
         return practiced
           ? [...rest, { id: `optimistic-${signSlug}-${practicedOn}`, sign_slug: signSlug, practiced_on: practicedOn }]
           : rest;
       });
-      return { previous };
+      return { previousRow };
     },
-    onError: (err, { childId }, context) => {
-      queryClient.setQueryData(["child-sign-practice", childId], context?.previous);
-      const message = (err as { message?: string } | null)?.message;
+    onError: (err, { childId, signSlug, practicedOn }, context) => {
+      // Undo only this tick, so another sign's in-flight tick keeps its state.
+      queryClient.setQueryData<SignPracticeRow[]>(["child-sign-practice", childId, practicedOn], (rows) => {
+        if (!rows) return rows;
+        const rest = rows.filter((r) => !(r.sign_slug === signSlug && r.practiced_on === practicedOn));
+        return context?.previousRow ? [...rest, context.previousRow] : rest;
+      });
       toast({
         title: "Couldn't save that tick",
         description:
           err instanceof SignPermissionError
             ? err.message
-            : message
-              ? `${message} Check your connection and try again.`
-              : "Check your connection and try again.",
+            : "That tick didn't save. Check your connection and try again.",
         variant: "destructive",
       });
     },

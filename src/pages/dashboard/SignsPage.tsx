@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { format } from "date-fns";
+import { useMutationState } from "@tanstack/react-query";
 import { Hand, Sparkles, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +17,13 @@ import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
 import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
 import { useSignProgress, useSetSignStatus, useSetSignFocus, type SignStatus } from "@/hooks/useSignProgress";
-import { useSignPractice, useToggleSignPractice } from "@/hooks/useSignPractice";
+import {
+  TOGGLE_SIGN_PRACTICE_KEY,
+  useSignPractice,
+  useToggleSignPractice,
+  type TogglePracticeVars,
+} from "@/hooks/useSignPractice";
+import { useTrackingNow } from "@/hooks/useTrackingNow";
 import {
   SIGN_STAGES,
   SIGN_LIBRARY,
@@ -40,8 +48,16 @@ export default function SignsPage() {
   const [focusBusy, setFocusBusy] = useState(false);
   const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
   const schedule = resolveTrackingSchedule(activeChild);
-  const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild?.id, schedule);
+  const now = useTrackingNow(schedule);
+  // One key for what renders as ticked AND what a tap writes, so the two can't
+  // disagree across the day boundary.
+  const todayKey = trackingDayKey(now, schedule) ?? format(now, "yyyy-MM-dd");
+  const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild?.id, todayKey);
   const togglePractice = useToggleSignPractice();
+  const pendingPracticeSlugs = useMutationState({
+    filters: { mutationKey: TOGGLE_SIGN_PRACTICE_KEY, status: "pending" },
+    select: (m) => (m.state.variables as TogglePracticeVars).signSlug,
+  });
 
   if (!activeChild) {
     return (
@@ -189,13 +205,11 @@ export default function SignsPage() {
       toast({ title: err instanceof Error ? err.message : "Try again in a moment." });
       return;
     }
-    const practicedOn = trackingDayKey(new Date(), schedule);
-    if (!practicedOn) return;
     togglePractice.mutate({
       childId: activeChild.id,
       childOwnerId: activeChild.parent_id,
       signSlug: sign.slug,
-      practicedOn,
+      practicedOn: todayKey,
       practiced,
     });
   };
@@ -263,7 +277,9 @@ export default function SignsPage() {
             busy={focusBusy}
             practiceRows={practiceRows}
             practiceLoading={practiceLoading}
-            pendingPracticeSlug={togglePractice.isPending ? (togglePractice.variables?.signSlug ?? null) : null}
+            now={now}
+            todayKey={todayKey}
+            pendingPracticeSlugs={pendingPracticeSlugs}
             onOpen={openSign}
             onStart={startFocus}
             onAdvance={advanceFocus}
