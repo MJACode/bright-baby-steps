@@ -7,6 +7,7 @@
 
 import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
 
+import { trackingDayEndFromKey } from "@/lib/sleepPatterns";
 import { trackingDayDate, type TrackingSchedule } from "@/lib/trackingDay";
 
 export interface SignPracticeInput {
@@ -51,6 +52,15 @@ function daysInFocus(focusSince: string, now: Date, schedule: TrackingSchedule):
 /** First tracking-day key of the 28-day practice window ending on `todayKey` (inclusive). */
 export function practiceWindowStart(todayKey: string): string {
   return toKey(addDays(keyToDate(todayKey), -(PRACTICE_WINDOW_DAYS - 1)));
+}
+
+/**
+ * Milliseconds from `now` until the next tracking day starts. Measured to the
+ * next day's real start, so a DST day of 23 or 25 hours rolls over on time.
+ */
+export function msUntilNextTrackingDay(now: Date, schedule: TrackingSchedule): number {
+  const next = trackingDayEndFromKey(toKey(todayDate(now, schedule)), schedule);
+  return next ? Math.max(0, next.getTime() - now.getTime()) : 0;
 }
 
 /** Distinct practice days in the plan week starting `weekStart` (inclusive, 7 days). */
