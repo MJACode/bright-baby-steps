@@ -70,7 +70,7 @@ export default function PartnerManagement() {
         .select("*")
         .eq("owner_id", user!.id)
         .eq("status", "pending")
-        .gte("expires_at", new Date().toISOString());
+        .gt("expires_at", new Date().toISOString());
       if (error) throw error;
       return data;
     },
