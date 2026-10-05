@@ -1,5 +1,6 @@
 import * as signProgress from "@/lib/signProgress";
 import {
+  msUntilNextTrackingDay,
   practiceDays4w,
   practiceWindowStart,
   readyForNewSigns,
@@ -158,6 +159,22 @@ describe("practiceWindowStart", () => {
   });
 });
 
+const HOUR_MS = 60 * 60 * 1000;
+
+describe("msUntilNextTrackingDay", () => {
+  it("counts to the next midnight with a midnight day start", () => {
+    expect(msUntilNextTrackingDay(at(2026, 10, 5, 18, 0), MIDNIGHT)).toBe(6 * HOUR_MS);
+  });
+
+  it("counts to today's day start when it's still the previous tracking day", () => {
+    expect(msUntilNextTrackingDay(at(2026, 10, 5, 3, 0), SEVEN_AM)).toBe(4 * HOUR_MS);
+  });
+
+  it("counts to tomorrow's day start once today's has passed, across a month end", () => {
+    expect(msUntilNextTrackingDay(at(2026, 9, 30, 7, 0), SEVEN_AM)).toBe(24 * HOUR_MS);
+  });
+});
+
 describe("across DST (America/New_York)", () => {
   const originalTz = process.env.TZ;
   beforeAll(() => {
@@ -192,6 +209,13 @@ describe("across DST (America/New_York)", () => {
     expect(practiceWindowStart("2026-03-20")).toBe("2026-02-21");
     expect(practiceWindowStart("2026-11-01")).toBe("2026-10-05");
     expect(practiceWindowStart("2026-11-20")).toBe("2026-10-24");
+  });
+
+  it("rolls over at the real next day start on DST days", () => {
+    expect(msUntilNextTrackingDay(at(2026, 3, 8, 0, 0), MIDNIGHT)).toBe(23 * HOUR_MS);
+    expect(msUntilNextTrackingDay(at(2026, 11, 1, 0, 0), MIDNIGHT)).toBe(25 * HOUR_MS);
+    expect(msUntilNextTrackingDay(at(2026, 3, 8, 0, 30), SEVEN_AM)).toBe(5.5 * HOUR_MS);
+    expect(msUntilNextTrackingDay(at(2026, 11, 1, 0, 30), SEVEN_AM)).toBe(7.5 * HOUR_MS);
   });
 
   it("keeps a 28-day window across the fall-back night", () => {
