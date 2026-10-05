@@ -31,10 +31,12 @@ export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: 
 };
 
 /**
- * Additional users (the 2nd and 3rd person on the account) are a Flare+
- * feature. Free tier gets zero seats. Mirrors `partner_seat_limit()` in
- * migration 20260828100000 — change both together.
+ * Additional users beyond the account owner. Free: 1 (typically the co-parent).
+ * Flare+: 2. When Flare+ lapses, the longest-standing partner keeps access and
+ * anyone beyond the free seat is on hold until renewal. Mirrors
+ * `partner_seat_limit()` in migration 20260930100000 — change both together.
  */
+export const FREE_ADDITIONAL_USERS = 1;
 export const MAX_ADDITIONAL_USERS = 2;
 
 export type PartnerAccessStatus = "active" | "paused" | "revoked";
@@ -58,7 +60,7 @@ export function seatSummary(opts: {
   /** partner_invitations rows still pending and unexpired. */
   pendingInviteCount: number;
 }): SeatSummary {
-  const limit = opts.isPremium ? MAX_ADDITIONAL_USERS : 0;
+  const limit = opts.isPremium ? MAX_ADDITIONAL_USERS : FREE_ADDITIONAL_USERS;
   const used = opts.partnerCount + opts.pendingInviteCount;
   const remaining = Math.max(0, limit - used);
   return { used, limit, remaining, canInvite: remaining > 0 };
@@ -79,7 +81,11 @@ export function describePartnerError(err: unknown, fallback: string): string {
     return "This account needs an active Flare+ subscription to share access.";
   }
   if (message.includes("SEAT_LIMIT_REACHED")) {
-    return `Flare+ includes ${MAX_ADDITIONAL_USERS} additional users. Remove someone to free up a spot.`;
+    // The server says which plan's limit was hit; the free-plan message
+    // mentions "free plan".
+    return message.includes("free plan")
+      ? `The free plan includes ${FREE_ADDITIONAL_USERS} additional person. Remove someone, or upgrade to Flare+ for ${MAX_ADDITIONAL_USERS}.`
+      : `Flare+ includes ${MAX_ADDITIONAL_USERS} additional people. Remove someone to free up a spot.`;
   }
   if (message.includes("Invalid or expired")) {
     return "This invite has expired or has already been used.";

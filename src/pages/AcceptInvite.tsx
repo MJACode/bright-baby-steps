@@ -134,6 +134,11 @@ export default function AcceptInvite() {
                   <li>AI-generated briefings, weekly insights, and suggestions that use the child's data.</li>
                 </ul>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Your access depends on the inviting parent's plan. The free plan includes one
+                  additional person; Flare+ includes two. If their Flare+ ends, the person who joined
+                  first keeps access and anyone else is paused until it restarts — nothing is deleted.
+                </p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                   By accepting, you become a co-controller of this child's data alongside the inviting parent.
                   We do not sell or share data for advertising. Full details:{" "}
                   <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>

@@ -14,6 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { Users, Copy, UserMinus, Link2, RefreshCw, X, Sparkles, PauseCircle } from "lucide-react";
 import {
   ROLE_COPY,
+  FREE_ADDITIONAL_USERS,
   MAX_ADDITIONAL_USERS,
   seatSummary,
   describePartnerError,
@@ -173,10 +174,17 @@ export default function PartnerManagement() {
     if (inviteLink) await copyText(inviteLink);
   };
 
-  // Someone whose Flare+ lapsed keeps their people listed but they can't see
-  // anything until the subscription is back. Say so plainly — this is the one
-  // place they can find out why their partner stopped getting updates.
-  const showLapsedBanner = !premiumLoading && !isPremium && partners.length > 0;
+  // Seniority order, oldest first: the database (partner_within_entitlement)
+  // ranks partners by created_at, then id. On the free plan only the first
+  // FREE_ADDITIONAL_USERS of them have access; anyone after that is on hold
+  // until Flare+ is back. Say so plainly — this is the one place an owner can
+  // find out why a partner stopped getting updates.
+  const rankedPartners = [...partners].sort(
+    (a: { created_at: string; id: string }, b: { created_at: string; id: string }) =>
+      a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
+  );
+  const isOnHold = (index: number) => !premiumLoading && !isPremium && index >= FREE_ADDITIONAL_USERS;
+  const showLapsedBanner = rankedPartners.some((_, i) => isOnHold(i));
 
   return (
     <Card className="border-0 bg-muted/50">
@@ -191,18 +199,20 @@ export default function PartnerManagement() {
           their own account.
         </p>
 
-        {isPremium && (
+        {!premiumLoading && (
           <p className="text-[11px] font-semibold text-muted-foreground">
-            {seats.used} of {seats.limit} Flare+ seats used
+            {seats.used} of {seats.limit} {seats.limit === 1 ? "seat" : "seats"} used
+            {isPremium ? " · Flare+" : " · Free plan"}
           </p>
         )}
 
         {showLapsedBanner && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2.5">
-            <p className="text-xs font-semibold text-foreground">Shared access is on hold</p>
+            <p className="text-xs font-semibold text-foreground">Some shared access is on hold</p>
             <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
-              Partner access is part of Flare+. Everyone below is saved exactly as they were —
-              restart Flare+ and they're back in instantly.
+              The free plan includes {FREE_ADDITIONAL_USERS} additional person — whoever joined first keeps
+              access. Everyone marked "On hold" is saved exactly as they were. Restart Flare+ and
+              they're back in instantly.
             </p>
             <Button size="sm" className="mt-2 h-8 rounded-full text-xs" onClick={() => setUpgradeOpen(true)}>
               Restart Flare+
@@ -211,11 +221,12 @@ export default function PartnerManagement() {
         )}
 
         {/* People on this account */}
-        {partners.length > 0 && (
+        {rankedPartners.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-semibold">On your account</p>
-            {partners.map((p: any) => {
+            {rankedPartners.map((p: any, index: number) => {
               const paused = p.status === "paused";
+              const onHold = isOnHold(index);
               return (
                 <div key={p.id} className="bg-background rounded-lg px-3 py-2 space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -228,6 +239,11 @@ export default function PartnerManagement() {
                         {paused && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-warning">
                             <PauseCircle className="w-3 h-3" /> Paused
+                          </span>
+                        )}
+                        {onHold && !paused && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-warning">
+                            <PauseCircle className="w-3 h-3" /> On hold
                           </span>
                         )}
                       </p>
@@ -333,8 +349,9 @@ export default function PartnerManagement() {
           </div>
         )}
 
-        {/* Invite CTA — teaser on free tier, real button on Flare+ */}
-        {premiumLoading ? null : !isPremium ? (
+        {/* Invite CTA — a real button while a seat is free (free plan: 1, Flare+: 2).
+            A full free account sees the Flare+ teaser for the second seat. */}
+        {premiumLoading ? null : !isPremium && !seats.canInvite ? (
           <button
             onClick={() => setUpgradeOpen(true)}
             className="w-full text-left rounded-2xl border border-primary/20 bg-primary/5 p-4 active:scale-[0.99] transition-transform min-h-[48px]"
@@ -346,8 +363,8 @@ export default function PartnerManagement() {
               </span>
             </div>
             <p className="text-sm text-foreground/80 leading-snug">
-              Flare+ brings your partner, sitter, or grandparent onto the account — same logs, live
-              sync, and you can pause anyone at any time.
+              Your free seat is in use. Flare+ adds room for a sitter or grandparent too — same
+              logs, live sync, and you can pause anyone at any time.
             </p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
               Try free for 7 days <span aria-hidden>→</span>
