@@ -1,14 +1,22 @@
 import { describe, it, expect } from "vitest";
 import {
+  FREE_ADDITIONAL_USERS,
   MAX_ADDITIONAL_USERS,
   seatSummary,
   describePartnerError,
 } from "@/lib/partnerInvite";
 
 describe("seatSummary", () => {
-  it("gives the free tier no seats at all", () => {
+  it("gives the free tier one additional user", () => {
     const s = seatSummary({ isPremium: false, partnerCount: 0, pendingInviteCount: 0 });
-    expect(s.limit).toBe(0);
+    expect(s.limit).toBe(FREE_ADDITIONAL_USERS);
+    expect(s.limit).toBe(1);
+    expect(s.canInvite).toBe(true);
+  });
+
+  it("fills the free seat with a pending invite", () => {
+    const s = seatSummary({ isPremium: false, partnerCount: 0, pendingInviteCount: 1 });
+    expect(s.remaining).toBe(0);
     expect(s.canInvite).toBe(false);
   });
 
@@ -42,18 +50,38 @@ describe("seatSummary", () => {
 });
 
 describe("describePartnerError", () => {
-  it("explains a lapsed subscription", () => {
+  it("translates the legacy Flare+-required error without promising an upgrade fixes it", () => {
     const msg = describePartnerError(
       { message: "FLARE_PLUS_REQUIRED: additional users need an active Flare+ subscription" },
       "fallback"
     );
-    expect(msg).toContain("Flare+");
+    expect(msg).toContain("can't add more people");
     expect(msg).not.toContain("FLARE_PLUS_REQUIRED");
   });
 
-  it("explains a full account", () => {
-    const msg = describePartnerError({ message: "SEAT_LIMIT_REACHED: Flare+ includes 2" }, "fallback");
+  it("tells an invitee to ask the inviter, not to upgrade", () => {
+    const msg = describePartnerError(
+      { message: "SEAT_LIMIT_REACHED: the free plan includes 1 additional user; Flare+ includes 2" },
+      "fallback",
+      "invitee"
+    );
+    expect(msg).toContain("Ask the person who invited you");
+    expect(msg).not.toContain("upgrade");
+  });
+
+  it("explains a full Flare+ account", () => {
+    const msg = describePartnerError({ message: "SEAT_LIMIT_REACHED: Flare+ includes 2 additional users" }, "fallback");
     expect(msg).toContain(String(MAX_ADDITIONAL_USERS));
+    expect(msg).not.toContain("SEAT_LIMIT_REACHED");
+  });
+
+  it("explains a full free account and points to Flare+", () => {
+    const msg = describePartnerError(
+      { message: "SEAT_LIMIT_REACHED: the free plan includes 1 additional user; Flare+ includes 2" },
+      "fallback"
+    );
+    expect(msg).toContain("free plan");
+    expect(msg).toContain("Flare+");
     expect(msg).not.toContain("SEAT_LIMIT_REACHED");
   });
 

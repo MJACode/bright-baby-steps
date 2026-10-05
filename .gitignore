@@ -49,3 +49,6 @@ supabase/.branches/
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Session snapshot written by .claude/hooks/PreCompact.sh
+tasks/compact-state.md

@@ -2872,6 +2872,28 @@ Legitimate callers keep working:
 
 ---
 
+## 2026-10-05 — Partner-facing copy matches the free 1 / Flare+ 2 seat model; Terms gain a shared-access clause
+
+**Reviewer:** in-house (legal agent pre-review + QA agent, founder-approved in session). **Risk level:** closes the 2026-10-01 "partner-facing copy" item.
+
+**Why:** the 2026-09-30 model (free plan 1 additional person, Flare+ 2, earliest-joined partner keeps access on lapse) was live in the database, but the app still treated the free plan as 0 seats: free owners could not invite, onboarding pushed an upgrade, and the lapse banner said all shared access was on hold. The invitee screen and FAQ said nothing about plan dependence, and the Terms said nothing about shared access.
+
+**What changed:**
+- **Terms § 5** (Last reviewed → 2026-10-05): new "Shared access" paragraph: plan-dependent seat count, hold on lapse, owner can pause/remove anyone, invitee access ends if removed or the record/account is deleted, owner responsible for whom they invite.
+- **AcceptInvite (invitee notice, before the consent checkbox):** plan dependence, hold on lapse ("doesn't delete anything"), owner can pause/remove at any time, deletion of the child record or account ends access and deletes data. "Co-controller" replaced with "see (and, depending on your role, log)". Body text raised to 12px.
+- **FAQ:** same model; deleting a child or account deletes that data for everyone.
+- **Partner Management / onboarding:** free seat usable; "On hold" badge on partners beyond the free seat; banner CTA "Get Flare+" (covers owners who never subscribed); teaser no longer pitches pausing as a Flare+ perk and offers "remove someone" as an alternative.
+- **Errors:** the legacy FLARE_PLUS_REQUIRED copy no longer implies upgrading fixes it; invitees hitting a full account are told to ask the inviter, not to upgrade.
+
+**Redlines rejected:** none. An absolute "nothing is deleted" promise from the first draft was removed before ship.
+
+**Open (founder/counsel):**
+1. "Try free for 7 days" still appears in the Flare+ teaser while the pre-checkout ROSCA / Cal. B&P § 17602 items (auto-renewal disclosure, Terms subscriptions section, trial reminder, cancel flow) are open.
+2. Partners are not notified when they are paused, removed or put on hold.
+3. Verify that deleting a child also deletes entries a co-parent logged for that child (policy says yes).
+
+---
+
 ## 2026-10-03 — Baby Signs v2 (PR-C): `child_sign_practice` practice-day data + direct-notice enumeration
 
 **Reviewer:** in-house (Claude `legal` pre-review of Baby Signs v2 PR-C, spec `specs/001-baby-signs-v2`, task T040). **Risk level:** Low (new parent-entered child-data field inside an existing consented category; no new egress, no new subprocessor).

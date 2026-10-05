@@ -85,7 +85,7 @@ export default function AcceptInvite() {
       // Seat-limit and lapsed-subscription rejections come back from the RPC
       // with machine-readable prefixes — the invitee should see why, not a
       // generic failure.
-      const message = describePartnerError(err, "Failed to accept invite");
+      const message = describePartnerError(err, "Failed to accept invite", "invitee");
       setErrorMessage(message);
       toast({ title: message, variant: "destructive" });
       setStatus("error");
@@ -133,8 +133,16 @@ export default function AcceptInvite() {
                   <li>All sleep, feeding, diaper, allergen, milestone, illness, medication, and supplement records the family logs.</li>
                   <li>AI-generated briefings, weekly insights, and suggestions that use the child's data.</li>
                 </ul>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Your access depends on the inviting parent's plan: the free plan includes one
+                  additional person, Flare+ includes two. If their Flare+ ends, the earliest-joined
+                  person keeps access and anyone else is put on hold until it restarts. Going on hold
+                  doesn't delete anything. The inviting parent can pause or remove your access at any
+                  time. If they delete the child's record or their account, that data is deleted and
+                  your access ends.
+                </p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  By accepting, you become a co-controller of this child's data alongside the inviting parent.
+                  By accepting, you'll be able to see (and, depending on your role, log) this child's data alongside the inviting parent.
                   We do not sell or share data for advertising. Full details:{" "}
                   <Link to="/privacy" target="_blank" className="text-primary underline">Privacy Policy</Link>
                   {" · "}
