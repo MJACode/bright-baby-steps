@@ -10,11 +10,12 @@ import { PremiumGate } from "@/components/PremiumGate";
 import { SignDetailSheet } from "@/components/signs/SignDetailSheet";
 import { SignRow } from "@/components/signs/SignRow";
 import { ThisWeekFocus } from "@/components/signs/ThisWeekFocus";
-import { resolveTrackingSchedule } from "@/lib/trackingDay";
+import { resolveTrackingSchedule, trackingDayKey } from "@/lib/trackingDay";
 import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
 import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
 import { useSignProgress, useSetSignStatus, useSetSignFocus, type SignStatus } from "@/hooks/useSignProgress";
+import { useSignPractice, useToggleSignPractice } from "@/hooks/useSignPractice";
 import {
   SIGN_STAGES,
   SIGN_LIBRARY,
@@ -38,6 +39,9 @@ export default function SignsPage() {
   const setFocus = useSetSignFocus();
   const [focusBusy, setFocusBusy] = useState(false);
   const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  const schedule = resolveTrackingSchedule(activeChild);
+  const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild?.id, schedule);
+  const togglePractice = useToggleSignPractice();
 
   if (!activeChild) {
     return (
@@ -94,7 +98,6 @@ export default function SignsPage() {
 
   const canEditFocus = roleResolved && role !== "viewer";
   const showViewerHelp = roleResolved && role === "viewer";
-  const schedule = resolveTrackingSchedule(activeChild);
   const focusSlugs = SIGN_PATH.flatMap((set) => set.signSlugs).filter((slug) => !!progress?.[slug]?.focus_since);
   const focusSigns = focusSlugs
     .map((slug) => SIGN_LIBRARY.find((s) => s.slug === slug))
@@ -179,6 +182,24 @@ export default function SignsPage() {
       `Swapped ${out.label.toUpperCase()} for ${into.label.toUpperCase()}.`,
     );
 
+  const toggleModeled = (sign: Sign, practiced: boolean) => {
+    try {
+      assertCanWrite(roleResolved, role);
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Try again in a moment." });
+      return;
+    }
+    const practicedOn = trackingDayKey(new Date(), schedule);
+    if (!practicedOn) return;
+    togglePractice.mutate({
+      childId: activeChild.id,
+      childOwnerId: activeChild.parent_id,
+      signSlug: sign.slug,
+      practicedOn,
+      practiced,
+    });
+  };
+
   const openSign = (sign: Sign) => {
     setSelectedSlug(sign.slug);
     setSheetOpen(true);
@@ -240,9 +261,13 @@ export default function SignsPage() {
             canEdit={canEditFocus}
             showViewerHelp={showViewerHelp}
             busy={focusBusy}
+            practiceRows={practiceRows}
+            practiceLoading={practiceLoading}
+            pendingPracticeSlug={togglePractice.isPending ? (togglePractice.variables?.signSlug ?? null) : null}
             onOpen={openSign}
             onStart={startFocus}
             onAdvance={advanceFocus}
+            onTogglePractice={toggleModeled}
           />
 
           <h2 className="font-display font-bold text-xl pt-2">All signs</h2>
