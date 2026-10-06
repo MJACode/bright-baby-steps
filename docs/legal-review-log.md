@@ -2924,3 +2924,37 @@ Legitimate callers keep working:
 3. ~~Inherited: `inactive-account-purge` cron returning 401.~~ Resolved 2026-10-02 (see "Scheduled jobs restored" entry); the 24-month purge now covers this table via the `auth.users` cascade.
 4. CLAUDE.md "Legal Review" still refers to retention as "PrivacyPage § 8"; the live page numbers it § 9. Fix references.
 5. PR-D: disclosure for practice-day counts to Anthropic, plus `sign_plans` in `EXPORT_TABLES`.
+
+---
+
+## 2026-10-06 — Baby Signs v2 (PR-D): `generate-sign-plan` weekly AI sign plan (eighth Anthropic edge function) + `sign_plans` table
+
+**Reviewer:** in-house (Claude `legal` pre-review of Baby Signs v2 PR-D, spec `specs/001-baby-signs-v2`, task T053); disclosure wording approved by the founder 2026-10-06. **Risk level:** Low (new Anthropic data flow inside an existing processor, purpose, and consent; less data than any other AI feature; disclosure ships in the same PR).
+
+**What changed:**
+- New edge function `supabase/functions/generate-sign-plan/` (the eighth that calls Anthropic: briefing, weekly-insights, chat, extract-memory, generate-speech-class, visit-prep-questions, generate-activity-plan, generate-sign-plan). Flare+ only (server-side `subscriptions` check, 403 `premium_required`), tap-triggered, one plan per child per week (409 checked BEFORE the paid Anthropic call; any stored week on or after the requested week blocks a new call). `slp` persona + `SIGN_PLAN_INSTRUCTION`; model `claude-sonnet-4-6`.
+- New table `public.sign_plans` (migration `20261006000000_sign_plans.sql`): one current row per child (`UNIQUE child_id`), upserted weekly by the function using the caller's JWT so RLS is the write gate. `plan` jsonb is the sanitized SignPlan (intro / focus / stuck), built from library slugs; no parent free text.
+- Disclosures: Privacy § 2 (Baby Signs sentence corrected; new "AI plans (Flare+)" bullet, also closing the never-listed Speech Class / Weekly Play Plan plan tables), Privacy § 4 (feature list + Baby Signs data clause), Privacy "Last reviewed" → October 6, 2026; `/subprocessors` Anthropic purpose + dataCategories (Baby Signs added; Weekly Play Plan added, a gap since 2026-07-19), "Last reviewed" → October 6, 2026; FAQ third-party answer and stored-data answer; CoppaDirectNotice "How we use it" names weekly plans (best practice).
+
+**Data sent to Anthropic (verified against code, not spec — `buildUserText`):** corrected age in months; for each of the 20 curated library slugs: status (introduced / emerging / signing / not started), whether it is a focus sign and days in focus, days modeled in the last 28 (omitted when zero), and a server-derived STALLED flag (focus ≥ 14 days, still "introduced", ≥ 1 practice day). Not sent: child id, user id, name, DOB, gender, interests, temperament, journal words, notes, any free text. The request is allowlist-rebuilt, slugs are checked against `_shared/signSlugs.ts`, body capped at 16 KB and never logged.
+
+**Data minimization (16 CFR § 312.7; FR-021, research R7):** smallest payload of any AI feature (the only one without the child's first name). Inputs are bounded enums/integers over a fixed 20-slug library. Output sanitized: unknown slugs, extra fields, over-length and off-tone strings dropped; 0 usable focus signs → 422 with nothing stored.
+
+**Retention / deletion:** one current plan per child; each weekly plan overwrites the previous one. Kept until the child (`child_id ON DELETE CASCADE`) or account (`parent_id ON DELETE CASCADE` from `auth.users`, reached by `delete_user_account()` / `_purge_user_data()`) is deleted; no purge-function edit. Flare+ lapse deletes nothing (FR-029). No Storage objects. Included in Export My Data (`EXPORT_TABLES` key `signPlans`). Covered by Privacy § 9.
+
+**Subprocessor / DPA coverage:** Anthropic, PBC — not a new subprocessor, so no 30-day notice under Privacy § 5. DPA accepted 2026-05-08 (template eff. 2025-02-24) covers the flow. No-training basis unchanged: DPA § B.2 + Schedule 1 § B.5 purpose limitation, plus Anthropic Commercial Terms / Usage Policy no-training commitment, as cited in Privacy § 4. Abuse-review retention stays as "limited period … per Anthropic's Usage Policy"; no day count added.
+
+**RLS:** SELECT owner or `has_partner_access`; INSERT/UPDATE `partner_can_write(parent_id)` + EXISTS owner binding on `children` (explicit WITH CHECK on UPDATE); DELETE `partner_can_write`. Viewers can read but not generate.
+
+**Analysis:** additive Flare+ feature, same processor and purpose already in the direct notice ("Anthropic for AI", "AI-assisted briefings and insights"), inputs already collected under VPC, less identifying than existing flows, disclosure ships with the feature. Non-material change under 16 CFR § 312.5(a)(1); no renewed VPC (reasoning per 2026-07-19 Activities, 2026-08-28 Baby Signs, 2026-10-03 PR-C entries).
+
+**Code refs:** PR-D (Baby Signs v2), #271 — fill in commit hash at merge.
+
+**Closes:** 2026-10-03 PR-C follow-up 5 (practice-day counts disclosed to Anthropic in Privacy § 4 / `/subprocessors` / FAQ; `sign_plans` in `EXPORT_TABLES`).
+
+**Follow-ups:**
+1. Flare+ is checked on the caller, not the child's owner (same as every Flare+ feature today). Founder decision 2026-10-06: ship PR-D caller-based; Flare+ should become family-wide (one subscription covers the family's partners) — tracked as its own initiative in `tasks/backlog.md`. When it ships, revisit the Privacy § 4 "any parent or caregiver with edit access" sentence. P1.
+2. Parse-failure logs write the first 300 chars of model output and of Anthropic error bodies to Supabase function logs. Content is slugs + generic coaching copy, no identifiers, but it is child-derived. Consider logging length + error class only. P2.
+3. `/subprocessors` "Briefings / weekly insights" line omits interests, temperament, and AI-memory notes that Privacy § 4 lists. Reconcile. P1.
+4. Outside counsel (when commissioned): (a) non-material change under § 312.5(a)(1) for a new AI feature on already-consented data to an already-disclosed processor; (b) whether "then deleted" is accurate for Anthropic content flagged for safety review; (c) whether a partner-triggered AI flow is within the owner's original VPC.
+5. Carry-over: PR-C follow-ups 1, 2, 4 still open.
