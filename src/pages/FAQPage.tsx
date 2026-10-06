@@ -18,7 +18,7 @@ const FAQS = [
   },
   {
     q: "What data does Grace Flare store?",
-    a: "We store the information you enter: your child's name, date of birth, feeding, sleep, diaper, allergen, milestone, and health logs. We also store your account email and any notes you add. See our Privacy Policy for full details.",
+    a: "We store the information you enter: your child's name, date of birth, feeding, sleep, diaper, allergen, milestone, and health logs, play activities you've tried, and your Baby Signs progress (which signs you're working on and the days you modeled them). We also store your account email and any notes you add. See our Privacy Policy for full details.",
   },
   {
     q: "Is my child's data sent to third parties?",

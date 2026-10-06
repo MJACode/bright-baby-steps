@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { format } from "date-fns";
+import { useMutationState } from "@tanstack/react-query";
 import { Hand, Sparkles, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +12,18 @@ import { PremiumGate } from "@/components/PremiumGate";
 import { SignDetailSheet } from "@/components/signs/SignDetailSheet";
 import { SignRow } from "@/components/signs/SignRow";
 import { ThisWeekFocus } from "@/components/signs/ThisWeekFocus";
-import { resolveTrackingSchedule } from "@/lib/trackingDay";
+import { resolveTrackingSchedule, trackingDayKey } from "@/lib/trackingDay";
 import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
 import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
 import { useSignProgress, useSetSignStatus, useSetSignFocus, type SignStatus } from "@/hooks/useSignProgress";
+import {
+  TOGGLE_SIGN_PRACTICE_KEY,
+  useSignPractice,
+  useToggleSignPractice,
+  type TogglePracticeVars,
+} from "@/hooks/useSignPractice";
+import { useTrackingNow } from "@/hooks/useTrackingNow";
 import {
   SIGN_STAGES,
   SIGN_LIBRARY,
@@ -38,6 +47,17 @@ export default function SignsPage() {
   const setFocus = useSetSignFocus();
   const [focusBusy, setFocusBusy] = useState(false);
   const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  const schedule = resolveTrackingSchedule(activeChild);
+  const now = useTrackingNow(schedule);
+  // One key for what renders as ticked AND what a tap writes, so the two can't
+  // disagree across the day boundary.
+  const todayKey = trackingDayKey(now, schedule) ?? format(now, "yyyy-MM-dd");
+  const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild?.id, todayKey);
+  const togglePractice = useToggleSignPractice();
+  const pendingPracticeSlugs = useMutationState({
+    filters: { mutationKey: TOGGLE_SIGN_PRACTICE_KEY, status: "pending" },
+    select: (m) => (m.state.variables as TogglePracticeVars).signSlug,
+  });
 
   if (!activeChild) {
     return (
@@ -94,7 +114,6 @@ export default function SignsPage() {
 
   const canEditFocus = roleResolved && role !== "viewer";
   const showViewerHelp = roleResolved && role === "viewer";
-  const schedule = resolveTrackingSchedule(activeChild);
   const focusSlugs = SIGN_PATH.flatMap((set) => set.signSlugs).filter((slug) => !!progress?.[slug]?.focus_since);
   const focusSigns = focusSlugs
     .map((slug) => SIGN_LIBRARY.find((s) => s.slug === slug))
@@ -179,6 +198,22 @@ export default function SignsPage() {
       `Swapped ${out.label.toUpperCase()} for ${into.label.toUpperCase()}.`,
     );
 
+  const toggleModeled = (sign: Sign, practiced: boolean) => {
+    try {
+      assertCanWrite(roleResolved, role);
+    } catch (err) {
+      toast({ title: err instanceof Error ? err.message : "Try again in a moment." });
+      return;
+    }
+    togglePractice.mutate({
+      childId: activeChild.id,
+      childOwnerId: activeChild.parent_id,
+      signSlug: sign.slug,
+      practicedOn: todayKey,
+      practiced,
+    });
+  };
+
   const openSign = (sign: Sign) => {
     setSelectedSlug(sign.slug);
     setSheetOpen(true);
@@ -240,9 +275,15 @@ export default function SignsPage() {
             canEdit={canEditFocus}
             showViewerHelp={showViewerHelp}
             busy={focusBusy}
+            practiceRows={practiceRows}
+            practiceLoading={practiceLoading}
+            now={now}
+            todayKey={todayKey}
+            pendingPracticeSlugs={pendingPracticeSlugs}
             onOpen={openSign}
             onStart={startFocus}
             onAdvance={advanceFocus}
+            onTogglePractice={toggleModeled}
           />
 
           <h2 className="font-display font-bold text-xl pt-2">All signs</h2>
