@@ -33,7 +33,7 @@ import { formatDurationShort } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { BUCKET_LABEL, NAPS_BY_BRACKET, TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
-import { DEFAULT_TRACKING_SCHEDULE, type TrackingSchedule } from "@/lib/trackingDay";
+import { atWallClock, DEFAULT_TRACKING_SCHEDULE, type TrackingSchedule } from "@/lib/trackingDay";
 
 /**
  * How many minutes a tracking day actually runs. A day that absorbs a DST
@@ -132,17 +132,11 @@ export function clockOffsetInDay(
   const dayEnd = trackingDayEndFromKey(dayKey, schedule);
   if (!dayStart || !dayEnd) return 0;
 
-  // Wall-clock arithmetic on the date fields, not elapsed-minute arithmetic:
-  // `addMinutes` would land on 20:00 where the family reads 19:00.
-  const atClock = (reference: Date): Date => {
-    const d = new Date(reference);
-    d.setHours(0, 0, 0, 0);
-    d.setMinutes(Math.round(clockMin));
-    return d;
-  };
-
-  let instant = atClock(dayStart);
-  if (instant < dayStart) instant = atClock(addDays(dayStart, 1));
+  // Wall-clock, not elapsed: `addMinutes` would land on 20:00 where the
+  // family reads 19:00.
+  const minutes = Math.round(clockMin);
+  let instant = atWallClock(dayStart, minutes);
+  if (instant < dayStart) instant = atWallClock(addDays(dayStart, 1), minutes);
 
   const length = Math.max(1, differenceInMinutes(dayEnd, dayStart));
   return Math.min(length, Math.max(0, differenceInMinutes(instant, dayStart)));

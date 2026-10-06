@@ -12,7 +12,7 @@
 // night sleep. It's read by resolveNightStartMin() in sleepTodo.ts, which
 // keeps its age-aware fallbacks when the family hasn't set one.
 
-import { addMinutes, format, startOfDay, subDays } from "date-fns";
+import { format, startOfDay, subDays } from "date-fns";
 
 import { parseHHmm } from "@/lib/sleepPlan";
 
@@ -69,6 +69,27 @@ function toDate(value: Date | string): Date | null {
 }
 
 /**
+ * `minutes` past midnight on `day`'s calendar date, read off the wall clock.
+ *
+ * Every tracking-day anchor goes through here. `addMinutes(startOfDay(day), m)`
+ * adds ELAPSED time, so on a DST day a 07:00 day start lands at 08:00 (spring)
+ * or 06:00 (autumn). Setting the clock fields instead keeps 07:00 at 07:00.
+ *
+ * A clock time the transition skips (02:30 on a spring-forward day in most US
+ * zones) rolls forward by the gap, to 03:30. A clock time the transition
+ * repeats (01:30 on a fall-back day) resolves to its first occurrence. Both
+ * are the platform's Date rules; since keys and boundaries are all built here,
+ * they agree either way.
+ */
+export function atWallClock(day: Date, minutes: number): Date {
+  const d = new Date(day);
+  // Minutes overflow through the clock fields (Date's MakeTime), so 1500 is
+  // 01:00 the next day and -30 is 23:30 the day before — still wall-clock.
+  d.setHours(0, minutes, 0, 0);
+  return d;
+}
+
+/**
  * The instant the tracking day containing `value` began.
  *
  * With a 07:00 day start, both 08:00 Tuesday and 03:00 Wednesday return
@@ -80,8 +101,8 @@ export function trackingDayStart(
 ): Date | null {
   const d = toDate(value);
   if (!d) return null;
-  const anchor = addMinutes(startOfDay(d), schedule.dayStartMin);
-  return d < anchor ? addMinutes(startOfDay(subDays(d, 1)), schedule.dayStartMin) : anchor;
+  const anchor = atWallClock(d, schedule.dayStartMin);
+  return d < anchor ? atWallClock(subDays(d, 1), schedule.dayStartMin) : anchor;
 }
 
 /**
@@ -133,5 +154,5 @@ export function trackingWindowStart(
 export function formatClock(value: string | null | undefined): string {
   const min = parseClock(value);
   if (min === null) return "Midnight";
-  return format(addMinutes(startOfDay(new Date()), min), "h:mm a");
+  return format(atWallClock(new Date(2000, 0, 1), min), "h:mm a");
 }
