@@ -111,8 +111,11 @@ export function UpgradeSheet({ open, onOpenChange, feature = "ai-insights" }: Up
           >
             Try Flare+ free for 7 days
           </Button>
-          <p className="text-center text-[11px] text-muted-foreground mt-3">
+          <p className="text-center text-xs text-muted-foreground mt-3">
             No charge today · {PREMIUM_FEATURES[feature]} included
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            After 7 days, $9.99/month or $59.99/year, renewing automatically until you cancel. Cancel before the trial ends and you won't be charged.
           </p>
         </div>
       </DrawerContent>
