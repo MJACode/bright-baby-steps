@@ -2670,6 +2670,44 @@ export type Database = {
           },
         ]
       }
+      sign_plans: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          parent_id: string
+          plan: Json
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          parent_id: string
+          plan: Json
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          parent_id?: string
+          plan?: Json
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sign_plans_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sleep_day_todos: {
         Row: {
           child_id: string
