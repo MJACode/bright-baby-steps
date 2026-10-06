@@ -81,7 +81,7 @@ Once a week, a Flare+ parent taps "Build this week's sign plan". The coach looks
 
 **Why this priority**: This adds personalization on top of the default path. The page is complete without it (Stories 1–3), and it is the only story that adds a new AI flow and disclosure work, so it ships last and can slip without blocking the rest.
 
-**Independent Test**: For a child with MILK at "Signs it!", MORE at "Trying it" (modeled 5 of 7 days), and EAT at "Using it" (modeled 1 day), generate a plan. Confirm it moves past MILK, keeps or adjusts MORE, offers a stall tip for EAT, and uses calm, non-diagnostic copy.
+**Independent Test**: For a child with MILK at "Signs it!", MORE at "Trying it" (modeled 5 of 7 days), and EAT at "Using it" (a focus sign for 14+ days, modeled 1 day), generate a plan. Confirm it moves past MILK, keeps or adjusts MORE, offers a stall tip for EAT, and uses calm, non-diagnostic copy.
 
 **Acceptance Scenarios**:
 
