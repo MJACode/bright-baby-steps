@@ -24,12 +24,12 @@ export interface ChildSignRow {
  * look identical from here (no edit access, the owner's Flare+ lapsed, or the
  * row changed on another device), so the copy stays neutral.
  */
-class SignPermissionError extends Error {}
+export class SignPermissionError extends Error {}
 
-const SIGN_PERMISSION_MESSAGE =
+export const SIGN_PERMISSION_MESSAGE =
   "That change didn't save — you may not have edit access to this child right now, or it was just changed on another device. Refresh and try again, or ask the parent who shared it with you.";
 
-function isRlsError(err: unknown): boolean {
+export function isRlsError(err: unknown): boolean {
   const message = (err as { message?: string } | null)?.message;
   return typeof message === "string" && message.toLowerCase().includes("row-level security");
 }

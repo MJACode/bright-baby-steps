@@ -782,6 +782,41 @@ export type Database = {
           },
         ]
       }
+      child_sign_practice: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          parent_id: string
+          practiced_on: string
+          sign_slug: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          parent_id: string
+          practiced_on: string
+          sign_slug: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          parent_id?: string
+          practiced_on?: string
+          sign_slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_sign_practice_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       child_signs: {
         Row: {
           child_id: string

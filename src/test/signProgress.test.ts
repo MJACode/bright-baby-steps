@@ -1,13 +1,15 @@
 import * as signProgress from "@/lib/signProgress";
 import {
+  msUntilNextTrackingDay,
   practiceDays4w,
+  practiceWindowStart,
   readyForNewSigns,
   stalled,
   weeklyPracticeDays,
   type SignFocusInput,
   type SignPracticeInput,
 } from "@/lib/signProgress";
-import type { TrackingSchedule } from "@/lib/trackingDay";
+import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
 
 const MIDNIGHT: TrackingSchedule = { dayStartMin: 0, nightStartMin: null };
 const SEVEN_AM: TrackingSchedule = { dayStartMin: 7 * 60, nightStartMin: null };
@@ -142,6 +144,37 @@ describe("stalled", () => {
   });
 });
 
+describe("practiceWindowStart", () => {
+  it("returns the first of 28 days ending today, inclusive", () => {
+    expect(practiceWindowStart("2026-10-05")).toBe("2026-09-08");
+  });
+
+  it("crosses a month boundary, including the end of February", () => {
+    expect(practiceWindowStart("2026-03-01")).toBe("2026-02-02");
+    expect(practiceWindowStart("2026-05-15")).toBe("2026-04-18");
+  });
+
+  it("crosses a year boundary", () => {
+    expect(practiceWindowStart("2026-01-10")).toBe("2025-12-14");
+  });
+});
+
+const HOUR_MS = 60 * 60 * 1000;
+
+describe("msUntilNextTrackingDay", () => {
+  it("counts to the next midnight with a midnight day start", () => {
+    expect(msUntilNextTrackingDay(at(2026, 10, 5, 18, 0), MIDNIGHT)).toBe(6 * HOUR_MS);
+  });
+
+  it("counts to today's day start when it's still the previous tracking day", () => {
+    expect(msUntilNextTrackingDay(at(2026, 10, 5, 3, 0), SEVEN_AM)).toBe(4 * HOUR_MS);
+  });
+
+  it("counts to tomorrow's day start once today's has passed, across a month end", () => {
+    expect(msUntilNextTrackingDay(at(2026, 9, 30, 7, 0), SEVEN_AM)).toBe(24 * HOUR_MS);
+  });
+});
+
 describe("across DST (America/New_York)", () => {
   const originalTz = process.env.TZ;
   beforeAll(() => {
@@ -169,6 +202,37 @@ describe("across DST (America/New_York)", () => {
     expect(readyForNewSigns(rows, at(2026, 3, 15, 0, 0), MIDNIGHT)).toBe(true);
     expect(readyForNewSigns(rows, at(2026, 3, 15, 6, 59), SEVEN_AM)).toBe(false);
     expect(readyForNewSigns(rows, at(2026, 3, 15, 7, 0), SEVEN_AM)).toBe(true);
+  });
+
+  it("starts the practice window 27 calendar days back across both DST nights", () => {
+    expect(practiceWindowStart("2026-03-08")).toBe("2026-02-09");
+    expect(practiceWindowStart("2026-03-20")).toBe("2026-02-21");
+    expect(practiceWindowStart("2026-11-01")).toBe("2026-10-05");
+    expect(practiceWindowStart("2026-11-20")).toBe("2026-10-24");
+  });
+
+  it("rolls over at the real next day start on DST days", () => {
+    expect(msUntilNextTrackingDay(at(2026, 3, 8, 0, 0), MIDNIGHT)).toBe(23 * HOUR_MS);
+    expect(msUntilNextTrackingDay(at(2026, 11, 1, 0, 0), MIDNIGHT)).toBe(25 * HOUR_MS);
+  });
+
+  it("lands exactly where trackingDayKey flips, on DST days and others", () => {
+    const samples = [
+      at(2026, 3, 7, 23, 0),
+      at(2026, 3, 8, 0, 30),
+      at(2026, 3, 8, 12, 0),
+      at(2026, 10, 31, 23, 0),
+      at(2026, 11, 1, 0, 30),
+      at(2026, 11, 1, 12, 0),
+    ];
+    for (const schedule of [MIDNIGHT, SEVEN_AM]) {
+      for (const now of samples) {
+        const ms = msUntilNextTrackingDay(now, schedule);
+        const key = trackingDayKey(now, schedule);
+        expect(trackingDayKey(new Date(now.getTime() + ms - 1), schedule)).toBe(key);
+        expect(trackingDayKey(new Date(now.getTime() + ms), schedule)).not.toBe(key);
+      }
+    }
   });
 
   it("keeps a 28-day window across the fall-back night", () => {

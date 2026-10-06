@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,8 +10,11 @@ import {
   type Sign,
 } from "@/data/signLibrary";
 import type { ChildSignRow } from "@/hooks/useSignProgress";
-import { readyForNewSigns } from "@/lib/signProgress";
-import type { TrackingSchedule } from "@/lib/trackingDay";
+import type { SignPracticeRow } from "@/hooks/useSignPractice";
+import { planWeekStart } from "@/lib/planWeek";
+import { readyForNewSigns, weeklyPracticeDays } from "@/lib/signProgress";
+import { trackingDayDate, type TrackingSchedule } from "@/lib/trackingDay";
+import { cn } from "@/lib/utils";
 
 export const FOCUS_VIEW_ONLY_HELP =
   "Only parents and caregivers who can edit can change signs or this week's signs.";
@@ -33,9 +37,15 @@ export function ThisWeekFocus({
   canEdit,
   showViewerHelp,
   busy,
+  practiceRows,
+  practiceLoading,
+  now,
+  todayKey,
+  pendingPracticeSlugs,
   onOpen,
   onStart,
   onAdvance,
+  onTogglePractice,
 }: {
   progress: Record<string, ChildSignRow> | undefined;
   /** Current focus slugs, in display order. */
@@ -47,9 +57,18 @@ export function ThisWeekFocus({
   canEdit: boolean;
   showViewerHelp: boolean;
   busy: boolean;
+  practiceRows: SignPracticeRow[] | undefined;
+  practiceLoading: boolean;
+  /** The page's clock; refreshed at tracking-day rollover. */
+  now: Date;
+  /** Today's tracking-day key, derived from `now` — the key a tick writes. */
+  todayKey: string;
+  /** Signs whose tick is saving right now. */
+  pendingPracticeSlugs: string[];
   onOpen: (sign: Sign) => void;
   onStart: (slugs: string[]) => void;
   onAdvance: (unfocusSlugs: string[], focusSlugs: string[]) => void;
+  onTogglePractice: (sign: Sign, practiced: boolean) => void;
 }) {
   const rows = Object.values(progress ?? {});
   const focusRows = focusSlugs.map((slug) => progress?.[slug]).filter((r): r is ChildSignRow => !!r);
@@ -57,9 +76,13 @@ export function ThisWeekFocus({
     rows.map((r) => [r.sign_slug, r.status]),
   );
   const allSigning = SIGN_LIBRARY.every((s) => statusBySlug[s.slug] === "signing");
-  const ready = readyForNewSigns(focusRows, new Date(), schedule);
+  const ready = readyForNewSigns(focusRows, now, schedule);
   const actionsDisabled = !canEdit || busy || loading;
   const ageGatedLine = `More signs open up as ${firstName} grows — browse All signs anytime.`;
+  const practiceDays = weeklyPracticeDays(practiceRows ?? [], planWeekStart(trackingDayDate(now, schedule) ?? now));
+  const modeledToday = new Set(
+    (practiceRows ?? []).filter((r) => r.practiced_on === todayKey).map((r) => r.sign_slug),
+  );
 
   const renderPrompt = () => {
     if (allSigning) {
@@ -128,9 +151,16 @@ export function ThisWeekFocus({
 
   return (
     <section className="space-y-3" aria-labelledby="this-week-heading">
-      <h2 id="this-week-heading" className="font-display font-bold text-xl">
-        This week
-      </h2>
+      <div className="space-y-1">
+        <h2 id="this-week-heading" className="font-display font-bold text-xl">
+          This week
+        </h2>
+        {practiceDays > 0 && (
+          <p className="text-sm font-semibold text-muted-foreground">
+            You modeled signs on {practiceDays} {practiceDays === 1 ? "day" : "days"} this week
+          </p>
+        )}
+      </div>
 
       {loading ? (
         <div className="space-y-2">
@@ -141,9 +171,41 @@ export function ThisWeekFocus({
         <>
           {focusRows.length > 0 && (
             <div className="space-y-2">
+              <div className="flex justify-end" aria-hidden>
+                <span className="w-12 text-center text-xs font-semibold leading-tight text-muted-foreground">
+                  Modeled today
+                </span>
+              </div>
               {focusRows.map((row) => {
                 const sign = SIGN_LIBRARY.find((s) => s.slug === row.sign_slug);
-                return sign ? <SignRow key={row.sign_slug} sign={sign} row={row} onOpen={onOpen} /> : null;
+                if (!sign) return null;
+                const modeled = modeledToday.has(sign.slug);
+                return (
+                  <div key={row.sign_slug} className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <SignRow sign={sign} row={row} onOpen={onOpen} />
+                    </div>
+                    <button
+                      type="button"
+                      aria-pressed={modeled}
+                      aria-label={`Modeled ${sign.label} today`}
+                      disabled={!canEdit || practiceLoading || pendingPracticeSlugs.includes(sign.slug)}
+                      onClick={() => onTogglePractice(sign, !modeled)}
+                      className="touch-target flex shrink-0 items-center justify-center rounded-full disabled:opacity-50"
+                    >
+                      <span
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors",
+                          modeled
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-primary/60 bg-background",
+                        )}
+                      >
+                        {modeled && <Check className="h-5 w-5" strokeWidth={3} aria-hidden />}
+                      </span>
+                    </button>
+                  </div>
+                );
               })}
             </div>
           )}

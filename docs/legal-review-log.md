@@ -2870,6 +2870,8 @@ Legitimate callers keep working:
 - **`weight_logs` INSERT finding withdrawn.** The 2026-10-02 entry said `weight_logs` was the only child-log table whose INSERT policy omits `parent_id = auth.uid()`, so a partner could insert a row stamped with another user's `parent_id`. That is wrong: `weight_logs` has **no `parent_id` column** (columns verified live 2026-10-05: id, child_id, weight_oz, logged_at, is_pediatrician_visit, notes, created_at, length_cm, head_circumference_cm). Its INSERT check, `can_write_child(auth.uid(), child_id)`, is complete. No change needed.
 - **2026-10-02 entry superseded on the write rule.** That entry's migration (`20261001000000_can_write_child_requires_owner_plus.sql`) gated partner writes on `owner_has_plus()` alone. The founder-approved model from 2026-09-30 (free = 1 seat, Flare+ = 2, the longest-standing partner keeps access on lapse; `20260930100000_free_partner_seat.sql`) was applied to live afterwards and is what live runs. But by filename the 2026-10-01 file sorts last, so a replay of the repo migrations would have restored the Flare+-only rule and cut off a free account's one entitled partner. `20261005000000_can_write_child_entitlement_reassert.sql` re-states the entitlement version at the end of the chain. Applied to live 2026-10-05; no behavior change there.
 
+---
+
 ## 2026-10-05 — Partner-facing copy matches the free 1 / Flare+ 2 seat model; Terms gain a shared-access clause
 
 **Reviewer:** in-house (legal agent pre-review + QA agent, founder-approved in session). **Risk level:** closes the 2026-10-01 "partner-facing copy" item.
@@ -2889,6 +2891,39 @@ Legitimate callers keep working:
 1. "Try free for 7 days" still appears in the Flare+ teaser while the pre-checkout ROSCA / Cal. B&P § 17602 items (auto-renewal disclosure, Terms subscriptions section, trial reminder, cancel flow) are open.
 2. Partners are not notified when they are paused, removed or put on hold.
 3. Verify that deleting a child also deletes entries a co-parent logged for that child (policy says yes).
+
+---
+
+## 2026-10-03 — Baby Signs v2 (PR-C): `child_sign_practice` practice-day data + direct-notice enumeration
+
+**Reviewer:** in-house (Claude `legal` pre-review of Baby Signs v2 PR-C, spec `specs/001-baby-signs-v2`, task T040). **Risk level:** Low (new parent-entered child-data field inside an existing consented category; no new egress, no new subprocessor).
+
+**What changed:**
+- New table `public.child_sign_practice` (migration `20261003000000_child_sign_practice.sql`): one row per (child, curated sign slug, tracking day) recording that a parent or caregiver modeled that sign with the child that day. Columns: `child_id`, `parent_id` (the child's owner), `sign_slug`, `practiced_on` (date), `created_at`. `UNIQUE (child_id, sign_slug, practiced_on)`; insert = tick, delete = un-tick; no UPDATE policy.
+- Catch-up from PR-B, not logged at the time: `child_signs.focus_since` (migration `20260930000000_child_signs_focus.sql`), a nullable date marking up to 3 "focus" signs per child. Same bounded-slug posture as v1.
+- `CoppaDirectNotice.tsx` "What we collect" now reads "sign-language signs you choose to focus on or mark as introduced or used, the days you mark a sign as modeled". "Modeled" matches the in-app control ("Modeled today").
+- `PrivacyPage.tsx` § 2 "Tracking data" extended to name play activities (pre-existing gap since 2026-07-19), Baby Signs focus/status, and practice days, with a plain statement that Baby Signs stores no notes or media. "Last reviewed" date updated.
+- `FAQPage.tsx` "What data does Grace Flare store?" updated to mention play activities and Baby Signs progress (best-practice, not required).
+- `src/lib/exportUserData.ts` `EXPORT_TABLES` gains `child_sign_practice`, so Export My Data (Privacy § 8; 16 CFR § 312.6(a)) stays complete.
+
+**Data minimization (COPPA 16 CFR § 312.7; spec FR-019):** the only child-specific values are which sign from the static library (`src/data/signLibrary.ts`) and which day. No free text, notes, photos, audio, or video; the table comment says "Do NOT widen to free text". No streak, consecutive-day, or missed-day value is computed or stored (FR-016); the UI shows only a positive weekly total, hidden at zero. `child_sign_practice.sign_slug` is also bounded at the DB by CHECK `child_sign_practice_slug_format` (`^[a-z][a-z0-9-]{0,39}$`), so the column cannot carry free text. One row per sign per day caps volume. There is no FK to `child_signs`, so practice history survives a cleared status (FR-029). This is a deliberate retention-of-history choice and stays within the account-lifetime retention in Privacy § 9.
+
+**RLS / owner binding:** PR-B closed a v1 cross-tenant write hole in `child_signs`. The old INSERT/UPDATE check (`auth.uid() = parent_id OR partner_can_write(parent_id)`) let any signed-in user stamp their own uid as `parent_id` on another family's `child_id`. Fixed by migration `20260930010000_child_signs_rls_bind_child.sql` (applied to live 2026-10-01; verified with role-switched tests: stranger rejected both ways). `child_sign_practice` ships with the same binding from day one: SELECT `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT `partner_can_write(parent_id) AND EXISTS (children c WHERE c.id = child_id AND c.parent_id = parent_id)`; DELETE `partner_can_write(parent_id)`; no UPDATE policy. Partner access follows the existing partner-seat entitlement rules (free = 1 seat, Flare+ = 2; see the 2026-10-05 correction entry). Viewers can read but not tick (FR-018), enforced in RLS, not only in the UI.
+
+**Retention / deletion:** same as other tracking logs. Kept for the account's lifetime; deleted when the child is deleted (`child_id ON DELETE CASCADE`) or the account is deleted (`parent_id ON DELETE CASCADE` from `auth.users`, reached by `delete_user_account()` / `_purge_user_data()`). No purge-function edit needed. Covered by Privacy § 9 (7-day primary-record deletion, ≤30-day backup rotation, 24-month inactivity purge). No Storage objects.
+
+**AI processing:** none in PR-C. No edge function reads `child_sign_practice`; Privacy § 4, `/subprocessors`, and the FAQ third-party answer are unchanged. PR-D's weekly coach (`generate-sign-plan`) will send per-sign practice-day **counts** to Anthropic; that disclosure (Privacy § 4, FAQ, notice "How we use it", this log) must ship in the PR-D PR.
+
+**Analysis:** additive Flare+ feature, parent-entered, bounded values, no new subprocessor or egress, disclosure ships with the feature. Non-material change under 16 CFR § 312.5(a)(1); no renewed VPC (reasoning per the 2026-07-19 Activities and 2026-08-28 Baby Signs entries).
+
+**Code refs:** PR-C (Baby Signs v2) — fill in commit hash at merge.
+
+**Follow-ups:**
+1. `child_signs.sign_slug` is still unconstrained `text`, so for that table the "no free text" promise is enforced only by the client. Add a CHECK matching `child_sign_practice_slug_format` (slug-format regex with a length cap) so the minimization claim holds server-side for both tables. P2.
+2. Privacy § 2 and the direct notice still omit Word Journal words and growth/weight records (mentioned only in § 4). Reconcile both lists against `EXPORT_TABLES`. P1.
+3. ~~Inherited: `inactive-account-purge` cron returning 401.~~ Resolved 2026-10-02 (see "Scheduled jobs restored" entry); the 24-month purge now covers this table via the `auth.users` cascade.
+4. CLAUDE.md "Legal Review" still refers to retention as "PrivacyPage § 8"; the live page numbers it § 9. Fix references.
+5. PR-D: disclosure for practice-day counts to Anthropic, plus `sign_plans` in `EXPORT_TABLES`.
 
 ## 2026-10-06 — `chat` narrowed; free-trial disclosures; partner notifications; child-deletion audit
 

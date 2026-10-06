@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: September 30, 2026 ·{" "}
+          Effective: June 20, 2026 · Last reviewed: October 3, 2026 ·{" "}
           <Link to="/subprocessors" className="underline">Subprocessors</Link>
         </p>
       </div>
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
             <li><strong>Account data:</strong> your name and email address, collected when you create an account.</li>
             <li><strong>Child profile data:</strong> your child's name, date of birth, gender (optional), prematurity status, photo (optional), and optional interests and temperament you select from a fixed list.</li>
             <li><strong>AI memory:</strong> short factual notes about your child that our AI features save from your briefings and weekly insights (or that you add yourself) — for example routines, preferences, and things you're working on. You can view, edit, and delete these notes at any time in Profile → About your child.</li>
-            <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, supplement, and body-temperature (fever) records that you choose to log.</li>
+            <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, supplement, and body-temperature (fever) records that you choose to log; play activities you mark as tried; and, in Baby Signs, the signs you choose to focus on or mark as introduced or used, and the days you mark a sign as modeled. Baby Signs stores only which sign from our built-in list and which day, never notes, photos, audio, or video.</li>
             <li><strong>Finance planning data:</strong> for each child, your answers to the Finance account finder (what the savings are for, and whether family will contribute) and which account types you mark as opened. We never ask for or store Social Security numbers, account numbers, balances, or income.</li>
             <li><strong>Chat history (historical):</strong> Grace Flare previously offered an AI chat. That feature was removed on August 28, 2026 and no new chat data is created. Conversations saved before then are still stored in your account — you can export them at any time from Profile, and deleting your account deletes them.</li>
             <li><strong>Technical data:</strong> IP address, device type and operating system, browser type and version, app version, session identifiers, crash logs, and approximate location derived from your IP address (city-level only). We use first-party cookies and equivalent local-storage tokens strictly to keep you signed in and to remember your preferences. We do not use third-party advertising cookies or cross-site tracking pixels.</li>
