@@ -8,6 +8,7 @@ import {
   defaultNapDurationMin,
   parseHHmm,
 } from "@/lib/sleepPlan";
+import { atWallClock } from "@/lib/trackingDay";
 
 export type TodoStatus = "done" | "active" | "now" | "upcoming" | "skipped";
 
@@ -44,10 +45,11 @@ export interface SleepTodoPlanLike {
 }
 
 // Apply an HH:mm clock to the same calendar day as `dayRef` (local time).
+// Clock times go through here; nap lengths, wake windows and the routine
+// lead-in below are real durations, so those stay `addMinutes` (a 2h wake
+// window across the 02:00 jump is still 2h of baby awake).
 function applyClockToDay(dayRef: Date, hhmm: string): Date {
-  const mins = parseHHmm(hhmm);
-  const d = startOfDay(dayRef);
-  return addMinutes(d, mins);
+  return atWallClock(dayRef, parseHHmm(hhmm));
 }
 
 // Minutes-since-midnight for a Date, in local time.
@@ -188,7 +190,7 @@ export function buildSleepTodo(opts: {
   // blanket-skip, so a 2 AM night-feed view still shows the day's plan ahead.
   const dayEnd = bedLatest
     ? applyClockToDay(now, bedLatest)
-    : addMinutes(dayStart, nightStartMin);
+    : atWallClock(dayStart, nightStartMin);
   const nowIsEvening = clockMinutes(now) >= nightStartMin;
 
   // Daytime nap slots — adaptive to how the day actually went, not a fixed count.

@@ -1,4 +1,4 @@
-import { addMinutes, startOfDay, subDays } from "date-fns";
+import { startOfDay, subDays } from "date-fns";
 
 import { BEDTIME_RANGE_BY_BRACKET, parseHHmm } from "@/lib/sleepPlan";
 import {
@@ -9,7 +9,7 @@ import {
   type SleepTodoLog,
 } from "@/lib/sleepTodo";
 import { getAgeBucket } from "@/lib/sleepTriage";
-import { parseClock } from "@/lib/trackingDay";
+import { atWallClock, parseClock } from "@/lib/trackingDay";
 
 // The night's end is resolved from the last night sleep that ended this
 // morning. Below this floor an ended night sleep is a night waking, not the
@@ -138,13 +138,11 @@ export function resolveNightWindow(opts: {
   // on it.
   const hasBedtime = opts.bedtimeEarliest != null || bracketBedtime.earliest != null;
 
-  // Clock-to-instant conversions skew on the two DST days: spring-forward runs
-  // the night an hour long (a 07:00 wake lands at what feels like 08:00) and
-  // fall-back ends it an hour early. Same trade-off applyClockToDay makes in
-  // sleepTodo.ts — one skewed morning a year beats carrying a timezone table.
+  // Every clock below becomes an instant through atWallClock, so a 07:00 wake
+  // is 07:00 on the two DST days too.
   const dayStart = startOfDay(now);
-  const dayCutoff = addMinutes(dayStart, parseHHmm(DAY_CUTOFF));
-  const morningFloor = addMinutes(dayStart, EARLIEST_MORNING_MIN);
+  const dayCutoff = atWallClock(dayStart, parseHHmm(DAY_CUTOFF));
+  const morningFloor = atWallClock(dayStart, EARLIEST_MORNING_MIN);
 
   const lastNightEnd = (opts.logs ?? [])
     .filter((l) => l.ended_at && isEffectivelyNight(l, nightStartMin))
@@ -153,7 +151,7 @@ export function resolveNightWindow(opts: {
     .sort((a, b) => b.getTime() - a.getTime())[0];
 
   const morningEndsAt =
-    lastNightEnd ?? addMinutes(dayStart, parseHHmm(opts.wakeTime ?? WAKE_TIME_FALLBACK));
+    lastNightEnd ?? atWallClock(dayStart, parseHHmm(opts.wakeTime ?? WAKE_TIME_FALLBACK));
   const morningEndMin = clockMinutes(morningEndsAt);
 
   const nowMin = clockMinutes(now);
@@ -176,11 +174,8 @@ export function resolveNightWindow(opts: {
 
   const nightSleepInProgress = activeSleepType === "night";
 
-  // Same DST caveat as the day boundaries above.
-  const clockNightStartsAt = addMinutes(
-    nowMin >= nightStartMin ? dayStart : startOfDay(subDays(now, 1)),
-    nightStartMin,
-  );
+  const nightDay = nowMin >= nightStartMin ? dayStart : startOfDay(subDays(now, 1));
+  const clockNightStartsAt = atWallClock(nightDay, nightStartMin);
 
   // A night the timer opened before the clock would have has to be anchored to
   // the timer. The clock's own answer in that window is yesterday's boundary —
@@ -216,7 +211,10 @@ export function resolveNightWindow(opts: {
     nightOpensAt: new Date(
       Math.max(
         (timerAnchor ?? clockNightStartsAt).getTime(),
-        addMinutes(clockNightStartsAt, clockStartMin - nightStartMin).getTime(),
+        // clockStartMin is a clock reading (it is what clockIsNight compares
+        // nowMin against), not a duration past the start, so it is placed on
+        // the wall clock too.
+        atWallClock(nightDay, clockStartMin).getTime(),
       ),
     ),
     morningEndsAt,
