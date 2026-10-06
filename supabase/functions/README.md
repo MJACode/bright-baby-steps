@@ -6,7 +6,11 @@ Every folder here is a deployed Supabase Edge Function. Folders starting with
 ## How deploys work
 
 `.github/workflows/deploy-functions.yml` runs on every push to `main` that
-touches this folder. It deploys **all** functions here with
+touches this folder or `supabase/migrations/`. First its `migrate` job applies
+any migration files **added** by the push (oldest first, each in one
+transaction with its `schema_migrations` row; already-recorded versions are
+skipped). A failed migration stops the run before any function deploys. Then
+it deploys **all** functions here with
 `supabase functions deploy --prune`, so production always matches `main`:
 
 - **New function:** add its folder **and** a `[functions.<name>]` entry with
@@ -19,3 +23,6 @@ touches this folder. It deploys **all** functions here with
 - **Never deploy by hand** from a branch or the dashboard. A manual deploy is
   overwritten by the next merge, and code that only exists in production is
   lost.
+- **Migrations:** write them so they could run twice safely (`IF NOT EXISTS`,
+  `DROP ... IF EXISTS`), and keep them transaction-safe (no
+  `CREATE INDEX CONCURRENTLY`). Merging the PR applies them to production.

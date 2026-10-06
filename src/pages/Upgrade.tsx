@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { Sparkles, Activity, Users, BarChart3, Check, X, Crown, Stethoscope } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -93,8 +93,12 @@ export default function Upgrade() {
         >
           Start 7-day free trial
         </Button>
-        <p className="text-center text-[11px] opacity-50 mt-3">
-          No charge today
+        {/* Auto-renewal disclosure (ROSCA, Cal. B&P § 17602): price, renewal
+            and how to avoid the charge, next to the button that starts it. */}
+        <p className="text-xs opacity-70 mt-3 leading-relaxed">
+          No charge today. After 7 days, Flare+ is {plan === "yearly" ? "$59.99 per year" : "$9.99 per month"} and
+          renews automatically until you cancel. Cancel before the trial ends and you won't be charged.
+          See <Link to="/terms" className="underline">Terms § 5</Link>.
         </p>
       </div>
     </div>

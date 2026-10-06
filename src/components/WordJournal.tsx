@@ -14,11 +14,10 @@ import { SpeechInsightsPanel } from "@/components/SpeechInsightsPanel";
 
 interface WordJournalProps {
   childId: string;
-  childName?: string;
   ageMonths?: number;
 }
 
-export function WordJournal({ childId, childName = "Baby", ageMonths = 0 }: WordJournalProps) {
+export function WordJournal({ childId, ageMonths = 0 }: WordJournalProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [word, setWord] = useState("");
@@ -172,7 +171,6 @@ export function WordJournal({ childId, childName = "Baby", ageMonths = 0 }: Word
         totalCount={totalCount ?? 0}
         ageMonths={ageMonths}
         childId={childId}
-        childName={childName}
       />
 
       {entries && entries.length > 0 ? (
