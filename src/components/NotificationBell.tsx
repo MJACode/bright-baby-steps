@@ -67,6 +67,7 @@ export function NotificationBell() {
     appointment_reminder: "📋",
     pumping_reminder: "🧴",
     reactivation: "👋",
+    partner_access: "👥",
     sleep_plan_winddown: "🌙",
     sleep_window_15min: "⏰",
     sleep_window_exceeded: "🚨",

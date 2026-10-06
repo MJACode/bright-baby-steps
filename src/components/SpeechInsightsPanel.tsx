@@ -13,10 +13,9 @@ interface SpeechInsightsPanelProps {
   totalCount: number;
   ageMonths: number;
   childId: string;
-  childName: string;
 }
 
-export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, childName }: SpeechInsightsPanelProps) {
+export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId }: SpeechInsightsPanelProps) {
   const { user } = useAuth();
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
@@ -50,26 +49,20 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId, c
     if (!user) return;
     setLoadingInsight(true);
     try {
-      const wordList = entries?.slice(0, 30).map((e) => e.word_or_sound).join(", ") ?? "";
-      const prompt = `Analyze this baby's speech development. Child: ${childName}, age: ${ageMonths} months. Total vocabulary logged: ${totalCount} words. Words this week: ${stats?.recentCount ?? 0}. Weekly rate: ${stats?.weeklyRate ?? 0}. Recent words: ${wordList}. Age benchmark: ${benchmark.label}. Give a brief, warm, encouraging 2-3 sentence insight about their language development progress. Include one specific activity suggestion.`;
-
-      // Posts a single prompt to the `chat` edge function and renders the
-      // streamed answer inline — this is a one-shot insight, not a
-      // conversation. The chat UI was removed on 2026-08-28; this panel is the
-      // only remaining caller of that function, which is why it stays deployed.
+      // One-shot insight from the `chat` edge function. Since 2026-10-06 it
+      // takes only the child's id and builds the prompt server-side from the
+      // Word Journal, so nothing parent-typed is sent as instructions.
       const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not signed in");
       const resp = await fetch(
         "https://ieuznbvvwdvhtirzwkly.supabase.co/functions/v1/chat",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlldXpuYnZ2d2R2aHRpcnp3a2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5OTIzODQsImV4cCI6MjA4ODU2ODM4NH0.04dxqjtlwWujfWTSM8fm2Y6EXGqIpOZisvBcN4eETEc"}`,
+            Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: prompt }],
-            skill: "slp",
-          }),
+          body: JSON.stringify({ childId }),
         }
       );
 

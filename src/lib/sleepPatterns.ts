@@ -21,6 +21,7 @@ import {
 } from "date-fns";
 
 import {
+  atWallClock,
   DEFAULT_TRACKING_SCHEDULE,
   trackingDayKey,
   trackingDayStart,
@@ -140,7 +141,7 @@ export function trackingDayStartFromKey(
 ): Date | null {
   const parsed = parseISO(dayKey);
   if (Number.isNaN(parsed.getTime())) return null;
-  return addMinutes(startOfDay(parsed), schedule.dayStartMin);
+  return atWallClock(parsed, schedule.dayStartMin);
 }
 
 /**
@@ -156,7 +157,7 @@ export function trackingDayEndFromKey(
 ): Date | null {
   const parsed = parseISO(dayKey);
   if (Number.isNaN(parsed.getTime())) return null;
-  return addMinutes(startOfDay(addDays(parsed, 1)), schedule.dayStartMin);
+  return atWallClock(addDays(parsed, 1), schedule.dayStartMin);
 }
 
 /** The last `days` tracking-day keys, oldest first, ending with the one

@@ -467,7 +467,7 @@ export default function MilestonesPage() {
                 </DialogContent>
               </Dialog>
 
-              <WordJournal childId={activeChild.id} childName={activeChild.name} ageMonths={ageMonths} />
+              <WordJournal childId={activeChild.id} ageMonths={ageMonths} />
 
               <Link to="/dashboard/signs" className="block touch-target">
                 <Card className="border-0 bg-milestones-bg active:scale-[0.99] transition-transform">

@@ -2916,7 +2916,7 @@ Legitimate callers keep working:
 
 **Analysis:** additive Flare+ feature, parent-entered, bounded values, no new subprocessor or egress, disclosure ships with the feature. Non-material change under 16 CFR § 312.5(a)(1); no renewed VPC (reasoning per the 2026-07-19 Activities and 2026-08-28 Baby Signs entries).
 
-**Code refs:** PR-C (Baby Signs v2) — fill in commit hash at merge.
+**Code refs:** PR-C (Baby Signs v2), #264, merged as `e3d0a04` (2026-10-06). `child_sign_practice` applied to live 2026-10-06.
 
 **Follow-ups:**
 1. `child_signs.sign_slug` is still unconstrained `text`, so for that table the "no free text" promise is enforced only by the client. Add a CHECK matching `child_sign_practice_slug_format` (slug-format regex with a length cap) so the minimization claim holds server-side for both tables. P2.
@@ -2924,6 +2924,21 @@ Legitimate callers keep working:
 3. ~~Inherited: `inactive-account-purge` cron returning 401.~~ Resolved 2026-10-02 (see "Scheduled jobs restored" entry); the 24-month purge now covers this table via the `auth.users` cascade.
 4. CLAUDE.md "Legal Review" still refers to retention as "PrivacyPage § 8"; the live page numbers it § 9. Fix references.
 5. PR-D: disclosure for practice-day counts to Anthropic, plus `sign_plans` in `EXPORT_TABLES`.
+
+## 2026-10-06 — `chat` narrowed; free-trial disclosures; partner notifications; child-deletion audit
+
+**Reviewer:** in-house (Claude pass, founder decisions in session). **Risk level:** closes the 2026-08-28 P1 and the three open items from the 2026-10-05 entry, with the follow-ups listed below.
+
+**Founder decisions (2026-10-06):** (a) narrow `chat` now, accepting that older iOS builds lose the Word Journal insight until updated; keep "Try free for 7 days" and add the disclosures; notify partners on pause / restore / remove / hold; verify and fix child-deletion cascade.
+
+**1. `chat` edge function (2026-08-28 P1 — closed).** Accepts only `{ childId }`. The prompt is built server-side from the child's Word Journal, read through the caller's RLS client (word count, last-7-days count, weekly rate, the 30 most recent words capped at 40 chars each, age benchmark). No client text reaches the model as instructions; no tools; no memory read or `extract-memory` write (it no longer runs after `chat`). A legacy `messages[]` body gets 400 `update_required`. Free quota (10/UTC day) now counts `public.ai_insight_usage` (migration `20261006000000`); the old count read `chat_messages`, which nothing writes, so it never fired. Data sent to Anthropic shrinks to: child first name, age in months, logged words and counts. Privacy § 4 already covers this; no copy change.
+
+**2. Free trial (ROSCA, 15 U.S.C. § 8403; Cal. B&P § 17602).** Finding: the "Start 7-day free trial" button is not wired to any checkout (`Upgrade.tsx` TODO), so nobody can be charged today. Added now so they ship with checkout: (i) auto-renewal disclosure next to the trial button on `/upgrade` and in the upgrade sheet: price, auto-renewal until cancelled, cancel before the trial ends to avoid the charge; (ii) **Terms § 5 "Flare+ subscriptions and free trials"** (Last reviewed → 2026-10-06): price, trial, automatic renewal in bold, cancel anytime in the same place you subscribed, no partial refunds unless required by law, Apple handles App Store billing and refunds, 30 days' notice of price changes. Adding this clause is not a § 10 material change for existing users: no one has paid.
+**Before checkout ships (blocking):** affirmative consent to the renewal terms at purchase; an acknowledgement (email/receipt) with the renewal terms and how to cancel; an online cancellation path (App Store covers iOS; web needs its own). No trial reminder is required by § 17602 for a 7-day trial (the reminder rule applies to trials over 31 days); worth sending anyway.
+
+**3. Partner notifications.** Migration `20261006020000`: in-app notification (bell, type `partner_access`) when the owner pauses, restores or removes a partner, and when the owner's Flare+ ends or restarts and that puts the second seat on hold or brings it back; also when removing someone moves a held partner up into a seat. A restore that is still past the free seat says "on hold", not "back on". Account purges send nothing (no trigger on subscription DELETE). Copy says nothing was deleted on pause/hold, and that removal ends access to the child's records. No email (Resend secrets not yet set).
+
+**4. Child deletion (verified on live, 2026-10-06).** 45 tables reference `children`; 43 cascade, so entries a co-parent or caregiver logged are deleted with the child. Three gaps, fixed in migration `20261006010000`: `parent_financial_checklist` and `pediatrician_exports` had NO ACTION foreign keys (deleting a child with such a row would fail outright); `custom_milestones` had no foreign key (rows would orphan). Live data at audit: no affected rows, 0 orphans. FAQ/AcceptInvite claims ("deleting a child deletes that data for everyone") are now accurate.
 
 ---
 
@@ -2933,7 +2948,7 @@ Legitimate callers keep working:
 
 **What changed:**
 - New edge function `supabase/functions/generate-sign-plan/` (the eighth that calls Anthropic: briefing, weekly-insights, chat, extract-memory, generate-speech-class, visit-prep-questions, generate-activity-plan, generate-sign-plan). Flare+ only (server-side `subscriptions` check, 403 `premium_required`), tap-triggered, one plan per child per week (409 checked BEFORE the paid Anthropic call; any stored week on or after the requested week blocks a new call). `slp` persona + `SIGN_PLAN_INSTRUCTION`; model `claude-sonnet-4-6`.
-- New table `public.sign_plans` (migration `20261006000000_sign_plans.sql`): one current row per child (`UNIQUE child_id`), upserted weekly by the function using the caller's JWT so RLS is the write gate. `plan` jsonb is the sanitized SignPlan (intro / focus / stuck), built from library slugs; no parent free text.
+- New table `public.sign_plans` (migration `20261006030000_sign_plans.sql`): one current row per child (`UNIQUE child_id`), upserted weekly by the function using the caller's JWT so RLS is the write gate. `plan` jsonb is the sanitized SignPlan (intro / focus / stuck), built from library slugs; no parent free text.
 - Disclosures: Privacy § 2 (Baby Signs sentence corrected; new "AI plans (Flare+)" bullet, also closing the never-listed Speech Class / Weekly Play Plan plan tables), Privacy § 4 (feature list + Baby Signs data clause), Privacy "Last reviewed" → October 6, 2026; `/subprocessors` Anthropic purpose + dataCategories (Baby Signs added; Weekly Play Plan added, a gap since 2026-07-19), "Last reviewed" → October 6, 2026; FAQ third-party answer and stored-data answer; CoppaDirectNotice "How we use it" names weekly plans (best practice).
 
 **Data sent to Anthropic (verified against code, not spec — `buildUserText`):** corrected age in months; for each of the 20 curated library slugs: status (introduced / emerging / signing / not started), whether it is a focus sign and days in focus, days modeled in the last 28 (omitted when zero), and a server-derived STALLED flag (focus ≥ 14 days, still "introduced", ≥ 1 practice day). Not sent: child id, user id, name, DOB, gender, interests, temperament, journal words, notes, any free text. The request is allowlist-rebuilt, slugs are checked against `_shared/signSlugs.ts`, body capped at 16 KB and never logged.
