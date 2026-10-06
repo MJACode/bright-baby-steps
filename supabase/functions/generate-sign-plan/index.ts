@@ -155,7 +155,7 @@ serve(async (req) => {
     // through the API: sign_plans has no DELETE policy, and the
     // sign_plans_guard_write trigger (20261006030000_sign_plans.sql) rejects
     // any UPDATE that doesn't move week_start forward or that changes
-    // child_id / parent_id, plus any week_start > 8 days ahead.
+    // child_id / parent_id, plus any week_start > 1 day ahead.
     if (planExistsForWeek(planRes.data?.week_start, input.weekStart)) {
       return json(409, { error: "plan_exists_this_week" });
     }
@@ -228,7 +228,7 @@ serve(async (req) => {
     if (upsertErr) {
       // Two concurrent generates for the same week both pass the 409 read;
       // the guard trigger rejects the slower upsert. Report it as the limit.
-      if (upsertErr.message === "sign_plan_week_must_advance") {
+      if (upsertErr.code === "23514" && upsertErr.message === "sign_plan_week_must_advance") {
         return json(409, { error: "plan_exists_this_week" });
       }
       console.error("generate-sign-plan upsert failed:", upsertErr.code, upsertErr.message);

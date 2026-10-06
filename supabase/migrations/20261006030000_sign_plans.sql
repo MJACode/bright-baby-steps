@@ -27,7 +27,7 @@
 --       - guard trigger sign_plans_guard_write (BEFORE INSERT OR UPDATE):
 --         UPDATE must strictly advance week_start (backdate -> limit reset;
 --         same week -> a second paid generate for the week), child_id and
---         parent_id are immutable, and week_start may not be more than 8 days
+--         parent_id are immutable, and week_start may not be more than 1 day
 --         past today UTC (pinning a year-3000 week would lock the family out
 --         of generating forever).
 --     Residual, accepted: a writer can still INSERT (when no row exists) or
@@ -119,23 +119,23 @@ CREATE TRIGGER update_sign_plans_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at();
 
--- Write guard: backs the edge function's weekly limit (see header). Named
--- *_update for history; it fires on INSERT too (far-future check only — the
+-- Write guard: backs the edge function's weekly limit (see header). It
+-- fires on INSERT too (far-future check only — the
 -- INSERT half of an upsert fires it with TG_OP = 'INSERT' before the conflict
 -- turns it into an UPDATE, which then fires it again with OLD/NEW).
 -- SECURITY INVOKER is enough: it only compares OLD/NEW and reads no tables.
 -- Errors use check_violation (23514, PostgREST -> HTTP 400) with a stable
 -- message the edge function can branch on.
-CREATE OR REPLACE FUNCTION public.sign_plans_guard_update()
+CREATE OR REPLACE FUNCTION public.sign_plans_guard_write()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  IF NEW.week_start > (now() AT TIME ZONE 'UTC')::date + 8 THEN
+  IF NEW.week_start > (now() AT TIME ZONE 'UTC')::date + 1 THEN
     RAISE EXCEPTION 'sign_plan_week_too_far_ahead'
       USING ERRCODE = 'check_violation',
-            DETAIL = 'week_start may be at most 8 days after today (UTC).';
+            DETAIL = 'week_start may be at most 1 day after today (UTC); the edge function only accepts the UTC Monday of now±1 day.';
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
@@ -159,7 +159,7 @@ $$;
 -- Trigger firing does not check EXECUTE; nobody needs to call this directly.
 -- pg_default_acl grants anon/authenticated EXECUTE explicitly on this
 -- project, so revoking from PUBLIC alone would be a no-op.
-REVOKE EXECUTE ON FUNCTION public.sign_plans_guard_update() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.sign_plans_guard_write() FROM PUBLIC, anon, authenticated;
 
 -- BEFORE triggers fire in name order: sign_plans_guard_write runs before
 -- update_sign_plans_updated_at, so a rejected write never reaches it.
@@ -167,7 +167,7 @@ DROP TRIGGER IF EXISTS sign_plans_guard_write ON public.sign_plans;
 CREATE TRIGGER sign_plans_guard_write
   BEFORE INSERT OR UPDATE ON public.sign_plans
   FOR EACH ROW
-  EXECUTE FUNCTION public.sign_plans_guard_update();
+  EXECUTE FUNCTION public.sign_plans_guard_write();
 
 ALTER TABLE public.sign_plans ENABLE ROW LEVEL SECURITY;
 

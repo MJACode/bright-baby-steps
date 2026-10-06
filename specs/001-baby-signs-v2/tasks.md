@@ -232,7 +232,7 @@
   - `week_start date NOT NULL`
   - `plan jsonb NOT NULL`
   - `created_at`, `updated_at`, with the `update_updated_at` trigger
-  - RLS: SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT and UPDATE WITH CHECK through `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = sign_plans.child_id AND c.parent_id = sign_plans.parent_id)` (owner binding, as in T022a); no DELETE policy (cascades only); all owner-keyed. `week_start` CHECK is a Monday; a BEFORE INSERT/UPDATE guard trigger (`sign_plans_guard_update()`) rejects a week_start more than 8 days ahead, any UPDATE that doesn't move week_start forward, and any change of child_id/parent_id — the edge function's weekly limit reads this row, so the row must not be deletable or backdatable by a client
+  - RLS: SELECT through `auth.uid() = parent_id OR has_partner_access(auth.uid(), parent_id)`; INSERT and UPDATE WITH CHECK through `partner_can_write(parent_id) AND EXISTS (SELECT 1 FROM public.children c WHERE c.id = sign_plans.child_id AND c.parent_id = sign_plans.parent_id)` (owner binding, as in T022a); no DELETE policy (cascades only); all owner-keyed. `week_start` CHECK is a Monday; a BEFORE INSERT/UPDATE guard trigger (`sign_plans_guard_write()`) rejects a week_start more than 1 day ahead, any UPDATE that doesn't move week_start forward, and any change of child_id/parent_id — the edge function's weekly limit reads this row, so the row must not be deletable or backdatable by a client
 
   *(backend)*
 - [ ] T044 [P] [US4] Create `supabase/functions/_shared/signSlugs.ts` exporting `SIGN_SLUGS` as a readonly array of the 20 slugs, in `src/data/signLibrary.ts` order (research R7) *(backend)*
