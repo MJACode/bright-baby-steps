@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Check, Lightbulb, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,10 +56,15 @@ export function SignPlanCard({
   const { data, isLoading } = useSignPlan(childId, weekStart);
   const generate = useGenerateSignPlan();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // `disabled={generate.isPending}` only lands on the next render, so a fast
+  // double-tap can fire two paid calls before either stores a plan.
+  const buildInFlight = useRef(false);
 
   const plan = data?.plan ?? null;
 
   const handleBuild = () => {
+    if (buildInFlight.current) return;
+    buildInFlight.current = true;
     generate.mutate(
       {
         childId,
@@ -73,6 +78,9 @@ export function SignPlanCard({
       {
         onError: (err) => {
           if (err instanceof PremiumRequiredError) setUpgradeOpen(true);
+        },
+        onSettled: () => {
+          buildInFlight.current = false;
         },
       },
     );

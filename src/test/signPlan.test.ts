@@ -2,6 +2,7 @@ import { SIGN_LIBRARY } from "@/data/signLibrary";
 import {
   buildSignPlanRequest,
   currentSignPlan,
+  isSignPlanCurrent,
   parseSignPlan,
   planFocusSteps,
 } from "@/lib/signPlan";
@@ -85,6 +86,14 @@ describe("buildSignPlanRequest", () => {
     expect(req.signs[0].focusDays).toBe(0);
   });
 
+  it("never sends negative focus days when focus_since is a day ahead", () => {
+    const req = buildSignPlanRequest({
+      ...base,
+      progress: { [A]: { status: "introduced", focus_since: "2026-10-07" } },
+    });
+    expect(req.signs[0]).toMatchObject({ isFocus: true, focusDays: 0 });
+  });
+
   it("clamps the corrected age to a whole number in 0–60", () => {
     expect(buildSignPlanRequest({ ...base, ageMonths: 10.7 }).correctedAgeMonths).toBe(10);
     expect(buildSignPlanRequest({ ...base, ageMonths: -2 }).correctedAgeMonths).toBe(0);
@@ -128,10 +137,21 @@ describe("parseSignPlan", () => {
 });
 
 describe("currentSignPlan", () => {
-  it("returns the plan only for the matching week", () => {
+  it("returns the plan for this week or a later stored week, never an earlier one", () => {
     expect(currentSignPlan({ week_start: "2026-10-05", plan: validPlan }, "2026-10-05")).toEqual(validPlan);
+    // A caregiver in a timezone ahead already built next Monday's plan; the
+    // server 409s a new build, so it must render rather than offer "build".
+    const nextWeek = { ...validPlan, weekStart: "2026-10-12" };
+    expect(currentSignPlan({ week_start: "2026-10-12", plan: nextWeek }, "2026-10-05")).toEqual(nextWeek);
     expect(currentSignPlan({ week_start: "2026-09-28", plan: validPlan }, "2026-10-05")).toBeNull();
     expect(currentSignPlan(null, "2026-10-05")).toBeNull();
+  });
+
+  it("isSignPlanCurrent compares weeks on or after the requested one", () => {
+    expect(isSignPlanCurrent("2026-10-05", "2026-10-05")).toBe(true);
+    expect(isSignPlanCurrent("2026-10-12", "2026-10-05")).toBe(true);
+    expect(isSignPlanCurrent("2026-09-28", "2026-10-05")).toBe(false);
+    expect(isSignPlanCurrent(undefined, "2026-10-05")).toBe(false);
   });
 });
 

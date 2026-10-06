@@ -5,6 +5,7 @@ import { PremiumRequiredError } from "@/hooks/useSpeechClass";
 import {
   buildSignPlanRequest,
   currentSignPlan,
+  isSignPlanCurrent,
   parseSignPlan,
   type SignPlan,
 } from "@/lib/signPlan";
@@ -41,7 +42,7 @@ export function useSignPlan(childId: string | undefined, weekStart: string) {
     },
     select: (row) => ({
       plan: currentSignPlan(row, weekStart),
-      isThisWeek: row?.week_start === weekStart,
+      isThisWeek: isSignPlanCurrent(row?.week_start, weekStart),
     }),
     enabled: !!childId,
   });

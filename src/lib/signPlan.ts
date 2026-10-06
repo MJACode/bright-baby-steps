@@ -80,6 +80,8 @@ export function buildSignPlanRequest({
       slug,
       status: row && STATUSES.has(row.status) ? (row.status as SignPlanStatus) : null,
       isFocus,
+      // clampInt's 0 floor matters: a caregiver in a timezone ahead can stamp
+      // focus_since a day past this device's tracking day, which reads as -1.
       focusDays: isFocus ? clampInt(daysInFocus(row!.focus_since!, now, schedule), 0, MAX_FOCUS_DAYS) : null,
       practiceDays4w: clampInt(practiced[slug] ?? 0, 0, MAX_PRACTICE_DAYS),
     };
@@ -140,12 +142,21 @@ export function parseSignPlan(raw: unknown): SignPlan | null {
   return { weekStart, intro: cleanText(raw.intro) ?? "", focus, stuck };
 }
 
-/** The stored plan, only when it belongs to the plan week `weekStart`. */
+/**
+ * True when the stored plan covers `weekStart` or a later week. A caregiver in
+ * a timezone ahead may already have stored next Monday's plan, and the server
+ * refuses a new build (409) for any stored week on or after the requested one.
+ */
+export function isSignPlanCurrent(storedWeekStart: string | null | undefined, weekStart: string): boolean {
+  return !!storedWeekStart && storedWeekStart >= weekStart;
+}
+
+/** The stored plan, only when it is current for the plan week `weekStart`. */
 export function currentSignPlan(
   row: { week_start: string; plan: unknown } | null | undefined,
   weekStart: string,
 ): SignPlan | null {
-  if (!row || row.week_start !== weekStart) return null;
+  if (!row || !isSignPlanCurrent(row.week_start, weekStart)) return null;
   return parseSignPlan(row.plan);
 }
 
