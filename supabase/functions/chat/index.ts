@@ -226,7 +226,10 @@ serve(async (req) => {
     }
 
     // Count the insight only once Anthropic has accepted the request, so a
-    // failed call doesn't spend a free one.
+    // failed call doesn't spend a free one. Known soft spots, accepted for a
+    // 10/day cap on a cheap Haiku call: concurrent requests can all pass the
+    // count above before any of them is recorded, and a failed insert is
+    // logged rather than blocking the insight.
     const { error: usageError } = await supabase
       .from("ai_insight_usage")
       .insert({ user_id: userId, child_id: childId, kind: USAGE_KIND });
