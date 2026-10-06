@@ -2916,7 +2916,7 @@ Legitimate callers keep working:
 
 **Analysis:** additive Flare+ feature, parent-entered, bounded values, no new subprocessor or egress, disclosure ships with the feature. Non-material change under 16 CFR § 312.5(a)(1); no renewed VPC (reasoning per the 2026-07-19 Activities and 2026-08-28 Baby Signs entries).
 
-**Code refs:** PR-C (Baby Signs v2) — fill in commit hash at merge.
+**Code refs:** PR-C (Baby Signs v2), #264, merged as `e3d0a04` (2026-10-06). `child_sign_practice` applied to live 2026-10-06.
 
 **Follow-ups:**
 1. `child_signs.sign_slug` is still unconstrained `text`, so for that table the "no free text" promise is enforced only by the client. Add a CHECK matching `child_sign_practice_slug_format` (slug-format regex with a length cap) so the minimization claim holds server-side for both tables. P2.

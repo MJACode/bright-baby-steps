@@ -17,7 +17,7 @@ import { trackingDayDate, type TrackingSchedule } from "@/lib/trackingDay";
 import { cn } from "@/lib/utils";
 
 export const FOCUS_VIEW_ONLY_HELP =
-  "Only parents and caregivers who can edit can change signs or this week's signs.";
+  "Only parents and caregivers who can edit can change signs, update this week's signs, or mark signs as modeled.";
 
 const glossList = (slugs: string[]) =>
   slugs
