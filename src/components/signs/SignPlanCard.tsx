@@ -208,16 +208,16 @@ export function SignPlanCard({
             <p className="flex items-center gap-1.5 text-sm font-semibold text-milestones">
               <Check className="w-4 h-4" aria-hidden /> These are this week's signs
             </p>
-          ) : (
+          ) : canEdit ? (
             <Button
               type="button"
               className={ctaClass}
-              disabled={!canEdit || busy || progressLoading}
+              disabled={busy || progressLoading}
               onClick={() => onApply(planSlugs)}
             >
               Use these signs
             </Button>
-          )}
+          ) : null}
         </CardContent>
       </Card>
     </section>

@@ -67,10 +67,10 @@ type SignPlan = {
 - Ask for 2–3 focus signs (the sanitizer accepts 1–3).
 - Celebrate effort. Never diagnose, never mention delays, red flags, "behind", or "should". Never mention days without practice, missed days, or streaks. Never mention worry, concern, evaluations, or therapists, or call a baby a "late talker".
 - Don't withhold items to force a sign (SLP guidance from v1).
-
-The server backstops these rules: any model string matching the tone regex in `_shared/signPlan.ts` is dropped (delay, fall behind / is behind, lagging, late talker/signer/bloomer, red flag, should, diagnos-, disorder, evaluat-, therapist, worry, concern, missed, skipped, days without, streak, and withholding phrasing such as "until your baby signs", "before you give", "make them sign"). "Behind your back" and "late afternoon" pass.
 - Moments must be everyday routines (meals, bath, diaper change, play, reading).
 - Prefer keeping emerging signs in focus. Move past signs already at `signing`. Offer a stuck tip only for stalled signs.
+
+The server backstops these rules: any model string matching the tone regex in `_shared/signPlan.ts` is dropped (delay, fall behind / is behind, lagging, late talker/signer/bloomer, red flag, should, diagnos-, disorder, evaluat-, therapist, worry, concern, missed, skipped, days without, streak, and withholding phrasing such as "until your baby signs", "before you give", "make them sign"). "Behind your back" and "late afternoon" pass.
 
 ## Client: which stored plan is "current"
 

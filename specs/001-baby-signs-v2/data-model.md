@@ -78,11 +78,11 @@ any ──clear status (v1 re-tap)──▶ row deleted  (UI confirms first if f
 | id | uuid PK | |
 | child_id | uuid NOT NULL → children(id) ON DELETE CASCADE, **UNIQUE** | One current plan per child. Replaced each week |
 | parent_id | uuid NOT NULL → auth.users(id) ON DELETE CASCADE | Child owner |
-| week_start | date NOT NULL | Monday (research R4/R5) |
+| week_start | date NOT NULL | Monday (research R4/R5), CHECK `isodow = 1`. Only moves forward (guard trigger) |
 | plan | jsonb NOT NULL | `SignPlan` shape, see [contracts/generate-sign-plan.md](./contracts/generate-sign-plan.md) |
 | created_at, updated_at | timestamptz | `update_updated_at` trigger, as in activity_plans |
 
-RLS follows the standard pattern. Rows are written only by the edge function, using the caller's JWT, so a read-only viewer's generate attempt fails at the database as well as in the UI. The client code only reads.
+RLS follows the standard pattern. Rows are written only by the edge function, using the caller's JWT, so a read-only viewer's generate attempt fails at the database as well as in the UI. The client code only reads. There is no DELETE policy, and a BEFORE INSERT/UPDATE guard trigger lets `week_start` only move forward (never more than 8 days ahead) and pins `child_id` / `parent_id`: the edge function's weekly limit reads this row, so a caregiver deleting or backdating it through the API would otherwise reset the limit.
 
 ### Deletion and retention
 
