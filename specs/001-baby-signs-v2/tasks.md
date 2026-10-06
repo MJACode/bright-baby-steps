@@ -181,9 +181,9 @@
   - `COMMENT ON TABLE` that includes "bounded slug — Do NOT widen to free text"
 
   *(backend)*
-- [ ] T033 [US3] Apply the migration to live with the MCP `apply_migration`. Confirm with `list_migrations`, and check the unique-constraint dedup and cascade on child delete with `execute_sql` in a transaction that is rolled back *(backend)*
-- [ ] T034 [US3] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` *(backend)*
-- [ ] T035 [US3] Invoke **`qa`** on the migration: RLS parity with `child_signs` (including the owner-binding check, tested with a role-switched stranger insert), no UPDATE path, cascade on both FKs, and no free-text column *(qa)*
+- [x] T033 [US3] Apply the migration to live with the MCP `apply_migration`. Confirm with `list_migrations`, and check the unique-constraint dedup and cascade on child delete with `execute_sql` in a transaction that is rolled back *(backend)*
+- [x] T034 [US3] Regenerate `src/integrations/supabase/types.ts` with `generate_typescript_types` *(backend)*
+- [x] T035 [US3] Invoke **`qa`** on the migration: RLS parity with `child_signs` (including the owner-binding check, tested with a role-switched stranger insert), no UPDATE path, cascade on both FKs, and no free-text column *(qa)*
 
 ### Frontend
 
