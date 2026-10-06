@@ -57,8 +57,12 @@ describe("tracking-day bounds across a DST transition", () => {
   it("knows a spring-forward day is 23 hours and a fall-back day is 25", () => {
     expect(dayLengthMin(SPRING_FORWARD, MIDNIGHT)).toBe(1380);
     expect(dayLengthMin(FALL_BACK, MIDNIGHT)).toBe(1500);
-    expect(dayLengthMin(SPRING_FORWARD, SEVEN_AM)).toBe(1380);
-    expect(dayLengthMin(FALL_BACK, SEVEN_AM)).toBe(1500);
+    // A 07:00 day starts after the 02:00 transition, so the short and long
+    // tracking days are the ones filed the day before.
+    expect(dayLengthMin("2026-03-07", SEVEN_AM)).toBe(1380);
+    expect(dayLengthMin(SPRING_FORWARD, SEVEN_AM)).toBe(1440);
+    expect(dayLengthMin("2026-10-31", SEVEN_AM)).toBe(1500);
+    expect(dayLengthMin(FALL_BACK, SEVEN_AM)).toBe(1440);
     // An ordinary day is unaffected either way.
     expect(dayLengthMin("2026-09-02", MIDNIGHT)).toBe(1440);
     expect(dayLengthMin("2026-09-02", SEVEN_AM)).toBe(1440);
@@ -105,23 +109,29 @@ describe("segmentSleepForDay across a DST transition", () => {
   });
 
   it("holds under a 07:00 day start, in both directions", () => {
-    // Spring forward: the hour after the short day closes used to belong to
-    // both the short day and the one after it.
-    const morningAfterForward = sleep(at(2026, 3, 9, 7, 10), at(2026, 3, 9, 7, 50));
-    expect(segmentSleepForDay([morningAfterForward], SPRING_FORWARD, SEVEN_AM, now)).toEqual([]);
-    expect(segmentSleepForDay([morningAfterForward], "2026-03-09", SEVEN_AM, now)).toEqual([
+    // Spring forward: the short day is Mar 7 07:00 EST -> Mar 8 07:00 EDT. The
+    // first hour of the next day belongs to it alone.
+    const morningAfterForward = sleep(at(2026, 3, 8, 7, 10), at(2026, 3, 8, 7, 50));
+    expect(segmentSleepForDay([morningAfterForward], "2026-03-07", SEVEN_AM, now)).toEqual([]);
+    expect(segmentSleepForDay([morningAfterForward], SPRING_FORWARD, SEVEN_AM, now)).toEqual([
       { startMin: 10, endMin: 50, sleepType: "nap", isOngoing: false },
     ]);
-    expect(trackingDayKey(morningAfterForward.started_at, SEVEN_AM)).toBe("2026-03-09");
+    expect(trackingDayKey(morningAfterForward.started_at, SEVEN_AM)).toBe(SPRING_FORWARD);
 
-    // Fall back: the extra hour at the end of the 25-hour day used to belong to
-    // neither it nor the day after.
-    const morningAfterBack = sleep(at(2026, 11, 2, 6, 10), at(2026, 11, 2, 6, 50));
-    expect(segmentSleepForDay([morningAfterBack], FALL_BACK, SEVEN_AM, now)).toEqual([
+    // Fall back: the long day is Oct 31 07:00 EDT -> Nov 1 07:00 EST, so a
+    // 06:10 nap on Nov 1 sits 24h10m into it and on no other day.
+    const morningAfterBack = sleep(at(2026, 11, 1, 6, 10), at(2026, 11, 1, 6, 50));
+    expect(segmentSleepForDay([morningAfterBack], "2026-10-31", SEVEN_AM, now)).toEqual([
       { startMin: 1450, endMin: 1490, sleepType: "nap", isOngoing: false },
     ]);
-    expect(segmentSleepForDay([morningAfterBack], "2026-11-02", SEVEN_AM, now)).toEqual([]);
-    expect(trackingDayKey(morningAfterBack.started_at, SEVEN_AM)).toBe(FALL_BACK);
+    expect(segmentSleepForDay([morningAfterBack], FALL_BACK, SEVEN_AM, now)).toEqual([]);
+    expect(trackingDayKey(morningAfterBack.started_at, SEVEN_AM)).toBe("2026-10-31");
+
+    // The day after each transition is an ordinary 24 hours.
+    const morningAfterBackDay = sleep(at(2026, 11, 2, 6, 10), at(2026, 11, 2, 6, 50));
+    expect(segmentSleepForDay([morningAfterBackDay], FALL_BACK, SEVEN_AM, now)).toEqual([
+      { startMin: 1390, endMin: 1430, sleepType: "nap", isOngoing: false },
+    ]);
   });
 
   it("puts every sleep on exactly one day, and on the day its key files it under", () => {
