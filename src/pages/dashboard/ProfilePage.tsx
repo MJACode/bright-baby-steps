@@ -383,7 +383,7 @@ export default function ProfilePage() {
                   What Grace Flare remembers
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Review or delete what personalizes {contextFirstName}'s suggestions
+                  What personalizes {contextFirstName}'s suggestions
                 </p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />

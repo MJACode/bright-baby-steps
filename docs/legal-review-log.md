@@ -2973,3 +2973,30 @@ Legitimate callers keep working:
 3. `/subprocessors` "Briefings / weekly insights" line omits interests, temperament, and AI-memory notes that Privacy § 4 lists. Reconcile. P1.
 4. Outside counsel (when commissioned): (a) non-material change under § 312.5(a)(1) for a new AI feature on already-consented data to an already-disclosed processor; (b) whether "then deleted" is accurate for Anthropic content flagged for safety review; (c) whether a partner-triggered AI flow is within the owner's original VPC.
 5. Carry-over: PR-C follow-ups 1, 2, 4 still open.
+
+---
+
+## 2026-10-07 — "What Grace Flare remembers": per-note list removed; AI-memory extraction narrowed and capped at 20
+
+**Reviewer:** in-house (Claude `legal` pre-review; founder product decision 2026-10-07). **Risk level:** Low–Medium (narrows collection; removes in-app per-note edit that the signed direct notice promised; review and delete remain).
+
+**What changed:**
+- `ChildContextPage.tsx` no longer lists individual `child_memories` notes; per-note view, edit, pin, delete and manual add removed. "Forget everything" (delete all notes for the active child) stays and is always visible; success toast added. Stale "Next Steps" copy (retired 2026-09-07) removed.
+- `extract-memory`: prompt narrowed to likes/soothing, temperament, routines in words, goals, family/care context. Forbids log statistics, norm/baseline comparisons, logging-behavior comments, diagnostic or health judgments, single-day/week trends. `concern` no longer accepted from the extractor. Max 3 notes per run, 200 chars each. Code-side `looksLikeLogStatistic` filter. After an insert, unpinned auto-extracted rows beyond the newest 20 per child are deleted (user-session client; DELETE RLS is `can_access_child`).
+- `_shared/memory.ts` `loadMemoryContext`: loads 20 notes (was 50) into briefing / weekly-insights / visit-prep prompts.
+- Disclosures: Privacy § 2 AI-memory bullet rewritten (scope, sleep-plan summary note, legacy manual notes, "only the 20 most recent are used", export / Forget everything / child or account deletion / rights request; removes the nonexistent "Profile → About your child" path). Privacy § 8 Correction routes per-note correction to `/rights-request`. `CoppaDirectNotice.tsx` "review, edit, and delete" → "see in Export My Data and clear at any time". `/subprocessors` briefings line now names interests, temperament and up to 20 AI-memory notes (closes 2026-10-06 follow-up 3). Privacy + Subprocessors "Last reviewed" → October 7, 2026; Effective dates unchanged.
+
+**Parental rights (16 CFR § 312.6(a)):** review = Export My Data or rights request; delete = Forget everything, child/account deletion, or rights request; refuse further collection = child/account deletion or coppa@ email (unchanged from before).
+
+**Analysis:** narrows collection; use and disclosure unchanged (same processor, same three features). Not material under § 312.5(a)(1); no renewed VPC. Loss of in-app per-note edit treated as non-material under Privacy § 11 (review and delete survive; correction on request), per the 2026-08-29 / 2026-09-07 narrowing precedents.
+
+**Known gap:** legacy auto-extracted notes collected under the old prompt (live audit 2026-10-07: 283 rows across 2 children, 267 stat-like) count toward the cap: they stay until the child's next successful extraction, which prunes all but the newest 20 auto-extracted notes (in chunks of 100, looping). Until then, and afterwards for whichever legacy notes are among the newest 20, legacy notes still reach prompts. Under the stricter prompt successful extractions are rare, so a one-time cleanup is still worth deciding on (migration; founder decision).
+
+**Code refs:** fill in PR # and commit hash at merge.
+
+**Follow-ups:**
+1. One-time cleanup of legacy stat-like / `concern` auto-extracted notes (migration; founder decision). P0.
+2. Per-child "Stop saving notes" toggle (refuse-further-collection right for this store). P2.
+3. Rights-request triage runbook: correct/delete a single `child_memories` row by id. P1.
+4. Pre-existing: "Profile → Manage Child Data" (Privacy § 7, CoppaDirectNotice, ChildContextPage) names a control that doesn't exist; point to Export My Data / Delete Account. P1.
+5. Outside counsel (when commissioned): whether withdrawing an in-app edit control promised in a signed direct notice needs § 11 30-day notice.

@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: October 6, 2026 ·{" "}
+          Effective: June 20, 2026 · Last reviewed: October 7, 2026 ·{" "}
           <Link to="/subprocessors" className="underline">Subprocessors</Link>
         </p>
       </div>
@@ -28,7 +28,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Account data:</strong> your name and email address, collected when you create an account.</li>
             <li><strong>Child profile data:</strong> your child's name, date of birth, gender (optional), prematurity status, photo (optional), and optional interests and temperament you select from a fixed list.</li>
-            <li><strong>AI memory:</strong> short factual notes about your child that our AI features save from your briefings and weekly insights (or that you add yourself) — for example routines, preferences, and things you're working on. You can view, edit, and delete these notes at any time in Profile → About your child.</li>
+            <li><strong>AI memory:</strong> short notes about your child that our AI saves from your daily briefings and weekly insights — things like what your child enjoys, what helps soothe them, daily routines, goals you're working on, and family context — plus a one-line summary when you save a sleep plan and any notes you added yourself in earlier versions of the app. Only the 20 most recent notes for each child are used, and we keep at most 20 AI-saved notes per child going forward. These notes are sent to Anthropic with briefings, weekly insights, and Visit Prep (see § 4). To see every note, use Profile → Export My Data. To clear all of a child's notes at once, use "Forget everything" in Profile → What Grace Flare remembers. Notes are also deleted when you delete that child or your account, or you can ask us to correct or delete a specific note through the <Link to="/rights-request" className="text-primary underline">privacy request form</Link>.</li>
             <li><strong>AI plans (Flare+):</strong> your child's current weekly Speech Class, Weekly Play Plan, and Baby Signs plan, created by our AI from the information described in § 4. Each new plan replaces the last one. Plans are included in Export My Data and deleted with your child's record or your account.</li>
             <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, supplement, and body-temperature (fever) records that you choose to log; play activities you mark as tried; and, in Baby Signs, the signs you choose to focus on or mark as introduced or used, and the days you mark a sign as modeled. For Baby Signs, you log only which sign from our built-in list and which day, never notes, photos, audio, or video.</li>
             <li><strong>Finance planning data:</strong> for each child, your answers to the Finance account finder (what the savings are for, and whether family will contribute) and which account types you mark as opened. We never ask for or store Social Security numbers, account numbers, balances, or income.</li>
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
           <h2 className="font-semibold text-foreground mb-2">8. Your rights</h2>
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Access:</strong> view all your data within the app at any time, or request a copy.</li>
-            <li><strong>Correction:</strong> edit your child's profile and any logged data at any time.</li>
+            <li><strong>Correction:</strong> edit your child's profile and any logged data at any time. AI memory notes can't be edited one by one; clear them all with "Forget everything" in Profile → What Grace Flare remembers, or ask us to correct or delete a specific note through the <Link to="/rights-request" className="text-primary underline">privacy request form</Link>.</li>
             <li><strong>Deletion / right to erasure (GDPR Art. 17):</strong> delete your account and all associated data from Profile → Delete Account.</li>
             <li><strong>Portability (GDPR Art. 20):</strong> download a copy of your data in a structured, machine-readable JSON format from Profile → Export My Data.</li>
             <li><strong>Objection / restriction (GDPR Art. 21–22):</strong> object to or restrict processing based on legitimate interest, including the right not to be subject to a decision based solely on automated processing.</li>
