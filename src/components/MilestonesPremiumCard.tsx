@@ -18,7 +18,7 @@ const PERKS = [
   },
   {
     icon: Hand,
-    title: "Baby Signs: ASL-based sign program",
+    title: "Sign Language: ASL-based sign program",
     sub: "20 signs in 5 stages — communicate before words come, with per-sign progress tracking.",
   },
 ];

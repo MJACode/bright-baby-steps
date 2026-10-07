@@ -476,7 +476,7 @@ export default function MilestonesPage() {
                       <Hand className="w-5 h-5 text-milestones" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">Baby Signs</p>
+                      <p className="text-sm font-semibold">Sign Language</p>
                       <p className="text-xs text-muted-foreground">
                         Teach your baby to tell you what they need — before words.
                       </p>

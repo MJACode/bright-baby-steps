@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Collapsible,
   CollapsibleContent,
@@ -11,8 +13,11 @@ import {
   Loader2,
   ChevronDown,
   BookOpen,
+  Hand,
 } from "lucide-react";
-import { usePreferences } from "@/hooks/usePreferences";
+import type { Preferences, SetPreferences } from "@/hooks/usePreferences";
+import { toast } from "@/hooks/use-toast";
+import { shouldShowSignsPromo } from "@/lib/signsPromo";
 import { useBriefing } from "@/hooks/useBriefing";
 import {
   getDevelopmentContentForChild,
@@ -33,14 +38,19 @@ interface TodayCardProps {
   activeChild: ChildLite | null;
   showBriefing: boolean;
   showWhatToExpect: boolean;
+  // Dashboard's usePreferences instance: hook instances don't share state, so
+  // a tile added here must go through the same instance QuickNavGrid reads.
+  prefs: Preferences;
+  setPrefs: SetPreferences;
 }
 
 export function TodayCard({
   activeChild,
   showBriefing,
   showWhatToExpect,
+  prefs,
+  setPrefs,
 }: TodayCardProps) {
-  const { prefs, setPrefs } = usePreferences();
   const { data: briefing, isLoading: briefingLoading } = useBriefing(
     showBriefing ? activeChild?.id : undefined,
   );
@@ -58,6 +68,19 @@ export function TodayCard({
   const watchNote = briefing?.watch?.trim() ?? "";
 
   if (!briefingRegionVisible && !weekVisible) return null;
+
+  const signsPromoVisible = shouldShowSignsPromo({
+    child: activeChild,
+    briefingVisible: showBriefing && !briefingLoading && !!briefing,
+    homeQuickTiles: prefs.homeQuickTiles,
+    dismissed: prefs.signsPromoDismissed,
+  });
+  const firstName = activeChild.name.split(" ")[0];
+
+  const addSignsTile = () => {
+    setPrefs({ homeQuickTiles: [...prefs.homeQuickTiles, "signs"] });
+    toast({ title: "Sign Language added to your Home Screen" });
+  };
 
   return (
     <Card className="border-0 bg-card rounded-2xl shadow-sm">
@@ -105,6 +128,51 @@ export function TodayCard({
               )
             )}
           </div>
+        )}
+
+        {signsPromoVisible && (
+          <>
+            <div className="border-t border-border" />
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
+                  <Hand className="w-5 h-5 text-milestones" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-snug">
+                    A great age to start signing with {firstName}
+                  </p>
+                  <p className="text-sm text-muted-foreground leading-snug mt-0.5">
+                    Signs like "more" and "milk" let your baby tell you what they need — before words come.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={addSignsTile}
+                className="w-full touch-target min-h-[48px] font-semibold"
+              >
+                Add to Home Screen
+              </Button>
+              <div className="flex items-center justify-between gap-2">
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="touch-target min-h-[48px] font-semibold text-milestones hover:text-milestones"
+                >
+                  <Link to="/dashboard/signs">Take a look</Link>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setPrefs({ signsPromoDismissed: true })}
+                  className="touch-target min-h-[48px] font-semibold text-muted-foreground"
+                >
+                  Not now
+                </Button>
+              </div>
+            </div>
+          </>
         )}
 
         {briefingRegionVisible && weekVisible && (

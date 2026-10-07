@@ -65,6 +65,8 @@ export default function Dashboard() {
         activeChild={activeChild}
         showBriefing={isVisible("briefing")}
         showWhatToExpect={isVisible("whatToExpect")}
+        prefs={prefs}
+        setPrefs={setPrefs}
       />
 
       {/* Sleep Coach (Flare+) */}

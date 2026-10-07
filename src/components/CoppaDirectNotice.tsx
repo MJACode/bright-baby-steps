@@ -75,7 +75,7 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
         <div>
           <p className="font-medium text-foreground">How we use it</p>
           <p className="text-foreground/80">
-            To provide tracking features, generate AI-assisted briefings, insights, and weekly plans (like Baby Signs plans),
+            To provide tracking features, generate AI-assisted briefings, insights, and weekly plans (like Sign Language plans),
             produce charts and milestone progress, and send optional reminders (for
             example, about opening savings accounts for your child). We do not use
             your child's data to train AI models or to choose or target ads.

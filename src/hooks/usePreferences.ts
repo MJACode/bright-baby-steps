@@ -16,6 +16,7 @@ export interface Preferences {
   hiddenHomeSections: string[];
   homeQuickTiles: string[];
   homeSectionsMigrated: boolean;
+  signsPromoDismissed: boolean;
   theme: ThemePreference;
 }
 
@@ -33,6 +34,7 @@ const defaults: Preferences = {
   hiddenHomeSections: [],
   homeQuickTiles: ["food", "sleep", "diaper", "milestone"],
   homeSectionsMigrated: false,
+  signsPromoDismissed: false,
   theme: "system",
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing

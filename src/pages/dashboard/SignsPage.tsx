@@ -68,7 +68,7 @@ export default function SignsPage() {
       <div className="space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-            <Hand className="w-7 h-7 text-milestones" /> Baby Signs
+            <Hand className="w-7 h-7 text-milestones" /> Sign Language
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Add a child to start signing together.</p>
         </div>
@@ -235,7 +235,7 @@ export default function SignsPage() {
     <div className="space-y-5">
       <div>
         <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Hand className="w-7 h-7 text-milestones" /> Baby Signs
+          <Hand className="w-7 h-7 text-milestones" /> Sign Language
           <Badge variant="secondary" className="text-[10px] uppercase tracking-wider font-mono">
             <Sparkles className="w-3 h-3 mr-1" />
             Flare+
