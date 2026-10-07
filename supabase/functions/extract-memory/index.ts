@@ -322,9 +322,10 @@ function jsonResponse(body: unknown, status: number): Response {
 const PRUNE_CHUNK = 100;
 const PRUNE_MAX_PASSES = 20;
 
+type UserClient = ReturnType<typeof createClient>;
+
 async function pruneAutoMemories(
-  // deno-lint-ignore no-explicit-any
-  client: any,
+  client: UserClient,
   childId: string,
 ): Promise<void> {
   try {
@@ -338,8 +339,7 @@ async function pruneAutoMemories(
 }
 
 // Returns how many ids it tried to delete; 0 on error so the loop stops.
-// deno-lint-ignore no-explicit-any
-async function prunePass(client: any, childId: string): Promise<number> {
+async function prunePass(client: UserClient, childId: string): Promise<number> {
   const { data: overCap, error: selErr } = await client
     .from("child_memories")
     .select("id")
