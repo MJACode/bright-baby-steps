@@ -12,6 +12,8 @@ Items raised during the Finance Account Finder work and production catch-up (202
 
 ## Follow-ups (no decision needed, just not done yet)
 
+- [ ] **Family-wide Flare+.** Founder decision 2026-10-06: one Flare+ subscription should cover the whole family (owner + partners). Today every premium check (`usePremium`, `PremiumGate`, `generate-activity-plan`, `generate-speech-class`, `generate-sign-plan`, …) uses the caller's own subscription, so a free co-parent in a paying family sees upgrade prompts. Needs a spec: entitlement source of truth (owner's subscription via `partner_access`?), client + server checks, partner-seat interaction, pricing copy, Privacy/Terms wording. Next initiative after Baby Signs v2. (Legal log 2026-10-06, follow-up 1.)
+- [ ] **Calendar Day/Week timeline is an hour off on DST days.** Events are placed with `differenceInMinutes` from `startOfDay`, so on 23h/25h days they land an hour off. Needs a UX call on how to draw 23h/25h days.
 - [ ] **Finance reminders delivery check.** Confirm the first `finance_*` notifications landed after quiet hours, and the 02:30 UTC inactive-account purge ran (first run since the key fix).
 - [ ] **Runbook note:** rotating Supabase API keys also requires updating `app_service_role_key` in Vault.
 - [ ] **Visit-reminder email secrets.** `send-visit-reminder-email` needs `RESEND_API_KEY` (and `VPC_FROM_EMAIL` / `APP_URL`) set before visit emails send; until then it fails and check-notifications retries quietly.

@@ -45,7 +45,8 @@ function focusRows(rows: SignFocusInput[]): (SignFocusInput & { focus_since: str
   return rows.filter((r): r is SignFocusInput & { focus_since: string } => r.focus_since !== null);
 }
 
-function daysInFocus(focusSince: string, now: Date, schedule: TrackingSchedule): number {
+/** Whole tracking days since `focusSince` (0 on the day it was focused). */
+export function daysInFocus(focusSince: string, now: Date, schedule: TrackingSchedule): number {
   return differenceInCalendarDays(todayDate(now, schedule), keyToDate(focusSince));
 }
 

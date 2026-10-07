@@ -81,11 +81,11 @@ Once a week, a Flare+ parent taps "Build this week's sign plan". The coach looks
 
 **Why this priority**: This adds personalization on top of the default path. The page is complete without it (Stories 1–3), and it is the only story that adds a new AI flow and disclosure work, so it ships last and can slip without blocking the rest.
 
-**Independent Test**: For a child with MILK at "Signs it!", MORE at "Trying it" (modeled 5 of 7 days), and EAT at "Using it" (modeled 1 day), generate a plan. Confirm it moves past MILK, keeps or adjusts MORE, offers a stall tip for EAT, and uses calm, non-diagnostic copy.
+**Independent Test**: For a child with MILK at "Signs it!", MORE at "Trying it" (modeled 5 of 7 days), and EAT at "Using it" (a focus sign for 14+ days, modeled 1 day), generate a plan. Confirm it moves past MILK, keeps or adjusts MORE, offers a stall tip for EAT, and uses calm, non-diagnostic copy.
 
 **Acceptance Scenarios**:
 
-1. **Given** a Flare+ parent with some sign progress, **When** they tap "Build this week's sign plan", **Then** within about 20 seconds they see 2–3 recommended focus signs, one line on why each was chosen, 1–2 routine moments for each, and a stall tip for any sign modeled for 2+ weeks without progress.
+1. **Given** a Flare+ parent with some sign progress, **When** they tap "Build this week's sign plan", **Then** within about 20 seconds they see 2–3 recommended focus signs (at least 1 if the coach's output is partly discarded), one line on why each was chosen, 1–2 routine moments for each, and a stall tip for any stalled sign (a focus sign for 2+ weeks, still at the first stage, modeled on at least 1 day).
 2. **Given** a plan has been generated, **When** the parent taps "Use these signs", **Then** the recommended signs become this week's focus signs.
 3. **Given** a plan already exists for this child this week, **When** the parent opens the page, **Then** they see that plan. They cannot generate another one until next week.
 4. **Given** the coach recommends a sign, **Then** it is always a sign from the curated library, never a sign the app doesn't have.
@@ -147,7 +147,7 @@ Once a week, a Flare+ parent taps "Build this week's sign plan". The coach looks
 
 - **FR-020**: Flare+ parents MUST be able to generate one personalized sign plan per child per week by tapping a button. It is never generated automatically.
 - **FR-021**: The coach's input MUST be limited to: the child's corrected age in months, the 3-stage status of each sign, current focus signs, and per-sign practice-day counts for the past 4 weeks. It MUST NOT receive the child's name, date of birth, health records, journal text, or any free text.
-- **FR-022**: The plan MUST contain 2–3 recommended focus signs chosen only from the curated library, a one-line reason for each, 1–2 natural routine moments for each, and a stall tip for any sign modeled for 14+ days without status progress.
+- **FR-022**: The plan MUST contain 1–3 recommended focus signs (the coach is asked for 2–3; at least 1 must survive sanitization) chosen only from the curated library, a one-line reason for each, 1–2 natural routine moments for each, and a stall tip offered only for stalled signs. A sign is stalled when it has been a focus sign for 14+ days, its status is still "introduced", and it was modeled on at least 1 day in the last 4 weeks (`stalled()` in `src/lib/signProgress.ts`).
 - **FR-023**: Parents MUST be able to apply the recommended focus signs in one action, or ignore the plan.
 - **FR-024**: The plan is one-shot. There MUST be no follow-up question box, chat thread, or free-text input (Principle III).
 - **FR-025**: Plan copy MUST follow the same calm, non-diagnostic rules as the static copy (Principle I). If the coach returns an unknown sign or output that can't be used, the system MUST discard it and show an error. The default path stays available.

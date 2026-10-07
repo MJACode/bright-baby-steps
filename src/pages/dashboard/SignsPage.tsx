@@ -12,7 +12,10 @@ import { PremiumGate } from "@/components/PremiumGate";
 import { SignDetailSheet } from "@/components/signs/SignDetailSheet";
 import { SignRow } from "@/components/signs/SignRow";
 import { ThisWeekFocus } from "@/components/signs/ThisWeekFocus";
-import { resolveTrackingSchedule, trackingDayKey } from "@/lib/trackingDay";
+import { SignPlanCard } from "@/components/signs/SignPlanCard";
+import { planWeekStart } from "@/lib/planWeek";
+import { planFocusSteps } from "@/lib/signPlan";
+import { resolveTrackingSchedule, trackingDayDate, trackingDayKey } from "@/lib/trackingDay";
 import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
 import { useChildren, getAgeInMonths, isAgeCorrected } from "@/hooks/useChildren";
@@ -52,6 +55,7 @@ export default function SignsPage() {
   // One key for what renders as ticked AND what a tap writes, so the two can't
   // disagree across the day boundary.
   const todayKey = trackingDayKey(now, schedule) ?? format(now, "yyyy-MM-dd");
+  const weekStart = planWeekStart(trackingDayDate(now, schedule) ?? now);
   const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild?.id, todayKey);
   const togglePractice = useToggleSignPractice();
   const pendingPracticeSlugs = useMutationState({
@@ -198,6 +202,12 @@ export default function SignsPage() {
       `Swapped ${out.label.toUpperCase()} for ${into.label.toUpperCase()}.`,
     );
 
+  const applyPlan = (planSlugs: string[]) => {
+    const steps = planFocusSteps(focusSlugs, planSlugs);
+    if (steps.length === 0) return;
+    void runFocusSteps(steps, `This week's signs: ${gloss(planSlugs)}`);
+  };
+
   const toggleModeled = (sign: Sign, practiced: boolean) => {
     try {
       assertCanWrite(roleResolved, role);
@@ -284,6 +294,24 @@ export default function SignsPage() {
             onStart={startFocus}
             onAdvance={advanceFocus}
             onTogglePractice={toggleModeled}
+          />
+
+          <SignPlanCard
+            childId={activeChild.id}
+            weekStart={weekStart}
+            ageMonths={ageMonths}
+            firstName={firstName}
+            progress={progress}
+            progressLoading={progressLoading}
+            practiceRows={practiceRows}
+            practiceLoading={practiceLoading}
+            now={now}
+            schedule={schedule}
+            focusSlugs={focusSlugs}
+            canEdit={canEditFocus}
+            busy={focusBusy}
+            onOpen={openSign}
+            onApply={applyPlan}
           />
 
           <h2 className="font-display font-bold text-xl pt-2">All signs</h2>

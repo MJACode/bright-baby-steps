@@ -58,6 +58,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { key: "speechPracticePlans", table: "speech_practice_plans", label: "speech practice plans" },
   { key: "childSigns", table: "child_signs", label: "baby signs" },
   { key: "childSignPractice", table: "child_sign_practice", label: "baby sign practice days" },
+  { key: "signPlans", table: "sign_plans", label: "baby sign plans" },
   { key: "childLeaps", table: "child_leaps", label: "leaps" },
   { key: "customMilestones", table: "custom_milestones", label: "custom milestones" },
   { key: "milestoneFlags", table: "milestone_flags", label: "milestone flags" },

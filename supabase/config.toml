@@ -24,6 +24,12 @@ verify_jwt = false
 [functions.generate-activity-plan]
 verify_jwt = true
 
+# Baby Signs v2 weekly sign plan. Called from the app via
+# supabase.functions.invoke with the parent's JWT; same mode as the other
+# user-invoked Flare+ generators.
+[functions.generate-sign-plan]
+verify_jwt = true
+
 [functions.generate-speech-class]
 verify_jwt = true
 
