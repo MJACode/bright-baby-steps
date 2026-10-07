@@ -5,18 +5,34 @@ import { formatInterestsTemperament, loadChildCore } from "../_shared/childConte
 // Per-child memory extractor.
 //
 // Invoked fire-and-forget (via _shared/memory.ts → fireExtractMemory) by
-// `chat`, `briefing`, and `weekly-insights` after each successful AI turn.
-// Extracts up to 5 durable facts from the transcript, dedups against the
-// caller's existing memory list, and writes the new rows to
-// `public.child_memories`.
+// `briefing` and `weekly-insights` after each successful generation. (`chat`
+// no longer calls it: since 2026-10-06 chat only builds the one-shot Word
+// Journal insight. "chat" stays accepted as a sourceFunction for
+// compatibility with old rows / callers.)
+//
+// Extracts up to 3 durable facts the logs can't capture (likes/dislikes,
+// soothing strategies, temperament, routines described in words, parent
+// goals, family/care context), dedups against the existing memory list, and
+// writes the new rows to `public.child_memories`. Log statistics, norm
+// comparisons, comments on what was/wasn't logged, and anything diagnostic
+// are rejected by the prompt and by a cheap code-side filter
+// (looksLikeLogStatistic). Parents can no longer see or edit these notes in
+// the UI, so the bar for saving one is deliberately high.
+//
+// Per-child cap: after a successful insert, auto-extracted, unpinned rows
+// (source_function in chat / briefing / weekly-insights) beyond the newest
+// MAX_AUTO_MEMORIES are deleted. Pinned, manual, and sleep-triage rows are
+// never pruned.
 //
 // Auth model:
 //   - Validates Bearer JWT, derives `user.id` for the audit column.
 //   - All Supabase calls (SELECT existing memories, probe children for
-//     access, INSERT new memories) go through the USER-SESSION client so
-//     RLS via `can_access_child(auth.uid(), child_id)` AND the INSERT
-//     policy's `created_by = auth.uid()` check both apply. No service-role
-//     dependency on this hot path.
+//     access, INSERT new memories, DELETE over-cap rows) go through the
+//     USER-SESSION client so RLS via `can_access_child(auth.uid(), child_id)`
+//     AND the INSERT policy's `created_by = auth.uid()` check both apply.
+//     The DELETE policy is `can_access_child(auth.uid(), child_id)` only (no
+//     created_by check), so a partner's run can prune rows the primary
+//     parent's run created and vice versa. No service-role dependency.
 //
 // Returns 204 No Content on success even when zero rows are inserted —
 // extraction is best-effort.
@@ -27,18 +43,23 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// "concern" is deliberately absent: the DB still allows it (manual /
+// sleep-triage rows), but auto-extracted concerns drift into diagnostic,
+// health-judgment territory, which this extractor must not produce.
 const VALID_CATEGORIES = new Set([
   "preference",
   "trait",
   "routine",
-  "concern",
   "goal",
   "context",
 ]);
 const MIN_CONTENT_LEN = 3;
-const MAX_CONTENT_LEN = 500;
-const MAX_EXTRACTED = 5;
+const MAX_CONTENT_LEN = 200;
+const MAX_EXTRACTED = 3;
 const MAX_TRANSCRIPT_CHARS = 12000; // hard cap to bound the prompt
+// Newest auto-extracted, unpinned memories kept per child.
+const MAX_AUTO_MEMORIES = 20;
+const AUTO_SOURCES = ["chat", "briefing", "weekly-insights"];
 
 type ExtractedItem = {
   category: string;
@@ -145,8 +166,27 @@ serve(async (req) => {
       .join("\n\n")
       .slice(0, MAX_TRANSCRIPT_CHARS);
 
-    const systemPrompt =
-      `You extract durable facts about a specific child or the parent's persistent preferences from a parenting-app conversation. Return up to 5 facts as a JSON array of {category, content, confidence} where category is one of: preference, trait, routine, concern, goal, context. Skip ephemeral details (today's nap time, what they ate at one feeding, a single tantrum). Skip anything that semantically duplicates the existing memory list provided. Content must be 3-500 chars. Confidence is 0.0-1.0. If nothing durable is worth remembering, return [].`;
+    const systemPrompt = [
+      "You save a small number of durable notes about a child that a baby-tracking app's logs cannot capture. The text you read is usually an AI briefing or weekly summary generated FROM the app's logs, so most of it is log data restated. That is never worth saving: the app already has the logs.",
+      "",
+      "SAVE only facts that stay true for months and could not be computed from feeding, sleep, diaper, or growth logs:",
+      "- preference: likes and dislikes (foods, toys, songs, positions), and what soothes this child (e.g. \"Calms fastest with white noise and rocking\")",
+      "- trait: temperament quirks (e.g. \"Startles easily at loud noises\")",
+      "- routine: routines described in words, not times or counts (e.g. \"Bath, book, then bed\")",
+      "- goal: something the parent says they are working toward (e.g. \"Parent wants to move to one nap\")",
+      "- context: family or care setup (daycare, siblings, bilingual home, a grandparent who helps)",
+      "",
+      "NEVER save:",
+      "- numbers, counts, durations, rates, or totals derived from logs (\"feeds about 10 times per 48 hours\", \"slept 24.6 hours\")",
+      "- comparisons to norms, baselines, averages, percentiles, or what is typical for the age",
+      "- anything about what the parent did or didn't log, track, or record",
+      "- anything diagnostic, medical, or a judgment about health, growth, or development",
+      "- anything about a single day, night, or week, or a trend that could change by the next summary",
+      "- anything that duplicates the existing memories or the structured profile",
+      "",
+      "Write each note as one short, neutral sentence, ideally 140 characters or fewer (hard limit 200). Do not use the child's name.",
+      "Return a JSON array of {category, content, confidence} with at most 3 items; confidence is 0.0-1.0. Returning [] is the normal, expected answer: only save a note when the text clearly states a durable fact from the list above.",
+    ].join("\n");
 
     const userMessage =
       `EXISTING MEMORIES:\n${existingList}${structuredProfile}\n\nCONVERSATION:\n\`\`\`\n${transcriptStr}\n\`\`\`\n\nReturn ONLY the JSON array — no markdown, no commentary.`;
@@ -215,6 +255,7 @@ serve(async (req) => {
 
       if (!VALID_CATEGORIES.has(cat)) continue;
       if (content.length < MIN_CONTENT_LEN || content.length > MAX_CONTENT_LEN) continue;
+      if (looksLikeLogStatistic(content)) continue;
       if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) continue;
 
       const norm = normalizeContent(content);
@@ -253,6 +294,8 @@ serve(async (req) => {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
+    await pruneAutoMemories(userClient, childId);
+
     return new Response(null, { status: 204, headers: corsHeaders });
   } catch (err) {
     console.error("extract-memory unhandled error:", err);
@@ -265,6 +308,83 @@ function jsonResponse(body: unknown, status: number): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+// Keep only the newest MAX_AUTO_MEMORIES auto-extracted, unpinned rows for
+// this child. Pinned, manual, and sleep-triage rows are never touched (they
+// are excluded by the filters on BOTH the select and the delete, so a row
+// pinned between the two calls is still safe). Runs through the user-session
+// client; RLS DELETE policy is `can_access_child(auth.uid(), child_id)`.
+// Deletes in chunks of PRUNE_CHUNK ids so the DELETE's `id=in.(...)` query
+// string stays well under gateway URL limits; loops until nothing is over
+// the cap (bounded by PRUNE_MAX_PASSES). Best-effort: errors are logged and
+// swallowed.
+const PRUNE_CHUNK = 100;
+const PRUNE_MAX_PASSES = 20;
+
+type UserClient = ReturnType<typeof createClient>;
+
+async function pruneAutoMemories(
+  client: UserClient,
+  childId: string,
+): Promise<void> {
+  try {
+    for (let pass = 0; pass < PRUNE_MAX_PASSES; pass++) {
+      const removed = await prunePass(client, childId);
+      if (removed < PRUNE_CHUNK) return;
+    }
+  } catch (err) {
+    console.error("extract-memory prune unhandled error:", err);
+  }
+}
+
+// Returns how many ids it tried to delete; 0 on error so the loop stops.
+async function prunePass(client: UserClient, childId: string): Promise<number> {
+  const { data: overCap, error: selErr } = await client
+    .from("child_memories")
+    .select("id")
+    .eq("child_id", childId)
+    .eq("pinned", false)
+    .in("source_function", AUTO_SOURCES)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(MAX_AUTO_MEMORIES, MAX_AUTO_MEMORIES + PRUNE_CHUNK - 1);
+
+  if (selErr) {
+    console.error("extract-memory prune select error:", selErr);
+    return 0;
+  }
+  const ids = (overCap ?? []).map((r: { id: string }) => r.id);
+  if (ids.length === 0) return 0;
+
+  const { error: delErr } = await client
+    .from("child_memories")
+    .delete()
+    .eq("child_id", childId)
+    .eq("pinned", false)
+    .in("source_function", AUTO_SOURCES)
+    .in("id", ids);
+
+  if (delErr) {
+    console.error("extract-memory prune delete error:", delErr);
+    return 0;
+  }
+  return ids.length;
+}
+
+// Cheap backstop for the prompt rules: reject notes that talk about logging
+// or read as log statistics / norm comparisons. Patterns are narrow on
+// purpose ("3 days a week at daycare" or "big sister is 4" still pass).
+const LOG_STAT_PATTERNS: RegExp[] = [
+  /\b(logs?|logged|logging|recorded|tracked|tracking)\b/i,
+  /\b(baseline|percentile|on average)\b/i,
+  /\b(below|above|under|over)\s+(the\s+)?(typical|average|normal|expected)\b/i,
+  /\d+(\.\d+)?\s*(h|hours?|hrs?|minutes?|mins?|times|oz|ounces?|ml|feeds?|feedings?|diapers?|%|percent)\b/i,
+  /\bper\s+(\d+\s*)?(hours?|day|days|week|weeks|night)\b/i,
+];
+
+function looksLikeLogStatistic(content: string): boolean {
+  return LOG_STAT_PATTERNS.some((re) => re.test(content));
 }
 
 function normalizeContent(s: string): string {

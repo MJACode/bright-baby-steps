@@ -69,7 +69,8 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
             as modeled, illnesses, medications, supplements), finance-planning
             answers and which savings accounts you mark as opened,
             and short AI-generated notes
-            about your child that you can review, edit, and delete.
+            about your child's likes, routines, and goals, which you can see
+            in Export My Data and clear at any time.
           </p>
         </div>
         <div>

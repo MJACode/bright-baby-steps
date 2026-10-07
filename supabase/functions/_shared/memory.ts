@@ -39,7 +39,7 @@ const MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN;
 /**
  * Load the per-child memory context block to inject into AI system prompts.
  *
- * Selects up to 50 rows for `childId`, ordered `pinned DESC, created_at DESC`,
+ * Selects up to 20 rows for `childId`, ordered `pinned DESC, created_at DESC`,
  * formats them as a bulleted block, truncates from the bottom (oldest
  * unpinned drops first) if the total exceeds ~1500 tokens, and stamps
  * `last_referenced_at = now()` on the rows it actually returned.
@@ -59,7 +59,7 @@ export async function loadMemoryContext(
     .eq("child_id", childId)
     .order("pinned", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(20);
 
   if (error) {
     console.error("loadMemoryContext select error:", error);
