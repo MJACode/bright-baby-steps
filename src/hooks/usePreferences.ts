@@ -16,6 +16,9 @@ export interface Preferences {
   hiddenHomeSections: string[];
   homeQuickTiles: string[];
   homeSectionsMigrated: boolean;
+  signsPromoDismissed: boolean;
+  /** ISO timestamp the Sign Language comeback nudge is hidden until. */
+  signsNudgeSnoozedUntil: string | null;
   theme: ThemePreference;
 }
 
@@ -33,6 +36,8 @@ const defaults: Preferences = {
   hiddenHomeSections: [],
   homeQuickTiles: ["food", "sleep", "diaper", "milestone"],
   homeSectionsMigrated: false,
+  signsPromoDismissed: false,
+  signsNudgeSnoozedUntil: null,
   theme: "system",
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing
