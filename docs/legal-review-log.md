@@ -3041,7 +3041,7 @@ Legitimate callers keep working:
 - `can_manage_child_finance` (the gate on the Financial surface) did not check the free-plan seat limit, so a co-parent put on hold by a plan lapse kept finance access.
 - The same twelve policies keyed on the client-supplied `parent_id`, so a signed-in user could insert junk rows against any child id, and the owner could not see records a partner had entered. No such rows exist on live (0 partner-authored or foreign rows across the 12 tables).
 
-**What changed:** migration `20261008000000_role_permissions.sql` (applied by the `migrate` job on merge, after founder approval).
+**What changed:** migration `20261008010000_role_permissions.sql` (applied by the `migrate` job on merge, after founder approval).
 - Care-tier records (vaccinations, pediatrician / dental visits, cry analyses, EI tracker + providers, new-baby checklist, birth certificates): every active partner can read; only the owner, co-parents and caregivers can write; View-only cannot write.
 - Finance-tier records (college savings + contributions, life insurance, health insurance): owner and co-parents only, read and write, the same audience as the existing Financial surface.
 - Only the owner can delete a child.
