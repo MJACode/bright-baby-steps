@@ -3050,7 +3050,7 @@ Legitimate callers keep working:
 
 **Analysis:** narrows access to match the existing disclosures (invite role copy, Terms "Shared access", Privacy § 5 "co-parents or caregivers you explicitly invite"). No new collection, use, processor or retention change. The one widening, owners now seeing records their partners entered, is within the owner's own account. No Privacy / Terms copy change needed; non-material under 16 CFR § 312.5(a)(1).
 
-**Code refs:** PR (draft) on branch `claude/role-permissions-rls`. Fill in the commit hash at merge.
+**Code refs:** PR #282 (branch `claude/role-permissions-rls`). Fill in the commit hash at merge.
 
 **Follow-ups:**
 1. Seven tables still check write access against the client-supplied `parent_id` (`activity_plans`, `child_activities`, `ferber_check_ins`, `scheduled_visits`, `sleep_day_todos`, `sleep_plans`, `speech_practice_plans`), so a View-only partner can still insert rows of their own against the child (not visible to the owner). `child_memories` lets any partner, including View-only, add, edit and delete AI-memory notes. Same fix pattern; needs its own founder OK. P1.
