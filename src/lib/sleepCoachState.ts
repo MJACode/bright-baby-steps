@@ -87,3 +87,48 @@ export function sleepCoachShowing(
 ): boolean {
   return deriveCoachState(now, windowStart, windowEnd, calmMode) !== null;
 }
+
+export type WakeState =
+  | { kind: "before"; title: string; cue: string }
+  | { kind: "window"; title: string; cue: string }
+  | { kind: "longer"; title: string; cue: string };
+
+export const WAKE_LONGER_CUE = "Enjoy the stretch — we'll update when you log the wake.";
+
+/** "{Name|Your baby} may be hungry when they wake." — shared by every surface. */
+export function hungryOnWakeCopy(childName?: string | null): string {
+  return `${firstNameOrBaby(childName)} may be hungry when they wake.`;
+}
+
+export function firstNameOrBaby(childName?: string | null): string {
+  return childName?.trim().split(/\s+/)[0] || "Your baby";
+}
+
+/** The Sleep Coach card's copy while a sleep is in progress. */
+export function deriveWakeState(
+  now: Date,
+  pred: { windowStart: Date; windowEnd: Date },
+  calmMode: boolean,
+  opts: { hungryOnWake: boolean; childName?: string | null; isNight: boolean },
+): WakeState {
+  const nowMs = now.getTime();
+  const restCue = opts.hungryOnWake
+    ? hungryOnWakeCopy(opts.childName)
+    : opts.isNight
+      ? "Morning light helps set the day's rhythm."
+      : "Keep things quiet and dim.";
+
+  if (nowMs < pred.windowStart.getTime()) {
+    const center = new Date((pred.windowStart.getTime() + pred.windowEnd.getTime()) / 2);
+    const clock = calmMode ? formatApproxClock(center) : format(center, "h:mm a");
+    return { kind: "before", title: `Likely to wake around ${clock}`, cue: restCue };
+  }
+  if (nowMs <= pred.windowEnd.getTime()) {
+    return { kind: "window", title: "Could wake any minute", cue: restCue };
+  }
+  return {
+    kind: "longer",
+    title: "Sleeping longer than usual",
+    cue: opts.hungryOnWake ? hungryOnWakeCopy(opts.childName) : WAKE_LONGER_CUE,
+  };
+}
