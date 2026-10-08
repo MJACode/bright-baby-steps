@@ -60,7 +60,8 @@ export function DeepLinkHandler() {
               access_token: accessToken,
               refresh_token: refreshToken,
             });
-            navigate("/dashboard");
+            // Via /auth so a pending partner invite still wins.
+            navigate("/auth");
           }
         }
       } catch (err) {
