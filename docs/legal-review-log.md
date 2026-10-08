@@ -3013,4 +3013,4 @@ Legitimate callers keep working:
 **Analysis:** this is a pure naming change. No change to the data collected, the purposes, the processors (Anthropic, PBC stays the same with the same per-sign payload and no name), retention, or deletion. It is non-material under 16 CFR § 312.5(a)(1), so no renewed VPC and no 30-day subprocessor notice.
 
 **Follow-ups:**
-1. The server-side `generate-sign-plan` prompt still calls it the "Baby Signs plan" internally. The model sees this, but users never do. Rename it when that function is next touched (backend). P3.
+1. The server-side `generate-sign-plan` prompt still calls it the "Baby Signs plan" internally. The model sees this, but users never do. Rename it when that function is next touched (backend). P3. **Closed 2026-10-08:** prompt now says "Sign Language plan"; payload, model and data sent to Anthropic unchanged.

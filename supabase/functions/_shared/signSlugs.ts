@@ -1,4 +1,4 @@
-// Server copy of the Baby Signs library slugs, in src/data/signLibrary.ts order.
+// Server copy of the Sign Language library slugs, in src/data/signLibrary.ts order.
 //
 // generate-sign-plan uses this to reject unknown slugs on input and to drop
 // any slug the model invents on output (research R7). It duplicates the client
