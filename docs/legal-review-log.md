@@ -3031,6 +3031,34 @@ Legitimate callers keep working:
 
 ---
 
+## 2026-10-08 — Partner role permissions enforced in the database (view-only, caregiver finance, owner-only child delete)
+
+**Reviewer:** in-house (Claude `backend`; founder-approved target 2026-10-03, task 2c in `docs/handoff-2026-10-05-partners-team.md`). **Risk level:** Medium before the fix (the database did not enforce what the role copy promises); Low after.
+
+**What was wrong (live, read-only audit 2026-10-08):**
+- The invite copy (`src/lib/partnerInvite.ts`) promises View-only "Cannot log or change anything" and Caregiver "not finance or settings". Twelve records tables still had one `FOR ALL` policy that admitted every active partner, so a **View-only partner could add, edit and delete** vaccinations, pediatrician and dental visits, cry analyses, Early Intervention records, the new-baby checklist, birth-certificate details, health and life insurance, and college savings / contributions; **caregivers could read and write the finance records**.
+- `children` DELETE allowed any write-capable partner, so **a caregiver (or co-parent) could delete the owner's child** and, by cascade, all of that child's records.
+- `can_manage_child_finance` (the gate on the Financial surface) did not check the free-plan seat limit, so a co-parent put on hold by a plan lapse kept finance access.
+- The same twelve policies keyed on the client-supplied `parent_id`, so a signed-in user could insert junk rows against any child id, and the owner could not see records a partner had entered. No such rows exist on live (0 partner-authored or foreign rows across the 12 tables).
+
+**What changed:** migration `20261008010000_role_permissions.sql` (applied by the `migrate` job on merge, after founder approval).
+- Care-tier records (vaccinations, pediatrician / dental visits, cry analyses, EI tracker + providers, new-baby checklist, birth certificates): every active partner can read; only the owner, co-parents and caregivers can write; View-only cannot write.
+- Finance-tier records (college savings + contributions, life insurance, health insurance): owner and co-parents only, read and write, the same audience as the existing Financial surface.
+- Only the owner can delete a child.
+- `can_manage_child_finance` now honours the seat limit like every other access helper.
+- New rows must carry the author's own id (authorship cannot be forged).
+
+**Analysis:** narrows access to match the existing disclosures (invite role copy, Terms "Shared access", Privacy § 5 "co-parents or caregivers you explicitly invite"). No new collection, use, processor or retention change. The one widening, owners now seeing records their partners entered, is within the owner's own account. No Privacy / Terms copy change needed; non-material under 16 CFR § 312.5(a)(1).
+
+**Code refs:** PR #282 (branch `claude/role-permissions-rls`). Fill in the commit hash at merge.
+
+**Follow-ups:**
+1. Seven tables still check write access against the client-supplied `parent_id` (`activity_plans`, `child_activities`, `ferber_check_ins`, `scheduled_visits`, `sleep_day_todos`, `sleep_plans`, `speech_practice_plans`), so a View-only partner can still insert rows of their own against the child (not visible to the owner). `child_memories` lets any partner, including View-only, add, edit and delete AI-memory notes. Same fix pattern; needs its own founder OK. P1.
+2. Caregivers can still create a child under the owner's account and edit the child's profile (`children` INSERT / UPDATE). Decide whether that is "settings". P2.
+3. Frontend: hide add / edit / delete controls on Records surfaces for View-only, and finance-tier data for caregivers, so they don't hit RLS errors. P2.
+
+---
+
 ## 2026-10-08 — Partner role subs (legal "G" wording) and the owner's role switch
 
 **Reviewer:** in-house (Claude `frontend`; legal's wording from `docs/handoff-2026-10-05-partners-team.md` § 4 "G", founder-approved). **Risk level:** Low (copy change plus an owner-only control over an existing RPC).
@@ -3040,6 +3068,6 @@ Legitimate callers keep working:
 - `PartnerManagement.tsx` gives the account owner a role switch (Co-parent / Caregiver / View-only) on each person, backed by the owner-only `set_partner_role` RPC. The person is not notified, as legal's approved AcceptInvite bullet says ("{Owner} can change your role … We don't send a notice when that happens.").
 - The role descriptions (`ROLE_COPY.*.desc`) are unchanged. The Co-parent desc ("Full access. Logs, edits, manages everything.") still conflicts with the new Co-parent sub. It is waiting on a founder decision.
 
-**Analysis:** the Co-parent sub is accurate: `partner_access` UPDATE and `set_partner_role` are owner-only, so co-parents can't manage the team. Restricting a role is only as true as the live RLS behind it. The role switch must not merge before the companion permissions PR (`claude/role-permissions-rls`), which makes View-only and Caregiver enforce what the copy promises. No change to data collected, purposes, processors, or retention.
+**Analysis:** the Co-parent sub is accurate: `partner_access` UPDATE and `set_partner_role` are owner-only, so co-parents can't manage the team. Restricting a role is only as true as the live RLS behind it. The companion permissions PR #282 merged and was applied to production on 2026-10-08 (migration `20261008010000_role_permissions`), so View-only and Caregiver now enforce what the copy promises (see the entry above). No change to data collected, purposes, processors, or retention.
 
 **Code refs:** PR #280. Fill in the commit hash at merge.
