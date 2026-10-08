@@ -3028,3 +3028,18 @@ Legitimate callers keep working:
 **Analysis:** removes data collected under the broader, pre-2026-10-07 extraction scope (including stat-like and `concern` notes), so what is retained now matches Privacy § 2 as rewritten on 2026-10-07. Deletion only — no new collection, use, or disclosure; no Privacy copy change needed; no parent notice required.
 
 **Code refs:** PR #277 — fill in commit hash at merge.
+
+---
+
+## 2026-10-08 — Partner role subs (legal "G" wording) and the owner's role switch
+
+**Reviewer:** in-house (Claude `frontend`; legal's wording from `docs/handoff-2026-10-05-partners-team.md` § 4 "G", founder-approved). **Risk level:** Low (copy change plus an owner-only control over an existing RPC).
+
+**What changed:**
+- `ROLE_COPY` subs in `src/lib/partnerInvite.ts` now use legal's "G" wording: Co-parent "Everything except managing your team", Caregiver "Nanny · Sitter · Grandparent", View-only "Grandparent · Family friend". "Pediatrician" and "Daycare" are removed. The subs appear on the onboarding `PartnerRolePicker`.
+- `PartnerManagement.tsx` gives the account owner a role switch (Co-parent / Caregiver / View-only) on each person, backed by the owner-only `set_partner_role` RPC. The person is not notified, as legal's approved AcceptInvite bullet says ("{Owner} can change your role … We don't send a notice when that happens.").
+- The role descriptions (`ROLE_COPY.*.desc`) are unchanged. The Co-parent desc ("Full access. Logs, edits, manages everything.") still conflicts with the new Co-parent sub. It is waiting on a founder decision.
+
+**Analysis:** the Co-parent sub is accurate: `partner_access` UPDATE and `set_partner_role` are owner-only, so co-parents can't manage the team. Restricting a role is only as true as the live RLS behind it. The role switch must not merge before the companion permissions PR (`claude/role-permissions-rls`), which makes View-only and Caregiver enforce what the copy promises. No change to data collected, purposes, processors, or retention.
+
+**Code refs:** PR #280. Fill in the commit hash at merge.

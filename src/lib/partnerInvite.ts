@@ -32,7 +32,7 @@ export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: 
   },
 };
 
-/** Rows created before roles existed have a null role; they were co-parents. */
+/** Defensive: the column is NOT NULL DEFAULT 'coparent', but anything unrecognised falls back to co-parent. */
 export function toPartnerRole(raw: string | null | undefined): PartnerRole {
   return raw === "caregiver" || raw === "viewer" ? raw : "coparent";
 }

@@ -144,7 +144,6 @@ export default function PartnerManagement() {
       if (error) throw error;
     },
     onSuccess: (_data, { role, email }) => {
-      queryClient.invalidateQueries({ queryKey: ["partner_access"] });
       toast({ title: "Role updated", description: roleChangedMessage(email, role) });
     },
     onError: (err) =>
@@ -153,6 +152,9 @@ export default function PartnerManagement() {
         description: "Nothing changed. Try again in a moment.",
         variant: "destructive",
       }),
+    // Returned so the mutation stays pending until the row refetches; a failed
+    // change (e.g. the person was removed elsewhere) refreshes the row too.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["partner_access"] }),
   });
 
   const revokePartner = useMutation({

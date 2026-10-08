@@ -6,7 +6,7 @@ describe("toPartnerRole", () => {
     for (const r of PARTNER_ROLES) expect(toPartnerRole(r)).toBe(r);
   });
 
-  it("treats a legacy null role as co-parent", () => {
+  it("falls back to co-parent for a missing role", () => {
     expect(toPartnerRole(null)).toBe("coparent");
     expect(toPartnerRole(undefined)).toBe("coparent");
   });
