@@ -1,5 +1,5 @@
-// "Weekly sign plan" (Baby Signs coach) — builds a one-week sign plan for a
-// child from the curated Baby Signs library.
+// "Weekly sign plan" (Sign Language coach) — builds a one-week sign plan for a
+// child from the curated Sign Language library.
 //
 // Flare+ feature. Wraps the `slp` persona (single source of truth in
 // ../_shared/personas.ts) with SIGN_PLAN_INSTRUCTION and returns a sanitized
@@ -51,7 +51,7 @@ const SIGN_PLAN_MAX_TOKENS = 1500;
 const MAX_BODY_BYTES = 16 * 1024;
 
 // Appended to the slp persona prompt. Mirrors the contract's prompt rules.
-const SIGN_PLAN_INSTRUCTION = `You are now building this week's Baby Signs plan: a short, warm plan that helps one tired parent model a few ASL-based signs with their baby during everyday routines. You are given only the child's corrected age in months and their progress on a curated library of signs. You do not know the child's name, and you never need it — say "your baby".
+const SIGN_PLAN_INSTRUCTION = `You are now building this week's Sign Language plan: a short, warm plan that helps one tired parent model a few ASL-based signs with their baby during everyday routines. You are given only the child's corrected age in months and their progress on a curated library of signs. You do not know the child's name, and you never need it — say "your baby".
 
 Return ONLY this JSON object — no prose, no code fences:
 {

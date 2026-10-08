@@ -1,4 +1,4 @@
-// Pure helpers for generate-sign-plan (Baby Signs coach).
+// Pure helpers for generate-sign-plan (Sign Language coach).
 //
 // Kept free of Deno globals and URL imports on purpose: the only import is the
 // relative ./signSlugs.ts, so vitest can import this file directly and lock

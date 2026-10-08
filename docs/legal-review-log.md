@@ -3001,6 +3001,20 @@ Legitimate callers keep working:
 4. Pre-existing: "Profile → Manage Child Data" (Privacy § 7, CoppaDirectNotice, ChildContextPage) names a control that doesn't exist; point to Export My Data / Delete Account. P1.
 5. Outside counsel (when commissioned): whether withdrawing an in-app edit control promised in a signed direct notice needs § 11 30-day notice.
 
+## 2026-10-07 — "Baby Signs" renamed "Sign Language" in user-visible copy
+
+**Reviewer:** in-house (Claude `frontend`, founder-approved rename 2026-10-07). **Risk level:** None/Low (naming change only).
+
+**What changed:**
+- The feature formerly called "Baby Signs" is now called "Sign Language" everywhere a user can see it: Privacy § 2 (the "AI plans (Flare+)" and "Tracking data" bullets) and § 4 (feature list and the sign-plan data clause), the FAQ stored-data and third-party answers, the COPPA direct notice "How we use it" line (`CoppaDirectNotice.tsx`, "like Sign Language plans"), and the `/subprocessors` Anthropic purpose and data-categories text. Product surfaces renamed too: Home tile, Signs page heading, Milestones card, Flare+ feature lists, and the Export My Data table labels.
+- No other legal wording changed. Privacy / `/subprocessors` "Last reviewed" dates are left as they were.
+- Internal identifiers are unchanged: route `/dashboard/signs`, tile id `signs`, premium feature key `baby-signs`, tables `child_signs` / `child_sign_practice` / `sign_plans`, and edge function `generate-sign-plan`.
+
+**Analysis:** this is a pure naming change. No change to the data collected, the purposes, the processors (Anthropic, PBC stays the same with the same per-sign payload and no name), retention, or deletion. It is non-material under 16 CFR § 312.5(a)(1), so no renewed VPC and no 30-day subprocessor notice.
+
+**Follow-ups:**
+1. The server-side `generate-sign-plan` prompt still calls it the "Baby Signs plan" internally. The model sees this, but users never do. Rename it when that function is next touched (backend). P3. **Closed 2026-10-08:** prompt now says "Sign Language plan"; payload, model and data sent to Anthropic unchanged.
+
 ---
 
 ## 2026-10-08 — One-time purge of legacy auto-extracted AI-memory notes
@@ -3013,4 +3027,4 @@ Legitimate callers keep working:
 
 **Analysis:** removes data collected under the broader, pre-2026-10-07 extraction scope (including stat-like and `concern` notes), so what is retained now matches Privacy § 2 as rewritten on 2026-10-07. Deletion only — no new collection, use, or disclosure; no Privacy copy change needed; no parent notice required.
 
-**Code refs:** fill in PR # and commit hash at merge.
+**Code refs:** PR #277 — fill in commit hash at merge.

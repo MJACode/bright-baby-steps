@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { PremiumGate } from "@/components/PremiumGate";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
+import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { usePreferences } from "@/hooks/usePreferences";
 import { formatApproxClock } from "@/lib/gentleTime";
 import { pickBandEvent } from "@/lib/nextEvent";
@@ -42,6 +43,7 @@ export function NextEventBand({
 }: NextEventBandProps) {
   const { data: coach } = useSleepCoach(activeChild);
   const feed = useFeedCoach(activeChild);
+  const { active: activeSleep } = useActiveSleep(activeChild?.id);
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
 
@@ -54,7 +56,9 @@ export function NextEventBand({
     return () => clearInterval(id);
   }, []);
 
-  const nap = coach?.prediction ?? null;
+  // No "likely sleepy" while the baby is already asleep — the band falls back
+  // to the feed side, which still matters for when they wake.
+  const nap = activeSleep ? null : coach?.prediction ?? null;
   const hunger = feed.prediction;
   const napOwned =
     sleepCoachVisible &&
