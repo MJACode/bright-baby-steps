@@ -52,6 +52,31 @@ export function usePremium() {
 }
 
 /**
+ * True when the child's owner has Flare+ and the caller can access the child —
+ * lets a caregiver on a paying family see client-side premium surfaces.
+ * `subscriptions` RLS is own-row only, so usePremium() can't answer this.
+ *
+ * Any failure (including the RPC not existing yet because the frontend
+ * deployed ahead of the migration) resolves to false, once, without retrying.
+ */
+export function useChildOwnerPremium(childId: string | undefined, { enabled = true }: { enabled?: boolean } = {}) {
+  const { user } = useAuth();
+  const { data, isLoading } = useQuery<boolean>({
+    queryKey: ["child-premium", user?.id, childId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("child_owner_is_premium", { _child_id: childId! });
+      if (error) return false;
+      return data === true;
+    },
+    enabled: enabled && !!user && !!childId,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  return { isChildOwnerPremium: data === true, isLoading };
+}
+
+/**
  * Premium feature flags. Centralizing these makes it trivial to add a feature
  * to the paywall (or remove it during a promo) without grepping the codebase.
  */
