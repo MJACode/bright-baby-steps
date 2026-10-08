@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePremium, type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { useChildren } from "@/hooks/useChildren";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 
 interface PremiumGateProps {
   feature: PremiumFeature;
@@ -37,10 +39,13 @@ export function PremiumGate({
 }: PremiumGateProps) {
   const { isPremium, isLoading } = usePremium();
   const [open, setOpen] = useState(false);
+  const { activeChild } = useChildren();
+  const { role, isResolved } = useCurrentRoleQuery(activeChild?.id);
 
   if (isLoading) return <>{children}</>;
   if (isPremium) return <>{children}</>;
-  if (hideOnFree) return null;
+  // A caregiver isn't the one who'd pay for Flare+, so never pitch it to them.
+  if (hideOnFree || (isResolved && role === "caregiver")) return null;
 
   const featureLabel = label ?? PREMIUM_FEATURES[feature];
 

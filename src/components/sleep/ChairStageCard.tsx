@@ -168,7 +168,9 @@ export function ChairStageCard({ childId, plan }: ChairStageCardProps) {
     try {
       await saveSleepPlan.mutateAsync({
         child_id: childId,
-        parent_id: user.id,
+        // The owner's id, not the tapper's: a partner overwriting it would move
+        // the row out of the owner's RLS scope.
+        parent_id: plan.parent_id,
         wake_time: plan.wake_time,
         bedtime_earliest: plan.bedtime_earliest,
         bedtime_latest: plan.bedtime_latest,

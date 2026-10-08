@@ -10,6 +10,7 @@ import { useChildren } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useLeaps } from "@/hooks/useLeaps";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { useSleepWindow } from "@/hooks/useSleepPatterns";
 import { useSleepPlan, type FerberSchedule } from "@/hooks/useSleepPlan";
 import { sleepAgeMonths, useSleepCoach } from "@/hooks/useSleepCoach";
@@ -108,6 +109,10 @@ export default function SleepPage() {
   const { data: savedPlan } = useSleepPlan(activeChild?.id ?? null);
   const { data: leaps } = useLeaps(activeChild ?? null);
   const { active: activeSleepLog } = useActiveSleep(activeChild?.id);
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  // Choosing or rebuilding the sleep plan is the parents' call; a caregiver
+  // follows it (Ferber / chair cards stay) but doesn't get the plan editor.
+  const canEditPlan = !(roleResolved && role === "caregiver");
 
   const [savingTimer, setSavingTimer] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -255,7 +260,7 @@ export default function SleepPage() {
           {showFerberTimer && user && activeSleepLog && (
             <FerberCheckInTimer
               childId={activeChild.id}
-              parentId={user.id}
+              parentId={activeChild.parent_id}
               method="ferber"
               ferberSchedule={(savedPlan?.ferber_schedule as unknown as FerberSchedule | null) ?? null}
               activeSleepLog={{
@@ -283,12 +288,14 @@ export default function SleepPage() {
         schedule={sleepWindow.schedule}
       />
 
-      <SleepPlanReminderBanner
-        childId={activeChild.id}
-        childName={activeChild.name ?? "your baby"}
-        variant="row"
-        onOpen={() => setPlanOpen(true)}
-      />
+      {canEditPlan && (
+        <SleepPlanReminderBanner
+          childId={activeChild.id}
+          childName={activeChild.name ?? "your baby"}
+          variant="row"
+          onOpen={() => setPlanOpen(true)}
+        />
+      )}
 
       <section aria-labelledby="sleep-recent-heading" className="space-y-2">
         <div className="flex items-center justify-between gap-2">
@@ -341,16 +348,19 @@ export default function SleepPage() {
         )}
       </section>
 
-      <SleepPlanDialog
-        open={planOpen}
-        onOpenChange={setPlanOpen}
-        childId={activeChild.id}
-        childName={activeChild.name ?? "your baby"}
-        ageMonths={ageMonths}
-        ageChild={activeChild}
-        ageDays={ageDays}
-        logs={coach?.logs ?? []}
-      />
+      {canEditPlan && (
+        <SleepPlanDialog
+          open={planOpen}
+          onOpenChange={setPlanOpen}
+          childId={activeChild.id}
+          ownerId={activeChild.parent_id}
+          childName={activeChild.name ?? "your baby"}
+          ageMonths={ageMonths}
+          ageChild={activeChild}
+          ageDays={ageDays}
+          logs={coach?.logs ?? []}
+        />
+      )}
     </div>
   );
 }
