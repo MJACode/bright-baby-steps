@@ -3409,6 +3409,10 @@ export type Database = {
         Args: { p_child_id: string }
         Returns: boolean
       }
+      child_owner_is_premium: {
+        Args: { _child_id: string }
+        Returns: boolean
+      }
       complete_vpc_second_confirmation: {
         Args: { p_token: string }
         Returns: Json
