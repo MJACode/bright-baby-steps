@@ -1,4 +1,4 @@
-// Weekly Baby Signs plan: the request the client sends to generate-sign-plan,
+// Weekly Sign Language plan: the request the client sends to generate-sign-plan,
 // the client-side re-validation of what comes back (FR-025), and the focus
 // steps "Use these signs" runs. Contract:
 // specs/001-baby-signs-v2/contracts/generate-sign-plan.md.
