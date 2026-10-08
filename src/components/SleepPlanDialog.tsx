@@ -57,6 +57,9 @@ interface SleepPlanDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   childId: string;
+  // The child's owner. sleep_plans RLS pivots on parent_id, so a partner saving
+  // under their own id would hide the plan from the owner.
+  ownerId: string;
   childName: string;
   ageMonths: number;
   // The child's age fields, so the plan can find the day the next age
@@ -92,6 +95,7 @@ export function SleepPlanDialog({
   open,
   onOpenChange,
   childId,
+  ownerId,
   childName,
   ageMonths,
   ageChild,
@@ -214,7 +218,7 @@ export function SleepPlanDialog({
 
       await saveSleepPlan.mutateAsync({
         child_id: childId,
-        parent_id: user.id,
+        parent_id: ownerId,
         wake_time: local.overrides.wake_time ? local.wake_time : null,
         bedtime_earliest: local.overrides.bedtime ? local.bedtime_earliest : null,
         bedtime_latest: local.overrides.bedtime ? local.bedtime_latest : null,

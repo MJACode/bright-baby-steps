@@ -12,6 +12,7 @@ import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
+import { caregiverBackTarget } from "@/lib/caregiverRoutes";
 
 // Secondary pages (no bottom-tab presence) get a back affordance to their
 // parent surface. Navigates to the parent route — not history back — so deep
@@ -68,9 +69,33 @@ export default function DashboardLayout() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Caregiver-role partners get a purpose-built UI (no tabs, briefing, or analytics)
+  // Caregiver-role partners get a purpose-built UI (no tabs, briefing, or
+  // analytics). The only routes they reach are the logging surfaces, in a
+  // minimal shell whose single exit is back to CaregiverHome.
   if (!isOnboarding && role === "caregiver") {
-    return <CaregiverHome />;
+    const back = caregiverBackTarget(location.pathname);
+    if (!back) return <CaregiverHome />;
+    const backLabel = back.label ?? activeChild?.name ?? "Home";
+    return (
+      <div className="fixed inset-0 flex flex-col bg-background">
+        <header className="shrink-0 z-40 bg-card/90 backdrop-blur-lg border-b border-border safe-area-top">
+          <div className="flex items-center h-14 px-2 max-w-lg mx-auto">
+            <Link
+              to={back.to}
+              aria-label={`Back to ${backLabel}`}
+              className="inline-flex items-center gap-0.5 touch-target pl-1 pr-3 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              <span className="truncate">{backLabel}</span>
+            </Link>
+          </div>
+        </header>
+        <ActiveSessionBanner />
+        <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-w-lg mx-auto w-full">
+          <Outlet />
+        </main>
+      </div>
+    );
   }
 
   return (
