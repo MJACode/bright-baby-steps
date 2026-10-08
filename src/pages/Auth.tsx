@@ -3,6 +3,7 @@ import { Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeoBlock } from "@/hooks/useGeoBlock";
+import { peekPendingInvite } from "@/lib/partnerInvite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,10 +96,11 @@ export default function Auth() {
   }
 
   if (session) {
-    const pendingInvite = sessionStorage.getItem("pending_invite");
+    const metadataInvite = session.user.user_metadata?.pending_invite;
+    const pendingInvite =
+      peekPendingInvite() ?? (typeof metadataInvite === "string" && metadataInvite ? metadataInvite : null);
     if (pendingInvite) {
-      sessionStorage.removeItem("pending_invite");
-      return <Navigate to={`/invite/${pendingInvite}`} replace />;
+      return <Navigate to={`/invite/${encodeURIComponent(pendingInvite)}`} replace />;
     }
     // localStorage (not sessionStorage) so the deep link survives a Capacitor
     // WebView cold-start, same as the pending_invite deep-link pattern.
@@ -120,12 +122,13 @@ export default function Auth() {
         if (error) throw error;
         toast.success("Welcome back!");
       } else if (view === "signup") {
+        const pendingInviteCode = peekPendingInvite();
         const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth`,
-            data: { full_name: fullName },
+            data: { full_name: fullName, ...(pendingInviteCode ? { pending_invite: pendingInviteCode } : {}) },
           },
         });
         if (error) throw error;
