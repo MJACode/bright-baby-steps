@@ -2995,7 +2995,7 @@ Legitimate callers keep working:
 **Code refs:** fill in PR # and commit hash at merge.
 
 **Follow-ups:**
-1. One-time cleanup of legacy stat-like / `concern` auto-extracted notes (migration; founder decision). P0.
+1. ~~One-time cleanup of legacy stat-like / `concern` auto-extracted notes (migration; founder decision). P0.~~ Done — see 2026-10-08 entry below.
 2. Per-child "Stop saving notes" toggle (refuse-further-collection right for this store). P2.
 3. Rights-request triage runbook: correct/delete a single `child_memories` row by id. P1.
 4. Pre-existing: "Profile → Manage Child Data" (Privacy § 7, CoppaDirectNotice, ChildContextPage) names a control that doesn't exist; point to Export My Data / Delete Account. P1.
@@ -3014,3 +3014,17 @@ Legitimate callers keep working:
 
 **Follow-ups:**
 1. The server-side `generate-sign-plan` prompt still calls it the "Baby Signs plan" internally. The model sees this, but users never do. Rename it when that function is next touched (backend). P3. **Closed 2026-10-08:** prompt now says "Sign Language plan"; payload, model and data sent to Anthropic unchanged.
+
+---
+
+## 2026-10-08 — One-time purge of legacy auto-extracted AI-memory notes
+
+**Reviewer:** in-house (founder decision 2026-10-07, "Yes clean up"). **Risk level:** Low (deletion only; narrows retention; closes the 2026-10-07 Known gap / follow-up 1).
+
+**What changed:** migration `20261007000000_purge_legacy_auto_memories.sql` deletes every `child_memories` row with `source_function IN ('chat','briefing','weekly-insights')` created before `extract-memory` v6 (the narrowed prompt from PR #272) went live at 2026-10-07 09:45:08.301Z. Manual and sleep-triage rows are kept. Pinned rows are included (no UI can unpin any more). Idempotent; applied by the `migrate` job on merge.
+
+**Live impact (read-only audit 2026-10-08 00:11Z):** 283 rows across 2 children (273 briefing, 10 weekly-insights; 0 pinned; 0 manual / sleep-triage; 0 written by the new prompt). All 283 pre-cutoff rows are removed (newer rows, if any, survive). Irreversible except from Supabase backups (≤ 30 days).
+
+**Analysis:** removes data collected under the broader, pre-2026-10-07 extraction scope (including stat-like and `concern` notes), so what is retained now matches Privacy § 2 as rewritten on 2026-10-07. Deletion only — no new collection, use, or disclosure; no Privacy copy change needed; no parent notice required.
+
+**Code refs:** PR #277 — fill in commit hash at merge.
