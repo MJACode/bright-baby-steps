@@ -50,7 +50,8 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
     return () => clearInterval(id);
   }, []);
 
-  if (!pred) return null;
+  // A nap prediction is noise while the baby is already asleep.
+  if (!pred || activeSleep) return null;
 
   const state = deriveCoachState(now, pred.windowStart, pred.windowEnd, calmMode);
   if (!state) return null;
@@ -93,8 +94,7 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
     }
   })();
 
-  const ctaLabel = activeSleep ? "Nap in progress" : "Start nap";
-  const isCtaDisabled = !!activeSleep || start.isPending || !activeChild;
+  const isCtaDisabled = start.isPending || !activeChild;
 
   const handleStartNap = async () => {
     try {
@@ -164,7 +164,7 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
               disabled={isCtaDisabled}
               className="w-full min-h-[48px] mt-3 bg-sleep text-white hover:bg-sleep/90"
             >
-              {ctaLabel}
+              Start nap
             </Button>
           )}
         </CardContent>
