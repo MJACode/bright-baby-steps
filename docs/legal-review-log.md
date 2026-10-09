@@ -3057,8 +3057,6 @@ Legitimate callers keep working:
 2. Caregivers can still create a child under the owner's account and edit the child's profile (`children` INSERT / UPDATE). Decide whether that is "settings". P2.
 3. Frontend: hide add / edit / delete controls on Records surfaces for View-only, and finance-tier data for caregivers, so they don't hit RLS errors. P2.
 
----
-
 ## 2026-10-08 — Partner role subs (legal "G" wording) and the owner's role switch
 
 **Reviewer:** in-house (Claude `frontend`; legal's wording from `docs/handoff-2026-10-05-partners-team.md` § 4 "G", founder-approved). **Risk level:** Low (copy change plus an owner-only control over an existing RPC).
@@ -3071,3 +3069,32 @@ Legitimate callers keep working:
 **Analysis:** the Co-parent sub is accurate: `partner_access` UPDATE and `set_partner_role` are owner-only, so co-parents can't manage the team. Restricting a role is only as true as the live RLS behind it. The companion permissions PR #282 merged and was applied to production on 2026-10-08 (migration `20261008010000_role_permissions`), so View-only and Caregiver now enforce what the copy promises (see the entry above). No change to data collected, purposes, processors, or retention.
 
 **Code refs:** PR #280. Fill in the commit hash at merge.
+
+## 2026-10-08 — SECURITY: feed / sleep / diaper logs readable with the public anon key via `family_moments`; anon-callable functions locked down
+
+**Reviewer:** in-house (Claude `backend`; second pass 2026-10-09 before founder merge). **Risk level:** High (data exposure) → resolved when migration `20261008020000_security_hardening_anon_rpc.sql` is applied by the `migrate` job on merge. **Not applied to live. Merging applies it to production and needs founder approval first.**
+
+**What was exposed (new finding).** The view `public.family_moments` (`20260501020000_family_moments.sql`, used by the caregiver home card) was a plain view owned by `postgres`. `postgres` bypasses RLS and owns the underlying tables, so the view ignored every row-level policy. The project's default table privileges also gave `anon` SELECT on it. Result: anyone holding the public anon key could call `GET /rest/v1/family_moments` and read **every feed, sleep and diaper entry in the database**: child id, author user id, timestamps, feed amount and method, sleep duration, diaper type, and log source. No names. Verified read-only on live 2026-10-08: as `anon` the view returned 772 rows across 2 children (all children with logs; 4 accounts exist). The migration's comment said "view inherits RLS from base tables"; that was wrong. The 2026-09-30 audit (follow-up 2) flagged the view from the security advisor but did not test it.
+
+**Evidence of misuse.** Supabase log retention covers about 24 hours (2026-10-07T01:33Z to 2026-10-08T00:10Z). In that window there were no requests to `/rest/v1/family_moments` from anyone, and no anonymous `/rest/v1/rpc/*` calls. Anything before that window **cannot be ruled in or out from logs.**
+
+**Also closed by this migration (2026-09-30 audit follow-ups):**
+1. **Root cause** (follow-up 1). New functions in `public` are no longer executable by PUBLIC, `anon` or `authenticated` by default (`ALTER DEFAULT PRIVILEGES FOR ROLE postgres`). From now on every client-callable function needs an explicit `GRANT EXECUTE ... TO authenticated`. Added to the backend and QA lessons.
+2. **`family_moments`** (follow-up 2). Now `security_invoker = true`, so the querying user's RLS applies. `anon` has no access; signed-in users keep SELECT. The owner and entitled partners see exactly what they can already read from the log tables. A paused, removed or out-of-entitlement partner no longer sees entries through the view.
+3. **`delete_user_account()`** (follow-up 3). It was safe for anon (it raises "Not authenticated" when `auth.uid()` is null), and anon can no longer call it at all.
+4. **`can_access_child` guard** (follow-up 4). Already fixed on live by `20260930100000_free_partner_seat.sql`. The new migration fails if the `_user_id = auth.uid()` guard ever disappears from `can_access_child`, `can_write_child` or `has_partner_access`.
+
+**Function access after the migration.** Anon can execute only three token-based functions that a logged-out person needs: `complete_vpc_second_confirmation` (the COPPA email #2 link, often opened without a session) and the SLP share-page pair `get_home_program` / `toggle_home_program_day` (live only; that branch is not on `main`). Trigger functions can no longer be called directly by anyone. RLS helpers and signed-in RPCs stay available to signed-in users only, including `child_owner_is_premium` (the Flare+ check `usePremium` calls for partners; it landed on `main` while this PR was open, and it is already not anon-callable). `set_partner_role` stays signed-in only; Partner Management (PR #280) calls it after login. `lookup_partner_invitation` is signed-in only. The invite page still sends logged-out visitors to sign in before calling it (`AcceptInvite.tsx`, including the #283 pending-invite path), so anonymous invite-code probing stays closed. `touch_ai_memories_updated_at` gets a fixed `search_path`. The `mcp_*` tables keep RLS with no policies on purpose (service-role only, used by the `mcp` edge function).
+
+**Why the filename is `20261008020000`, not `20261008000000`.** Live `supabase_migrations.schema_migrations` already records version `20261008000000` as `child_owner_is_premium` (PR #281) and `20261008010000` as `role_permissions` (PR #282). `deploy-functions.yml` skips a new file whose version prefix is already recorded and the job still succeeds. Shipping the original name would have merged this lockdown without applying it. The file now sorts after those two migrations.
+
+**Disclosures.** No change to Privacy, Terms, FAQ or `/subprocessors` wording. This restores the access model those pages already describe (Privacy § 10 Security; only you and the adults you invite can see your child's data).
+
+**Founder / counsel decision still open.** Whether the earlier exposures are a reportable security incident is still undecided. That covers the 2026-09-30 admin-RPC exposure and this `family_moments` exposure, which ran from the 2026-05 apply of `20260501020000` until this migration lands. Relevant facts: child activity logs (no names) for every child were readable without signing in for about 5 months; there is no evidence of access in the one day of retained logs; and the affected accounts appear to be pre-launch (2 children, 4 accounts). Weigh this against Privacy § 10 (Security), state breach-notification statutes (counsel to check whether these data elements, which include no names, meet each statute's definition of personal information), and COPPA 16 CFR § 312.8 (reasonable security). CLAUDE.md lists "material breach" as a trigger for outside counsel.
+
+**Code refs:** PR #275, `supabase/migrations/20261008020000_security_hardening_anon_rpc.sql`. Fill in the commit hash at merge.
+
+**Follow-ups:**
+1. The default **table** privileges still grant `anon` full rights on every new table and view in `public`. RLS protects tables, but views and any table created without RLS are exposed. Consider a matching `ALTER DEFAULT PRIVILEGES ... ON TABLES` change (this needs explicit grants on every new table). P1.
+2. After the migration applies: re-run the security advisor. Expected: `security_definer_view` gone; `function_search_path_mutable` gone; `anon_security_definer_function_executable` left only for the three token functions. Lint 0029 (`authenticated_security_definer_function_executable`) will still list the intentional signed-in RPCs and RLS helpers. Trigger functions (`handle_new_user`, `handle_new_user_subscription`, `dedupe_child_memory`, `enforce_vpc_on_child_insert`, `sync_email_confirmation_to_vpc`) should drop off both lists. The `mcp_*` "RLS enabled, no policy" info findings stay on purpose. This cannot be confirmed until the migration is applied. P0 at merge.
+3. The SLP-branch functions (`start_pro_trial`, `get_home_program`, `toggle_home_program_day`) and their tables are live but not on `main` (backlog). Their grants are set here, but their source still isn't in this repo. P2.
