@@ -3056,3 +3056,18 @@ Legitimate callers keep working:
 1. Seven tables still check write access against the client-supplied `parent_id` (`activity_plans`, `child_activities`, `ferber_check_ins`, `scheduled_visits`, `sleep_day_todos`, `sleep_plans`, `speech_practice_plans`), so a View-only partner can still insert rows of their own against the child (not visible to the owner). `child_memories` lets any partner, including View-only, add, edit and delete AI-memory notes. Same fix pattern; needs its own founder OK. P1.
 2. Caregivers can still create a child under the owner's account and edit the child's profile (`children` INSERT / UPDATE). Decide whether that is "settings". P2.
 3. Frontend: hide add / edit / delete controls on Records surfaces for View-only, and finance-tier data for caregivers, so they don't hit RLS errors. P2.
+
+---
+
+## 2026-10-08 — Partner role subs (legal "G" wording) and the owner's role switch
+
+**Reviewer:** in-house (Claude `frontend`; legal's wording from `docs/handoff-2026-10-05-partners-team.md` § 4 "G", founder-approved). **Risk level:** Low (copy change plus an owner-only control over an existing RPC).
+
+**What changed:**
+- `ROLE_COPY` subs in `src/lib/partnerInvite.ts` now use legal's "G" wording: Co-parent "Everything except managing your team", Caregiver "Nanny · Sitter · Grandparent", View-only "Grandparent · Family friend". "Pediatrician" and "Daycare" are removed. The subs appear on the onboarding `PartnerRolePicker`.
+- `PartnerManagement.tsx` gives the account owner a role switch (Co-parent / Caregiver / View-only) on each person, backed by the owner-only `set_partner_role` RPC. The person is not notified, as legal's approved AcceptInvite bullet says ("{Owner} can change your role … We don't send a notice when that happens.").
+- The role descriptions (`ROLE_COPY.*.desc`) are unchanged. The Co-parent desc ("Full access. Logs, edits, manages everything.") still conflicts with the new Co-parent sub. It is waiting on a founder decision.
+
+**Analysis:** the Co-parent sub is accurate: `partner_access` UPDATE and `set_partner_role` are owner-only, so co-parents can't manage the team. Restricting a role is only as true as the live RLS behind it. The companion permissions PR #282 merged and was applied to production on 2026-10-08 (migration `20261008010000_role_permissions`), so View-only and Caregiver now enforce what the copy promises (see the entry above). No change to data collected, purposes, processors, or retention.
+
+**Code refs:** PR #280. Fill in the commit hash at merge.

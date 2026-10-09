@@ -9,11 +9,15 @@ import { usePremium } from "@/hooks/usePremium";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { toast } from "@/hooks/use-toast";
 import { Users, Copy, UserMinus, Link2, RefreshCw, X, Sparkles, PauseCircle } from "lucide-react";
 import {
   ROLE_COPY,
+  PARTNER_ROLES,
+  toPartnerRole,
+  roleChangedMessage,
   FREE_ADDITIONAL_USERS,
   MAX_ADDITIONAL_USERS,
   seatSummary,
@@ -131,6 +135,28 @@ export default function PartnerManagement() {
       }),
   });
 
+  const setRole = useMutation({
+    mutationFn: async ({ partnerId, role }: { partnerId: string; role: PartnerRole; email: string }) => {
+      const { error } = await supabase.rpc("set_partner_role", {
+        _partner_id: partnerId,
+        _role: role,
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_data, { role, email }) => {
+      toast({ title: "Role updated", description: roleChangedMessage(email, role) });
+    },
+    onError: (err) =>
+      toast({
+        title: describePartnerError(err, "Couldn't change their role"),
+        description: "Nothing changed. Try again in a moment.",
+        variant: "destructive",
+      }),
+    // Returned so the mutation stays pending until the row refetches; a failed
+    // change (e.g. the person was removed elsewhere) refreshes the row too.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["partner_access"] }),
+  });
+
   const revokePartner = useMutation({
     mutationFn: async (partnerId: string) => {
       const { error } = await supabase
@@ -227,15 +253,14 @@ export default function PartnerManagement() {
             {rankedPartners.map((p: any, index: number) => {
               const paused = p.status === "paused";
               const onHold = isOnHold(index);
+              const role = toPartnerRole(p.role);
+              const email: string = p.partner?.email ?? "This person";
               return (
                 <div key={p.id} className="bg-background rounded-lg px-3 py-2 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm flex items-center gap-2 flex-wrap">
                         <span className="truncate">{p.partner?.email ?? "Unknown"}</span>
-                        <span className="text-[10px] font-mono uppercase text-muted-foreground">
-                          {p.role ?? "coparent"}
-                        </span>
                         {paused && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-warning">
                             <PauseCircle className="w-3 h-3" /> Paused
@@ -259,6 +284,32 @@ export default function PartnerManagement() {
                     >
                       <UserMinus className="w-3.5 h-3.5" /> Remove
                     </Button>
+                  </div>
+                  <div className="space-y-1">
+                    <Select
+                      value={role}
+                      disabled={setRole.isPending}
+                      onValueChange={(next) => {
+                        const nextRole = next as PartnerRole;
+                        if (nextRole === role) return;
+                        setRole.mutate({ partnerId: p.partner_id, role: nextRole, email });
+                      }}
+                    >
+                      <SelectTrigger
+                        className="touch-target h-12 rounded-lg text-sm font-semibold"
+                        aria-label={`Role for ${email}`}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PARTNER_ROLES.map((r) => (
+                          <SelectItem key={r} value={r} className="min-h-[48px] text-sm">
+                            {ROLE_COPY[r].title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground leading-snug">{ROLE_COPY[role].desc}</p>
                   </div>
                   <label className="flex items-center justify-between gap-3 border-t border-border pt-2 cursor-pointer">
                     <span className="text-[11px] text-muted-foreground leading-snug">

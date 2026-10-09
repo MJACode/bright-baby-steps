@@ -12,23 +12,36 @@ const APP_URL = typeof window !== "undefined" ? window.location.origin : "";
 
 export type PartnerRole = "coparent" | "caregiver" | "viewer";
 
+export const PARTNER_ROLES: PartnerRole[] = ["coparent", "caregiver", "viewer"];
+
 export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: string }> = {
   coparent: {
     title: "Co-parent",
     desc: "Full access. Logs, edits, manages everything.",
-    sub: "1 person · same as you",
+    sub: "Everything except managing your team",
   },
   caregiver: {
     title: "Caregiver",
     desc: "Logs feeds, sleep, diapers — but not finance or settings.",
-    sub: "Nanny · Grandparent · Daycare",
+    sub: "Nanny · Sitter · Grandparent",
   },
   viewer: {
     title: "View-only",
     desc: "Sees the rhythm. Cannot log or change anything.",
-    sub: "Pediatrician · Family",
+    sub: "Grandparent · Family friend",
   },
 };
+
+/** Defensive: the column is NOT NULL DEFAULT 'coparent', but anything unrecognised falls back to co-parent. */
+export function toPartnerRole(raw: string | null | undefined): PartnerRole {
+  return raw === "caregiver" || raw === "viewer" ? raw : "coparent";
+}
+
+/** "a@b.com is now a Caregiver." / "a@b.com is now View-only." */
+export function roleChangedMessage(who: string, role: PartnerRole): string {
+  const title = ROLE_COPY[role].title;
+  return role === "viewer" ? `${who} is now ${title}.` : `${who} is now a ${title}.`;
+}
 
 /**
  * Additional users beyond the account owner. Free: 1 (typically the co-parent).
