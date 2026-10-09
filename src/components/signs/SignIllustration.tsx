@@ -6,13 +6,17 @@ import { SIGN_MEDIA } from "@/data/signMedia";
 
 export function SignIllustration({ sign, className }: { sign: Sign; className?: string }) {
   const media = SIGN_MEDIA[sign.slug];
-  const [videoFailed, setVideoFailed] = useState(false);
+  // The detail sheet reuses this component when the sign changes. A boolean
+  // would keep the previous clip's failure and hide the next sign's video.
+  const [failedSlug, setFailedSlug] = useState<string | null>(null);
+  const videoFailed = failedSlug === sign.slug;
   const alt = media?.illustrationAlt ?? `How to sign ${sign.label.toUpperCase()}: ${sign.howTo}`;
 
   let content: ReactNode;
   if (media?.video && !videoFailed) {
     content = (
       <video
+        key={sign.slug}
         src={media.video}
         poster={media.videoPoster}
         muted
@@ -20,8 +24,9 @@ export function SignIllustration({ sign, className }: { sign: Sign; className?: 
         playsInline
         controls
         autoPlay={false}
+        preload="metadata"
         aria-label={alt}
-        onError={() => setVideoFailed(true)}
+        onError={() => setFailedSlug(sign.slug)}
         className="h-full w-full object-contain"
       />
     );
