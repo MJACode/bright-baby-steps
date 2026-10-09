@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import nodePath from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { SIGN_LIBRARY } from "@/data/signLibrary";
 import { SIGN_MEDIA, SIGN_VIDEO_DIR, resolveSignClip } from "@/data/signMedia";
@@ -257,7 +256,8 @@ describe("resolveSignClip", () => {
 });
 
 describe("bundled sign clips", () => {
-  const videoDir = fileURLToPath(new URL("../assets/signs/video", import.meta.url));
+  // npm test and CI both run from the repo root. import.meta.url is not a file URL under Vitest.
+  const videoDir = nodePath.resolve(process.cwd(), "src/assets/signs/video");
 
   it("sets video and videoPoster only when the matching file is in the drop-in folder", () => {
     const names = new Set(fs.readdirSync(videoDir));

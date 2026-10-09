@@ -32,5 +32,7 @@ From `specs/001-baby-signs-v2/contracts/illustration-asset-spec.md` §4:
 does not autoplay.
 
 These files are bundled with the app (Vite `?url`), the same way the SVGs are.
-They are static teaching media, not child data — do not put them in
-`milestone-photos` or `feedback-screenshots`.
+`vite.config.ts` keeps this folder out of the asset inliner, so a clip is its
+own file and is fetched when the sign sheet plays it, not copied into the
+page script. They are static teaching media, not child data — do not put them
+in `milestone-photos` or `feedback-screenshots`.
