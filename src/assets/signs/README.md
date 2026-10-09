@@ -18,3 +18,9 @@ The format, color classes (`sign-line`, `sign-ghost`, `sign-motion`,
 
 Run files through SVGO (default preset) before adding them; that strips the
 header and comments.
+
+## Video clips
+
+Looping Sign-Speak clips do not go in this folder next to the SVGs. Drop them
+in [`video/`](./video/README.md) as `{slug}.mp4` (or `{slug}.webm`). Until a
+clip is there, the sign keeps this SVG, then the emoji.
