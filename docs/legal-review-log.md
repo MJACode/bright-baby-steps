@@ -3098,3 +3098,13 @@ Legitimate callers keep working:
 1. The default **table** privileges still grant `anon` full rights on every new table and view in `public`. RLS protects tables, but views and any table created without RLS are exposed. Consider a matching `ALTER DEFAULT PRIVILEGES ... ON TABLES` change (this needs explicit grants on every new table). P1.
 2. After the migration applies: re-run the security advisor. Expected: `security_definer_view` gone; `function_search_path_mutable` gone; `anon_security_definer_function_executable` left only for the three token functions. Lint 0029 (`authenticated_security_definer_function_executable`) will still list the intentional signed-in RPCs and RLS helpers. Trigger functions (`handle_new_user`, `handle_new_user_subscription`, `dedupe_child_memory`, `enforce_vpc_on_child_insert`, `sync_email_confirmation_to_vpc`) should drop off both lists. The `mcp_*` "RLS enabled, no policy" info findings stay on purpose. This cannot be confirmed until the migration is applied. P0 at merge.
 3. The SLP-branch functions (`start_pro_trial`, `get_home_program`, `toggle_home_program_day`) and their tables are live but not on `main` (backlog). Their grants are set here, but their source still isn't in this repo. P2.
+
+---
+
+## 2026-10-09 — Co-parent role copy simplified ("Same access as you")
+
+**Reviewer:** in-house (founder decision 2026-10-09). **Risk level:** Low (copy only; no permission change).
+
+**What changed:** in `src/lib/partnerInvite.ts`, the Co-parent sub changed from "Everything except managing your team" to "Same access as you", and the desc changed from "Full access. Logs, edits, manages everything." to "Full access. Logs and edits everything." This resolves the conflict noted in the 2026-10-08 role-switch entry. The desc appears on the owner's role switch, the onboarding role picker and AcceptInvite. The sub appears on the onboarding role picker.
+
+**Analysis:** the founder confirmed that co-parents have the same data access as the owner, so there's no need to call out exceptions in the copy. Two actions stay owner-only, by founder decision on 2026-10-09: deleting a child, and managing the team (invite, change role, pause, remove). Neither is a data-access right. The approved AcceptInvite bullet "{Owner} stays in charge of this child's records and decides who's on the team" still covers team management, so the shorter Co-parent copy doesn't misdescribe access. The old desc's "manages everything" was the inaccurate part and is removed. No change to data collected, purposes, processors, or retention.

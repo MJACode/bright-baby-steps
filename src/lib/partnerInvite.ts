@@ -17,8 +17,8 @@ export const PARTNER_ROLES: PartnerRole[] = ["coparent", "caregiver", "viewer"];
 export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: string }> = {
   coparent: {
     title: "Co-parent",
-    desc: "Full access. Logs, edits, manages everything.",
-    sub: "Everything except managing your team",
+    desc: "Full access. Logs and edits everything.",
+    sub: "Same access as you",
   },
   caregiver: {
     title: "Caregiver",
