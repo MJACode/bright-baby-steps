@@ -26,7 +26,7 @@ describe("roleChangedMessage", () => {
 
 describe("ROLE_COPY subs", () => {
   it("match the legal-approved copy", () => {
-    expect(ROLE_COPY.coparent.sub).toBe("Everything except managing your team");
+    expect(ROLE_COPY.coparent.sub).toBe("Same access as you");
     expect(ROLE_COPY.caregiver.sub).toBe("Nanny · Sitter · Grandparent");
     expect(ROLE_COPY.viewer.sub).toBe("Grandparent · Family friend");
   });
