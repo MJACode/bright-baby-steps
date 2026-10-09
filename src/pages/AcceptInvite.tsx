@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Users, CheckCircle, XCircle, Loader2, ShieldCheck } from "lucide-react";
-import { ROLE_COPY, describePartnerError, type PartnerRole } from "@/lib/partnerInvite";
+import { ROLE_COPY, describePartnerError, stashPendingInvite, clearPendingInvite, type PartnerRole } from "@/lib/partnerInvite";
 
 export default function AcceptInvite() {
   const { code } = useParams<{ code: string }>();
@@ -23,14 +23,20 @@ export default function AcceptInvite() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      // Store invite code in localStorage so it survives a cold-start deep link
-      // (sessionStorage is wiped when the WebView is created fresh from a deep link)
-      localStorage.setItem("pending_invite", code ?? "");
+      if (code) stashPendingInvite(code);
       navigate("/auth");
       return;
     }
+    clearPendingInvite();
+    if (user.user_metadata?.pending_invite) {
+      // Signup copied the code here for cross-browser email confirmation;
+      // clear it so later logins don't bounce back to this invite.
+      supabase.auth.updateUser({ data: { pending_invite: null } }).then(({ error }) => {
+        if (error) console.error("Failed to clear pending_invite metadata", error);
+      });
+    }
     loadInvite();
-  }, [user, authLoading, code]);
+  }, [user?.id, authLoading, code]);
 
   const loadInvite = async () => {
     if (!code) { setStatus("error"); return; }

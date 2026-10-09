@@ -2,8 +2,10 @@ import { ReactNode, useState } from "react";
 import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { usePremium, type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
+import { usePremium, useChildOwnerPremium, type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { useChildren } from "@/hooks/useChildren";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 
 interface PremiumGateProps {
   feature: PremiumFeature;
@@ -37,10 +39,21 @@ export function PremiumGate({
 }: PremiumGateProps) {
   const { isPremium, isLoading } = usePremium();
   const [open, setOpen] = useState(false);
+  const { activeChild } = useChildren();
+  const { role, isResolved } = useCurrentRoleQuery(activeChild?.id);
+  // Only predictions inherit the family's plan: they're local math. Every other
+  // feature calls an AI edge function billed against the caller's own sub.
+  const inheritsFamilyPlan = feature === "predictions";
+  const { isChildOwnerPremium, isLoading: familyLoading } = useChildOwnerPremium(activeChild?.id, {
+    enabled: inheritsFamilyPlan && !isLoading && !isPremium,
+  });
 
-  if (isLoading) return <>{children}</>;
-  if (isPremium) return <>{children}</>;
-  if (hideOnFree) return null;
+  // Rendering children while loading keeps the layout fixed: a premium family
+  // sees no flash, and a free one sees the same card simply blur in place.
+  if (isLoading || familyLoading) return <>{children}</>;
+  if (isPremium || (inheritsFamilyPlan && isChildOwnerPremium)) return <>{children}</>;
+  // A caregiver isn't the one who'd pay for Flare+, so never pitch it to them.
+  if (hideOnFree || (isResolved && role === "caregiver")) return null;
 
   const featureLabel = label ?? PREMIUM_FEATURES[feature];
 

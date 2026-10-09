@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { PremiumGate } from "@/components/PremiumGate";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { useWakePrediction } from "@/hooks/useWakePrediction";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
 import { formatApproxClock } from "@/lib/gentleTime";
 import { pickBandEvent } from "@/lib/nextEvent";
-import { sleepCoachShowing } from "@/lib/sleepCoachState";
+import { firstNameOrBaby, sleepCoachShowing } from "@/lib/sleepCoachState";
 
 interface NextEventBandProps {
-  activeChild: FeedCoachChild | null;
+  activeChild: (FeedCoachChild & { name?: string | null }) | null;
   /** Whether the Feed Coach card is also on this screen. See `pickBandEvent`. */
   feedCoachVisible?: boolean;
   /** Whether the Sleep Coach card is also on this screen. See `pickBandEvent`. */
@@ -42,27 +42,26 @@ export function NextEventBand({
 }: NextEventBandProps) {
   const { data: coach } = useSleepCoach(activeChild);
   const feed = useFeedCoach(activeChild);
+  // The hook's tick keeps `minutesAway` fresh and lets the hand-off to the
+  // coach card fire; its `activeSleep` already drops a stale (>12h) timer.
+  const { wake, hungryOnWake, activeSleep, now } = useWakePrediction(activeChild);
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
 
-  // Without this tick `minutesAway` is computed once per render and never
-  // refreshes, so "in ~45 min" goes stale and the hand-off to the coach card
-  // never fires. Same 30s cadence as SleepCoachCard.
-  const [now, setNow] = useState<Date>(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const nap = coach?.prediction ?? null;
+  // No "likely sleepy" while the baby is already asleep — the band falls back
+  // to the feed side, which still matters for when they wake.
+  const nap = activeSleep ? null : coach?.prediction ?? null;
   const hunger = feed.prediction;
   const napOwned =
     sleepCoachVisible &&
     !!nap &&
     sleepCoachShowing(now, nap.windowStart, nap.windowEnd, calmMode);
+  // While asleep, the Sleep Coach card's cue already says "may be hungry when
+  // they wake" — the band steps aside rather than repeat it.
+  const wakeHungerOwned = sleepCoachVisible && !!wake && hungryOnWake;
   const pick = pickBandEvent(nap?.windowStart ?? null, hunger?.windowStart ?? null, {
     nap: napOwned,
-    feed: feedCoachVisible,
+    feed: feedCoachVisible || wakeHungerOwned,
   });
   if (!pick) return null;
 
@@ -89,9 +88,15 @@ export function NextEventBand({
               Coach predicts
             </span>
           </div>
-          <p className="text-sm text-foreground leading-snug">
-            Likely <strong>{verb}</strong> {whenText}.
-          </p>
+          {hungryOnWake && pick.type === "feed" ? (
+            <p className="text-sm text-foreground leading-snug">
+              {firstNameOrBaby(activeChild?.name)} may be <strong>hungry</strong> when they wake.
+            </p>
+          ) : (
+            <p className="text-sm text-foreground leading-snug">
+              Likely <strong>{verb}</strong> {whenText}.
+            </p>
+          )}
           {sample && (
             <p className="text-[11px] text-muted-foreground mt-1">{sample}</p>
           )}

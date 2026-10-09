@@ -4,6 +4,8 @@ import { Sparkles, UtensilsCrossed } from "lucide-react";
 import { PremiumGate } from "@/components/PremiumGate";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
+import { useWakePrediction } from "@/hooks/useWakePrediction";
+import { hungryOnWakeCopy } from "@/lib/sleepCoachState";
 import {
   deriveFeedCoachState,
   feedCoachCopy,
@@ -49,6 +51,7 @@ export function FeedCoachCard({
 }: FeedCoachCardProps) {
   const coach = useFeedCoach(activeChild);
   const { prefs } = usePreferences();
+  const { hungryOnWake } = useWakePrediction(activeChild);
 
   if (!activeChild) return null;
 
@@ -63,9 +66,11 @@ export function FeedCoachCard({
     night,
   });
   const copy = feedCoachCopy(state, firstName);
-  const headline = prediction
-    ? feedPredictionHeadline({ prediction, now, calmMode: prefs.calmMode })
-    : null;
+  const headline = !prediction
+    ? null
+    : hungryOnWake && !feedInProgress
+      ? hungryOnWakeCopy(firstName)
+      : feedPredictionHeadline({ prediction, now, calmMode: prefs.calmMode });
 
   const content = (
     <>

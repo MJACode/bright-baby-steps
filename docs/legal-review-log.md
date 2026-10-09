@@ -2995,7 +2995,7 @@ Legitimate callers keep working:
 **Code refs:** fill in PR # and commit hash at merge.
 
 **Follow-ups:**
-1. One-time cleanup of legacy stat-like / `concern` auto-extracted notes (migration; founder decision). P0.
+1. ~~One-time cleanup of legacy stat-like / `concern` auto-extracted notes (migration; founder decision). P0.~~ Done — see 2026-10-08 entry below.
 2. Per-child "Stop saving notes" toggle (refuse-further-collection right for this store). P2.
 3. Rights-request triage runbook: correct/delete a single `child_memories` row by id. P1.
 4. Pre-existing: "Profile → Manage Child Data" (Privacy § 7, CoppaDirectNotice, ChildContextPage) names a control that doesn't exist; point to Export My Data / Delete Account. P1.
@@ -3015,9 +3015,51 @@ Legitimate callers keep working:
 **Follow-ups:**
 1. The server-side `generate-sign-plan` prompt still calls it the "Baby Signs plan" internally. The model sees this, but users never do. Rename it when that function is next touched (backend). P3. **Closed 2026-10-08:** prompt now says "Sign Language plan"; payload, model and data sent to Anthropic unchanged.
 
+---
+
+## 2026-10-08 — One-time purge of legacy auto-extracted AI-memory notes
+
+**Reviewer:** in-house (founder decision 2026-10-07, "Yes clean up"). **Risk level:** Low (deletion only; narrows retention; closes the 2026-10-07 Known gap / follow-up 1).
+
+**What changed:** migration `20261007000000_purge_legacy_auto_memories.sql` deletes every `child_memories` row with `source_function IN ('chat','briefing','weekly-insights')` created before `extract-memory` v6 (the narrowed prompt from PR #272) went live at 2026-10-07 09:45:08.301Z. Manual and sleep-triage rows are kept. Pinned rows are included (no UI can unpin any more). Idempotent; applied by the `migrate` job on merge.
+
+**Live impact (read-only audit 2026-10-08 00:11Z):** 283 rows across 2 children (273 briefing, 10 weekly-insights; 0 pinned; 0 manual / sleep-triage; 0 written by the new prompt). All 283 pre-cutoff rows are removed (newer rows, if any, survive). Irreversible except from Supabase backups (≤ 30 days).
+
+**Analysis:** removes data collected under the broader, pre-2026-10-07 extraction scope (including stat-like and `concern` notes), so what is retained now matches Privacy § 2 as rewritten on 2026-10-07. Deletion only — no new collection, use, or disclosure; no Privacy copy change needed; no parent notice required.
+
+**Code refs:** PR #277 — fill in commit hash at merge.
+
+---
+
+## 2026-10-08 — Partner role permissions enforced in the database (view-only, caregiver finance, owner-only child delete)
+
+**Reviewer:** in-house (Claude `backend`; founder-approved target 2026-10-03, task 2c in `docs/handoff-2026-10-05-partners-team.md`). **Risk level:** Medium before the fix (the database did not enforce what the role copy promises); Low after.
+
+**What was wrong (live, read-only audit 2026-10-08):**
+- The invite copy (`src/lib/partnerInvite.ts`) promises View-only "Cannot log or change anything" and Caregiver "not finance or settings". Twelve records tables still had one `FOR ALL` policy that admitted every active partner, so a **View-only partner could add, edit and delete** vaccinations, pediatrician and dental visits, cry analyses, Early Intervention records, the new-baby checklist, birth-certificate details, health and life insurance, and college savings / contributions; **caregivers could read and write the finance records**.
+- `children` DELETE allowed any write-capable partner, so **a caregiver (or co-parent) could delete the owner's child** and, by cascade, all of that child's records.
+- `can_manage_child_finance` (the gate on the Financial surface) did not check the free-plan seat limit, so a co-parent put on hold by a plan lapse kept finance access.
+- The same twelve policies keyed on the client-supplied `parent_id`, so a signed-in user could insert junk rows against any child id, and the owner could not see records a partner had entered. No such rows exist on live (0 partner-authored or foreign rows across the 12 tables).
+
+**What changed:** migration `20261008010000_role_permissions.sql` (applied by the `migrate` job on merge, after founder approval).
+- Care-tier records (vaccinations, pediatrician / dental visits, cry analyses, EI tracker + providers, new-baby checklist, birth certificates): every active partner can read; only the owner, co-parents and caregivers can write; View-only cannot write.
+- Finance-tier records (college savings + contributions, life insurance, health insurance): owner and co-parents only, read and write, the same audience as the existing Financial surface.
+- Only the owner can delete a child.
+- `can_manage_child_finance` now honours the seat limit like every other access helper.
+- New rows must carry the author's own id (authorship cannot be forged).
+
+**Analysis:** narrows access to match the existing disclosures (invite role copy, Terms "Shared access", Privacy § 5 "co-parents or caregivers you explicitly invite"). No new collection, use, processor or retention change. The one widening, owners now seeing records their partners entered, is within the owner's own account. No Privacy / Terms copy change needed; non-material under 16 CFR § 312.5(a)(1).
+
+**Code refs:** PR #282 (branch `claude/role-permissions-rls`). Fill in the commit hash at merge.
+
+**Follow-ups:**
+1. Seven tables still check write access against the client-supplied `parent_id` (`activity_plans`, `child_activities`, `ferber_check_ins`, `scheduled_visits`, `sleep_day_todos`, `sleep_plans`, `speech_practice_plans`), so a View-only partner can still insert rows of their own against the child (not visible to the owner). `child_memories` lets any partner, including View-only, add, edit and delete AI-memory notes. Same fix pattern; needs its own founder OK. P1.
+2. Caregivers can still create a child under the owner's account and edit the child's profile (`children` INSERT / UPDATE). Decide whether that is "settings". P2.
+3. Frontend: hide add / edit / delete controls on Records surfaces for View-only, and finance-tier data for caregivers, so they don't hit RLS errors. P2.
+
 ## 2026-10-08 — SECURITY: feed / sleep / diaper logs readable with the public anon key via `family_moments`; anon-callable functions locked down
 
-**Reviewer:** in-house (Claude `backend`, founder-approved pre-launch hardening PR). **Risk level:** High (data exposure) → resolved when migration `20261008000000_security_hardening_anon_rpc.sql` is applied by the `migrate` job on merge. **Not yet applied to live at the time of writing.**
+**Reviewer:** in-house (Claude `backend`; second pass 2026-10-09 before founder merge). **Risk level:** High (data exposure) → resolved when migration `20261008020000_security_hardening_anon_rpc.sql` is applied by the `migrate` job on merge. **Not applied to live. Merging applies it to production and needs founder approval first.**
 
 **What was exposed (new finding).** The view `public.family_moments` (`20260501020000_family_moments.sql`, used by the caregiver home card) was a plain view owned by `postgres`. `postgres` bypasses RLS and owns the underlying tables, so the view ignored every row-level policy. The project's default table privileges also gave `anon` SELECT on it. Result: anyone holding the public anon key could call `GET /rest/v1/family_moments` and read **every feed, sleep and diaper entry in the database**: child id, author user id, timestamps, feed amount and method, sleep duration, diaper type, and log source. No names. Verified read-only on live 2026-10-08: as `anon` the view returned 772 rows across 2 children (all children with logs; 4 accounts exist). The migration's comment said "view inherits RLS from base tables"; that was wrong. The 2026-09-30 audit (follow-up 2) flagged the view from the security advisor but did not test it.
 
@@ -3029,15 +3071,17 @@ Legitimate callers keep working:
 3. **`delete_user_account()`** (follow-up 3). It was safe for anon (it raises "Not authenticated" when `auth.uid()` is null), and anon can no longer call it at all.
 4. **`can_access_child` guard** (follow-up 4). Already fixed on live by `20260930100000_free_partner_seat.sql`. The new migration fails if the `_user_id = auth.uid()` guard ever disappears from `can_access_child`, `can_write_child` or `has_partner_access`.
 
-**Function access after the migration.** Anon can execute only three token-based functions that a logged-out person needs: `complete_vpc_second_confirmation` (the COPPA email #2 link, often opened without a session) and the SLP share-page pair `get_home_program` / `toggle_home_program_day` (live only; that branch is not on `main`). Trigger functions can no longer be called directly by anyone. RLS helpers and signed-in RPCs stay available to signed-in users only. `lookup_partner_invitation` is now signed-in only, because the invite page sends logged-out visitors to sign in before calling it, so anonymous invite-code probing is closed too. `touch_ai_memories_updated_at` gets a fixed `search_path`. The `mcp_*` tables keep RLS with no policies on purpose (service-role only, used by the `mcp` edge function).
+**Function access after the migration.** Anon can execute only three token-based functions that a logged-out person needs: `complete_vpc_second_confirmation` (the COPPA email #2 link, often opened without a session) and the SLP share-page pair `get_home_program` / `toggle_home_program_day` (live only; that branch is not on `main`). Trigger functions can no longer be called directly by anyone. RLS helpers and signed-in RPCs stay available to signed-in users only, including `child_owner_is_premium` (the Flare+ check `usePremium` calls for partners; it landed on `main` while this PR was open, and it is already not anon-callable). `lookup_partner_invitation` is signed-in only. The invite page still sends logged-out visitors to sign in before calling it (`AcceptInvite.tsx`, including the #283 pending-invite path), so anonymous invite-code probing stays closed. `touch_ai_memories_updated_at` gets a fixed `search_path`. The `mcp_*` tables keep RLS with no policies on purpose (service-role only, used by the `mcp` edge function).
+
+**Why the filename is `20261008020000`, not `20261008000000`.** Live `supabase_migrations.schema_migrations` already records version `20261008000000` as `child_owner_is_premium` (PR #281) and `20261008010000` as `role_permissions` (PR #282). `deploy-functions.yml` skips a new file whose version prefix is already recorded and the job still succeeds. Shipping the original name would have merged this lockdown without applying it. The file now sorts after those two migrations.
 
 **Disclosures.** No change to Privacy, Terms, FAQ or `/subprocessors` wording. This restores the access model those pages already describe (Privacy § 10 Security; only you and the adults you invite can see your child's data).
 
 **Founder / counsel decision still open.** Whether the earlier exposures are a reportable security incident is still undecided. That covers the 2026-09-30 admin-RPC exposure and this `family_moments` exposure, which ran from the 2026-05 apply of `20260501020000` until this migration lands. Relevant facts: child activity logs (no names) for every child were readable without signing in for about 5 months; there is no evidence of access in the one day of retained logs; and the affected accounts appear to be pre-launch (2 children, 4 accounts). Weigh this against Privacy § 10 (Security), state breach-notification statutes (counsel to check whether these data elements, which include no names, meet each statute's definition of personal information), and COPPA 16 CFR § 312.8 (reasonable security). CLAUDE.md lists "material breach" as a trigger for outside counsel.
 
-**Code refs:** `supabase/migrations/20261008000000_security_hardening_anon_rpc.sql`. Fill in PR # and commit hash at merge.
+**Code refs:** PR #275, `supabase/migrations/20261008020000_security_hardening_anon_rpc.sql`. Fill in the commit hash at merge.
 
 **Follow-ups:**
 1. The default **table** privileges still grant `anon` full rights on every new table and view in `public`. RLS protects tables, but views and any table created without RLS are exposed. Consider a matching `ALTER DEFAULT PRIVILEGES ... ON TABLES` change (this needs explicit grants on every new table). P1.
-2. After the migration applies: run the security advisor and confirm `security_definer_view` and every `anon_security_definer_function_executable` finding is gone except the three token functions. P0 at merge.
+2. After the migration applies: re-run the security advisor. Expected: `security_definer_view` gone; `function_search_path_mutable` gone; `anon_security_definer_function_executable` left only for the three token functions. Lint 0029 (`authenticated_security_definer_function_executable`) will still list the intentional signed-in RPCs and RLS helpers. Trigger functions (`handle_new_user`, `handle_new_user_subscription`, `dedupe_child_memory`, `enforce_vpc_on_child_insert`, `sync_email_confirmation_to_vpc`) should drop off both lists. The `mcp_*` "RLS enabled, no policy" info findings stay on purpose. This cannot be confirmed until the migration is applied. P0 at merge.
 3. The SLP-branch functions (`start_pro_trial`, `get_home_program`, `toggle_home_program_day`) and their tables are live but not on `main` (backlog). Their grants are set here, but their source still isn't in this repo. P2.

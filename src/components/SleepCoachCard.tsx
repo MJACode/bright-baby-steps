@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { useWakePrediction } from "@/hooks/useWakePrediction";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
 import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -12,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
-import { deriveCoachState } from "@/lib/sleepCoachState";
+import { deriveCoachState, deriveWakeState } from "@/lib/sleepCoachState";
 import { PremiumGate } from "@/components/PremiumGate";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,9 @@ interface ChildLite {
   date_of_birth: string;
   is_premature?: boolean | null;
   due_date?: string | null;
+  name?: string | null;
+  day_start_time?: string | null;
+  night_start_time?: string | null;
 }
 
 interface SleepCoachCardProps {
@@ -38,17 +42,37 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
   const { data } = useSleepCoach(activeChild);
   const { data: plan } = useSleepPlan(activeChild?.id ?? null);
   const pred = data?.prediction ?? null;
-  const [now, setNow] = useState<Date>(() => new Date());
-  const { active: activeSleep, start } = useActiveSleep(activeChild?.id);
+  const { start } = useActiveSleep(activeChild?.id);
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
   const schedule = useTrackingSchedule();
   const { toast } = useToast();
+  const { wake, hungryOnWake, activeSleep, now } = useWakePrediction(activeChild);
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(id);
-  }, []);
+  // While the baby is asleep the card stops predicting the next nap and
+  // predicts the wake instead.
+  if (activeSleep) {
+    if (!wake) return null;
+    const wakeState = deriveWakeState(now, wake, calmMode, {
+      hungryOnWake,
+      childName: activeChild?.name,
+      isNight: activeSleep.sleep_type === "night",
+    });
+    return (
+      <CoachShell
+        variant={variant}
+        pill={
+          <Badge variant="secondary" className="bg-sleep/15 text-sleep border-transparent">
+            Sleeping
+          </Badge>
+        }
+        confidenceTone={CONFIDENCE_DOT_CLASS[wake.confidence]}
+        title={wakeState.title}
+        cue={wakeState.cue}
+        reason={wake.reason}
+      />
+    );
+  }
 
   if (!pred) return null;
 
@@ -93,8 +117,7 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
     }
   })();
 
-  const ctaLabel = activeSleep ? "Nap in progress" : "Start nap";
-  const isCtaDisabled = !!activeSleep || start.isPending || !activeChild;
+  const isCtaDisabled = start.isPending || !activeChild;
 
   const handleStartNap = async () => {
     try {
@@ -121,6 +144,45 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
     }
   };
 
+  return (
+    <CoachShell
+      variant={variant}
+      pill={pill}
+      confidenceTone={confidenceTone}
+      title={state.title}
+      cue={state.cue}
+      reason={pred.reason}
+    >
+      {state.showCta && (
+        <Button
+          onClick={handleStartNap}
+          disabled={isCtaDisabled}
+          className="w-full min-h-[48px] mt-3 bg-sleep text-white hover:bg-sleep/90"
+        >
+          Start nap
+        </Button>
+      )}
+    </CoachShell>
+  );
+}
+
+function CoachShell({
+  variant,
+  pill,
+  confidenceTone,
+  title,
+  cue,
+  reason,
+  children,
+}: {
+  variant: "card" | "strip";
+  pill: ReactNode;
+  confidenceTone: string;
+  title: string;
+  cue: string;
+  reason: string;
+  children?: ReactNode;
+}) {
   // The gate wraps the prediction and nothing else. On the Sleep tab the timer
   // is a sibling of this strip, so a free account can still start a sleep.
   if (variant === "strip") {
@@ -135,9 +197,9 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
             {pill}
             <span className={cn("ml-auto w-2 h-2 rounded-full", confidenceTone)} />
           </div>
-          <p className="text-sm font-bold leading-snug">{state.title}</p>
-          <p className="text-sm text-foreground/85 leading-snug mt-0.5">{state.cue}</p>
-          <p className="text-xs text-muted-foreground mt-1">{pred.reason}</p>
+          <p className="text-sm font-bold leading-snug">{title}</p>
+          <p className="text-sm text-foreground/85 leading-snug mt-0.5">{cue}</p>
+          <p className="text-xs text-muted-foreground mt-1">{reason}</p>
         </div>
       </PremiumGate>
     );
@@ -155,18 +217,10 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
             {pill}
             <span className={cn("ml-auto w-2 h-2 rounded-full", confidenceTone)} />
           </div>
-          <p className="font-display font-bold text-base leading-snug">{state.title}</p>
-          <p className="text-sm text-foreground/85 leading-snug mt-1">{state.cue}</p>
-          <p className="text-xs text-muted-foreground mt-1">{pred.reason}</p>
-          {state.showCta && (
-            <Button
-              onClick={handleStartNap}
-              disabled={isCtaDisabled}
-              className="w-full min-h-[48px] mt-3 bg-sleep text-white hover:bg-sleep/90"
-            >
-              {ctaLabel}
-            </Button>
-          )}
+          <p className="font-display font-bold text-base leading-snug">{title}</p>
+          <p className="text-sm text-foreground/85 leading-snug mt-1">{cue}</p>
+          <p className="text-xs text-muted-foreground mt-1">{reason}</p>
+          {children}
         </CardContent>
       </Card>
     </PremiumGate>

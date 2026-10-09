@@ -104,6 +104,56 @@ export function describePartnerError(
   return fallback;
 }
 
+/**
+ * An invite link opened while signed out stashes its code here, and Auth
+ * sends the user back to /invite/:code after login. localStorage (not
+ * sessionStorage) so it survives a Capacitor WebView cold-start from a deep
+ * link. Both sides go through these helpers so the key and storage can't drift.
+ *
+ * Signup also copies the code into user_metadata.pending_invite, because the
+ * confirmation email is often opened in a different browser (Gmail's in-app
+ * browser) whose localStorage never saw the stash.
+ */
+const PENDING_INVITE_KEY = "pending_invite";
+/** Matches the invite lifetime; an older stash is a dead link, not an intent. */
+const PENDING_INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function stashPendingInvite(code: string, now: number = Date.now()): void {
+  try {
+    localStorage.setItem(PENDING_INVITE_KEY, JSON.stringify({ code, at: now }));
+    // The invite is the user's newest intent; an older post-login redirect
+    // would otherwise fire on some later login.
+    localStorage.removeItem("post_login_redirect");
+  } catch {
+    // Storage unavailable (private mode); the user can reopen the link.
+  }
+}
+
+/**
+ * Reads the stashed invite code without clearing it — safe to call during
+ * render. AcceptInvite clears it once a signed-in user reaches the invite.
+ */
+export function peekPendingInvite(now: number = Date.now()): string | null {
+  try {
+    const raw = localStorage.getItem(PENDING_INVITE_KEY);
+    if (!raw) return null;
+    const { code, at } = JSON.parse(raw) as { code?: unknown; at?: unknown };
+    if (typeof code !== "string" || !code || typeof at !== "number") return null;
+    return now - at > PENDING_INVITE_TTL_MS ? null : code;
+  } catch {
+    // Unavailable storage, or a pre-JSON value from an older build.
+    return null;
+  }
+}
+
+export function clearPendingInvite(): void {
+  try {
+    localStorage.removeItem(PENDING_INVITE_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
 export interface CreateInviteArgs {
   ownerId: string;
   role: PartnerRole;

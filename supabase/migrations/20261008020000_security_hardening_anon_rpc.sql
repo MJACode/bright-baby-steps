@@ -1,5 +1,12 @@
 -- SECURITY: pre-launch hardening of anon-reachable database surface.
 --
+-- Version prefix is 20261008020000, not 20261008000000. Live
+-- schema_migrations already records 20261008000000 as child_owner_is_premium
+-- (PR #281) and 20261008010000 as role_permissions (PR #282). The migrate job
+-- skips a file whose version is already recorded and still exits 0, so the
+-- original name would have merged without applying. This file sorts after
+-- those two.
+--
 -- Closes the Supabase security-advisor findings open on 2026-10-08 and the
 -- 2026-09-30 audit follow-ups 1-3 in docs/legal-review-log.md
 -- ("SECURITY: admin database functions were callable with the public anon
@@ -77,6 +84,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
 -- outside the owner's Flare+ entitlement no longer sees moments through the
 -- view (the definer view ignored RLS for them too).
 -- The view is a UNION ALL, so it is not auto-updatable; only SELECT is kept.
+-- REVOKE ALL, not a privilege list: Postgres 17's default table ACL also
+-- grants MAINTAIN, which an INSERT/UPDATE/DELETE list would leave in place.
 DO $$
 BEGIN
   IF to_regclass('public.family_moments') IS NULL THEN
@@ -84,9 +93,7 @@ BEGIN
     RETURN;
   END IF;
   ALTER VIEW public.family_moments SET (security_invoker = true);
-  REVOKE ALL ON public.family_moments FROM PUBLIC, anon;
-  REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
-    ON public.family_moments FROM authenticated;
+  REVOKE ALL ON public.family_moments FROM PUBLIC, anon, authenticated;
   GRANT SELECT ON public.family_moments TO authenticated;
 END
 $$;
@@ -162,6 +169,7 @@ BEGIN
     'public.has_partner_access(uuid,uuid)',
     'public.partner_can_write(uuid)',           -- also generate-sign-plan (user JWT)
     'public.can_manage_child_finance(uuid)',    -- child_finance_finder / child_account_status policies
+    'public.child_owner_is_premium(uuid)',      -- usePremium.tsx; false unless the caller can access the child
     -- Client RPCs (src/**) and user-JWT edge-function calls.
     'public.lookup_partner_invitation(text)',   -- AcceptInvite.tsx; only after login (redirects to /auth first)
     'public.accept_partner_invitation(text)',   -- AcceptInvite.tsx
@@ -272,7 +280,8 @@ BEGIN
   FOREACH _sig IN ARRAY ARRAY[
     'public.can_access_child(uuid,uuid)', 'public.can_write_child(uuid,uuid)',
     'public.has_partner_access(uuid,uuid)', 'public.partner_can_write(uuid)',
-    'public.can_manage_child_finance(uuid)', 'public.lookup_partner_invitation(text)',
+    'public.can_manage_child_finance(uuid)', 'public.child_owner_is_premium(uuid)',
+    'public.lookup_partner_invitation(text)',
     'public.accept_partner_invitation(text)', 'public.set_partner_access_paused(uuid,boolean)',
     'public.set_partner_role(uuid,text)', 'public.list_my_mcp_connections()',
     'public.revoke_my_mcp_connection(uuid)', 'public.delete_user_account()',
@@ -317,6 +326,11 @@ BEGIN
     END IF;
     IF NOT has_table_privilege('authenticated', 'public.family_moments', 'SELECT') THEN
       RAISE EXCEPTION 'security_hardening: authenticated lost SELECT on family_moments';
+    END IF;
+    IF has_table_privilege('authenticated', 'public.family_moments', 'INSERT')
+       OR has_table_privilege('authenticated', 'public.family_moments', 'UPDATE')
+       OR has_table_privilege('authenticated', 'public.family_moments', 'DELETE') THEN
+      RAISE EXCEPTION 'security_hardening: authenticated can write family_moments';
     END IF;
   END IF;
 

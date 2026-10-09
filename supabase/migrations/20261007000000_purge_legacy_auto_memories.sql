@@ -1,0 +1,41 @@
+-- One-time cleanup: delete AI-memory notes auto-extracted under the old
+-- extract-memory prompt.
+--
+-- Why: founder decision 2026-10-07. PR #272 narrowed the extract-memory
+-- prompt (no log statistics, norm comparisons, health judgments or
+-- `concern` notes; max 3 notes per run) and capped auto-extracted notes at
+-- the newest 20 per child. Notes saved before that change were mostly
+-- log-statistic restatements (live audit 2026-10-07: 283 rows across 2
+-- children, 267 stat-like) and would keep reaching briefing /
+-- weekly-insights / visit-prep prompts until the child's next successful
+-- extraction pruned them. This migration removes them now. See
+-- docs/legal-review-log.md, entry "2026-10-07 — 'What Grace Flare
+-- remembers': per-note list removed; AI-memory extraction narrowed and
+-- capped at 20", Known gap + Follow-up 1.
+--
+-- Scope:
+--   * Only auto-extracted rows: source_function IN ('chat','briefing',
+--     'weekly-insights'). Rows from 'manual', 'sleep-triage' (the sleep-plan
+--     summary note written by SleepPlanDialog) and NULL source are kept.
+--   * Regardless of `pinned`: no UI can unpin any more (per-note controls
+--     were removed in #272), and live had 0 pinned rows on 2026-10-07.
+--   * Only rows created before 2026-10-07T09:45:08.301Z, the moment
+--     extract-memory v6 (the #272 prompt) went live via deploy-functions.yml.
+--     PR #272 merged at 09:44:20Z; the deploy landed 48s later, so anything
+--     older than the deploy timestamp was written by the old prompt. Notes
+--     saved under the new prompt survive.
+--
+-- Triggers: child_memories has only BEFORE INSERT (dedupe_child_memory) and
+-- BEFORE UPDATE (update_updated_at) triggers; nothing fires on DELETE, and
+-- no table has a foreign key into child_memories. Removing old rows also
+-- frees their (child_id, category, content) keys from the 30-day dedupe
+-- window, which is intended.
+--
+-- Idempotent: a re-run matches no rows (the cutoff is fixed in the past and
+-- the new prompt cannot write rows before it). No BEGIN/COMMIT here: the
+-- `migrate` job in .github/workflows/deploy-functions.yml wraps each file in
+-- its own transaction together with the schema_migrations insert.
+
+DELETE FROM public.child_memories
+ WHERE source_function IN ('chat', 'briefing', 'weekly-insights')
+   AND created_at < timestamptz '2026-10-07 09:45:08.301+00';
