@@ -3057,6 +3057,19 @@ Legitimate callers keep working:
 2. Caregivers can still create a child under the owner's account and edit the child's profile (`children` INSERT / UPDATE). Decide whether that is "settings". P2.
 3. Frontend: hide add / edit / delete controls on Records surfaces for View-only, and finance-tier data for caregivers, so they don't hit RLS errors. P2.
 
+## 2026-10-08 — Partner role subs (legal "G" wording) and the owner's role switch
+
+**Reviewer:** in-house (Claude `frontend`; legal's wording from `docs/handoff-2026-10-05-partners-team.md` § 4 "G", founder-approved). **Risk level:** Low (copy change plus an owner-only control over an existing RPC).
+
+**What changed:**
+- `ROLE_COPY` subs in `src/lib/partnerInvite.ts` now use legal's "G" wording: Co-parent "Everything except managing your team", Caregiver "Nanny · Sitter · Grandparent", View-only "Grandparent · Family friend". "Pediatrician" and "Daycare" are removed. The subs appear on the onboarding `PartnerRolePicker`.
+- `PartnerManagement.tsx` gives the account owner a role switch (Co-parent / Caregiver / View-only) on each person, backed by the owner-only `set_partner_role` RPC. The person is not notified, as legal's approved AcceptInvite bullet says ("{Owner} can change your role … We don't send a notice when that happens.").
+- The role descriptions (`ROLE_COPY.*.desc`) are unchanged. The Co-parent desc ("Full access. Logs, edits, manages everything.") still conflicts with the new Co-parent sub. It is waiting on a founder decision.
+
+**Analysis:** the Co-parent sub is accurate: `partner_access` UPDATE and `set_partner_role` are owner-only, so co-parents can't manage the team. Restricting a role is only as true as the live RLS behind it. The companion permissions PR #282 merged and was applied to production on 2026-10-08 (migration `20261008010000_role_permissions`), so View-only and Caregiver now enforce what the copy promises (see the entry above). No change to data collected, purposes, processors, or retention.
+
+**Code refs:** PR #280. Fill in the commit hash at merge.
+
 ## 2026-10-08 — SECURITY: feed / sleep / diaper logs readable with the public anon key via `family_moments`; anon-callable functions locked down
 
 **Reviewer:** in-house (Claude `backend`; second pass 2026-10-09 before founder merge). **Risk level:** High (data exposure) → resolved when migration `20261008020000_security_hardening_anon_rpc.sql` is applied by the `migrate` job on merge. **Not applied to live. Merging applies it to production and needs founder approval first.**
@@ -3071,7 +3084,7 @@ Legitimate callers keep working:
 3. **`delete_user_account()`** (follow-up 3). It was safe for anon (it raises "Not authenticated" when `auth.uid()` is null), and anon can no longer call it at all.
 4. **`can_access_child` guard** (follow-up 4). Already fixed on live by `20260930100000_free_partner_seat.sql`. The new migration fails if the `_user_id = auth.uid()` guard ever disappears from `can_access_child`, `can_write_child` or `has_partner_access`.
 
-**Function access after the migration.** Anon can execute only three token-based functions that a logged-out person needs: `complete_vpc_second_confirmation` (the COPPA email #2 link, often opened without a session) and the SLP share-page pair `get_home_program` / `toggle_home_program_day` (live only; that branch is not on `main`). Trigger functions can no longer be called directly by anyone. RLS helpers and signed-in RPCs stay available to signed-in users only, including `child_owner_is_premium` (the Flare+ check `usePremium` calls for partners; it landed on `main` while this PR was open, and it is already not anon-callable). `lookup_partner_invitation` is signed-in only. The invite page still sends logged-out visitors to sign in before calling it (`AcceptInvite.tsx`, including the #283 pending-invite path), so anonymous invite-code probing stays closed. `touch_ai_memories_updated_at` gets a fixed `search_path`. The `mcp_*` tables keep RLS with no policies on purpose (service-role only, used by the `mcp` edge function).
+**Function access after the migration.** Anon can execute only three token-based functions that a logged-out person needs: `complete_vpc_second_confirmation` (the COPPA email #2 link, often opened without a session) and the SLP share-page pair `get_home_program` / `toggle_home_program_day` (live only; that branch is not on `main`). Trigger functions can no longer be called directly by anyone. RLS helpers and signed-in RPCs stay available to signed-in users only, including `child_owner_is_premium` (the Flare+ check `usePremium` calls for partners; it landed on `main` while this PR was open, and it is already not anon-callable). `set_partner_role` stays signed-in only; Partner Management (PR #280) calls it after login. `lookup_partner_invitation` is signed-in only. The invite page still sends logged-out visitors to sign in before calling it (`AcceptInvite.tsx`, including the #283 pending-invite path), so anonymous invite-code probing stays closed. `touch_ai_memories_updated_at` gets a fixed `search_path`. The `mcp_*` tables keep RLS with no policies on purpose (service-role only, used by the `mcp` edge function).
 
 **Why the filename is `20261008020000`, not `20261008000000`.** Live `supabase_migrations.schema_migrations` already records version `20261008000000` as `child_owner_is_premium` (PR #281) and `20261008010000` as `role_permissions` (PR #282). `deploy-functions.yml` skips a new file whose version prefix is already recorded and the job still succeeds. Shipping the original name would have merged this lockdown without applying it. The file now sorts after those two migrations.
 

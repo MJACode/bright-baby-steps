@@ -174,7 +174,7 @@ BEGIN
     'public.lookup_partner_invitation(text)',   -- AcceptInvite.tsx; only after login (redirects to /auth first)
     'public.accept_partner_invitation(text)',   -- AcceptInvite.tsx
     'public.set_partner_access_paused(uuid,boolean)', -- PartnerManagement.tsx
-    'public.set_partner_role(uuid,text)',       -- owner-only RPC (20260930110000); no src caller today
+    'public.set_partner_role(uuid,text)',       -- PartnerManagement.tsx role switch (PR #280); owner-only
     'public.list_my_mcp_connections()',         -- useMcpConnections.ts
     'public.revoke_my_mcp_connection(uuid)',    -- useMcpConnections.ts
     'public.delete_user_account()',             -- delete-account edge fn, user JWT
