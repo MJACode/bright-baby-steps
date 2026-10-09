@@ -16,6 +16,7 @@ import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 import { getAgeInMonths } from "@/hooks/useChildren";
 import { CHILD_INTERESTS, MAX_INTERESTS, TEMPERAMENTS } from "@/lib/childInterests";
+import { parseInviteCode } from "@/lib/partnerInvite";
 import { UserPlus } from "lucide-react";
 
 type PrimaryInterest = "sleep_feeding" | "developmental" | "speech" | "financial";
@@ -162,6 +163,22 @@ export function OnboardingWizard() {
   const [partnerSheetOpen, setPartnerSheetOpen] = useState(false);
   const [partnerInviteSent, setPartnerInviteSent] = useState(false);
   const hasPartnerStampedRef = useRef(false);
+
+  // Step-1 escape hatch for an invited caregiver who opened the app instead
+  // of tapping their invite link. Invites don't store the invitee's email, so
+  // the link or code they were sent is the only way to find the family.
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinInput, setJoinInput] = useState("");
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  const handleJoinFamily = () => {
+    const code = parseInviteCode(joinInput);
+    if (!code) {
+      setJoinError("That doesn't look like an invite link. Ask the person who invited you to send it again.");
+      return;
+    }
+    navigate(`/invite/${encodeURIComponent(code)}`);
+  };
 
   // Steps 1–5 are the pre-completion inputs (step 4 is optional child
   // interests; step 5 finishes setup). Step 6 is an optional milestone
@@ -458,6 +475,51 @@ export function OnboardingWizard() {
           />
           <div className="mt-auto pt-8">
             <Button className="w-full" disabled={!state.name.trim()} onClick={() => setStep(2)}>Continue</Button>
+            {!joinOpen ? (
+              <Button
+                variant="link"
+                className="w-full mt-2 touch-target text-sm font-semibold text-muted-foreground"
+                onClick={() => setJoinOpen(true)}
+              >
+                Joining someone's family?
+              </Button>
+            ) : (
+              <div id="join-family-panel" className="mt-6 rounded-xl border border-border bg-card p-4">
+                <label htmlFor="join-family-input" className="block text-sm font-semibold text-foreground">
+                  Paste your invite link
+                </label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+                  Or tap the link in the message or email you were sent. It opens your invite directly.
+                </p>
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => { e.preventDefault(); handleJoinFamily(); }}
+                >
+                  <Input
+                    id="join-family-input"
+                    autoFocus
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    inputMode="url"
+                    placeholder="graceflare.com/invite/..."
+                    value={joinInput}
+                    onChange={(e) => { setJoinInput(e.target.value); setJoinError(null); }}
+                    aria-invalid={!!joinError}
+                    aria-describedby={joinError ? "join-family-error" : undefined}
+                    className="h-12 text-base flex-1 min-w-0"
+                  />
+                  <Button type="submit" variant="outline" className="touch-target" disabled={!joinInput.trim()}>
+                    Join
+                  </Button>
+                </form>
+                {joinError && (
+                  <p id="join-family-error" role="alert" className="text-sm text-destructive mt-2">
+                    {joinError}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

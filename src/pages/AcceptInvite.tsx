@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ export default function AcceptInvite() {
   const { code } = useParams<{ code: string }>();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<"loading" | "ready" | "accepted" | "error" | "expired" | "self">("loading");
   const [invite, setInvite] = useState<any>(null);
   const [accepting, setAccepting] = useState(false);
@@ -82,6 +84,10 @@ export default function AcceptInvite() {
       });
 
       if (error) throw error;
+      // Drop the cached (possibly empty) children list — e.g. from the
+      // onboarding wizard's "Joining someone's family?" path — so /dashboard
+      // loads the shared child instead of re-showing the wizard.
+      queryClient.removeQueries({ queryKey: ["children"] });
 
       setStatus("accepted");
       toast({ title: "You're now connected as a partner! 🎉" });

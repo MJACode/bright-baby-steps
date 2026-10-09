@@ -167,6 +167,24 @@ export function clearPendingInvite(): void {
   }
 }
 
+/**
+ * Pulls the invite code out of whatever an invitee pastes: a full invite URL
+ * (web or the graceflare:// deep link, with or without a trailing slash or
+ * query), the whole share-sheet message that contains one, or a bare code.
+ * Deliberately loose about the code itself; AcceptInvite owns telling an
+ * invalid or expired code apart from a good one.
+ */
+const INVITE_PATH_CODE = /\/invite\/([A-Za-z0-9_-]+)/;
+const BARE_INVITE_CODE = /^[A-Za-z0-9_-]+$/;
+
+export function parseInviteCode(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const fromPath = trimmed.match(INVITE_PATH_CODE);
+  if (fromPath) return fromPath[1];
+  return BARE_INVITE_CODE.test(trimmed) ? trimmed : null;
+}
+
 export interface CreateInviteArgs {
   ownerId: string;
   role: PartnerRole;
