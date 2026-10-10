@@ -80,6 +80,29 @@
 --     data request used the sb_secret_ (service_role) key.
 --   * authenticated holds arwdDxtm on 72 tables, SELECT-only on
 --     family_moments, SELECT + MAINTAIN on finance_account_sponsors.
+-- Local test (2026-10-10, PostgreSQL 16; bootstrap superuser supabase_admin,
+-- non-superuser `postgres` owning everything, hosted r / S default ACLs
+-- replicated for both roles; file run wrapped in BEGIN/COMMIT like CI):
+--   PASS new postgres-created table, identity sequence and view: zero anon
+--        privileges; authenticated = SELECT/INSERT/UPDATE/DELETE (+ USAGE on
+--        the sequence), no TRUNCATE/REFERENCES/TRIGGER.
+--   PASS authenticated CRUD under RLS on an existing and a new table (own row
+--        insert/update/delete OK, foreign parent_id rejected by RLS); reads
+--        through the security_invoker view; TRUNCATE and mcp_* denied.
+--   PASS anon INSERT into rights_requests without RETURNING; anon INSERT
+--        ... RETURNING, SELECT on rights_requests / tables / view all 42501.
+--   PASS re-run: ACL snapshot identical before and after.
+--   PASS every assertion fires when its condition is broken (13 cases: anon
+--        table grant, PUBLIC sequence grant, anon column grant, rights_requests
+--        INSERT lost, authenticated TRUNCATE, authenticated on mcp_*, anon
+--        default on tables, anon default on sequences, authenticated TRUNCATE
+--        default, authenticated default missing DELETE, global authenticated
+--        default, definer view, RLS off); untouched control passes.
+--   PASS a supabase_admin-owned table in public makes the whole file fail at
+--        4.1 and roll back (state identical afterwards).
+--   NOT TESTED: MAINTAIN (PG17-only, local is 16). Covered by REVOKE ALL and by
+--        4.3 / 4.4, which reject any privilege outside the four DML ones.
+--        The section-3 before/after preservation RAISE was not forced.
 -- Out of scope, flagged in the legal log: postgres's default ACL in the
 -- `storage` schema also grants anon arwdDxtm on new tables (we never create
 -- tables there), and supabase_admin's public defaults (not changeable by
