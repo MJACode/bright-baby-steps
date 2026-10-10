@@ -3133,7 +3133,7 @@ Legitimate callers keep working:
 
 **Follow-ups:**
 1. `postgres`'s default ACL in the `storage` schema still grants anon full rights on new tables there. We never create tables in `storage`, so the risk is low. P3.
-2. `supabase_admin`'s default ACL in `public` still grants anon full rights. Only platform tooling creates objects as that role, and `postgres` cannot change it. If one ever appears, the check in this migration fails, and so does the next run of its query. P3.
+2. `supabase_admin`'s default ACL in `public` still grants anon full rights. Only platform tooling creates objects as that role, and `postgres` cannot change it. The migration fails if such an object exists today. One created later would only be caught by the security advisor or by re-running the migration's checks. P3.
 3. After the merge applies the migration, confirm on live that `has_table_privilege('anon', <every public relation>, 'SELECT')` is false except where expected, that `pg_default_acl` shows `authenticated=arwd` for `r`, and re-run the security advisor. P0 at merge.
 
 **Code refs:** draft PR #287, `supabase/migrations/20261009000000_default_table_privileges.sql`. Fill in the commit hash at merge.
