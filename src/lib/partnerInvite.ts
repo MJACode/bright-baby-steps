@@ -6,9 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import { Clipboard } from "@capacitor/clipboard";
 import { supabase } from "@/integrations/supabase/client";
-
-// Match PartnerManagement.tsx — main uses window.location.origin for invite URLs.
-const APP_URL = typeof window !== "undefined" ? window.location.origin : "";
+import { APP_URL } from "@/lib/appUrl";
 
 export type PartnerRole = "coparent" | "caregiver" | "viewer";
 
@@ -214,7 +212,7 @@ export async function createPartnerInvite({
   if (error) throw error;
   return {
     inviteCode: data.invite_code,
-    url: `${APP_URL}/invite/${data.invite_code}`,
+    url: inviteUrl(data.invite_code),
   };
 }
 
@@ -235,16 +233,23 @@ export function buildInviteMessage(opts: {
   return `${inviter} just set up a profile for ${opts.babyName} on Grace Flare and added you as ${r}. Tap to join — takes about a minute. ${opts.url}`;
 }
 
+export function inviteUrl(inviteCode: string): string {
+  return `${APP_URL}/invite/${inviteCode}`;
+}
+
 /**
  * Open the native share sheet (or fallback) for an invite.
- * Returns true if the share completed.
+ * "copied" means no share sheet was available and the full message went to
+ * the clipboard instead, so the caller must tell the user to paste it.
  */
+export type ShareInviteResult = "shared" | "copied" | "dismissed";
+
 export async function shareInvite(opts: {
   url: string;
   babyName: string;
   inviterName?: string;
   role: PartnerRole;
-}): Promise<boolean> {
+}): Promise<ShareInviteResult> {
   const text = buildInviteMessage(opts);
 
   if (Capacitor.isNativePlatform()) {
@@ -255,9 +260,9 @@ export async function shareInvite(opts: {
         url: opts.url,
         dialogTitle: "Send invite",
       });
-      return true;
+      return "shared";
     } catch {
-      return false;
+      return "dismissed";
     }
   }
 
@@ -265,13 +270,15 @@ export async function shareInvite(opts: {
   if (navigator.share) {
     try {
       await navigator.share({ title: opts.babyName, text, url: opts.url });
-      return true;
-    } catch {
-      /* fall through to copy */
+      return "shared";
+    } catch (err) {
+      // The user closed the share sheet — don't copy behind their back.
+      if (err instanceof DOMException && err.name === "AbortError") return "dismissed";
+      /* any other failure: fall through to copy */
     }
   }
   await navigator.clipboard.writeText(text);
-  return true;
+  return "copied";
 }
 
 /** Copy just the URL — used by the QR / "show on screen" path. */

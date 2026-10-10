@@ -96,12 +96,15 @@ export function InviteShareSheet({
   async function handleShare() {
     const inv = await ensureInvite();
     if (!inv) return;
-    const ok = await shareInvite({ url: inv.url, babyName, inviterName, role });
-    if (ok) {
-      setStatus("shared");
-      toast({ title: "Invite sent! 🎉" });
-      onSent?.(inv.code);
-    }
+    const result = await shareInvite({ url: inv.url, babyName, inviterName, role });
+    if (result === "dismissed") return;
+    setStatus("shared");
+    toast(
+      result === "copied"
+        ? { title: "Invite copied", description: "Paste it into a text or email to send it." }
+        : { title: "Invite sent! 🎉" },
+    );
+    onSent?.(inv.code);
   }
 
   async function handleCopy() {
