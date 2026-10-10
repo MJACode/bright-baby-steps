@@ -55,6 +55,36 @@
 --   mcp_* tables are touched only with the service-role client.
 -- No table is read or written by an anon-role request besides rights_requests.
 --
+-- Re-audit before merge (read-only, 2026-10-10 UTC; numbers above unchanged):
+--   * 20261008020000_security_hardening_anon_rpc IS applied on live (the
+--     function lockdown this file mirrors for tables). Version 20261009000000
+--     is still unused on live and on origin/main.
+--   * Every relacl entry in public has grantor postgres, and every relation
+--     is owned by postgres, so the REVOKEs below (run as postgres) take full
+--     effect; a non-owner REVOKE would only warn and 4.1 / 4.3 would fail.
+--   * The CI migrate job (Management API /database/query) runs as postgres
+--     (non-superuser, member of anon / authenticated / service_role); checked
+--     with current_user through the same API.
+--   * Functions anon can execute: complete_vpc_second_confirmation,
+--     get_home_program, toggle_home_program_day. All SECURITY DEFINER, owned
+--     by postgres, so they read / write tables as the owner and are not
+--     affected by anon losing table grants.
+--   * mcp_* tables: only the mcp edge function's service-role `admin` client
+--     touches them (grep src/ + supabase/functions); the client RPCs
+--     list_my_mcp_connections / revoke_my_mcp_connection are SECURITY DEFINER
+--     owned by postgres. mcp's user-data path mints an `authenticated` JWT.
+--   * storage.objects policies reference no public table; all buckets are
+--     private. No column ACLs, no sequences, no matviews in public.
+--   * Edge logs, last 24h: zero non-OPTIONS /rest/v1/* requests with the
+--     publishable key and no user JWT (anon role). Every non-authenticated
+--     data request used the sb_secret_ (service_role) key.
+--   * authenticated holds arwdDxtm on 72 tables, SELECT-only on
+--     family_moments, SELECT + MAINTAIN on finance_account_sponsors.
+-- Out of scope, flagged in the legal log: postgres's default ACL in the
+-- `storage` schema also grants anon arwdDxtm on new tables (we never create
+-- tables there), and supabase_admin's public defaults (not changeable by
+-- postgres).
+--
 -- ---------------------------------------------------------------------------
 -- DECISION: authenticated keeps SELECT / INSERT / UPDATE / DELETE by default.
 --   New postgres-created tables in public grant authenticated exactly those
