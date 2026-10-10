@@ -3108,3 +3108,32 @@ Legitimate callers keep working:
 **What changed:** in `src/lib/partnerInvite.ts`, the Co-parent sub changed from "Everything except managing your team" to "Same access as you", and the desc changed from "Full access. Logs, edits, manages everything." to "Full access. Logs and edits everything." This resolves the conflict noted in the 2026-10-08 role-switch entry. The desc appears on the owner's role switch, the onboarding role picker and AcceptInvite. The sub appears on the onboarding role picker.
 
 **Analysis:** the founder confirmed that co-parents have the same data access as the owner, so there's no need to call out exceptions in the copy. Two actions stay owner-only, by founder decision on 2026-10-09: deleting a child, and managing the team (invite, change role, pause, remove). Neither is a data-access right. The approved AcceptInvite bullet "{Owner} stays in charge of this child's records and decides who's on the team" still covers team management, so the shorter Co-parent copy doesn't misdescribe access. The old desc's "manages everything" was the inaccurate part and is removed. No change to data collected, purposes, processors, or retention.
+
+---
+
+## 2026-10-09 — SECURITY: new tables and views no longer readable with the public anon key by default
+
+**Reviewer:** in-house (Claude `backend`; live audit re-run read-only 2026-10-10 UTC). **Risk level:** Medium (latent exposure, no current leak found) → resolved when migration `20261009000000_default_table_privileges.sql` is applied by the `migrate` job on merge. **Not applied to live. Merging applies it to production and needs founder approval first** (draft PR #287).
+
+**What was wrong.** Closes follow-up 1 of the 2026-10-08 `family_moments` entry. The database's default privileges gave the public `anon` key (and every signed-in user) full rights, including `TRUNCATE` and Postgres 17 `MAINTAIN`, on every new table, view and sequence created in `public`. RLS hid the rows on tables, but a view, or any table created without RLS, was readable by anyone holding the anon key. That is how `family_moments` leaked. `TRUNCATE` also ignores RLS. PostgREST cannot send it, but it was still granted.
+
+**Live state before the change (read-only):** 73 tables and 1 view in `public`, all owned by `postgres`. RLS is on for all 73 tables. The one view (`family_moments`) is already `security_invoker` with no anon access, so there is **no definer view exposed to clients**. `anon` held every privilege on 70 tables. In the last 24 hours of edge logs there were **no anon-role data requests** to `/rest/v1/*`. Every non-signed-in request used the server-side secret key.
+
+**What the migration does:**
+1. **New objects.** Tables, views and sequences that `postgres` creates in `public` get **no anon privileges**. Signed-in users (`authenticated`) get only SELECT / INSERT / UPDATE / DELETE, with RLS as the control. No more TRUNCATE / REFERENCES / TRIGGER / MAINTAIN.
+2. **Existing objects.** Anon (and PUBLIC) lose all access to every `public` table, view and sequence, with one exception: **`rights_requests` INSERT**, so the public `/rights-request` form (Privacy § 7) still works for a logged-out parent. Anon cannot read it back.
+3. Signed-in users lose TRUNCATE / REFERENCES / TRIGGER / MAINTAIN everywhere. They keep exactly the read/write rights they had, so `family_moments` and `finance_account_sponsors` stay read-only. They lose all access to the `mcp_*` credential tables. Those were never client-readable in practice (RLS on, no policies). Only the `mcp` edge function (service role) and two SECURITY DEFINER RPCs use them.
+4. **End-of-migration checks.** If any of these fail, the whole migration rolls back and the job fails: no PUBLIC/anon grant except the one above, no column grants, the `rights_requests` INSERT is still there, no extra signed-in privileges, the default ACL is correct, every client-readable view is `security_invoker`, and RLS is on for every `public` table. Each check was dry-run against live's catalog and tested locally (see the migration header).
+
+**Logged-out flows checked:** `/auth` (auth API only), `/rights-request` (kept), `/vpc-confirm` and `/hp/:token` (SECURITY DEFINER RPCs, not affected), `/invite/:code` and the onboarding invite-paste (no DB call before sign-in), legal pages (no DB). One existing gap is unchanged: on signup with "Confirm email" on, `Auth.tsx` updates `profiles.data_consent_given_at` with no session. That already matched 0 rows under RLS. It now returns a permission error, which the code ignores. So the signup-time consent stamp is not recorded either way for email-confirmed signups. **P2:** move the stamp into `handle_new_user` (from signup metadata) or into the first signed-in load.
+
+**New convention (backend + QA lessons).** A new table needs no anon grant and must not get one unless a logged-out page needs it. Any such grant needs a comment naming the page. New views still need `WITH (security_invoker = true)` plus `REVOKE ALL ... FROM PUBLIC, anon, authenticated; GRANT SELECT ... TO authenticated`. Without that, a new view now defaults to signed-in read/write instead of anon read.
+
+**Disclosures.** No change to Privacy, Terms, FAQ or `/subprocessors` wording. This makes the database default match what Privacy § 10 already promises.
+
+**Follow-ups:**
+1. `postgres`'s default ACL in the `storage` schema still grants anon full rights on new tables there. We never create tables in `storage`, so the risk is low. P3.
+2. `supabase_admin`'s default ACL in `public` still grants anon full rights. Only platform tooling creates objects as that role, and `postgres` cannot change it. The migration fails if such an object exists today. One created later would only be caught by the security advisor or by re-running the migration's checks. P3.
+3. After the merge applies the migration, confirm on live that `has_table_privilege('anon', <every public relation>, 'SELECT')` is false except where expected, that `pg_default_acl` shows `authenticated=arwd` for `r`, and re-run the security advisor. P0 at merge.
+
+**Code refs:** draft PR #287, `supabase/migrations/20261009000000_default_table_privileges.sql`. Fill in the commit hash at merge.
