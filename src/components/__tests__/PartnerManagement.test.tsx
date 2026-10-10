@@ -3,17 +3,32 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PartnerManagement from "@/components/PartnerManagement";
 
-const { rpc, tables } = vi.hoisted(() => ({
+const { rpc, tables, copyInviteUrl, shareInvite, toast } = vi.hoisted(() => ({
   rpc: vi.fn(async () => ({ data: null, error: null })),
   tables: {
     owned: [] as unknown[],
     partnerOf: [] as unknown[],
+    invites: [] as unknown[],
   },
+  copyInviteUrl: vi.fn(async (_url: string) => {}),
+  shareInvite: vi.fn(async () => "copied" as const),
+  toast: vi.fn(),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "owner-1" } }) }));
 vi.mock("@/hooks/usePremium", () => ({ usePremium: () => ({ isPremium: true, isLoading: false }) }));
-vi.mock("@/hooks/use-toast", () => ({ toast: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ toast }));
+vi.mock("@/hooks/useChildren", () => ({
+  useChildren: () => ({
+    children: [{ id: "c-1", parent_id: "owner-1", name: "Ada" }],
+    activeChild: { id: "c-1", parent_id: "owner-1", name: "Ada" },
+  }),
+}));
+vi.mock("@/lib/partnerInvite", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/partnerInvite")>()),
+  copyInviteUrl,
+  shareInvite,
+}));
 vi.mock("@/components/UpgradeSheet", () => ({ UpgradeSheet: () => null }));
 
 // Resolves each select chain by table + which side of partner_access it filters on.
@@ -26,6 +41,7 @@ vi.mock("@/integrations/supabase/client", () => {
         if (table === "partner_access") {
           data = filters.includes("owner_id") ? tables.owned : tables.partnerOf;
         }
+        if (table === "partner_invitations") data = tables.invites;
         resolve({ data, error: null });
       },
     };
@@ -105,6 +121,7 @@ describe("PartnerManagement role switch", () => {
     rpc.mockClear();
     tables.owned = [ownedRow];
     tables.partnerOf = [];
+    tables.invites = [];
   });
 
   it("does not call the RPC when the current role is picked", async () => {
@@ -138,5 +155,49 @@ describe("PartnerManagement role switch", () => {
     await screen.findByText("alex@example.com's account");
     expect(screen.queryByTestId("role-trigger")).toBeNull();
     expect(screen.queryByRole("button", { name: "View-only" })).toBeNull();
+  });
+});
+
+describe("PartnerManagement pending invites", () => {
+  const invite = {
+    id: "inv-1",
+    owner_id: "owner-1",
+    role: "caregiver",
+    status: "pending",
+    invite_code: "abc123",
+    expires_at: "2099-01-01T00:00:00Z",
+  };
+
+  beforeEach(() => {
+    tables.owned = [];
+    tables.partnerOf = [];
+    tables.invites = [invite];
+    copyInviteUrl.mockClear();
+    shareInvite.mockClear();
+    toast.mockClear();
+  });
+
+  it("offers Share and Copy link without printing the raw URL", async () => {
+    renderIt();
+    await screen.findByRole("button", { name: /Share/ });
+    expect(screen.getByRole("button", { name: /Copy link/ })).toBeTruthy();
+    expect(screen.queryByText(/\/invite\/abc123/)).toBeNull();
+  });
+
+  it("copies the invite URL", async () => {
+    renderIt();
+    fireEvent.click(await screen.findByRole("button", { name: /Copy link/ }));
+    await waitFor(() => expect(copyInviteUrl).toHaveBeenCalledTimes(1));
+    expect(copyInviteUrl.mock.calls[0][0]).toMatch(/\/invite\/abc123$/);
+  });
+
+  it("shares with the baby's name and role, and toasts when it fell back to the clipboard", async () => {
+    renderIt();
+    fireEvent.click(await screen.findByRole("button", { name: /Share/ }));
+    await waitFor(() => expect(shareInvite).toHaveBeenCalledTimes(1));
+    expect(shareInvite).toHaveBeenCalledWith(
+      expect.objectContaining({ babyName: "Ada", role: "caregiver" }),
+    );
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Invite copied" })));
   });
 });
