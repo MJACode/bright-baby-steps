@@ -3,7 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import {
+  assertCanWrite, useCurrentRoleQuery, ROLE_UNRESOLVED_MESSAGE, VIEW_ONLY_MESSAGE,
+} from "@/hooks/useCurrentRole";
+import { isRlsViewerDenied } from "@/lib/handleRlsError";
+import { parseChildDate } from "@/lib/childAge";
+import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +35,35 @@ import {
   severityConfig, symptomOptions, type Severity, type AllergenStatus,
 } from "@/services/allergenService";
 
+class StartExposureError extends Error {
+  constructor(readonly cause: unknown, readonly rolledBack: boolean) {
+    super("allergen exposure log insert failed");
+  }
+}
+
+function describeStartExposureError(err: unknown, allergenName?: string): { title: string; description: string } {
+  if ((err as { code?: string })?.code === "23505") {
+    return {
+      title: "Already started",
+      description: `${allergenName ?? "This allergen"} was already started on another device. We've refreshed it.`,
+    };
+  }
+  const title = "Couldn't log that exposure";
+  if (err instanceof Error && (err.message === VIEW_ONLY_MESSAGE || err.message === ROLE_UNRESOLVED_MESSAGE)) {
+    return { title, description: err.message };
+  }
+  if (isRlsViewerDenied(err) || (err instanceof StartExposureError && isRlsViewerDenied(err.cause))) {
+    return { title, description: VIEW_ONLY_MESSAGE };
+  }
+  if (err instanceof StartExposureError && !err.rolledBack) {
+    return {
+      title,
+      description: "The exposure didn't save, so this allergen may show as In Progress. Remove its tracking, then log it again.",
+    };
+  }
+  return { title, description: "Nothing was saved. Check your connection and try again." };
+}
+
 export default function AllergenTracker() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
@@ -50,6 +84,9 @@ export default function AllergenTracker() {
   // Removal confirmations
   const [undoExposureOpen, setUndoExposureOpen] = useState(false);
   const [removeEntryOpen, setRemoveEntryOpen] = useState(false);
+
+  const [startOpen, setStartOpen] = useState(false);
+  const [startAt, setStartAt] = useState<Date>(() => new Date());
 
   // Queries
   const { data: allergens, isLoading: allergensLoading } = useQuery({
@@ -90,30 +127,65 @@ export default function AllergenTracker() {
 
   // Mutations
   const startIntro = useMutation({
-    mutationFn: async (allergenId: string) => {
+    mutationFn: async ({ allergenId, at }: { allergenId: string; at: Date }) => {
+      assertCanWrite(roleResolved, role);
+
+      const now = new Date();
+      const loggedAt = (at.getTime() > now.getTime() ? now : at).toISOString();
+
       const { data, error } = await supabase.from("allergen_introductions").insert({
         allergen_id: allergenId,
         child_id: activeChild!.id,
         parent_id: user!.id,
         status: "in_progress",
-        first_introduced_at: new Date().toISOString(),
+        first_introduced_at: loggedAt,
       }).select().single();
       if (error) throw error;
-      await supabase.from("allergen_exposure_logs").insert({
+
+      const { error: logError } = await supabase.from("allergen_exposure_logs").insert({
         allergen_id: allergenId,
         allergen_introduction_id: data.id,
         child_id: activeChild!.id,
         parent_id: user!.id,
         exposure_number: 1,
+        logged_at: loggedAt,
       });
-      return data;
+      if (logError) {
+        // An introduction with no exposure renders as In Progress with no way
+        // to log exposure #1, so undo it rather than leave it half-saved.
+        const { data: deleted, error: rollbackError } = await supabase
+          .from("allergen_introductions").delete().eq("id", data.id).select("id");
+        throw new StartExposureError(logError, !rollbackError && !!deleted?.length);
+      }
+      return { allergenId: data.allergen_id, loggedAt };
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
-      toast({ title: "First exposure logged! 🥜", description: "Wait 3 days before the next exposure." });
-      setSelectedAllergenId(data.allergen_id);
+    onSuccess: ({ allergenId, loggedAt }) => {
+      setStartOpen(false);
+      setSelectedAllergenId(allergenId);
+      const next = getNextExposureDate([{ logged_at: loggedAt }]);
+      toast({
+        title: "First exposure logged",
+        description: next ? `Next exposure on ${format(next, "MMM d")}.` : undefined,
+      });
     },
+    onError: (err, { allergenId }) => {
+      // Close when retrying can't help: a half-saved intro, or a partner already started it.
+      const duplicate = (err as { code?: string })?.code === "23505";
+      if (duplicate || (err instanceof StartExposureError && !err.rolledBack)) setStartOpen(false);
+      const allergenName = allergens?.find((a) => a.id === allergenId)?.name;
+      toast({ ...describeStartExposureError(err, allergenName), variant: "destructive" });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] }),
   });
+
+  const openStartDialog = () => {
+    setStartAt(new Date());
+    setStartOpen(true);
+  };
+
+  const childDob = activeChild ? parseChildDate(activeChild.date_of_birth) : undefined;
+  // An expected child's date is in the future; a min after the max would lock the calendar.
+  const startMinDate = childDob && childDob.getTime() <= Date.now() ? childDob : undefined;
 
   const logExposure = useMutation({
     mutationFn: async ({ introId, allergenId, exposureNum }: { introId: string; allergenId: string; exposureNum: number }) => {
@@ -501,10 +573,10 @@ export default function AllergenTracker() {
         </div>
 
         {/* Action buttons */}
-        {status === "not_started" && (
+        {status === "not_started" && canWrite && (
           <Button
             className="w-full touch-target h-14 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
-            onClick={() => startIntro.mutate(selectedAllergen.id)}
+            onClick={openStartDialog}
             disabled={startIntro.isPending}
           >
             <Play className="w-5 h-5" /> Start First Exposure
@@ -608,6 +680,39 @@ export default function AllergenTracker() {
           </div>
         )}
 
+        <AlertDialog open={startOpen} onOpenChange={setStartOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">
+                Log {selectedAllergen.name}'s first exposure?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This starts the 2-hour watch and the 3-day wait for {activeChild.name}.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <MobileDateTimePicker
+              value={startAt}
+              onChange={(d) => setStartAt(d > new Date() ? new Date() : d)}
+              maxDate={new Date()}
+              minDate={startMinDate}
+              label={`When did ${activeChild.name} have it?`}
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel className="touch-target">Not yet</AlertDialogCancel>
+              <AlertDialogAction
+                className="touch-target"
+                disabled={startIntro.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  startIntro.mutate({ allergenId: selectedAllergen.id, at: startAt });
+                }}
+              >
+                {startIntro.isPending ? "Logging..." : "Log exposure"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Undo the most recent exposure, keeping the rest of the protocol */}
         <AlertDialog open={undoExposureOpen} onOpenChange={setUndoExposureOpen}>
           <AlertDialogContent>
@@ -671,6 +776,111 @@ export default function AllergenTracker() {
           </AlertDialogContent>
         </AlertDialog>
 
+        {/* ─── REACTION LOGGING DIALOG ─── */}
+        <Dialog open={reactionDialog} onOpenChange={(open) => { setReactionDialog(open); if (!open) resetReactionForm(); }}>
+          <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="font-display text-lg">
+                Log Exposure #{currentExposureIntro?.exposureNum}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-5">
+              {/* Severity — large color-coded buttons */}
+              <div className="space-y-2">
+                <Label className="text-sm font-bold">Any Reaction?</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Object.entries(severityConfig) as [Severity, typeof severityConfig.none][]).map(([key, cfg]) => (
+                    <Button
+                      key={key}
+                      variant="outline"
+                      className={cn(
+                        "touch-target h-14 text-sm font-bold transition-all",
+                        severity === key ? cfg.activeColor : cfg.color
+                      )}
+                      onClick={() => setSeverity(key)}
+                    >
+                      <span className="text-lg mr-1">{cfg.emoji}</span> {cfg.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Symptoms — checkboxes */}
+              {severity !== "none" && (
+                <>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-bold">Symptoms Observed</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {symptomOptions.map((sym) => (
+                        <Button
+                          key={sym}
+                          variant={symptoms.includes(sym) ? "default" : "outline"}
+                          size="sm"
+                          className={cn("text-xs capitalize touch-target",
+                            symptoms.includes(sym) && "bg-destructive/80 hover:bg-destructive"
+                          )}
+                          onClick={() => setSymptoms(prev =>
+                            prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
+                          )}
+                        >
+                          {sym}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Verbatim notes — never summarize or interpret */}
+                  <div className="space-y-1">
+                    <Label className="text-sm font-bold">Describe What You Observed</Label>
+                    <Textarea
+                      value={reactionNotes}
+                      onChange={(e) => setReactionNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Describe exactly what you saw — timing, severity, how your child responded..."
+                      className="text-sm"
+                    />
+                    <p className="text-[10px] text-muted-foreground">Your description will be stored exactly as written for your pediatrician.</p>
+                  </div>
+
+                  {/* CLINICAL REVIEW NEEDED: Alert thresholds per AAAAI/AAP */}
+                  {(severity === "moderate" || severity === "severe") && (
+                    <Card className={cn("border-0", severity === "severe" ? "bg-destructive/15" : "bg-warning/15")}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className={cn("w-5 h-5 shrink-0 mt-0.5",
+                            severity === "severe" ? "text-destructive" : "text-warning"
+                          )} />
+                          <div>
+                            <p className={cn("text-sm font-bold",
+                              severity === "severe" ? "text-destructive" : "text-warning"
+                            )}>
+                              {severity === "severe"
+                                ? "These symptoms may need immediate attention"
+                                : "Consider contacting your pediatrician"}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {severity === "severe"
+                                ? "If your child is having difficulty breathing, swelling of the face or throat, or seems very unwell, call 911 immediately."
+                                : "These symptoms may need medical attention. Consider calling your pediatrician to discuss what you're observing."}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </>
+              )}
+
+              <Button
+                className="w-full touch-target h-12 text-base font-bold"
+                onClick={() => currentExposureIntro && logExposure.mutate(currentExposureIntro)}
+                disabled={logExposure.isPending || (severity !== "none" && symptoms.length === 0)}
+              >
+                {logExposure.isPending ? "Saving..." : "Save Exposure"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -798,111 +1008,6 @@ export default function AllergenTracker() {
         </CardContent>
       </Card>
 
-      {/* ─── REACTION LOGGING DIALOG ─── */}
-      <Dialog open={reactionDialog} onOpenChange={(open) => { setReactionDialog(open); if (!open) resetReactionForm(); }}>
-        <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display text-lg">
-              Log Exposure #{currentExposureIntro?.exposureNum}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-5">
-            {/* Severity — large color-coded buttons */}
-            <div className="space-y-2">
-              <Label className="text-sm font-bold">Any Reaction?</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {(Object.entries(severityConfig) as [Severity, typeof severityConfig.none][]).map(([key, cfg]) => (
-                  <Button
-                    key={key}
-                    variant="outline"
-                    className={cn(
-                      "touch-target h-14 text-sm font-bold transition-all",
-                      severity === key ? cfg.activeColor : cfg.color
-                    )}
-                    onClick={() => setSeverity(key)}
-                  >
-                    <span className="text-lg mr-1">{cfg.emoji}</span> {cfg.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Symptoms — checkboxes */}
-            {severity !== "none" && (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-sm font-bold">Symptoms Observed</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {symptomOptions.map((sym) => (
-                      <Button
-                        key={sym}
-                        variant={symptoms.includes(sym) ? "default" : "outline"}
-                        size="sm"
-                        className={cn("text-xs capitalize touch-target",
-                          symptoms.includes(sym) && "bg-destructive/80 hover:bg-destructive"
-                        )}
-                        onClick={() => setSymptoms(prev =>
-                          prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
-                        )}
-                      >
-                        {sym}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Verbatim notes — never summarize or interpret */}
-                <div className="space-y-1">
-                  <Label className="text-sm font-bold">Describe What You Observed</Label>
-                  <Textarea
-                    value={reactionNotes}
-                    onChange={(e) => setReactionNotes(e.target.value)}
-                    rows={3}
-                    placeholder="Describe exactly what you saw — timing, severity, how your child responded..."
-                    className="text-sm"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Your description will be stored exactly as written for your pediatrician.</p>
-                </div>
-
-                {/* CLINICAL REVIEW NEEDED: Alert thresholds per AAAAI/AAP */}
-                {(severity === "moderate" || severity === "severe") && (
-                  <Card className={cn("border-0", severity === "severe" ? "bg-destructive/15" : "bg-warning/15")}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className={cn("w-5 h-5 shrink-0 mt-0.5",
-                          severity === "severe" ? "text-destructive" : "text-warning"
-                        )} />
-                        <div>
-                          <p className={cn("text-sm font-bold",
-                            severity === "severe" ? "text-destructive" : "text-warning"
-                          )}>
-                            {severity === "severe"
-                              ? "These symptoms may need immediate attention"
-                              : "Consider contacting your pediatrician"}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {severity === "severe"
-                              ? "If your child is having difficulty breathing, swelling of the face or throat, or seems very unwell, call 911 immediately."
-                              : "These symptoms may need medical attention. Consider calling your pediatrician to discuss what you're observing."}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </>
-            )}
-
-            <Button
-              className="w-full touch-target h-12 text-base font-bold"
-              onClick={() => currentExposureIntro && logExposure.mutate(currentExposureIntro)}
-              disabled={logExposure.isPending || (severity !== "none" && symptoms.length === 0)}
-            >
-              {logExposure.isPending ? "Saving..." : "Save Exposure"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
