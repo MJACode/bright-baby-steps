@@ -121,7 +121,10 @@ function detectOffPlan(
 // Every recipient's `profiles.notification_prefs` (jsonb, nullable — see
 // migration 20260715000000_notification_preferences.sql) is resolved through
 // resolvePrefs() so NULL / {} / partial objects all get the same defaults:
-// quiet 21:00–07:00, cap 3/day, daily_briefing on, no mutes, tz UTC.
+// quiet 21:00–07:00, cap 3/day, no mutes, tz UTC. The blob's legacy
+// `daily_briefing` key is no longer read: the morning briefing nudge it
+// toggled was removed on 2026-10-12 (the key may still be present in stored
+// prefs and is simply ignored).
 
 type NotificationPrefs = {
   tz: string | null;
@@ -129,7 +132,6 @@ type NotificationPrefs = {
   quiet_end: string;
   muted_categories: string[];
   daily_cap: number;
-  daily_briefing: boolean;
 };
 
 /**
@@ -141,7 +143,8 @@ type NotificationPrefs = {
  *   milestones   — milestone_age, weekly_development
  *   reminders    — diaper_reminder, sleep_reminder, sleep_plan_winddown,
  *                  sleep_window_15min, sleep_window_exceeded, sleep_off_plan
- *   insights     — daily_briefing (deterministic morning nudge, this function)
+ *   insights     — daily_briefing (retired 2026-10-12; no longer produced.
+ *                  Kept so historical rows still map to their category)
  *   finance      — finance_trump_claim, finance_529_newborn, finance_529_birthday
  *                  (one-shot per child, owner only; see "Finance account
  *                  reminders" below)
@@ -178,7 +181,7 @@ function categoryOf(type: string): string {
  *   0 — appointment reminders (NEVER dropped by the cap; they count toward it
  *       and are the only type allowed to exceed it)
  *   1 — time-sensitive sleep-plan nudges (stale in minutes, worthless later)
- *   2 — everything else (daily_briefing, milestone_age, weekly_development,
+ *   2 — everything else (milestone_age, weekly_development,
  *       diaper_reminder, sleep_reminder, finance_* one-shots, unknown future
  *       types)
  */
@@ -218,7 +221,6 @@ function resolvePrefs(raw: unknown): NotificationPrefs {
         )
       : [],
     daily_cap: cap,
-    daily_briefing: p.daily_briefing !== false, // default true; only literal false disables
   };
 }
 
@@ -245,7 +247,7 @@ function safeTz(tz: string | null): string {
  *   minutes — minutes since local midnight (0..1439), via hourCycle h23 so
  *             midnight is 0, never 24*60
  *   dateKey — local calendar date "YYYY-MM-DD"; the unit of "today" for the
- *             daily cap and the one-briefing-per-day guard
+ *             daily cap
  */
 function localParts(date: Date, tz: string | null): { minutes: number; dateKey: string } {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -373,13 +375,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function formatSleepDuration(totalMin: number): string {
-  const h = Math.floor(totalMin / 60);
-  const m = Math.round(totalMin % 60);
-  if (h === 0) return `${m}m`;
-  return m === 0 ? `${h}h` : `${h}h ${m}m`;
-}
-
 // -----------------------------------------------------------------------------
 
 Deno.serve(async (req) => {
@@ -406,11 +401,6 @@ Deno.serve(async (req) => {
   }
 
   const notifications: Array<{ user_id: string; child_id: string; message: string; type: string }> = [];
-
-  // owner user_id -> active partner user_ids. Filled by the per-child partner
-  // fan-out below; reused by the Phase 2 briefing + restraint layer so we
-  // don't re-query partner_access.
-  const partnersByOwner = new Map<string, string[]>();
 
   // Additional users are entitled by seat: free 1, Flare+ 2, ranked by
   // seniority (migration 20260930100000). On a Flare+ lapse the longest-standing
@@ -898,7 +888,6 @@ Deno.serve(async (req) => {
       : null;
 
     if (partners) {
-      partnersByOwner.set(userId, partners.map((p: { partner_id: string }) => p.partner_id));
       for (const partner of partners) {
         for (const notif of notifications.filter((n) => n.user_id === userId && n.child_id === child.id)) {
           notifications.push({
@@ -911,14 +900,18 @@ Deno.serve(async (req) => {
   }
 
   // ===========================================================================
-  // Phase 2 — deterministic morning briefing + per-recipient restraint layer.
+  // Phase 2 — per-recipient restraint layer.
   //
   // Everything above queues candidates into `notifications` exactly as before
-  // (per-type dedupe untouched). From here on we (a) queue the daily_briefing
-  // nudge per RECIPIENT (not per child-loop iteration), then (b) run every
-  // queued row — primary AND partner copies — through the recipient's own
-  // prefs: category mutes, quiet hours, daily cap. Partner copies are judged
-  // by the PARTNER's prefs, never the primary's.
+  // (per-type dedupe untouched). From here on we run every queued row —
+  // primary AND partner copies — through the recipient's own prefs: category
+  // mutes, quiet hours, daily cap. Partner copies are judged by the PARTNER's
+  // prefs, never the primary's.
+  //
+  // The (d) daily_briefing morning nudge ("Good morning — X slept Yh… Tap for
+  // today's briefing.") was removed on 2026-10-12 along with the Home AI
+  // briefing. Rows of that type from before then may still exist in
+  // public.notifications; they keep their "insights" entry in TYPE_CATEGORY.
   // ===========================================================================
 
   type QueuedNotif = { user_id: string; child_id: string; message: string; type: string };
@@ -931,34 +924,14 @@ Deno.serve(async (req) => {
     is_expected: boolean | null;
   };
 
-  // (a) Household map: recipient -> children their briefing can draw on.
-  // Primary parents get their own children; partners get each owner's
-  // children (first owner wins if they partner multiple households — one
-  // briefing per recipient per day, period).
-  const childrenByParent = new Map<string, ChildRow[]>();
-  for (const child of children as ChildRow[]) {
-    const list = childrenByParent.get(child.parent_id) ?? [];
-    list.push(child);
-    childrenByParent.set(child.parent_id, list);
-  }
-  // Deterministic briefing subject: youngest child first (the children query
-  // has no ORDER BY, so raw order is arbitrary).
-  for (const list of childrenByParent.values()) {
-    list.sort((a, b) => b.date_of_birth.localeCompare(a.date_of_birth));
-  }
-  const briefingChildren = new Map<string, ChildRow[]>(childrenByParent);
-  for (const [ownerId, partnerIds] of partnersByOwner) {
-    const kids = childrenByParent.get(ownerId);
-    if (!kids) continue;
-    for (const pid of partnerIds) {
-      if (!briefingChildren.has(pid)) briefingChildren.set(pid, kids);
-    }
-  }
-
   // (b) Batch-fetch prefs for every recipient this run can touch — one query.
+  // Every child owner is included even when nothing is queued for them yet:
+  // the finance block (d2) below queues owner-only rows AFTER this fetch and
+  // needs the owner's tz (local date) here, plus their recent rows in (c) for
+  // the daily cap in (e).
   const recipientIds = new Set<string>([
     ...notifications.map((n) => n.user_id),
-    ...briefingChildren.keys(),
+    ...(children as ChildRow[]).map((c) => c.parent_id),
   ]);
   const prefsByUser = new Map<string, NotificationPrefs>();
   if (recipientIds.size > 0) {
@@ -976,9 +949,8 @@ Deno.serve(async (req) => {
   // (c) Everything created in the last 26h, batched in one query. 26h covers
   // any recipient-local midnight: a local day starts at most 24h before `now`
   // in every IANA zone (max offset UTC+14 still keeps local midnight within
-  // the last 24h of UTC `now`); +2h slack for clock skew. Used for BOTH the
-  // daily cap ("existing today", recipient-local day) and the
-  // one-briefing-per-day guard. Note this counts rows from every producer —
+  // the last 24h of UTC `now`); +2h slack for clock skew. Used for the
+  // daily cap ("existing today", recipient-local day). Note this counts rows from every producer —
   // including reactivate-nudge's `reactivation` type — so the cap reflects
   // total daily volume, not just this function's output.
   const twentySixHoursAgo = new Date(now.getTime() - 26 * 60 * 60 * 1000).toISOString();
@@ -994,122 +966,6 @@ Deno.serve(async (req) => {
       list.push({ type: r.type, created_at: r.created_at });
       recentByUser.set(r.user_id, list);
     }
-  }
-
-  // (d) daily_briefing — deterministic morning nudge. NO LLM call here: the
-  // message is built from yesterday's sleep/feed logs; the Anthropic-powered
-  // briefing itself is generated on demand when the user opens the dashboard
-  // (briefing edge function). Fires when:
-  //   - recipient-local time is in [07:00, 12:00) AND outside the recipient's
-  //     quiet hours. The window is 5h wide (not the nominal 3h "morning") so
-  //     the 3h cron always gets a SECOND tick inside it: if the first eligible
-  //     tick is swallowed by quiet hours (e.g. quiet-until 07:30 with a tick
-  //     at local 07:00) or by the daily cap, the next tick retries. Quiet
-  //     hours are pre-checked HERE — not just in the restraint filter — so a
-  //     quiet-suppressed tick doesn't consume the day's only chance. With a
-  //     3h-wide gate, quiet overlap made the briefing permanently
-  //     undeliverable for those users, silently, every day.
-  //   - prefs.daily_briefing !== false
-  //   - no daily_briefing already created today (recipient-local day) — this
-  //     is also the double-fire guard for the two ticks in the widened window
-  // It then flows through the same restraint filter as everything else, so it
-  // respects the "insights" category mute (also pre-checked here to skip the
-  // data fetch), quiet hours, and counts toward the daily cap.
-  const statsCache = new Map<string, { sleep: Array<{ s: number; e: number }>; feeds: number[] }>();
-  // 50h window: the earliest instant of a recipient-local "yesterday" is
-  // exactly now-48h in UTC terms (offset cancels out); +2h slack.
-  const fiftyHoursAgo = new Date(now.getTime() - 50 * 60 * 60 * 1000).toISOString();
-  const childStats = async (childId: string) => {
-    const cached = statsCache.get(childId);
-    if (cached) return cached;
-    const [sleepRes, feedRes] = await Promise.all([
-      supabase
-        .from("sleep_logs")
-        .select("started_at, ended_at")
-        .eq("child_id", childId)
-        .not("ended_at", "is", null)
-        .gte("ended_at", fiftyHoursAgo),
-      supabase
-        .from("feeding_logs")
-        .select("logged_at")
-        .eq("child_id", childId)
-        .gte("logged_at", fiftyHoursAgo),
-    ]);
-    const stats = {
-      sleep: ((sleepRes.data || []) as Array<{ started_at: string; ended_at: string }>).map((l) => ({
-        s: new Date(l.started_at).getTime(),
-        e: new Date(l.ended_at).getTime(),
-      })),
-      feeds: ((feedRes.data || []) as Array<{ logged_at: string }>).map((f) =>
-        new Date(f.logged_at).getTime(),
-      ),
-    };
-    statsCache.set(childId, stats);
-    return stats;
-  };
-
-  for (const [recipientId, kids] of briefingChildren) {
-    const prefs = prefsFor(recipientId);
-    if (!prefs.daily_briefing) continue;
-    if (prefs.muted_categories.includes("insights")) continue; // filter would drop it; skip the fetch
-    const local = localParts(now, prefs.tz);
-    if (local.minutes < 7 * 60 || local.minutes >= 12 * 60) continue;
-    // Quiet-hours pre-check (mirrors the mute pre-check above): if this tick
-    // is quiet for the recipient, skip WITHOUT queueing so a later tick in
-    // the [07:00, 12:00) window can deliver instead of the restraint filter
-    // burning the attempt.
-    if (
-      inQuietHours(
-        local.minutes,
-        parseHHMM(prefs.quiet_start, 21 * 60),
-        parseHHMM(prefs.quiet_end, 7 * 60),
-      )
-    ) {
-      continue;
-    }
-    const alreadyToday = (recentByUser.get(recipientId) || []).some(
-      (r) =>
-        r.type === "daily_briefing" &&
-        localParts(new Date(r.created_at), prefs.tz).dateKey === local.dateKey,
-    );
-    if (alreadyToday) continue;
-
-    const child = kids[0];
-    if (!child) continue;
-
-    const stats = await childStats(child.id);
-    const yesterdayKey = localParts(new Date(now.getTime() - 24 * 60 * 60 * 1000), prefs.tz).dateKey;
-    let sleepMin = 0;
-    for (const log of stats.sleep) {
-      if (log.e > log.s && localParts(new Date(log.e), prefs.tz).dateKey === yesterdayKey) {
-        sleepMin += (log.e - log.s) / 60_000;
-      }
-    }
-    sleepMin = Math.round(sleepMin);
-    const feedCount = stats.feeds.filter(
-      (t) => localParts(new Date(t), prefs.tz).dateKey === yesterdayKey,
-    ).length;
-
-    // Brand voice: lead with the most important info, no negative framing —
-    // a no-data day gets a neutral invite, never "you didn't log".
-    const feedPart = `${feedCount} feed${feedCount === 1 ? "" : "s"}`;
-    let message: string;
-    if (sleepMin > 0 && feedCount > 0) {
-      message = `Good morning — ${child.name} slept ${formatSleepDuration(sleepMin)} and had ${feedPart} yesterday. Tap for today's briefing.`;
-    } else if (sleepMin > 0) {
-      message = `Good morning — ${child.name} slept ${formatSleepDuration(sleepMin)} yesterday. Tap for today's briefing.`;
-    } else if (feedCount > 0) {
-      message = `Good morning — ${child.name} had ${feedPart} yesterday. Tap for today's briefing.`;
-    } else {
-      message = `Good morning — today's briefing for ${child.name} is ready. Tap to take a look.`;
-    }
-
-    notifications.push({
-      user_id: recipientId,
-      child_id: child.id,
-      message,
-      type: "daily_briefing",
-    });
   }
 
   // (d2) Finance account reminders — one-shot, OWNER ONLY.

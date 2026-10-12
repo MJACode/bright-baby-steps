@@ -58,12 +58,10 @@ export default function Dashboard() {
         sleepCoachVisible={isVisible("sleepCoach")}
       />
 
-      {/* One "Today" card: AI briefing headline → condensed this-week line.
-          Both regions gate on their Customize-Home toggles, and the card
-          renders nothing when neither is on. */}
+      {/* "Today" card: this-week development line, then the Sign Language
+          promo/nudge. Both ride on the What to Expect toggle. */}
       <TodayCard
         activeChild={activeChild}
-        showBriefing={isVisible("briefing")}
         showWhatToExpect={isVisible("whatToExpect")}
         prefs={prefs}
         setPrefs={setPrefs}

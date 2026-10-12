@@ -81,7 +81,6 @@ export function useChildOwnerPremium(childId: string | undefined, { enabled = tr
  * to the paywall (or remove it during a promo) without grepping the codebase.
  */
 export const PREMIUM_FEATURES = {
-  "ai-insights": "Daily AI briefings",
   "predictions": "Nap & feed predictions",
   "cry-analysis": "Cry clues",
   "growth-analytics": "Detailed growth analytics",

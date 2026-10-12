@@ -83,7 +83,7 @@ describe("PremiumGate family plan inheritance", () => {
 
   it("does not let AI features inherit the family plan", async () => {
     state.rpc.mockResolvedValue({ data: true, error: null });
-    renderGate("ai-insights");
+    renderGate("visit-prep-ai");
     await waitFor(() => expect(screen.queryByText("Gated content")).not.toBeInTheDocument());
     expect(state.rpc).not.toHaveBeenCalled();
   });

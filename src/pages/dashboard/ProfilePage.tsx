@@ -328,18 +328,6 @@ export default function ProfilePage() {
             </Select>
           </div>
 
-          <label className="flex items-center justify-between gap-3 min-h-[48px] cursor-pointer">
-            <div>
-              <p className="text-sm font-semibold">Morning briefing</p>
-              <p className="text-xs text-muted-foreground">A short good-morning summary of yesterday</p>
-            </div>
-            <Switch
-              checked={notifPrefs.daily_briefing}
-              disabled={!notifPrefsReady}
-              onCheckedChange={(checked) => saveNotifPrefs({ daily_briefing: checked })}
-            />
-          </label>
-
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">What you'll hear about</p>
 
           <div className="flex items-center justify-between gap-3 min-h-[48px]">
@@ -399,7 +387,7 @@ export default function ProfilePage() {
             <Shield className="w-3.5 h-3.5" /> AI & Data
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Grace Flare uses AI to generate daily briefings, weekly insights, and in-app suggestions. Your child's activity data is processed by our AI provider to enable these features. You may disable briefings in Preferences at any time.
+            Grace Flare uses AI to generate weekly insights, Visit Prep questions, and in-app suggestions. Your child's activity data is processed by our AI provider to enable these features.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
