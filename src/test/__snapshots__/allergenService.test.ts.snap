@@ -1,0 +1,72 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`allergen guidance copy > matches the approved wording 1`] = `
+{
+  "BEFORE_YOU_START_GENERAL": {
+    "items": [
+      "Talk to your pediatrician first if your baby has severe eczema or has reacted to a food before.",
+      "Offer it at home, earlier in the day, when your baby is healthy.",
+      "Make sure one adult can watch your baby closely for the next 2 hours — so don't start right before a nap or bedtime.",
+      "Serve it in a baby-safe form — soft, thinned, or pureed.",
+      "Start with a small taste, wait about 10 minutes, then offer the rest at your baby's usual pace.",
+    ],
+    "title": "Before you start",
+  },
+  "BEFORE_YOU_START_NUTS": {
+    "items": [
+      "Talk to your pediatrician first if your baby has severe eczema or has reacted to a food before.",
+      "Offer it at home, earlier in the day, when your baby is healthy.",
+      "Make sure one adult can watch your baby closely for the next 2 hours — so don't start right before a nap or bedtime.",
+      "Serve it in a baby-safe form, like thinned nut butter or a puree. Never whole nuts or a spoonful of thick nut butter.",
+      "Start with a small taste, wait about 10 minutes, then offer the rest at your baby's usual pace.",
+    ],
+    "title": "Before you start",
+  },
+  "CALL_911": {
+    "followUp": [
+      "If your baby has prescribed epinephrine, use it right away, then call 911. Don't wait to see if it passes.",
+      "Keep your baby lying down (on their side if vomiting) while you wait.",
+    ],
+    "items": [
+      "Trouble breathing, wheezing, a repeated cough, or a hoarse cry",
+      "Swelling of the lips, tongue, or face",
+      "Hives spreading across the body",
+      "Repeated vomiting",
+      "Pale or bluish skin, floppiness, or sudden unusual sleepiness",
+      "Signs in two areas at once, like hives plus vomiting — even if each seems mild",
+    ],
+    "title": "Call 911 right away if you see",
+  },
+  "CALL_PEDIATRICIAN": {
+    "followUp": [
+      "Keep watching for the full 2 hours. If anything on the 911 list appears, call 911.",
+      "Wait to offer this food again until your pediatrician says it's OK.",
+    ],
+    "items": [
+      "You see a few hives or a rash in one spot, a single vomit, or sneezing and a runny nose. Take a photo — it helps.",
+    ],
+    "title": "Stop the food and call your pediatrician today if",
+  },
+  "GUIDANCE_FOOTER": "Based on AAP (2019) and NIAID (2017) guidance. Your pediatrician knows your baby best.",
+  "LATER_SAME_DAY": {
+    "items": [
+      "Repeated vomiting, especially with pale skin or low energy: call your pediatrician now. Go to the ER if your baby can't keep fluids down. Call 911 if your baby is floppy or very hard to wake.",
+    ],
+    "title": "Later the same day (1–4 hours after eating)",
+  },
+  "NEXT_FEW_DAYS": {
+    "items": [
+      "Blood or mucus in the stool: call your pediatrician today.",
+      "Diarrhea or an eczema flare: note it here and mention it to your pediatrician. Call sooner if you see fewer wet diapers.",
+    ],
+    "title": "Over the next few days",
+  },
+  "ONCE_IT_GOES_WELL": "Keep it on the menu a few times a week to help your baby keep tolerating it.",
+  "USUALLY_NOT_A_REACTION": {
+    "items": [
+      "Flat redness only where food touched the skin — no raised bumps — that fades within the hour while your baby acts normal. Raised welts are hives.",
+    ],
+    "title": "Usually not a reaction",
+  },
+}
+`;
