@@ -1,5 +1,13 @@
 import { addDays, format, startOfDay, subDays } from "date-fns";
 import { getAgeBucket, type AgeBucket, type MethodFlavor } from "@/lib/sleepTriage";
+import {
+  acceptedWakeWindow,
+  clampWakeWindow,
+  personalWakeWindow,
+  positionOffsets,
+  wakeWindowRangeDisplay,
+  type WakeWindowOverrides,
+} from "@/lib/wakeWindow";
 
 // Evidence-based sleep plan generator. All clinical numbers come from the
 // sources listed below and are surfaced in the UI alongside their source label
@@ -25,13 +33,19 @@ interface TotalSleepRange {
 
 interface NapInfo {
   typical: number;
+  /** Shown instead of the bare count where the bracket straddles a drop. */
+  label?: string;
   transitionAhead?: string;
   note?: string;
 }
 
-interface WakeWindowRange {
+interface PlanWakeWindow {
+  /** Age min / max from the wake-window engine (saved as wake_window_low/high_min). */
   low: number;
   high: number;
+  typical: number;
+  /** The engine's personal target for this baby — the sample day's base. */
+  personalMin: number;
   display: string;
   footnote: string;
 }
@@ -67,7 +81,7 @@ export interface SleepPlan {
   bucketLabel: string;
   totalSleep: TotalSleepRange;
   naps: NapInfo;
-  wakeWindow: WakeWindowRange;
+  wakeWindow: PlanWakeWindow;
   bedtimeRange: BedtimeRange;
   predictedBedtime: {
     time: string | null;
@@ -103,9 +117,9 @@ export interface SleepPlan {
   // and a fixed clock would be misleading. Render `newbornNote` instead.
   sampleDay: SampleDayEntry[];
   newbornNote: string | null;
-  // Set when the next age bracket starts within UPCOMING_CHANGE_LEAD_DAYS. The
-  // bracket numbers are cited per bracket, so we flag the jump rather than
-  // interpolating between them.
+  // Set when the next age bracket starts within UPCOMING_CHANGE_LEAD_DAYS and
+  // the typical nap count moves. Wake windows are interpolated by age, so
+  // they never jump and are not announced.
   upcomingChange: UpcomingBracketChange | null;
   sources: SleepPlanSource[];
 }
@@ -145,7 +159,7 @@ export const TOTAL_SLEEP_BY_BRACKET: Record<AgeBucket, TotalSleepRange> = {
 export const NAPS_BY_BRACKET: Record<AgeBucket, NapInfo> = {
   "0-3mo": { typical: 4, transitionAhead: "Naps consolidate to 3 around 3-4 months" },
   "3-6mo": { typical: 3, transitionAhead: "3→2 nap drop typically 6-9 months" },
-  "6-9mo": { typical: 3, transitionAhead: "Most drop to 2 naps by 9 months" },
+  "6-9mo": { typical: 3, label: "2–3 naps", transitionAhead: "Most drop to 2 naps by 9 months" },
   "9-12mo": { typical: 2 },
   "12-18mo": { typical: 2, transitionAhead: "2→1 nap drop typically 14-18 months" },
   "18-24mo": { typical: 1 },
@@ -153,15 +167,20 @@ export const NAPS_BY_BRACKET: Record<AgeBucket, NapInfo> = {
   "3yr+": { typical: 0, note: "About half of 3-year-olds still nap; about 10% at 5" },
 };
 
-export const WAKE_WINDOW_BY_BRACKET: Record<AgeBucket, WakeWindowRange> = {
-  "0-3mo": { low: 45, high: 90, display: "45-90 min", footnote: MINDELL_OWENS_WW },
-  "3-6mo": { low: 75, high: 120, display: "75-120 min", footnote: MINDELL_OWENS_WW },
-  "6-9mo": { low: 120, high: 180, display: "2-3 hours", footnote: MINDELL_OWENS_WW },
-  "9-12mo": { low: 150, high: 210, display: "2.5-3.5 hours", footnote: MINDELL_OWENS_WW },
-  "12-18mo": { low: 180, high: 240, display: "3-4 hours", footnote: MINDELL_OWENS_WW },
-  "18-24mo": { low: 240, high: 360, display: "4-6 hours", footnote: MINDELL_OWENS_WW },
-  "2-3yr": { low: 300, high: 360, display: "5-6 hours", footnote: MINDELL_OWENS_WW },
-  "3yr+": { low: 360, high: 360, display: "6h+", footnote: MINDELL_OWENS_WW },
+/**
+ * Legacy bracket wake windows. Only the sleep to-do's no-saved-plan fallback
+ * still reads this; the plan, the coach and the "Why" sheet read the
+ * interpolated engine in `wakeWindow.ts`.
+ */
+export const WAKE_WINDOW_BY_BRACKET: Record<AgeBucket, { low: number; high: number }> = {
+  "0-3mo": { low: 45, high: 90 },
+  "3-6mo": { low: 75, high: 120 },
+  "6-9mo": { low: 120, high: 180 },
+  "9-12mo": { low: 150, high: 210 },
+  "12-18mo": { low: 180, high: 240 },
+  "18-24mo": { low: 240, high: 360 },
+  "2-3yr": { low: 300, high: 360 },
+  "3yr+": { low: 360, high: 360 },
 };
 
 export const BEDTIME_RANGE_BY_BRACKET: Record<AgeBucket, BedtimeRange> = {
@@ -361,6 +380,8 @@ interface BuildSleepPlanArgs {
   logs: PlanLog[];
   methodFlavor?: MethodFlavor;
   savedPlan?: SavedSleepPlan | null;
+  /** Accepted first-window stretch (`sleep_plans.overrides`), if any. */
+  wakeWindowOverrides?: WakeWindowOverrides | null;
   // The child's age in months on any date, by the same rule that produced
   // `ageMonths`. Needed for the heads-up: a preemie's age jumps when correction
   // stops at 24 months chronological, so the anchor can't be projected forward.
@@ -416,11 +437,6 @@ export function upcomingBracketChange(opts: {
   if (date === null) return null;
 
   const parts: string[] = [];
-  const wwNow = WAKE_WINDOW_BY_BRACKET[bucket];
-  const wwNext = WAKE_WINDOW_BY_BRACKET[next];
-  if (wwNow.low !== wwNext.low || wwNow.high !== wwNext.high) {
-    parts.push(`wake windows move to ${wwNext.display}`);
-  }
   const napsNow = NAPS_BY_BRACKET[bucket].typical;
   const napsNext = NAPS_BY_BRACKET[next].typical;
   if (!opts.napCountOverridden && napsNow !== napsNext) {
@@ -443,13 +459,24 @@ export function buildSleepPlan({
   ageMonths,
   logs,
   savedPlan,
+  wakeWindowOverrides,
   ageMonthsAt,
   now = new Date(),
 }: BuildSleepPlanArgs): SleepPlan {
   const bucket = getAgeBucket(ageMonths);
   const totalSleep = TOTAL_SLEEP_BY_BRACKET[bucket];
   const defaultNaps = NAPS_BY_BRACKET[bucket];
-  const wakeWindow = WAKE_WINDOW_BY_BRACKET[bucket];
+  const personal = personalWakeWindow({ ageMonths, logs, now });
+  const range = personal.range;
+  const wakeWindow: PlanWakeWindow = {
+    low: range.min,
+    high: range.max,
+    typical: range.typical,
+    personalMin: personal.personalMin,
+    display: wakeWindowRangeDisplay(range),
+    footnote: MINDELL_OWENS_WW,
+  };
+  const accepted = acceptedWakeWindow(wakeWindowOverrides, range);
   const defaultBedtimeRange = BEDTIME_RANGE_BY_BRACKET[bucket];
 
   const wakeOverride = savedPlan?.overrides?.wake_time && savedPlan.wake_time ? savedPlan.wake_time : null;
@@ -474,7 +501,7 @@ export function buildSleepPlan({
     : defaultBedtimeRange;
 
   const naps: NapInfo = napCountOverride !== null
-    ? { ...defaultNaps, typical: napCountOverride }
+    ? { ...defaultNaps, typical: napCountOverride, label: undefined }
     : defaultNaps;
 
   // Observed values from the last 14 days of logs.
@@ -528,8 +555,9 @@ export function buildSleepPlan({
   const sleepTrainingNote = sleepTrainingNoteFor(ageMonths);
 
   // Sample day — built from observed wake time or 07:00 default, using the
-  // lower end of the wake-window range to avoid pushing parents to over-extend.
-  // 0-3 mo skip the structured day in favor of a newborn-flexibility note.
+  // engine's personal wake window with first/last offsets (FR-004). An
+  // accepted stretch replaces the first window. 0-3 mo skip the structured
+  // day in favor of a newborn-flexibility note.
   const sampleDay: SampleDayEntry[] = [];
   let newbornNote: string | null = null;
   let predictedBedtimeTime: string | null = null;
@@ -541,21 +569,32 @@ export function buildSleepPlan({
   } else {
     const wakeAnchor = wakeOverride ?? observedWakeTime ?? "07:00";
     const bedtimeAnchor = bedtimeOverride?.earliest ?? observedBedtime ?? bedtimeRange.earliest ?? "19:30";
-    const wwLow = wakeWindow.low;
+    const offsets = positionOffsets(ageMonths, naps.typical);
+    const middleWindow = personal.personalMin;
+    const firstWindow = accepted?.targetMin ?? clampWakeWindow(middleWindow + offsets.first, range);
+    const lastWindow = clampWakeWindow(middleWindow + offsets.last, range);
     let cursor = wakeAnchor;
     sampleDay.push({ time: cursor, activity: "Wake + bright light" });
 
     const napCount = naps.typical;
+    const routineStartMin = parseHHmm(bedtimeAnchor) - 30;
+    // A nap that would end after the bedtime routine starts is dropped: at the
+    // top of a bracket, long windows plus long naps can't fit every nap of the
+    // bracket's typical count.
     const buildNaps = (napDurationMin: number) => {
       const entries: SampleDayEntry[] = [];
       let t = parseHHmm(wakeAnchor);
+      let scheduled = 0;
       for (let i = 1; i <= Math.min(napCount, 3); i++) {
-        t += wwLow;
-        entries.push({ time: formatHHmm(t), activity: `Nap ${i}` });
-        t += i === 3 ? Math.min(45, napDurationMin) : napDurationMin;
-        entries.push({ time: formatHHmm(t), activity: `Wake from nap ${i}` });
+        const start = t + (i === 1 ? firstWindow : middleWindow);
+        const end = start + (i === 3 ? Math.min(45, napDurationMin) : napDurationMin);
+        if (i > 1 && end > routineStartMin) break;
+        entries.push({ time: formatHHmm(start), activity: `Nap ${i}` });
+        entries.push({ time: formatHHmm(end), activity: `Wake from nap ${i}` });
+        t = end;
+        scheduled = i;
       }
-      return { entries, endMin: t };
+      return { entries, endMin: t, scheduled };
     };
 
     // A long observed nap applied to every nap can push the day past the
@@ -564,10 +603,9 @@ export function buildSleepPlan({
     const defaultNapDay = buildNaps(defaultNapDurationMin(bucket));
     const observedNapMin = observedNapDurationMin(logs, now);
     const observedNapDay = observedNapMin === null ? null : buildNaps(observedNapMin);
-    const routineStartMin = parseHHmm(bedtimeAnchor) - 30;
     const napDay =
       observedNapDay &&
-      (observedNapDay.endMin + wwLow <= routineStartMin || observedNapDay.endMin <= defaultNapDay.endMin)
+      (observedNapDay.endMin + lastWindow <= routineStartMin || observedNapDay.endMin <= defaultNapDay.endMin)
         ? observedNapDay
         : defaultNapDay;
     sampleDay.push(...napDay.entries);
@@ -577,14 +615,14 @@ export function buildSleepPlan({
       predictedBedtimeTime = bedtimeOverride.earliest;
       predictedBedtimeBasis = "fixed";
     } else {
-      const predicted = addMinutes(cursor, wakeWindow.low);
+      const predicted = addMinutes(cursor, lastWindow);
       // Clamp into the resolved bedtimeRange (an override window if one exists,
       // otherwise the age-band default) rather than the raw default.
       predictedBedtimeTime =
         bedtimeRange.earliest && bedtimeRange.latest
           ? clampHHmm(predicted, bedtimeRange.earliest, bedtimeRange.latest)
           : predicted;
-      predictedBedtimeBasis = `a ${wakeAnchor} wake and ${naps.typical} nap${naps.typical === 1 ? "" : "s"}`;
+      predictedBedtimeBasis = `a ${wakeAnchor} wake and ${napDay.scheduled} nap${napDay.scheduled === 1 ? "" : "s"}`;
     }
 
     const routineStart = addMinutes(bedtimeAnchor, -30);

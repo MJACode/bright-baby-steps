@@ -2,7 +2,6 @@ import { addDays, addMinutes, getHours, subDays } from "date-fns";
 
 import {
   OBSERVED_NAP_CLAMP_MIN,
-  WAKE_WINDOW_BY_BRACKET,
   defaultNapDurationMin,
   observedNapDurationMin,
 } from "@/lib/sleepPlan";
@@ -16,6 +15,17 @@ import {
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { atWallClock } from "@/lib/trackingDay";
 import type { TrackingSchedule } from "@/lib/trackingDay";
+import {
+  PERSONAL_MIN_LOGGED_DAYS,
+  acceptedReasonCopy,
+  acceptedWakeWindow,
+  ageWakeWindow,
+  blendWakeWindow,
+  loggedDayCount,
+  recentLogs,
+  wakeWindowMedian,
+  type WakeWindowOverrides,
+} from "@/lib/wakeWindow";
 
 interface Sleep { started_at: string; ended_at: string | null; sleep_type?: string | null; }
 
@@ -26,10 +36,9 @@ export interface NapPrediction {
   reason: string;
 }
 
-// Low end of the plan's wake window, matching the plan's sample day, so the
-// coach and the plan never disagree before there are logs to learn from.
-export const ageDefaultWakeWindowMin = (ageMo: number): number =>
-  WAKE_WINDOW_BY_BRACKET[getAgeBucket(ageMo)].low;
+/** Age typical from the wake-window engine — the same number the plan's
+ *  sample day and the "Why this time?" sheet start from. */
+export const ageDefaultWakeWindowMin = (ageMo: number): number => ageWakeWindow(ageMo).typical;
 
 function bucket(hour: number): "morning" | "midday" | "afternoon" | "evening" {
   if (hour < 11) return "morning";
@@ -42,11 +51,15 @@ export function predictNextNap(opts: {
   ageMonths: number;
   sleeps: Sleep[];
   now?: Date;
+  /** Saved accept/dismiss decisions (`sleep_plans.overrides`). */
+  wakeWindowOverrides?: WakeWindowOverrides | null;
 }): NapPrediction | null {
   const now = opts.now ?? new Date();
-  const completed = opts.sleeps
+  const range = ageWakeWindow(opts.ageMonths);
+  const recent = recentLogs(opts.sleeps, now);
+  const completed = recent
     .filter((s) => s.ended_at)
-    .map((s) => ({ start: new Date(s.started_at), end: new Date(s.ended_at!) }));
+    .map((s) => ({ start: new Date(s.started_at), end: new Date(s.ended_at!), type: s.sleep_type }));
 
   // No plan context here — suppress predictions whose window opens during
   // typical night hours so the coach never suggests a nap at bedtime.
@@ -55,9 +68,10 @@ export function predictNextNap(opts: {
     return h >= 20 || h < 6;
   };
 
-  const lastWake = [...completed].sort((a, b) => b.end.getTime() - a.end.getTime())[0]?.end;
+  const last = [...completed].sort((a, b) => b.end.getTime() - a.end.getTime())[0];
+  const lastWake = last?.end;
   if (!lastWake) {
-    const target = ageDefaultWakeWindowMin(opts.ageMonths);
+    const target = range.typical;
     const start = addMinutes(now, target - 30);
     if (isNightHour(start)) return null;
     return {
@@ -68,22 +82,23 @@ export function predictNextNap(opts: {
     };
   }
 
-  const windows = wakeWindowSamples(opts.sleeps);
+  const windows = wakeWindowSamples(recent);
   const samples = windows.map((w) => w.minutes);
+  const loggedDays = loggedDayCount(recent);
 
   const b = bucket(getHours(lastWake));
   const sameBucket = windows
     .filter((w) => bucket(getHours(w.wokeAt)) === b)
     .map((w) => w.minutes);
 
-  const median = (arr: number[]) => {
-    if (arr.length === 0) return null;
-    const s = [...arr].sort((a, b) => a - b);
-    return s[Math.floor(s.length / 2)];
-  };
-
-  const personal = median(sameBucket) ?? median(samples) ?? ageDefaultWakeWindowMin(opts.ageMonths);
-  const confidence: NapPrediction["confidence"] = sampleConfidence(sameBucket.length);
+  // FR-008: an accepted stretch only moves the first window of the day.
+  const accepted = last.type === "night" ? acceptedWakeWindow(opts.wakeWindowOverrides, range) : null;
+  const observed = wakeWindowMedian(sameBucket) ?? wakeWindowMedian(samples);
+  const personal =
+    accepted?.targetMin ??
+    blendWakeWindow(observed, { range, windowCount: samples.length, loggedDays });
+  const fromLogs = loggedDays >= PERSONAL_MIN_LOGGED_DAYS;
+  const confidence: NapPrediction["confidence"] = fromLogs ? sampleConfidence(sameBucket.length) : "low";
 
   const center = addMinutes(lastWake, personal);
   const windowStart = addMinutes(center, -15);
@@ -92,7 +107,9 @@ export function predictNextNap(opts: {
     windowStart,
     windowEnd: addMinutes(center, 15),
     confidence,
-    reason: confidence === "high"
+    reason: accepted
+      ? acceptedReasonCopy(accepted.targetMin)
+      : confidence === "high"
       ? `Based on ${sameBucket.length} ${b} naps over the last 2 weeks.`
       : confidence === "medium"
       ? `Based on a few ${b} naps — improving with more data.`

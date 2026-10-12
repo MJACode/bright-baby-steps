@@ -4,7 +4,6 @@ import { addDays, format, parseISO, subDays, subMonths } from "date-fns";
 import {
   BUCKET_LABEL,
   NAPS_BY_BRACKET,
-  WAKE_WINDOW_BY_BRACKET,
   buildSleepPlan,
   defaultNapDurationMin,
   observedNapDurationMin,
@@ -14,11 +13,12 @@ import {
 import { ageInMonthsAt } from "@/lib/childAge";
 import { ageDefaultWakeWindowMin, predictNextNap } from "@/lib/sleepCoach";
 import { getAgeBucket, type AgeBucket } from "@/lib/sleepTriage";
+import { ageWakeWindow } from "@/lib/wakeWindow";
 
 const NOW = new Date("2026-09-26T12:00:00Z");
 const MIN = 60_000;
 
-const BUCKETS = Object.keys(WAKE_WINDOW_BY_BRACKET) as AgeBucket[];
+const BUCKETS = Object.keys(NAPS_BY_BRACKET) as AgeBucket[];
 
 function nap(daysAgo: number, minutes: number): PlanLog {
   const start = subDays(new Date("2026-09-26T10:00:00Z"), daysAgo);
@@ -34,8 +34,10 @@ function wakeFromNap1(plan: ReturnType<typeof buildSleepPlan>): string {
   return plan.sampleDay.find((e) => e.activity === "Wake from nap 1")!.time;
 }
 
+// Changed 2026-10-12 (spec 002): the age default is the interpolated engine
+// typical, not the bracket's low end, so it no longer steps at a boundary.
 describe("nap predictor age default", () => {
-  it("uses the plan's wake-window low end for every bracket", () => {
+  it("uses the wake-window engine's age typical for every bracket", () => {
     const sampleAges: Record<AgeBucket, number> = {
       "0-3mo": 1,
       "3-6mo": 4,
@@ -47,26 +49,28 @@ describe("nap predictor age default", () => {
       "3yr+": 40,
     };
     for (const b of BUCKETS) {
-      expect(ageDefaultWakeWindowMin(sampleAges[b])).toBe(WAKE_WINDOW_BY_BRACKET[b].low);
+      expect(ageDefaultWakeWindowMin(sampleAges[b])).toBe(ageWakeWindow(sampleAges[b]).typical);
     }
   });
 
-  it("a 14-month-old with no logs gets a 180-minute window", () => {
+  it("a 14-month-old with no logs gets a 230-minute window", () => {
+    // 12 mo 210 → 15 mo 240: two thirds of the way is 230.
     const now = new Date("2026-09-26T08:00:00Z");
     const pred = predictNextNap({ ageMonths: 14, sleeps: [], now })!;
     expect(pred).not.toBeNull();
     const center = (pred.windowStart.getTime() + pred.windowEnd.getTime()) / 2;
-    expect(center - now.getTime()).toBe((180 - 15) * MIN);
+    expect(center - now.getTime()).toBe((230 - 15) * MIN);
   });
 
-  it("falls back to the plan low end after a wake with no wake-window samples", () => {
+  it("falls back to the age typical after a wake with no wake-window samples", () => {
     const now = new Date("2026-09-26T09:30:00Z");
     const sleeps = [
       { started_at: "2026-09-26T08:00:00Z", ended_at: "2026-09-26T09:00:00Z", sleep_type: "nap" },
     ];
     const pred = predictNextNap({ ageMonths: 14, sleeps, now })!;
-    expect(pred.windowStart.toISOString()).toBe("2026-09-26T11:45:00.000Z");
-    expect(pred.windowEnd.toISOString()).toBe("2026-09-26T12:15:00.000Z");
+    // 09:00 wake + 230 = 12:50, +/- 15.
+    expect(pred.windowStart.toISOString()).toBe("2026-09-26T12:35:00.000Z");
+    expect(pred.windowEnd.toISOString()).toBe("2026-09-26T13:05:00.000Z");
   });
 });
 
@@ -80,30 +84,33 @@ describe("upcoming bracket change", () => {
   const dobTurning = (months: number, daysAhead: number) =>
     format(subMonths(parseISO(localDay(daysAhead)), months), "yyyy-MM-dd");
 
-  it("is present 13 days before 6 months, naming what changes", () => {
+  // Changed 2026-10-12 (spec 002, FR-009): wake windows are interpolated by
+  // age and never jump, so the heads-up only announces a nap-count change.
+  it("is absent 13 days before 6 months, where only wake windows used to change", () => {
     const dob = dobTurning(6, 13);
     const plan = buildSleepPlan({ ageMonths: 5, logs: [], ageMonthsAt: ageFor(dob), now: NOW });
+    expect(plan.upcomingChange).toBeNull();
+  });
+
+  it("is present 13 days before 9 months, naming the nap change only", () => {
+    const dob = dobTurning(9, 13);
+    const plan = buildSleepPlan({ ageMonths: 8, logs: [], ageMonthsAt: ageFor(dob), now: NOW });
     expect(plan.upcomingChange).not.toBeNull();
     expect(plan.upcomingChange!.date.getTime()).toBe(parseISO(localDay(13)).getTime());
-    expect(plan.upcomingChange!.bucketLabel).toBe("6-9 months");
-    expect(plan.upcomingChange!.summary).toBe("wake windows move to 2-3 hours");
-  });
-
-  it("includes the nap change when the typical count moves", () => {
-    const change = upcomingBracketChange({ ageMonthsAt: ageFor(dobTurning(9, 5)), now: NOW })!;
-    expect(change.bucketLabel).toBe(BUCKET_LABEL["9-12mo"]);
-    expect(change.summary).toBe(
-      `wake windows move to ${WAKE_WINDOW_BY_BRACKET["9-12mo"].display} and naps go from ${NAPS_BY_BRACKET["6-9mo"].typical} to ${NAPS_BY_BRACKET["9-12mo"].typical}`,
+    expect(plan.upcomingChange!.bucketLabel).toBe("9-12 months");
+    expect(plan.upcomingChange!.summary).toBe(
+      `naps go from ${NAPS_BY_BRACKET["6-9mo"].typical} to ${NAPS_BY_BRACKET["9-12mo"].typical}`,
     );
+    expect(plan.upcomingChange!.summary).not.toMatch(/wake window/);
   });
 
-  it("drops the nap clause when the family has set its own nap count", () => {
+  it("is absent when the family has set its own nap count", () => {
     const change = upcomingBracketChange({
       ageMonthsAt: ageFor(dobTurning(9, 5)),
       now: NOW,
       napCountOverridden: true,
-    })!;
-    expect(change.summary).not.toMatch(/naps go/);
+    });
+    expect(change).toBeNull();
   });
 
   it("is absent 20 days before the boundary", () => {
@@ -141,13 +148,19 @@ describe("upcoming bracket change", () => {
     expect(buildSleepPlan({ ageMonths: 5, logs: [], now: NOW }).upcomingChange).toBeNull();
   });
 
-  it("fires for every bracket boundary and names the next bracket", () => {
+  it("fires at every boundary where the nap count moves, and only there", () => {
     for (const lower of [3, 6, 9, 12, 18, 24, 36]) {
       const change = upcomingBracketChange({ ageMonthsAt: ageFor(dobTurning(lower, 7)), now: NOW });
+      const napsMove =
+        NAPS_BY_BRACKET[getAgeBucket(lower - 0.5)].typical !== NAPS_BY_BRACKET[getAgeBucket(lower)].typical;
+      if (!napsMove) {
+        expect(change, `boundary ${lower}`).toBeNull();
+        continue;
+      }
       expect(change, `boundary ${lower}`).not.toBeNull();
       expect(change!.date.getTime(), `boundary ${lower}`).toBe(parseISO(localDay(7)).getTime());
       expect(change!.bucketLabel).toBe(BUCKET_LABEL[getAgeBucket(lower)]);
-      expect(change!.summary.length).toBeGreaterThan(0);
+      expect(change!.summary).toMatch(/^naps go from|stops scheduling a nap/);
     }
   });
 
@@ -157,12 +170,10 @@ describe("upcoming bracket change", () => {
     const ageMonthsAt = ageFor("2024-01-01", true, "2024-03-01");
     const now = new Date(2025, 11, 19, 12);
     expect(getAgeBucket(ageMonthsAt(now))).toBe("18-24mo");
-    const change = upcomingBracketChange({ ageMonthsAt, now })!;
-    expect(change).not.toBeNull();
-    expect(change.date.getTime()).toBe(new Date(2026, 0, 1).getTime());
-    expect(change.bucketLabel).toBe(BUCKET_LABEL["2-3yr"]);
-
-    expect(upcomingBracketChange({ ageMonthsAt, now: new Date(2025, 11, 17, 12) })).toBeNull();
+    expect(getAgeBucket(ageMonthsAt(new Date(2026, 0, 1)))).toBe("2-3yr");
+    // The jump is still crossed, but 18-24 mo and 2-3 yr share one nap and wake
+    // windows no longer step, so there is nothing to announce (spec 002).
+    expect(upcomingBracketChange({ ageMonthsAt, now })).toBeNull();
   });
 
   it("dates a month-end DOB on the day the age count actually rolls over", () => {
@@ -175,13 +186,17 @@ describe("upcoming bracket change", () => {
   });
 });
 
+// Changed 2026-10-12 (spec 002, FR-004/FR-009): the sample day's windows come
+// from the engine. With no wake windows logged a 7-month-old's personal target
+// is the age typical (150), the first window is 150 − 20 = 130 and the last is
+// 150 + 30 = 180, so nap 1 starts at 09:10 instead of 09:00.
 describe("sample-day nap length", () => {
   it("uses the median of 3+ logged naps from the last 14 days", () => {
     const logs = [nap(1, 50), nap(2, 60), nap(3, 70)];
     expect(observedNapDurationMin(logs, NOW)).toBe(60);
     const plan = buildSleepPlan({ ageMonths: 7, logs, now: NOW });
-    // 07:00 default wake + 120 min low wake window = 09:00 nap 1; + 60 min nap
-    expect(wakeFromNap1(plan)).toBe("10:00");
+    // 07:00 default wake + 130 min first window = 09:10 nap 1; + 60 min nap
+    expect(wakeFromNap1(plan)).toBe("10:10");
   });
 
   it("keeps the age default with fewer than 3 naps", () => {
@@ -189,7 +204,7 @@ describe("sample-day nap length", () => {
     expect(observedNapDurationMin(logs, NOW)).toBeNull();
     const plan = buildSleepPlan({ ageMonths: 7, logs, now: NOW });
     expect(defaultNapDurationMin("6-9mo")).toBe(90);
-    expect(wakeFromNap1(plan)).toBe("10:30");
+    expect(wakeFromNap1(plan)).toBe("10:40");
   });
 
   it("ignores naps older than 14 days, night sleeps and open naps", () => {
@@ -246,17 +261,21 @@ describe("sample-day nap length", () => {
     }
   });
 
-  it("falls back to the age default when longer observed naps would overrun bedtime", () => {
-    // 7mo, 07:00 wake, 120-min windows, 19:00 bedtime → routine 18:30. With
-    // 150-min naps nap 3 would end 17:45 and the next window 19:45.
+  it("drops the nap that would end after the routine when observed naps run long", () => {
+    // 7mo, 07:00 wake, 130/150-min windows, 19:00 bedtime → routine 18:30.
+    // With 150-min naps nap 3 would start 19:10, so the day keeps two naps and
+    // the parent's own nap length rather than the 90-min default.
     const long = [nap(1, 150), nap(2, 150), nap(3, 150)];
-    expect(wakeFromNap1(buildSleepPlan({ ageMonths: 7, logs: long, now: NOW }))).toBe("10:30");
+    const plan = buildSleepPlan({ ageMonths: 7, logs: long, now: NOW });
+    expect(wakeFromNap1(plan)).toBe("11:40");
+    expect(plan.sampleDay.some((e) => e.activity === "Nap 3")).toBe(false);
+    expect(plan.predictedBedtime.basis).toBe("a 07:00 wake and 2 naps");
   });
 
   it("keeps shorter observed naps even when the default day also runs long", () => {
-    // 85-min naps overrun by 5 min, but the 90-min default overruns further.
+    // 85-min naps leave a too-long last window, but the 90-min default ends later.
     const short = [nap(1, 85), nap(2, 85), nap(3, 85)];
-    expect(wakeFromNap1(buildSleepPlan({ ageMonths: 7, logs: short, now: NOW }))).toBe("10:25");
+    expect(wakeFromNap1(buildSleepPlan({ ageMonths: 7, logs: short, now: NOW }))).toBe("10:35");
   });
 
   it("uses the 7-month and 14-month examples without passing the routine", () => {
