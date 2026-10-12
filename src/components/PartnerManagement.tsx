@@ -1,10 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { APP_URL } from "@/lib/appUrl";
-import { Capacitor } from "@capacitor/core";
-import { Clipboard } from "@capacitor/clipboard";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useChildren } from "@/hooks/useChildren";
 import { usePremium } from "@/hooks/usePremium";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { toast } from "@/hooks/use-toast";
-import { Users, Copy, UserMinus, Link2, RefreshCw, X, Sparkles, PauseCircle } from "lucide-react";
+import { Users, Copy, UserMinus, UserPlus, RefreshCw, X, Sparkles, PauseCircle, Share } from "lucide-react";
 import {
   ROLE_COPY,
   PARTNER_ROLES,
@@ -22,6 +20,9 @@ import {
   MAX_ADDITIONAL_USERS,
   seatSummary,
   describePartnerError,
+  inviteUrl,
+  shareInvite,
+  copyInviteUrl,
   type PartnerRole,
 } from "@/lib/partnerInvite";
 import { format } from "date-fns";
@@ -30,8 +31,23 @@ export default function PartnerManagement() {
   const { user } = useAuth();
   const { isPremium, isLoading: premiumLoading } = usePremium();
   const queryClient = useQueryClient();
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const { children, activeChild } = useChildren();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [highlightedInviteId, setHighlightedInviteId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!highlightedInviteId) return;
+    const t = setTimeout(() => setHighlightedInviteId(null), 4000);
+    return () => clearTimeout(t);
+  }, [highlightedInviteId]);
+
+  // The children list also holds families you're a partner on; an invite
+  // only ever grants access to your own account, so name one of your own.
+  const ownChild =
+    activeChild?.parent_id === user?.id
+      ? activeChild
+      : children.find((c) => c.parent_id === user?.id);
+  const babyName = ownChild?.name ?? "your baby";
 
   // Fetch the people who hold a seat on this account. Paused rows come back
   // too — a paused partner still occupies a seat, and the owner needs the
@@ -98,10 +114,9 @@ export default function PartnerManagement() {
       return data;
     },
     onSuccess: (data) => {
-      const link = `${APP_URL}/invite/${data.invite_code}`;
-      setInviteLink(link);
+      setHighlightedInviteId(data.id);
       queryClient.invalidateQueries({ queryKey: ["partner_invitations"] });
-      toast({ title: "Invite link created!" });
+      toast({ title: "Invite ready — share it or copy the link." });
     },
     onError: (err) =>
       toast({
@@ -183,21 +198,42 @@ export default function PartnerManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["partner_invitations"] });
-      toast({ title: "Invite cancelled" });
+      toast({ title: "Invite cancelled", description: "That link no longer works." });
     },
+    onError: (err) =>
+      toast({
+        title: describePartnerError(err, "Couldn't cancel the invite"),
+        description: "The link still works. Try again in a moment.",
+        variant: "destructive",
+      }),
   });
 
-  const copyText = async (text: string) => {
-    if (Capacitor.isNativePlatform()) {
-      await Clipboard.write({ string: text });
-    } else {
-      await navigator.clipboard.writeText(text);
+  const handleShare = async (url: string, role: PartnerRole) => {
+    try {
+      const result = await shareInvite({ url, babyName, role });
+      if (result === "copied") {
+        toast({ title: "Invite copied", description: "Paste it into a text or email to send it." });
+      }
+    } catch {
+      toast({
+        title: "Couldn't open sharing",
+        description: "Tap Copy link and paste it into a message instead.",
+        variant: "destructive",
+      });
     }
-    toast({ title: "Link copied to clipboard! 📋" });
   };
 
-  const copyLink = async () => {
-    if (inviteLink) await copyText(inviteLink);
+  const handleCopy = async (url: string) => {
+    try {
+      await copyInviteUrl(url);
+      toast({ title: "Link copied", description: "Paste it into a text or email to send it." });
+    } catch {
+      toast({
+        title: "Couldn't copy the link",
+        description: "Tap Share to send it straight from your phone instead.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Seniority order, oldest first: the database (partner_within_entitlement)
@@ -226,7 +262,7 @@ export default function PartnerManagement() {
         </p>
 
         {!premiumLoading && (
-          <p className="text-[11px] font-semibold text-muted-foreground">
+          <p className="text-xs font-semibold text-muted-foreground">
             {seats.used} of {seats.limit} {seats.limit === 1 ? "seat" : "seats"} used
             {isPremium ? " · Flare+" : " · Free plan"}
           </p>
@@ -235,12 +271,12 @@ export default function PartnerManagement() {
         {showLapsedBanner && (
           <div className="rounded-xl border border-warning/40 bg-warning/10 px-3 py-2.5">
             <p className="text-xs font-semibold text-foreground">Some shared access is on hold</p>
-            <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+            <p className="text-xs text-muted-foreground leading-snug mt-0.5">
               The free plan includes {FREE_ADDITIONAL_USERS} additional person — whoever joined first keeps
               access. Everyone marked "On hold" is kept as they were. With Flare+ they're back right
               away.
             </p>
-            <Button size="sm" className="mt-2 h-8 rounded-full text-xs" onClick={() => setUpgradeOpen(true)}>
+            <Button size="sm" className="mt-2 touch-target rounded-full text-sm" onClick={() => setUpgradeOpen(true)}>
               Get Flare+
             </Button>
           </div>
@@ -262,24 +298,24 @@ export default function PartnerManagement() {
                       <p className="text-sm flex items-center gap-2 flex-wrap">
                         <span className="truncate">{p.partner?.email ?? "Unknown"}</span>
                         {paused && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-warning">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-warning">
                             <PauseCircle className="w-3 h-3" /> Paused
                           </span>
                         )}
                         {onHold && !paused && (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono uppercase text-warning">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-warning">
                             <PauseCircle className="w-3 h-3" /> On hold
                           </span>
                         )}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Added {format(new Date(p.created_at), "MMM d, yyyy")}
                       </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-destructive h-7 text-xs gap-1 shrink-0"
+                      className="text-destructive touch-target text-sm gap-1 shrink-0"
                       onClick={() => revokePartner.mutate(p.partner_id)}
                     >
                       <UserMinus className="w-3.5 h-3.5" /> Remove
@@ -312,7 +348,7 @@ export default function PartnerManagement() {
                     <p className="text-xs text-muted-foreground leading-snug">{ROLE_COPY[role].desc}</p>
                   </div>
                   <label className="flex items-center justify-between gap-3 border-t border-border pt-2 cursor-pointer">
-                    <span className="text-[11px] text-muted-foreground leading-snug">
+                    <span className="text-xs text-muted-foreground leading-snug">
                       {paused
                         ? "Switch on to give them access again."
                         : "Switch off to pause their access — you can turn it back on anytime."}
@@ -349,54 +385,48 @@ export default function PartnerManagement() {
           <div className="space-y-2">
             <p className="text-xs font-semibold">Pending invites</p>
             {pendingInvites.map((inv) => {
-              const url = `${APP_URL}/invite/${inv.invite_code}`;
-              const role = inv.role as PartnerRole;
+              const url = inviteUrl(inv.invite_code);
+              const role = toPartnerRole(inv.role);
+              const isNew = inv.id === highlightedInviteId;
               return (
-                <div key={inv.id} className="bg-background rounded-lg px-3 py-2 space-y-2">
+                <div
+                  key={inv.id}
+                  className={`bg-background rounded-lg px-3 py-2 space-y-2 transition-shadow ${
+                    isNew ? "ring-2 ring-primary" : ""
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{ROLE_COPY[role].title}</p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-sm font-semibold">{ROLE_COPY[role].title}</p>
+                      <p className="text-xs text-muted-foreground">
                         Expires {format(new Date(inv.expires_at), "MMM d")}
                       </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-destructive h-7 text-xs gap-1"
+                      className="text-destructive touch-target text-sm gap-1 shrink-0"
                       onClick={() => cancelInvite.mutate(inv.id)}
                       disabled={cancelInvite.isPending}
                     >
-                      <X className="w-3.5 h-3.5" /> Cancel
+                      <X className="w-4 h-4" /> Cancel
                     </Button>
                   </div>
-                  <div className="flex items-center gap-2 bg-muted rounded-md px-2 py-1.5">
-                    <Link2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <p className="text-[11px] truncate flex-1 font-mono">{url}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button className="touch-target gap-1.5 text-sm" onClick={() => handleShare(url, role)}>
+                      <Share className="w-4 h-4" /> Share
+                    </Button>
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      onClick={() => copyText(url)}
-                      aria-label="Copy invite link"
+                      variant="outline"
+                      className="touch-target gap-1.5 text-sm"
+                      onClick={() => handleCopy(url)}
                     >
-                      <Copy className="w-3 h-3" />
+                      <Copy className="w-4 h-4" /> Copy link
                     </Button>
                   </div>
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {/* Invite link display */}
-        {inviteLink && (
-          <div className="flex items-center gap-2 bg-background rounded-lg px-3 py-2">
-            <Link2 className="w-4 h-4 text-primary shrink-0" />
-            <p className="text-xs truncate flex-1 font-mono">{inviteLink}</p>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={copyLink}>
-              <Copy className="w-3.5 h-3.5" />
-            </Button>
           </div>
         )}
 
@@ -425,21 +455,20 @@ export default function PartnerManagement() {
           <>
             <Button
               variant="outline"
-              size="sm"
-              className="w-full gap-1.5"
+              className="w-full touch-target gap-1.5 text-sm"
               onClick={() => generateInvite.mutate()}
               disabled={generateInvite.isPending || !seats.canInvite}
             >
               {generateInvite.isPending ? (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
-                <Link2 className="w-3.5 h-3.5" />
+                <UserPlus className="w-4 h-4" />
               )}
-              Generate Invite Link
+              Invite someone
             </Button>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {seats.canInvite
-                ? "Links expire after 7 days. You can pause or remove anyone at any time."
+                ? "Invites expire after 7 days. You can pause or remove anyone at any time."
                 : `All ${seats.limit} seats are in use. Remove someone — or cancel a pending invite — to free one up.`}
             </p>
           </>
