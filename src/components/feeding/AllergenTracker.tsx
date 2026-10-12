@@ -165,6 +165,14 @@ type SaveExposureInput = {
   notes: string;
 };
 
+// The exposure row outlived a failed reaction insert. Carrying its id lets a
+// retry attach the reaction to it instead of inserting a duplicate exposure.
+class ReactionHalfSavedError extends Error {
+  constructor(readonly orphanExposureId: string) {
+    super(SAVE_COPY.reactionHalfSaved);
+  }
+}
+
 class StartExposureError extends Error {
   constructor(readonly cause: unknown, readonly rolledBack: boolean) {
     super("allergen exposure log insert failed");
@@ -205,6 +213,8 @@ export default function AllergenTracker() {
   const [reactionDialog, setReactionDialog] = useState(false);
   const [reactionTarget, setReactionTarget] = useState<ReactionTarget | null>(null);
   const [severity, setSeverity] = useState<Severity>("none");
+  // True while severity is Mild only because a chip bumped it up from None.
+  const [severityAutoBumped, setSeverityAutoBumped] = useState(false);
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [reactionNotes, setReactionNotes] = useState("");
 
@@ -372,7 +382,8 @@ export default function AllergenTracker() {
             ? await supabase.from("allergen_exposure_logs")
                 .update({ reaction_observed: target.previousReactionObserved }).eq("id", exposureId).select("id")
             : await supabase.from("allergen_exposure_logs").delete().eq("id", exposureId).select("id");
-          throw new Error(rollbackError || !rolledBack?.length ? SAVE_COPY.reactionHalfSaved : SAVE_COPY.reactionNotSaved);
+          if (rollbackError || !rolledBack?.length) throw new ReactionHalfSavedError(exposureId);
+          throw new Error(SAVE_COPY.reactionNotSaved);
         }
       }
 
@@ -400,7 +411,18 @@ export default function AllergenTracker() {
       const base = reacted && level !== "none" ? REACTION_SAVED_TOAST[level] : EXPOSURE_LOGGED_TOAST;
       toast(warning ? { title: base.title, description: `${base.description} ${warning}` } : base);
     },
-    onError: (err) => {
+    onError: (err, { target }) => {
+      if (err instanceof ReactionHalfSavedError && target.mode === "new_exposure") {
+        // The orphan is stored with reaction_observed = true, so that is the
+        // value a failed retry should leave behind.
+        setReactionTarget({
+          mode: "existing_exposure",
+          introId: target.introId,
+          exposureId: err.orphanExposureId,
+          exposureNum: target.exposureNum,
+          previousReactionObserved: true,
+        });
+      }
       toast({
         title: "Couldn't save that",
         description: err instanceof Error ? err.message : "Check your connection and try again.",
@@ -499,6 +521,7 @@ export default function AllergenTracker() {
 
   const resetReactionForm = () => {
     setSeverity("none");
+    setSeverityAutoBumped(false);
     setSymptoms([]);
     setReactionNotes("");
     setReactionTarget(null);
@@ -999,6 +1022,7 @@ export default function AllergenTracker() {
                         )}
                         onClick={() => {
                           setSeverity(key);
+                          setSeverityAutoBumped(false);
                           // "None" means no reaction — drop chips so what's saved matches what's shown.
                           if (key === "none") setSymptoms([]);
                         }}
@@ -1025,10 +1049,17 @@ export default function AllergenTracker() {
                           selected && "bg-destructive/80 hover:bg-destructive"
                         )}
                         onClick={() => {
-                          if (!selected && severity === "none") setSeverity("mild");
-                          setSymptoms((prev) =>
-                            prev.includes(chip.value) ? prev.filter((s) => s !== chip.value) : [...prev, chip.value]
-                          );
+                          const next = selected
+                            ? symptoms.filter((s) => s !== chip.value)
+                            : [...symptoms, chip.value];
+                          if (!selected && severity === "none") {
+                            setSeverity("mild");
+                            setSeverityAutoBumped(true);
+                          } else if (next.length === 0 && severityAutoBumped) {
+                            setSeverity("none");
+                            setSeverityAutoBumped(false);
+                          }
+                          setSymptoms(next);
                         }}
                       >
                         {chip.label}
