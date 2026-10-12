@@ -2,13 +2,13 @@ import { render, screen } from "@testing-library/react";
 
 import { WakeWindowSuggestionCard } from "@/components/sleep/WakeWindowSheet";
 
-const state = vi.hoisted(() => ({ role: "owner" as string, isPremium: true }));
+const state = vi.hoisted(() => ({ role: "owner" as string, isPremium: true, isLoading: false }));
 
 vi.mock("@/hooks/useCurrentRole", () => ({
   useCurrentRoleQuery: () => ({ role: state.role, isResolved: true }),
 }));
 vi.mock("@/hooks/usePremium", () => ({
-  usePremium: () => ({ isPremium: state.isPremium, isLoading: false }),
+  usePremium: () => ({ isPremium: state.isPremium, isLoading: state.isLoading }),
   useChildOwnerPremium: () => ({ isChildOwnerPremium: false, isLoading: false }),
   PREMIUM_FEATURES: { predictions: "Predictions" },
 }));
@@ -30,6 +30,7 @@ const renderCard = (hasSavedPlan = true) =>
 beforeEach(() => {
   state.role = "owner";
   state.isPremium = true;
+  state.isLoading = false;
 });
 
 describe("WakeWindowSuggestionCard visibility", () => {
@@ -47,6 +48,13 @@ describe("WakeWindowSuggestionCard visibility", () => {
     state.role = role;
     renderCard();
     expect(screen.queryByRole("button", { name: "Try it" })).toBeNull();
+  });
+
+  it("stays hidden while premium status is loading", () => {
+    state.isPremium = false;
+    state.isLoading = true;
+    const { container } = renderCard();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("is hidden on the free tier", () => {

@@ -125,8 +125,10 @@ export function firstWindowMin(opts: {
   range: WakeWindowRange;
   windows: WakeWindow[];
   loggedDays: number;
+  /** The family's nap-count override, if any; else the bracket typical. */
+  napCount?: number | null;
 }): { firstMin: number; firstMedianMin: number | null } {
-  const napCount = NAPS_BY_BRACKET[getAgeBucket(opts.ageMonths)].typical;
+  const napCount = opts.napCount ?? NAPS_BY_BRACKET[getAgeBucket(opts.ageMonths)].typical;
   const baselineMin = clampWakeWindow(
     opts.range.typical + positionOffsets(opts.ageMonths, napCount).first,
     opts.range,
@@ -185,6 +187,7 @@ export function personalWakeWindow(opts: {
   ageMonths: number;
   logs: WakeWindowLog[];
   now: Date;
+  napCount?: number | null;
 }): PersonalWakeWindow {
   const range = ageWakeWindow(opts.ageMonths);
   const recent = recentLogs(opts.logs, opts.now);
@@ -196,7 +199,8 @@ export function personalWakeWindow(opts: {
     range,
     personalMin: blendWakeWindow(medianMin, opt),
     medianMin,
-    firstMin: firstWindowMin({ ageMonths: opts.ageMonths, range, windows, loggedDays }).firstMin,
+    firstMin: firstWindowMin({ ageMonths: opts.ageMonths, range, windows, loggedDays, napCount: opts.napCount })
+      .firstMin,
     sampleCount: windows.length,
     loggedDays,
     weight: medianMin === null ? 0 : personalBlendWeight(windows.length, loggedDays),
@@ -255,20 +259,30 @@ export interface AcceptedWakeWindow {
   setAt: Date | null;
 }
 
-/** The accepted first-window target, or null once it has expired: fallen
- *  below the age min, or caught up by the engine's own first window
- *  (`firstMin`, computed without the target). Above the ceiling it is
- *  clamped, not dropped. */
+/**
+ * The accepted first-window target, or null once it has expired. Expiry is
+ * direction-aware, read from the stored `fromMin`:
+ * - a stretch (target > fromMin) expires once the engine's own first window
+ *   (`firstMin`, computed without the target) reaches it from below;
+ * - a shorten (target < fromMin) expires once `firstMin` drops to it;
+ * - either way, a target below the age min expires.
+ * Expiry is computed on read and never written back, so a caught-up target
+ * re-applies if `firstMin` later moves back past it. That is intended: the
+ * parent's choice stands until they change it or the baby outgrows it in the
+ * direction they chose. Above the ceiling a target is clamped, not dropped.
+ */
 export function acceptedWakeWindow(
   overrides: WakeWindowOverrides | null | undefined,
   range: WakeWindowRange,
   firstMin: number,
 ): AcceptedWakeWindow | null {
   if (!overrides || overrides.targetMin === null) return null;
-  if (overrides.targetMin < range.min) return null;
-  if (firstMin >= overrides.targetMin) return null;
+  const { targetMin, fromMin } = overrides;
+  if (targetMin < range.min) return null;
+  if (fromMin !== null && targetMin > fromMin && firstMin >= targetMin) return null;
+  if (fromMin !== null && targetMin < fromMin && firstMin <= targetMin) return null;
   return {
-    targetMin: Math.min(wakeWindowCeiling(range), Math.round(overrides.targetMin)),
+    targetMin: Math.min(wakeWindowCeiling(range), Math.round(targetMin)),
     fromMin: overrides.fromMin,
     setAt: overrides.setAt,
   };
@@ -544,9 +558,11 @@ export function wakeWindowState(opts: {
   logs: WakeWindowLog[];
   now: Date;
   overrides?: WakeWindowOverrides | null;
+  /** The family's nap-count override (`sleep_plans.nap_count`), if set. */
+  napCount?: number | null;
 }): WakeWindowState {
   const { ageMonths, now } = opts;
-  const p = personalWakeWindow({ ageMonths, logs: opts.logs, now });
+  const p = personalWakeWindow({ ageMonths, logs: opts.logs, now, napCount: opts.napCount });
   const range = p.range;
   const accepted = acceptedWakeWindow(opts.overrides, range, p.firstMin);
   const currentMin = accepted?.targetMin ?? p.firstMin;
@@ -589,8 +605,10 @@ export function wakeWindowState(opts: {
   const daysSince = (d: Date | null) => (d ? differenceInCalendarDays(now, d) : Infinity);
   const dismissedRecently = daysSince(dismissedAt) < DISMISS_COOLDOWN_DAYS;
 
-  // Story 3 #4: an easy way back, offered 5+ days after accepting.
-  if (accepted && o > 0 && daysSince(accepted.setAt) >= REVERT_AFTER_DAYS) {
+  // Story 3 #4: an easy way back from a longer first stretch, offered 5+ days
+  // after accepting. Not for an accepted shorter one: overtired signals don't
+  // point back up.
+  if (accepted && accepted.targetMin > p.firstMin && o > 0 && daysSince(accepted.setAt) >= REVERT_AFTER_DAYS) {
     const dismissedSinceAccept =
       dismissedRecently && (!accepted.setAt || (dismissedAt as Date) > accepted.setAt);
     // Going back clears the target, so the first window becomes `firstMin`;
@@ -609,9 +627,17 @@ export function wakeWindowState(opts: {
   const needU = ageMonths >= 8 && ageMonths < 10 ? 3 : 2;
   const stretch = !shorten && o === 0 && u >= needU;
 
+  // A step from an accepted target that reaches the engine's own first window
+  // is a way back: accepting it clears the target, landing on `firstMin`. As
+  // a shorten/stretch it would be stored and immediately expire, ending on a
+  // different number than the card offered.
+  const reachesFirst = (toMin: number) =>
+    !!accepted && (currentMin > p.firstMin ? toMin <= p.firstMin : toMin >= p.firstMin);
   if (shorten) {
     const toMin = clampWakeWindow(currentMin - step, range);
-    return done(signals, toMin < currentMin ? { kind: "shorten", fromMin: currentMin, toMin } : null);
+    if (toMin >= currentMin) return done(signals, null);
+    if (reachesFirst(toMin)) return done(signals, { kind: "revert", fromMin: currentMin, toMin: p.firstMin });
+    return done(signals, { kind: "shorten", fromMin: currentMin, toMin });
   }
   if (stretch) {
     if (ageMonths >= REGRESSION_WINDOW_MO[0] && ageMonths < REGRESSION_WINDOW_MO[1]) {
@@ -619,7 +645,9 @@ export function wakeWindowState(opts: {
     }
     if (sig.napTransition) return done(signals, null, "nap-transition");
     const toMin = clampWakeWindow(currentMin + step, range);
-    return done(signals, toMin > currentMin ? { kind: "stretch", fromMin: currentMin, toMin } : null);
+    if (toMin <= currentMin) return done(signals, null);
+    if (reachesFirst(toMin)) return done(signals, { kind: "revert", fromMin: currentMin, toMin: p.firstMin });
+    return done(signals, { kind: "stretch", fromMin: currentMin, toMin });
   }
   if (sig.napTransition) return done(signals, null, "nap-transition");
   return done(signals, null);

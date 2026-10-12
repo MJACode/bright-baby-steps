@@ -704,6 +704,114 @@ describe("first-window reference (one value across surfaces)", () => {
   });
 });
 
+describe("accepting a suggestion lands on its toMin", () => {
+  const shortLogs = neutralLogs(() => ({ ...NEUTRAL, naps: [[98, 30], [98, 30], [98, 30], [98, 30]], bedtime: hm(21, 0) }));
+  const accept = (logs: WakeWindowLog[], before: WakeWindowOverrides | null = null) => {
+    const s = state(logs, LULU_AGE, before);
+    expect(s.suggestion).not.toBeNull();
+    const raw = {
+      ...(before
+        ? {
+            wake_window_target_min: before.targetMin,
+            wake_window_from_min: before.fromMin,
+            wake_window_set_at: before.setAt?.toISOString(),
+          }
+        : {}),
+      ...wakeWindowDecisionPatch("accept", s.suggestion!, NOW),
+    };
+    return { s, after: state(logs, LULU_AGE, parseWakeWindowOverrides(raw)) };
+  };
+
+  it("stretch", () => {
+    const { s, after } = accept(readyLogs);
+    expect(s.suggestion!.kind).toBe("stretch");
+    expect(after.accepted).not.toBeNull();
+    expect(after.currentMin).toBe(s.suggestion!.toMin);
+  });
+
+  it("shorten (O2 alone)", () => {
+    const { s, after } = accept(shortLogs);
+    expect(s.suggestion).toEqual({ kind: "shorten", fromMin: 98, toMin: 89 });
+    expect(after.accepted).not.toBeNull();
+    expect(after.currentMin).toBe(89);
+  });
+
+  it("revert clears the target and lands on firstMin", () => {
+    const before: WakeWindowOverrides = { targetMin: 108, fromMin: 98, setAt: subDays(NOW, 5), dismissedAt: null };
+    const { s, after } = accept(shortLogs, before);
+    expect(s.suggestion!.kind).toBe("revert");
+    expect(after.accepted).toBeNull();
+    expect(after.currentMin).toBe(after.firstMin);
+    expect(after.currentMin).toBe(s.suggestion!.toMin);
+  });
+
+  it("a stretch from an accepted shorten that reaches firstMin is offered as a way back", () => {
+    // Accepted 89 under a first window of 98; a 10-min stretch would pass 98,
+    // and stored as a stretch it would expire at once.
+    const before: WakeWindowOverrides = { targetMin: 89, fromMin: 98, setAt: subDays(NOW, 8), dismissedAt: null };
+    const { s, after } = accept(readyLogs, before);
+    expect(s.suggestion).toEqual({ kind: "revert", fromMin: 89, toMin: 98 });
+    expect(after.accepted).toBeNull();
+    expect(after.currentMin).toBe(98);
+  });
+
+  it("offers no way back up from an accepted shorten on overtired signals", () => {
+    const before: WakeWindowOverrides = { targetMin: 89, fromMin: 98, setAt: subDays(NOW, 8), dismissedAt: null };
+    expect(state(shortLogs, LULU_AGE, before).suggestion?.kind).not.toBe("revert");
+  });
+
+  it("an accepted shorten holds until firstMin drops to it, and a stretch until firstMin reaches it", () => {
+    const shorter = (targetMin: number) =>
+      state(luluLogs, LULU_AGE, { targetMin, fromMin: 108, setAt: subDays(NOW, 2), dismissedAt: null });
+    expect(shorter(95).currentMin).toBe(95);
+    expect(shorter(98).accepted).toBeNull();
+    const longer = (targetMin: number) =>
+      state(luluLogs, LULU_AGE, { targetMin, fromMin: 90, setAt: subDays(NOW, 2), dismissedAt: null });
+    expect(longer(105).currentMin).toBe(105);
+    expect(longer(98).accepted).toBeNull();
+    // No stored fromMin: only the age-min floor applies.
+    expect(state(luluLogs, LULU_AGE, { targetMin: 95, fromMin: null, setAt: null, dismissedAt: null }).currentMin).toBe(95);
+    expect(state(luluLogs, LULU_AGE, { targetMin: 80, fromMin: null, setAt: null, dismissedAt: null }).accepted).toBeNull();
+  });
+});
+
+describe("nap-count override reaches the first window", () => {
+  it("coach, state and plan use the family's nap count for the FR-004 offset", () => {
+    // 14 months with no logs: 2 naps → first offset −30, 1 nap → −15.
+    const at = (napCount: number | null) => personalWakeWindow({ ageMonths: 14, logs: [], now: NOW, napCount }).firstMin;
+    const typical = ageWakeWindow(14).typical;
+    expect(at(null)).toBe(typical - 30);
+    expect(at(1)).toBe(typical - 15);
+    expect(wakeWindowState({ ageMonths: 14, logs: [], now: NOW, napCount: 1 }).currentMin).toBe(typical - 15);
+    const plan = buildSleepPlan({
+      ageMonths: 14,
+      logs: [],
+      now: NOW,
+      savedPlan: {
+        wake_time: null,
+        bedtime_earliest: null,
+        bedtime_latest: null,
+        wake_window_low_min: null,
+        wake_window_high_min: null,
+        nap_count: 1,
+        overrides: { nap_count: true },
+      },
+    });
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+    expect(toMin(plan.sampleDay.find((e) => e.activity === "Nap 1")!.time) - toMin(plan.sampleDay[0].time)).toBe(
+      typical - 15,
+    );
+    const nightEnd = atDay(0, hm(6, 30));
+    const pred = predictNextNap({
+      ageMonths: 14,
+      sleeps: [{ started_at: atDay(1, hm(19)).toISOString(), ended_at: nightEnd.toISOString(), sleep_type: "night" }],
+      now: atDay(0, hm(6, 45)),
+      napCount: 1,
+    })!;
+    expect(pred.windowMin).toBe(typical - 15);
+  });
+});
+
 describe("minimum step (sub-5-minute suggestions)", () => {
   it("matches the server's weekly-block validation", () => {
     expect(MIN_SUGGESTION_STEP_MIN).toBe(MIN_STEP_MIN);

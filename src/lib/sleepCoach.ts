@@ -56,6 +56,8 @@ export function predictNextNap(opts: {
   now?: Date;
   /** Saved accept/dismiss decisions (`sleep_plans.overrides`). */
   wakeWindowOverrides?: WakeWindowOverrides | null;
+  /** The family's nap-count override (`sleep_plans.nap_count`), if set. */
+  napCount?: number | null;
 }): NapPrediction | null {
   const now = opts.now ?? new Date();
   const range = ageWakeWindow(opts.ageMonths);
@@ -100,7 +102,7 @@ export function predictNextNap(opts: {
   // the time-of-day median.
   const isFirst = last.type === "night";
   const first = isFirst
-    ? firstWindowMin({ ageMonths: opts.ageMonths, range, windows, loggedDays }).firstMin
+    ? firstWindowMin({ ageMonths: opts.ageMonths, range, windows, loggedDays, napCount: opts.napCount }).firstMin
     : null;
   const accepted = first !== null ? acceptedWakeWindow(opts.wakeWindowOverrides, range, first) : null;
   const observed = wakeWindowMedian(sameBucket) ?? wakeWindowMedian(samples);

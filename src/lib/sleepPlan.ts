@@ -478,17 +478,6 @@ export function buildSleepPlan({
   const bucket = getAgeBucket(ageMonths);
   const totalSleep = TOTAL_SLEEP_BY_BRACKET[bucket];
   const defaultNaps = NAPS_BY_BRACKET[bucket];
-  const personal = personalWakeWindow({ ageMonths, logs, now });
-  const range = personal.range;
-  const wakeWindow: PlanWakeWindow = {
-    low: range.min,
-    high: range.max,
-    typical: range.typical,
-    personalMin: personal.personalMin,
-    display: wakeWindowRangeDisplay(range),
-    footnote: MINDELL_OWENS_WW,
-  };
-  const accepted = acceptedWakeWindow(wakeWindowOverrides, range, personal.firstMin);
   const defaultBedtimeRange = BEDTIME_RANGE_BY_BRACKET[bucket];
 
   const wakeOverride = savedPlan?.overrides?.wake_time && savedPlan.wake_time ? savedPlan.wake_time : null;
@@ -515,6 +504,18 @@ export function buildSleepPlan({
   const naps: NapInfo = napCountOverride !== null
     ? { ...defaultNaps, typical: napCountOverride, label: undefined }
     : defaultNaps;
+  // Same nap count the sample day offsets use, so first window and plan agree.
+  const personal = personalWakeWindow({ ageMonths, logs, now, napCount: naps.typical });
+  const range = personal.range;
+  const wakeWindow: PlanWakeWindow = {
+    low: range.min,
+    high: range.max,
+    typical: range.typical,
+    personalMin: personal.personalMin,
+    display: wakeWindowRangeDisplay(range),
+    footnote: MINDELL_OWENS_WW,
+  };
+  const accepted = acceptedWakeWindow(wakeWindowOverrides, range, personal.firstMin);
 
   // Observed values from the last 14 days of logs.
   const fourteenAgo = subDays(now, 14);

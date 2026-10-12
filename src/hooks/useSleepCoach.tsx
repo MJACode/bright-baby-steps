@@ -67,7 +67,7 @@ export function useSleepCoach(activeChild: ChildLite | null) {
           .order("started_at", { ascending: false })
           .limit(120),
         supabase.from("sleep_plans")
-          .select("overrides")
+          .select("overrides, nap_count")
           .eq("child_id", activeChild.id)
           .maybeSingle(),
       ]);
@@ -76,8 +76,16 @@ export function useSleepCoach(activeChild: ChildLite | null) {
       const overrides: WakeWindowOverrides | null = planRes.error
         ? null
         : parseWakeWindowOverrides(planRes.data?.overrides ?? null);
-      const prediction = predictNextNap({ ageMonths, sleeps: logs, now, wakeWindowOverrides: overrides });
-      const state = wakeWindowState({ ageMonths, logs, now, overrides });
+      // Same rule as buildSleepPlan, so the coach's first window uses the nap
+      // count the plan's sample day does.
+      const planOverrides = planRes.data?.overrides;
+      const napCountOn =
+        typeof planOverrides === "object" && planOverrides !== null && !Array.isArray(planOverrides) &&
+        !!(planOverrides as Record<string, unknown>).nap_count;
+      const napCount =
+        !planRes.error && napCountOn && typeof planRes.data?.nap_count === "number" ? planRes.data.nap_count : null;
+      const prediction = predictNextNap({ ageMonths, sleeps: logs, now, wakeWindowOverrides: overrides, napCount });
+      const state = wakeWindowState({ ageMonths, logs, now, overrides, napCount });
       // Without the saved decisions we can't tell whether a suggestion was
       // just dismissed, so offer none rather than re-offer it.
       const wakeWindow = planRes.error ? { ...state, suggestion: null } : state;
