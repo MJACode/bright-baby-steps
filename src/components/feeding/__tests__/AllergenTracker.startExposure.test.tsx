@@ -119,7 +119,7 @@ const openPeanut = async () => {
   renderTracker();
   fireEvent.click(await screen.findByText("Peanut"));
   fireEvent.click(await screen.findByRole("button", { name: /Start First Exposure/ }));
-  await screen.findByText("Log Peanut's first exposure?");
+  await screen.findByText("Before you offer Peanut");
 };
 
 const inserts = (table: string) => writes.filter((w) => w.table === table && w.op === "insert");
@@ -138,10 +138,10 @@ describe("AllergenTracker start first exposure", () => {
     await openPeanut();
 
     expect(screen.getByText("This starts the 2-hour watch and the 3-day wait for Rae.")).toBeInTheDocument();
-    expect(screen.getByTestId("picker-label")).toHaveTextContent("When did Rae have it?");
+    expect(screen.getByTestId("picker-label")).toHaveTextContent("When did you offer it?");
     expect(inserts("allergen_introductions")).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
     expect(inserts("allergen_introductions")).toHaveLength(1);
@@ -155,7 +155,7 @@ describe("AllergenTracker start first exposure", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "back-date" }));
     expect(screen.getByTestId("picker-value")).toHaveTextContent(BACKDATED_AT);
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
     expect(inserts("allergen_introductions")[0].payload).toMatchObject({
@@ -174,7 +174,7 @@ describe("AllergenTracker start first exposure", () => {
     await openPeanut();
 
     fireEvent.click(screen.getByRole("button", { name: "future" }));
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
     const introAt = new Date(inserts("allergen_introductions")[0].payload?.first_introduced_at as string).getTime();
@@ -188,7 +188,7 @@ describe("AllergenTracker start first exposure", () => {
     failures.exposureLogInsert = true;
     await openPeanut();
 
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() =>
       expect(writes.find((w) => w.table === "allergen_introductions" && w.op === "delete")).toMatchObject({
@@ -209,12 +209,12 @@ describe("AllergenTracker start first exposure", () => {
     await openPeanut();
 
     fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
-    await waitFor(() => expect(screen.queryByText("Log Peanut's first exposure?")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Before you offer Peanut")).not.toBeInTheDocument());
     expect(writes).toHaveLength(0);
 
     // Prove the path is live: reopening and confirming does write, exactly once.
     fireEvent.click(screen.getByRole("button", { name: /Start First Exposure/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Log exposure" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Start — I'll watch for 2 hours/ }));
     await waitFor(() => expect(inserts("allergen_introductions")).toHaveLength(1));
     expect(inserts("allergen_exposure_logs")).toHaveLength(1);
   });
@@ -225,9 +225,9 @@ describe("AllergenTracker start first exposure", () => {
     expect(screen.getByTestId("picker-value")).toHaveTextContent(BACKDATED_AT);
 
     fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
-    await waitFor(() => expect(screen.queryByText("Log Peanut's first exposure?")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Before you offer Peanut")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /Start First Exposure/ }));
-    await screen.findByText("Log Peanut's first exposure?");
+    await screen.findByText("Before you offer Peanut");
 
     const shown = new Date(screen.getByTestId("picker-value").textContent ?? "").getTime();
     expect(Math.abs(Date.now() - shown)).toBeLessThan(60_000);
@@ -236,7 +236,7 @@ describe("AllergenTracker start first exposure", () => {
   it("says the next exposure date in the success toast", async () => {
     await openPeanut();
 
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(
@@ -252,7 +252,7 @@ describe("AllergenTracker start first exposure", () => {
     failures.introInsertDuplicate = true;
     await openPeanut();
 
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith({
@@ -263,7 +263,7 @@ describe("AllergenTracker start first exposure", () => {
     );
     expect(inserts("allergen_introductions")).toHaveLength(1);
     expect(inserts("allergen_exposure_logs")).toHaveLength(0);
-    await waitFor(() => expect(screen.queryByText("Log Peanut's first exposure?")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Before you offer Peanut")).not.toBeInTheDocument());
   });
 
   it("reports a half-saved start and closes the dialog when the rollback deletes nothing", async () => {
@@ -271,7 +271,7 @@ describe("AllergenTracker start first exposure", () => {
     failures.rollbackDeletesNothing = true;
     await openPeanut();
 
-    fireEvent.click(screen.getByRole("button", { name: "Log exposure" }));
+    fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(
@@ -281,7 +281,7 @@ describe("AllergenTracker start first exposure", () => {
         }),
       ),
     );
-    await waitFor(() => expect(screen.queryByText("Log Peanut's first exposure?")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText("Before you offer Peanut")).not.toBeInTheDocument());
   });
 
   it("hides Start First Exposure from a viewer", async () => {

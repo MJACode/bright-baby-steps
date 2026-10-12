@@ -4,8 +4,14 @@ import AllergenTracker from "@/components/feeding/AllergenTracker";
 
 const FIRST_EXPOSURE_AT = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
 
-const { writes } = vi.hoisted(() => ({
-  writes: [] as Array<{ table: string; op: "insert" | "update" | "delete"; payload?: Record<string, unknown> }>,
+const { writes, mockState } = vi.hoisted(() => ({
+  writes: [] as Array<{
+    table: string;
+    op: "insert" | "update" | "delete";
+    payload?: Record<string, unknown>;
+    eqs: Array<[string, unknown]>;
+  }>,
+  mockState: { failReactionInsert: false, exposureInsertCount: 0 },
 }));
 
 const PEANUT = {
@@ -34,19 +40,32 @@ const INTRO = {
 
 vi.mock("@/integrations/supabase/client", () => {
   const makeChain = (table: string) => {
-    const state: { op?: "insert" | "update" | "delete"; payload?: Record<string, unknown> } = {};
+    const state: {
+      op?: "insert" | "update" | "delete";
+      payload?: Record<string, unknown>;
+      eqs: Array<[string, unknown]>;
+    } = { eqs: [] };
     const result = () => {
-      if (state.op) writes.push({ table, op: state.op, payload: state.payload });
+      if (state.op) writes.push({ table, op: state.op, payload: state.payload, eqs: state.eqs });
       if (state.op === "insert" && table === "allergen_exposure_logs") {
-        return { data: { id: "log-2", ...state.payload }, error: null };
+        mockState.exposureInsertCount += 1;
+        return { data: { id: `log-new-${mockState.exposureInsertCount}`, ...state.payload }, error: null };
       }
+      if (state.op === "insert" && table === "allergen_reactions" && mockState.failReactionInsert) {
+        return { data: null, error: { message: "network down" } };
+      }
+      // Updates echo a row; deletes return none, i.e. an RLS-blocked rollback.
+      if (state.op === "update") return { data: [{ id: "row" }], error: null };
       if (!state.op && table === "allergens") return { data: [PEANUT], error: null };
       if (!state.op && table === "allergen_introductions") return { data: [INTRO], error: null };
       return { data: [], error: null };
     };
     const chain: Record<string, unknown> = {
       select: () => chain,
-      eq: () => chain,
+      eq: (col: string, val: unknown) => {
+        state.eqs.push([col, val]);
+        return chain;
+      },
       in: () => chain,
       order: () => chain,
       insert: (payload: Record<string, unknown>) => {
@@ -92,8 +111,24 @@ vi.mock("@/components/AddChildDialog", () => ({ AddChildDialog: () => null }));
 
 const inserts = (table: string) => writes.filter((w) => w.table === table && w.op === "insert");
 
+const renderTracker = () =>
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <AllergenTracker />
+    </QueryClientProvider>,
+  );
+
+const openExposureTwo = async () => {
+  renderTracker();
+  fireEvent.click(await screen.findByText("Peanut"));
+  fireEvent.click(await screen.findByRole("button", { name: /Log Exposure #2/ }));
+  return screen.findByRole("dialog");
+};
+
 beforeEach(() => {
   writes.length = 0;
+  mockState.failReactionInsert = false;
+  mockState.exposureInsertCount = 0;
 });
 
 describe("AllergenTracker reaction dialog", () => {
@@ -124,5 +159,73 @@ describe("AllergenTracker reaction dialog", () => {
     expect(inserts("allergen_reactions")).toHaveLength(0);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(inserts("allergen_exposure_logs")).toHaveLength(1);
+  });
+
+  it("retries a half-saved reaction against the orphaned exposure instead of inserting another", async () => {
+    mockState.failReactionInsert = true;
+    await openExposureTwo();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hives all over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")).toHaveLength(1);
+    const retry = await screen.findByRole("button", { name: "Save reaction" });
+    expect(screen.getByRole("dialog")).toHaveTextContent("Log a reaction to exposure #2");
+
+    mockState.failReactionInsert = false;
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(2));
+    expect(inserts("allergen_exposure_logs")).toHaveLength(1);
+    expect(inserts("allergen_reactions")[1].payload).toMatchObject({
+      exposure_log_id: "log-new-1",
+      symptoms: ["Hives all over"],
+    });
+    const markReacted = writes.find(
+      (w) => w.table === "allergen_exposure_logs" && w.op === "update" && w.payload?.reaction_observed === true,
+    );
+    expect(markReacted?.eqs).toContainEqual(["id", "log-new-1"]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("reverts an auto-bumped Mild to None when the last chip is removed", async () => {
+    await openExposureTwo();
+
+    const chip = screen.getByRole("button", { name: "Hives all over" });
+    fireEvent.click(chip);
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")[0].payload).toMatchObject({ reaction_observed: false });
+    expect(inserts("allergen_reactions")).toHaveLength(0);
+  });
+
+  it("keeps a Mild the parent picked when the last chip is removed", async () => {
+    await openExposureTwo();
+
+    fireEvent.click(screen.getByRole("button", { name: /Mild/ }));
+    const chip = screen.getByRole("button", { name: "Hives all over" });
+    fireEvent.click(chip);
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")[0].payload).toMatchObject({ reaction_observed: true });
+    expect(inserts("allergen_reactions")[0].payload).toMatchObject({ severity: "mild", symptoms: [] });
+  });
+
+  it("keeps Mild when the parent confirms it after a chip bumped it", async () => {
+    await openExposureTwo();
+
+    const chip = screen.getByRole("button", { name: "Hives all over" });
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: /Mild/ }));
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_reactions")[0].payload).toMatchObject({ severity: "mild", symptoms: [] });
   });
 });
