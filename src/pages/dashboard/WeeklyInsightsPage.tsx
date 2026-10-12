@@ -2,6 +2,9 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
+import { useSleepCoach } from "@/hooks/useSleepCoach";
+import { WakeWindowSuggestionCard } from "@/components/sleep/WakeWindowSheet";
+import { suggestionDelta, weeklyWakeWindowBlock } from "@/lib/wakeWindow";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +24,8 @@ interface WeeklyDigest {
   development: string;
   tip: string;
   generatedAt: string;
+  /** Present only when the request carried a wake-window block. */
+  wakeWindow?: { choice: number; note: string };
   stats?: {
     avgSleepHrs: number;
     totalFeeds: number;
@@ -101,19 +106,36 @@ function exportWeeklyPdf(digest: WeeklyDigest, childName: string) {
 
 export default function WeeklyInsightsPage() {
   const { activeChild } = useChildren();
+  const coach = useSleepCoach(activeChild ?? null);
+  const engine = coach.data?.wakeWindow ?? null;
+  const hasSavedPlan = coach.data?.hasSavedPlan ?? false;
+  const wakeWindowBlock = weeklyWakeWindowBlock(engine, { offerChange: hasSavedPlan });
 
   const { data: digest, isLoading, refetch, isFetching } = useQuery<WeeklyDigest | null>({
     queryKey: ["weekly-insights", activeChild?.id],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("weekly-insights", {
-        body: { childId: activeChild!.id },
+        body: {
+          childId: activeChild!.id,
+          ...(wakeWindowBlock ? { wakeWindow: wakeWindowBlock } : {}),
+        },
       });
       if (error) throw error;
       return data as WeeklyDigest;
     },
-    enabled: !!activeChild,
+    // Wait for the sleep engine so the block rides on the first request; a
+    // failed sleep read still lets the digest load without it.
+    enabled: !!activeChild && (coach.isFetched || coach.isError),
     staleTime: 4 * 60 * 60 * 1000, // 4 hour cache
   });
+
+  const wakeWindowNote = digest?.wakeWindow?.note?.trim() || null;
+  // "Try it" only when the AI picked exactly the change the engine still offers.
+  const offerSuggestion =
+    !!engine?.suggestion &&
+    !!digest?.wakeWindow &&
+    digest.wakeWindow.choice !== 0 &&
+    digest.wakeWindow.choice === suggestionDelta(engine.suggestion);
 
   if (!activeChild) {
     return (
@@ -220,6 +242,17 @@ export default function WeeklyInsightsPage() {
                 <p className="text-sm text-foreground/80 leading-relaxed">
                   {digest[key]}
                 </p>
+                {key === "sleep" && wakeWindowNote && (
+                  <p className="text-sm text-foreground/80 leading-relaxed">{wakeWindowNote}</p>
+                )}
+                {key === "sleep" && offerSuggestion && engine?.suggestion && (
+                  <WakeWindowSuggestionCard
+                    child={activeChild}
+                    suggestion={engine.suggestion}
+                    hasSavedPlan={hasSavedPlan}
+                    className="mt-1"
+                  />
+                )}
               </CardContent>
             </Card>
           ))}
