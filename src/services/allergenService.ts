@@ -2,6 +2,7 @@
 // Business logic separated from UI components
 // CLINICAL REVIEW NEEDED: severity classification thresholds reference AAAAI/AAP guidelines
 
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 
 // Maps allergen slugs to emoji icons
@@ -239,10 +240,22 @@ export const GUIDANCE_FOOTER =
 export const FIRST_EXPOSURE_HELPER = "Offer a small taste and stay close for 2 hours.";
 export const WAIT_STEP_HELPER =
   "Many families wait a few days before offering it again, to watch for later signs.";
-export const START_INTRO_TOAST = {
-  title: "First exposure logged",
-  description: "Keep watching for 2 hours.",
-} as const;
+export const START_INTRO_TOAST_TITLE = "First exposure logged";
+
+// Exposure #1 can be back-dated, so the watch line is only true while the
+// window that started at logged_at is still open.
+export function startIntroToast(
+  exposure: { logged_at: string; observation_window_ends_at?: string | null },
+  now: Date = new Date(),
+): { title: string; description: string } {
+  const parts: string[] = [];
+  if (isExposureInWatchWindow(exposure, now)) {
+    parts.push(`Keep watching until ${format(exposureWatchEnd(exposure), "h:mm a")}.`);
+  }
+  const next = getNextExposureDate([exposure]);
+  if (next) parts.push(`Next exposure on ${format(next, "MMM d")}.`);
+  return { title: START_INTRO_TOAST_TITLE, description: parts.join(" ") };
+}
 
 export const EXPOSURE_LOGGED_TOAST = {
   title: "Exposure logged",
@@ -264,8 +277,10 @@ export const SAVE_COPY = {
     "The pediatrician report may not show this reaction in the allergen's status yet — mention it at your visit.",
   exposureStatusStale: "The pediatrician report may not list this allergen as introduced yet.",
   exposureGone: "That exposure was removed or is no longer yours to update. Close this and check the list again.",
+  startNotSaved: "Nothing was saved. Check your connection and try again.",
+  // The rollback didn't land, so Start is gone and the intro shows In Progress.
   startHalfSaved:
-    "We couldn't log the first exposure. Tap Start again — if it still says In Progress, remove the tracking and start over.",
+    "We couldn't log the first exposure, so this allergen may show as In Progress. Remove its tracking, then start it again.",
 } as const;
 
 export const EMERGENCY_BANNER_TITLE = "Call 911 now";

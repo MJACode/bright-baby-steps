@@ -3,7 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import {
+  assertCanWrite, useCurrentRoleQuery, ROLE_UNRESOLVED_MESSAGE, VIEW_ONLY_MESSAGE,
+} from "@/hooks/useCurrentRole";
+import { isRlsViewerDenied } from "@/lib/handleRlsError";
+import { parseChildDate } from "@/lib/childAge";
+import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +39,7 @@ import {
   beforeYouStartFor, CALL_911, CALL_911_EPINEPHRINE, CALL_911_POSITIONING,
   CALL_PEDIATRICIAN, CALL_PEDIATRICIAN_KEEP_WATCHING, SAVE_COPY, USUALLY_NOT_A_REACTION,
   LATER_SAME_DAY, NEXT_FEW_DAYS, ONCE_IT_GOES_WELL, GUIDANCE_FOOTER,
-  FIRST_EXPOSURE_HELPER, WAIT_STEP_HELPER, START_INTRO_TOAST,
+  FIRST_EXPOSURE_HELPER, WAIT_STEP_HELPER, startIntroToast,
   EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE,
   EXPOSURE_LOGGED_TOAST, REACTION_SAVED_TOAST, type GuidanceSection,
 } from "@/services/allergenService";
@@ -155,6 +160,32 @@ type SaveExposureInput = {
   notes: string;
 };
 
+class StartExposureError extends Error {
+  constructor(readonly cause: unknown, readonly rolledBack: boolean) {
+    super("allergen exposure log insert failed");
+  }
+}
+
+function describeStartExposureError(err: unknown, allergenName?: string): { title: string; description: string } {
+  if ((err as { code?: string })?.code === "23505") {
+    return {
+      title: "Already started",
+      description: `${allergenName ?? "This allergen"} was already started on another device. We've refreshed it.`,
+    };
+  }
+  const title = "Couldn't log that exposure";
+  if (err instanceof Error && (err.message === VIEW_ONLY_MESSAGE || err.message === ROLE_UNRESOLVED_MESSAGE)) {
+    return { title, description: err.message };
+  }
+  if (isRlsViewerDenied(err) || (err instanceof StartExposureError && isRlsViewerDenied(err.cause))) {
+    return { title, description: VIEW_ONLY_MESSAGE };
+  }
+  if (err instanceof StartExposureError && !err.rolledBack) {
+    return { title, description: SAVE_COPY.startHalfSaved };
+  }
+  return { title, description: SAVE_COPY.startNotSaved };
+}
+
 export default function AllergenTracker() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
@@ -172,8 +203,6 @@ export default function AllergenTracker() {
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [reactionNotes, setReactionNotes] = useState("");
 
-  const [startDialogOpen, setStartDialogOpen] = useState(false);
-
   // isPending only lands on the next render, so a double tap could insert two
   // rows before the button disables.
   const startInFlight = useRef(false);
@@ -182,6 +211,9 @@ export default function AllergenTracker() {
   // Removal confirmations
   const [undoExposureOpen, setUndoExposureOpen] = useState(false);
   const [removeEntryOpen, setRemoveEntryOpen] = useState(false);
+
+  const [startOpen, setStartOpen] = useState(false);
+  const [startAt, setStartAt] = useState<Date>(() => new Date());
 
   // Queries
   const { data: allergens, isLoading: allergensLoading } = useQuery({
@@ -222,50 +254,70 @@ export default function AllergenTracker() {
 
   // Mutations
   const startIntro = useMutation({
-    mutationFn: async (allergenId: string) => {
+    mutationFn: async ({ allergenId, at }: { allergenId: string; at: Date }) => {
       assertCanWrite(roleResolved, role);
+
+      const now = new Date();
+      const loggedAt = (at.getTime() > now.getTime() ? now : at).toISOString();
+
       const { data, error } = await supabase.from("allergen_introductions").insert({
         allergen_id: allergenId,
         child_id: activeChild!.id,
         parent_id: user!.id,
         status: "in_progress",
-        first_introduced_at: new Date().toISOString(),
+        first_introduced_at: loggedAt,
       }).select().single();
       if (error) throw error;
-      const { error: expError } = await supabase.from("allergen_exposure_logs").insert({
+
+      // Written explicitly so a back-dated exposure's watch window starts at
+      // logged_at, never at insert time.
+      const exposure = {
+        logged_at: loggedAt,
+        observation_window_ends_at: exposureWatchEnd({ logged_at: loggedAt }).toISOString(),
+      };
+      const { error: logError } = await supabase.from("allergen_exposure_logs").insert({
         allergen_id: allergenId,
         allergen_introduction_id: data.id,
         child_id: activeChild!.id,
         parent_id: user!.id,
         exposure_number: 1,
+        ...exposure,
       });
-      if (expError) {
-        // An intro with no exposure has no Start or Log button — take it back
-        // so the parent can tap Start again.
-        const { data: rolledBack, error: rollbackError } = await supabase
+      if (logError) {
+        // An introduction with no exposure renders as In Progress with no way
+        // to log exposure #1, so undo it rather than leave it half-saved.
+        const { data: deleted, error: rollbackError } = await supabase
           .from("allergen_introductions").delete().eq("id", data.id).select("id");
-        throw new Error(rollbackError || !rolledBack?.length ? SAVE_COPY.startHalfSaved : expError.message);
+        throw new StartExposureError(logError, !rollbackError && !!deleted?.length);
       }
-      return data;
+      return { allergenId: data.allergen_id as string, exposure };
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
-      setStartDialogOpen(false);
-      toast(START_INTRO_TOAST);
-      setSelectedAllergenId(data.allergen_id);
+    onSuccess: ({ allergenId, exposure }) => {
+      setStartOpen(false);
+      setSelectedAllergenId(allergenId);
+      toast(startIntroToast(exposure));
     },
-    onError: (err) => {
-      queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
-      toast({
-        title: "Couldn't start this allergen",
-        description: err instanceof Error ? err.message : "Check your connection and try again.",
-        variant: "destructive",
-      });
+    onError: (err, { allergenId }) => {
+      // Close when retrying can't help: a half-saved intro, or a partner already started it.
+      const duplicate = (err as { code?: string })?.code === "23505";
+      if (duplicate || (err instanceof StartExposureError && !err.rolledBack)) setStartOpen(false);
+      const allergenName = allergens?.find((a) => a.id === allergenId)?.name;
+      toast({ ...describeStartExposureError(err, allergenName), variant: "destructive" });
     },
     onSettled: () => {
       startInFlight.current = false;
+      return queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
     },
   });
+
+  const openStartDialog = () => {
+    setStartAt(new Date());
+    setStartOpen(true);
+  };
+
+  const childDob = activeChild ? parseChildDate(activeChild.date_of_birth) : undefined;
+  // An expected child's date is in the future; a min after the max would lock the calendar.
+  const startMinDate = childDob && childDob.getTime() <= Date.now() ? childDob : undefined;
 
   // Reactions are SEPARATE rows from exposure logs (clean audit trail for the
   // pediatrician export). Every reaction also moves the introduction to
@@ -462,7 +514,7 @@ export default function AllergenTracker() {
   const submitStart = (allergenId: string) => {
     if (startInFlight.current) return;
     startInFlight.current = true;
-    startIntro.mutate(allergenId);
+    startIntro.mutate({ allergenId, at: startAt });
   };
 
   const submitSave = (input: SaveExposureInput) => {
@@ -780,7 +832,7 @@ export default function AllergenTracker() {
         {status === "not_started" && canWrite && (
           <Button
             className="w-full touch-target h-14 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
-            onClick={() => setStartDialogOpen(true)}
+            onClick={openStartDialog}
             disabled={startIntro.isPending}
           >
             <Play className="w-5 h-5" /> Start First Exposure
@@ -857,12 +909,12 @@ export default function AllergenTracker() {
         )}
 
         {/* ─── BEFORE-YOU-START DIALOG ─── */}
-        <Dialog open={startDialogOpen} onOpenChange={(open) => { if (!startIntro.isPending) setStartDialogOpen(open); }}>
+        <Dialog open={startOpen} onOpenChange={(open) => { if (!startIntro.isPending) setStartOpen(open); }}>
           <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
             <DialogHeader className="text-left">
               <DialogTitle className="font-display text-lg">Before you offer {selectedAllergen.name}</DialogTitle>
-              <DialogDescription className="sr-only">
-                A short checklist and the signs that mean you should call 911.
+              <DialogDescription>
+                This starts the 2-hour watch and the 3-day wait for {activeChild.name}.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 text-left">
@@ -878,6 +930,16 @@ export default function AllergenTracker() {
                 </ul>
               </div>
               <GuidanceBlock section={CALL_911} tone="destructive" />
+              <div className="space-y-1">
+                <MobileDateTimePicker
+                  value={startAt}
+                  onChange={(d) => setStartAt(d > new Date() ? new Date() : d)}
+                  maxDate={new Date()}
+                  minDate={startMinDate}
+                  label="When did you offer it?"
+                />
+                <p className="text-xs text-muted-foreground">Already offered it? Set the time you did.</p>
+              </div>
               <div className="space-y-2">
                 <Button
                   className="w-full touch-target h-12 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
@@ -890,10 +952,10 @@ export default function AllergenTracker() {
                 <Button
                   variant="ghost"
                   className="w-full touch-target h-12 font-semibold"
-                  onClick={() => setStartDialogOpen(false)}
+                  onClick={() => setStartOpen(false)}
                   disabled={startIntro.isPending}
                 >
-                  Not now
+                  Not yet
                 </Button>
               </div>
             </div>
@@ -1068,7 +1130,6 @@ export default function AllergenTracker() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
       </div>
     );
   }

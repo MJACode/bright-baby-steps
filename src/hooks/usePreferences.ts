@@ -6,7 +6,6 @@ export type ThemePreference = "light" | "dark" | "system";
 export interface Preferences {
   /** @deprecated superseded by hiddenHomeSections; kept to preserve stored shape. */
   showBriefing: boolean;
-  briefingCollapsed: boolean;
   showNotifications: boolean;
   calendarView: "day" | "week";
   sleepPlanCollapsed: boolean;
@@ -26,7 +25,6 @@ export type SetPreferences = (updates: Partial<Preferences>) => void;
 
 const defaults: Preferences = {
   showBriefing: true,
-  briefingCollapsed: true,
   showNotifications: true,
   calendarView: "day",
   sleepPlanCollapsed: false,

@@ -18,7 +18,8 @@ export interface SignsPromoChild {
 
 export interface SignsSlotInput {
   child: SignsPromoChild | null;
-  briefingVisible: boolean;
+  /** The Today card section hosting the slot is switched on in Customize Home. */
+  hostVisible: boolean;
   now: Date;
 }
 
@@ -37,8 +38,8 @@ export interface SignsPromoInput extends SignsSlotInput {
 }
 
 /** The Today-card sign slot can show at all — gates the sign queries too. */
-export function signsSlotEligible({ child, briefingVisible, now }: SignsSlotInput): boolean {
-  if (!child || child.is_expected || !briefingVisible) return false;
+export function signsSlotEligible({ child, hostVisible, now }: SignsSlotInput): boolean {
+  if (!child || child.is_expected || !hostVisible) return false;
   return (
     ageInMonthsAt(child.date_of_birth, child.is_premature, child.due_date, now) >=
     SIGNS_PROMO_MIN_MONTHS

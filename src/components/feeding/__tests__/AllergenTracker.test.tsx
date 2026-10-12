@@ -23,7 +23,7 @@ vi.mock("@/hooks/use-toast", () => ({
 }));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("@/hooks/useChildren", () => ({
-  useChildren: () => ({ activeChild: { id: "c1", name: "Lulu", parent_id: "u1" } }),
+  useChildren: () => ({ activeChild: { id: "c1", name: "Lulu", parent_id: "u1", date_of_birth: "2026-01-01" } }),
 }));
 vi.mock("@/hooks/useCurrentRole", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/hooks/useCurrentRole")>();
@@ -120,7 +120,10 @@ describe("AllergenTracker", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
     await waitFor(() => expect(writes("allergen_exposure_logs", "insert")).toHaveLength(1));
     expect(writes("allergen_introductions", "insert")).toHaveLength(1);
-    expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ description: "Keep watching for 2 hours." }));
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({
+      title: "First exposure logged",
+      description: expect.stringMatching(/^Keep watching until .+\. Next exposure on /),
+    })));
   });
 
   it("opens the 911 list by default during the 2-hour window", async () => {
