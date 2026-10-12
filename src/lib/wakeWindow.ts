@@ -6,7 +6,7 @@
 
 import { differenceInCalendarDays, format, subDays } from "date-fns";
 
-import { TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
+import { NAPS_BY_BRACKET, TOTAL_SLEEP_BY_BRACKET } from "@/lib/sleepPlan";
 import { wakeWindowSamples, type Confidence, type WakeWindow } from "@/lib/sleepPatterns";
 import { getAgeBucket } from "@/lib/sleepTriage";
 
@@ -99,15 +99,51 @@ export function personalBlendWeight(windowCount: number, loggedDays: number): nu
   return Math.min(1, windowCount / FULL_WEIGHT_WINDOWS);
 }
 
-/** clamp(w·observed + (1−w)·typical). The coach feeds it a time-of-day median;
- *  the plan and the sheet feed it the overall median. */
+/** clamp(w·observed + (1−w)·baseline), baseline defaulting to the age
+ *  typical. The coach feeds it a time-of-day median; the plan and the sheet
+ *  feed it the overall median; the first window feeds it the first-window
+ *  median against a typical + FR-004 first-offset baseline. */
 export function blendWakeWindow(
   observedMin: number | null,
-  opts: { range: WakeWindowRange; windowCount: number; loggedDays: number },
+  opts: { range: WakeWindowRange; windowCount: number; loggedDays: number; baselineMin?: number },
 ): number {
   const w = observedMin === null ? 0 : personalBlendWeight(opts.windowCount, opts.loggedDays);
-  const raw = w * (observedMin ?? 0) + (1 - w) * opts.range.typical;
+  const raw = w * (observedMin ?? 0) + (1 - w) * (opts.baselineMin ?? opts.range.typical);
   return clampWakeWindow(raw, opts.range);
+}
+
+/**
+ * The first window of the day (woken from a night, into a nap) — the only window an
+ * accepted target replaces, so it is what suggestions start from. Weighted by
+ * the total window count, as the coach weights its time-of-day median, so a
+ * well-logged baby's first-window median carries full weight. With no
+ * first windows, or under 7 logged days, it is the age typical plus the FR-004
+ * first offset.
+ */
+export function firstWindowMin(opts: {
+  ageMonths: number;
+  range: WakeWindowRange;
+  windows: WakeWindow[];
+  loggedDays: number;
+}): { firstMin: number; firstMedianMin: number | null } {
+  const napCount = NAPS_BY_BRACKET[getAgeBucket(opts.ageMonths)].typical;
+  const baselineMin = clampWakeWindow(
+    opts.range.typical + positionOffsets(opts.ageMonths, napCount).first,
+    opts.range,
+  );
+  const firstMedianMin = wakeWindowMedian(
+    // An awake gap inside a split night (night → night) is not a daytime window.
+    opts.windows.filter((w) => w.wokeFrom === "night" && w.sleptInto !== "night").map((w) => w.minutes),
+  );
+  return {
+    firstMin: blendWakeWindow(firstMedianMin, {
+      range: opts.range,
+      windowCount: opts.windows.length,
+      loggedDays: opts.loggedDays,
+      baselineMin,
+    }),
+    firstMedianMin,
+  };
 }
 
 function toDate(v: string | null | undefined): Date | null {
@@ -137,6 +173,8 @@ export interface PersonalWakeWindow {
   range: WakeWindowRange;
   personalMin: number;
   medianMin: number | null;
+  /** First window of the day before any accepted target (see firstWindowMin). */
+  firstMin: number;
   sampleCount: number;
   loggedDays: number;
   weight: number;
@@ -158,6 +196,7 @@ export function personalWakeWindow(opts: {
     range,
     personalMin: blendWakeWindow(medianMin, opt),
     medianMin,
+    firstMin: firstWindowMin({ ageMonths: opts.ageMonths, range, windows, loggedDays }).firstMin,
     sampleCount: windows.length,
     loggedDays,
     weight: medianMin === null ? 0 : personalBlendWeight(windows.length, loggedDays),
@@ -216,14 +255,18 @@ export interface AcceptedWakeWindow {
   setAt: Date | null;
 }
 
-/** The accepted first-window target, or null once it has fallen below the age
- *  min (expired). Above the ceiling it is clamped, not dropped. */
+/** The accepted first-window target, or null once it has expired: fallen
+ *  below the age min, or caught up by the engine's own first window
+ *  (`firstMin`, computed without the target). Above the ceiling it is
+ *  clamped, not dropped. */
 export function acceptedWakeWindow(
   overrides: WakeWindowOverrides | null | undefined,
   range: WakeWindowRange,
+  firstMin: number,
 ): AcceptedWakeWindow | null {
   if (!overrides || overrides.targetMin === null) return null;
   if (overrides.targetMin < range.min) return null;
+  if (firstMin >= overrides.targetMin) return null;
   return {
     targetMin: Math.min(wakeWindowCeiling(range), Math.round(overrides.targetMin)),
     fromMin: overrides.fromMin,
@@ -448,6 +491,11 @@ export const REGRESSION_WINDOW_MO: [number, number] = [3.5, 4.5];
 export const ACCEPT_COOLDOWN_DAYS = 7;
 export const DISMISS_COOLDOWN_DAYS = 14;
 export const REVERT_AFTER_DAYS = 5;
+/** Smallest change worth offering. Mirrors MIN_STEP_MIN in
+ *  validateWakeWindowRequest (supabase/functions/_shared/wakeWindowInsight.ts),
+ *  which rejects a weekly block carrying a smaller option; a test keeps the
+ *  two equal. */
+export const MIN_SUGGESTION_STEP_MIN = 5;
 
 export function stretchStepMin(ageMonths: number): number {
   return ageMonths < 6 ? 10 : 15;
@@ -471,10 +519,15 @@ export type BlockedReason =
 export interface WakeWindowState {
   ageMonths: number;
   range: WakeWindowRange;
-  /** Blended target from age + logs (FR-003), before any accepted stretch. */
+  /** Blended target from age + logs (FR-003), over every window of the day.
+   *  The readiness signals (U1, U5, O1, O3, O4) compare windows against
+   *  this: they read windows from across the day, not only the first. */
   personalMin: number;
+  /** First window of the day from age + logs, before any accepted target. */
+  firstMin: number;
   /** What the first window of the day works from: the accepted target, or
-   *  the personal target. Signals and suggestions are relative to this. */
+   *  `firstMin`. Suggestions start from this — it is the window an accepted
+   *  target replaces. */
   currentMin: number;
   medianMin: number | null;
   sampleCount: number;
@@ -495,12 +548,13 @@ export function wakeWindowState(opts: {
   const { ageMonths, now } = opts;
   const p = personalWakeWindow({ ageMonths, logs: opts.logs, now });
   const range = p.range;
-  const accepted = acceptedWakeWindow(opts.overrides, range);
-  const currentMin = accepted?.targetMin ?? p.personalMin;
+  const accepted = acceptedWakeWindow(opts.overrides, range, p.firstMin);
+  const currentMin = accepted?.targetMin ?? p.firstMin;
   const base: Omit<WakeWindowState, "signals" | "suggestion"> = {
     ageMonths,
     range,
     personalMin: p.personalMin,
+    firstMin: p.firstMin,
     currentMin,
     medianMin: p.medianMin,
     sampleCount: p.sampleCount,
@@ -512,11 +566,19 @@ export function wakeWindowState(opts: {
     signals: SignalCode[],
     suggestion: WakeWindowSuggestion | null,
     blockedReason?: BlockedReason,
-  ): WakeWindowState => ({ ...base, signals, suggestion, ...(blockedReason ? { blockedReason } : {}) });
+  ): WakeWindowState => ({
+    ...base,
+    signals,
+    suggestion:
+      suggestion && Math.abs(suggestion.toMin - suggestion.fromMin) >= MIN_SUGGESTION_STEP_MIN
+        ? suggestion
+        : null,
+    ...(blockedReason ? { blockedReason } : {}),
+  });
 
   if (ageMonths < STRETCH_MIN_AGE_MO) return done([], null, "too-young");
 
-  const sig = wakeWindowSignals({ ageMonths, logs: opts.logs, now, referenceMin: currentMin });
+  const sig = wakeWindowSignals({ ageMonths, logs: opts.logs, now, referenceMin: p.personalMin });
   if (!sig.gate) return done([], null, "not-enough-data");
   const signals = sig.signals;
   const u = signals.filter((s) => s.startsWith("U")).length;
@@ -531,8 +593,10 @@ export function wakeWindowState(opts: {
   if (accepted && o > 0 && daysSince(accepted.setAt) >= REVERT_AFTER_DAYS) {
     const dismissedSinceAccept =
       dismissedRecently && (!accepted.setAt || (dismissedAt as Date) > accepted.setAt);
-    const toMin = clampWakeWindow(accepted.fromMin ?? p.personalMin, range);
-    if (!dismissedSinceAccept && toMin !== accepted.targetMin) {
+    // Going back clears the target, so the first window becomes `firstMin`;
+    // offer that, not the stored `fromMin`, which may since have moved.
+    const toMin = p.firstMin;
+    if (!dismissedSinceAccept && Math.abs(toMin - accepted.targetMin) >= MIN_SUGGESTION_STEP_MIN) {
       return done(signals, { kind: "revert", fromMin: accepted.targetMin, toMin });
     }
   }
@@ -578,10 +642,16 @@ export function suggestionDelta(s: WakeWindowSuggestion | null): number | null {
   return s ? s.toMin - s.fromMin : null;
 }
 
-/** Omitted under 4 months corrected or with no wake windows logged. */
-export function weeklyWakeWindowBlock(state: WakeWindowState | null | undefined): WeeklyWakeWindowBlock | null {
+/** Omitted under 4 months corrected or with no wake windows logged.
+ *  `offerChange: false` (no saved plan to write a Try it to) keeps the AI to
+ *  the "no change" option, so its note never proposes a change the page
+ *  can't offer. */
+export function weeklyWakeWindowBlock(
+  state: WakeWindowState | null | undefined,
+  opts: { offerChange?: boolean } = {},
+): WeeklyWakeWindowBlock | null {
   if (!state || state.ageMonths < STRETCH_MIN_AGE_MO || state.sampleCount === 0) return null;
-  const delta = suggestionDelta(state.suggestion);
+  const delta = opts.offerChange === false ? null : suggestionDelta(state.suggestion);
   const bound = (m: number) => Math.min(480, Math.max(20, Math.round(m)));
   return {
     ageTypicalMin: bound(state.range.typical),
@@ -589,7 +659,8 @@ export function weeklyWakeWindowBlock(state: WakeWindowState | null | undefined)
     maxMin: bound(state.range.max),
     currentMin: bound(state.currentMin),
     signals: [...state.signals],
-    options: delta !== null && delta !== 0 && Math.abs(delta) <= 30 ? [0, delta] : [0],
+    options:
+      delta !== null && Math.abs(delta) >= MIN_SUGGESTION_STEP_MIN && Math.abs(delta) <= 30 ? [0, delta] : [0],
   };
 }
 
@@ -656,7 +727,7 @@ export function suggestionCopy(
   if (suggestion.kind === "revert") {
     return {
       title: `Want to go back to ${to}?`,
-      body: `You've been trying ${from} for ${w.poss} first stretch of the day. Going back to ${to} is an easy option if the last few days have felt harder.`,
+      body: `You've been trying ${from} for ${w.poss} first stretch of the day. You can go back to ${to} any time.`,
       cues,
       safeSleep,
       primaryLabel: `Go back to ${to}`,
@@ -700,7 +771,13 @@ export const CONFIDENCE_WORD: Record<Confidence, string> = {
   low: "Early days",
 };
 
-export function wakeWindowExplainer(state: WakeWindowState, childName?: string | null): WakeWindowExplainer {
+/** `workingFromMin` is the window the prediction on screen used, so the sheet
+ *  never explains a different number than the card shows. */
+export function wakeWindowExplainer(
+  state: WakeWindowState,
+  childName?: string | null,
+  workingFromMin: number = state.currentMin,
+): WakeWindowExplainer {
   const w = who(childName);
   const rows: ExplainerRow[] = [
     { label: "Typical at this age", value: wakeWindowRangeDisplay(state.range) },
@@ -711,7 +788,7 @@ export function wakeWindowExplainer(state: WakeWindowState, childName?: string |
           ? `about ${state.medianMin} min (${state.sampleCount} wake windows logged)`
           : `Log naps for about a week and this starts to follow ${w.poss} own rhythm.`,
     },
-    { label: "Working from", value: `about ${state.personalMin} min between sleeps` },
+    { label: "Working from", value: `about ${workingFromMin} min before the next sleep` },
   ];
   if (state.accepted) {
     rows.push({

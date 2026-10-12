@@ -40,7 +40,7 @@ interface NapInfo {
 }
 
 interface PlanWakeWindow {
-  /** Age min / max from the wake-window engine (saved as wake_window_low/high_min). */
+  /** Age min / max from the wake-window engine (display only; the saved columns use legacyWakeWindowColumns). */
   low: number;
   high: number;
   typical: number;
@@ -168,9 +168,12 @@ export const NAPS_BY_BRACKET: Record<AgeBucket, NapInfo> = {
 };
 
 /**
- * Legacy bracket wake windows. Only the sleep to-do's no-saved-plan fallback
- * still reads this; the plan, the coach and the "Why" sheet read the
- * interpolated engine in `wakeWindow.ts`.
+ * Legacy bracket wake windows: values for banner/push timing; follow-up moves
+ * those onto the engine. `sleep_plans.wake_window_low_min` / `_high_min` are
+ * saved from here (`legacyWakeWindowColumns`) because SleepPlanReminderBanner,
+ * the sleep to-do and check-notifications time nap reminders off them. The
+ * plan display, the coach and the "Why" sheet read the interpolated engine in
+ * `wakeWindow.ts`.
  */
 export const WAKE_WINDOW_BY_BRACKET: Record<AgeBucket, { low: number; high: number }> = {
   "0-3mo": { low: 45, high: 90 },
@@ -182,6 +185,15 @@ export const WAKE_WINDOW_BY_BRACKET: Record<AgeBucket, { low: number; high: numb
   "2-3yr": { low: 300, high: 360 },
   "3yr+": { low: 360, high: 360 },
 };
+
+/** The saved plan's wake-window columns, unchanged from before the engine. */
+export function legacyWakeWindowColumns(bucket: AgeBucket): {
+  wake_window_low_min: number;
+  wake_window_high_min: number;
+} {
+  const ww = WAKE_WINDOW_BY_BRACKET[bucket];
+  return { wake_window_low_min: ww.low, wake_window_high_min: ww.high };
+}
 
 export const BEDTIME_RANGE_BY_BRACKET: Record<AgeBucket, BedtimeRange> = {
   "0-3mo": {
@@ -476,7 +488,7 @@ export function buildSleepPlan({
     display: wakeWindowRangeDisplay(range),
     footnote: MINDELL_OWENS_WW,
   };
-  const accepted = acceptedWakeWindow(wakeWindowOverrides, range);
+  const accepted = acceptedWakeWindow(wakeWindowOverrides, range, personal.firstMin);
   const defaultBedtimeRange = BEDTIME_RANGE_BY_BRACKET[bucket];
 
   const wakeOverride = savedPlan?.overrides?.wake_time && savedPlan.wake_time ? savedPlan.wake_time : null;
@@ -571,7 +583,8 @@ export function buildSleepPlan({
     const bedtimeAnchor = bedtimeOverride?.earliest ?? observedBedtime ?? bedtimeRange.earliest ?? "19:30";
     const offsets = positionOffsets(ageMonths, naps.typical);
     const middleWindow = personal.personalMin;
-    const firstWindow = accepted?.targetMin ?? clampWakeWindow(middleWindow + offsets.first, range);
+    // The same first window the coach predicts from after a night wake.
+    const firstWindow = accepted?.targetMin ?? personal.firstMin;
     const lastWindow = clampWakeWindow(middleWindow + offsets.last, range);
     let cursor = wakeAnchor;
     sampleDay.push({ time: cursor, activity: "Wake + bright light" });

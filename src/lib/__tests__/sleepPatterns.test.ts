@@ -23,7 +23,7 @@ import {
   type SleepLogRow,
 } from "@/lib/sleepPatterns";
 import { predictNextNap } from "@/lib/sleepCoach";
-import { ageWakeWindow, blendWakeWindow, loggedDayCount } from "@/lib/wakeWindow";
+import { ageWakeWindow, blendWakeWindow, firstWindowMin, loggedDayCount } from "@/lib/wakeWindow";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import type { TrackingSchedule } from "@/lib/trackingDay";
 
@@ -228,11 +228,12 @@ describe("wakeWindowSamples", () => {
 
   it("is the same calculation predictNextNap uses", () => {
     const prediction = predictNextNap({ ageMonths: 6, sleeps: logs, now: at(2026, 9, 3, 8, 0) });
-    // Last wake 06:00 on the 3rd. The two morning windows (120, 150) median to
-    // 150, but two logged days is under the engine's 7-day floor, so the blend
-    // is the 6-month typical (135): centre 08:15, +/- 15 minutes.
-    expect(prediction?.windowStart).toEqual(at(2026, 9, 3, 8, 0));
-    expect(prediction?.windowEnd).toEqual(at(2026, 9, 3, 8, 30));
+    // Last wake 06:00 on the 3rd, from a night: the first window of the day.
+    // Two logged days is under the engine's 7-day floor, so it is the 6-month
+    // typical (135) plus the FR-004 first offset (-20) = 115: centre 07:55,
+    // +/- 15 minutes.
+    expect(prediction?.windowStart).toEqual(at(2026, 9, 3, 7, 40));
+    expect(prediction?.windowEnd).toEqual(at(2026, 9, 3, 8, 10));
   });
 });
 
@@ -266,15 +267,16 @@ describe("predictNextNap reads the shared wake-window engine", () => {
     expected: { start: Date; end: Date; confidence: string } | null;
   }[] = [
     {
-      name: "medians the same-daypart windows when it has them",
+      name: "after a night wake, reads the first-window reference",
       sleeps: morningLogs,
       now: at(2026, 9, 3, 8, 0),
       lastWake: at(2026, 9, 3, 6, 0),
-      // Under 7 logged days the blend is the age typical (135 at 6 mo) and
-      // the confidence is low, whatever the daypart count.
+      // A wake from a night reads the first-window reference: under 7 logged
+      // days that is the age typical plus the first offset (135 - 20 = 115
+      // at 6 mo), and the confidence is low, whatever the daypart count.
       expected: {
-        start: at(2026, 9, 3, 8, 0),
-        end: at(2026, 9, 3, 8, 30),
+        start: at(2026, 9, 3, 7, 40),
+        end: at(2026, 9, 3, 8, 10),
         confidence: "low",
       },
     },
@@ -327,14 +329,20 @@ describe("predictNextNap reads the shared wake-window engine", () => {
       const sameDaypart = windows
         .filter((w) => daypart(w.wokeAt.getHours()) === part)
         .map((w) => w.minutes);
-      const offset = blendWakeWindow(
-        medianOf(sameDaypart) ?? medianOf(windows.map((w) => w.minutes)),
-        {
-          range: ageWakeWindow(6),
-          windowCount: windows.length,
-          loggedDays: loggedDayCount(testCase.sleeps),
-        },
-      );
+      const lastSleep = [...testCase.sleeps]
+        .filter((l) => l.ended_at)
+        .sort((x, y) => y.ended_at!.localeCompare(x.ended_at!))[0];
+      const engine = {
+        range: ageWakeWindow(6),
+        windowCount: windows.length,
+        loggedDays: loggedDayCount(testCase.sleeps),
+      };
+      // A wake from a night is the first window of the day, which has its own
+      // reference; later wakes blend the daypart median.
+      const offset =
+        lastSleep.sleep_type === "night"
+          ? firstWindowMin({ ageMonths: 6, range: engine.range, windows, loggedDays: engine.loggedDays }).firstMin
+          : blendWakeWindow(medianOf(sameDaypart) ?? medianOf(windows.map((w) => w.minutes)), engine);
       const center = new Date(testCase.lastWake.getTime() + offset * 60_000);
 
       expect(prediction?.windowStart).toEqual(new Date(center.getTime() - 15 * 60_000));

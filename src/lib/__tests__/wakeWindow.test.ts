@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { addMinutes, getHours, subDays } from "date-fns";
 
 import {
+  MIN_SUGGESTION_STEP_MIN,
   WAKE_WINDOW_ANCHORS,
   ageWakeWindow,
   blendWakeWindow,
@@ -20,7 +21,9 @@ import {
   type WakeWindowState,
 } from "@/lib/wakeWindow";
 import { predictNextNap } from "@/lib/sleepCoach";
-import { buildSleepPlan } from "@/lib/sleepPlan";
+import { buildSleepPlan, legacyWakeWindowColumns } from "@/lib/sleepPlan";
+import { getAgeBucket } from "@/lib/sleepTriage";
+import { MIN_STEP_MIN } from "../../../supabase/functions/_shared/wakeWindowInsight";
 import { wakeWindowSamples } from "@/lib/sleepPatterns";
 import { wakeWindowDecisionPatch } from "@/hooks/useSleepPlan";
 
@@ -481,6 +484,9 @@ describe("decision and gates (FR-006)", () => {
     const s = state(short, LULU_AGE, o);
     expect(s.suggestion).toEqual({ kind: "revert", fromMin: 108, toMin: 98 });
     const copy = suggestionCopy(s.suggestion!, "Lulu");
+    expect(copy.body).toBe(
+      "You've been trying about 108 min for Lulu's first stretch of the day. You can go back to about 98 min any time.",
+    );
     expect(copy.primaryLabel).toBe("Go back to about 98 min");
     expect(copy.secondaryLabel).toBe("Keep it");
 
@@ -601,6 +607,152 @@ describe("copy guardrails (FR-011)", () => {
     expect(e.rows[1].value).toBe("Log naps for about a week and this starts to follow Lulu's own rhythm.");
     const lulu = wakeWindowExplainer(state(luluLogs), "Lulu");
     expect(lulu.rows[1].value).toMatch(/^about 98 min \(\d+ wake windows logged\)$/);
+  });
+});
+
+// Non-uniform day at 4.5 months (range 80 / 113 / 143, step 10): the first
+// window is 80, the next two 105 and 110, the one into the night 130. The
+// overall median and the morning daypart median both differ from
+// the first window, so any surface reading the wrong reference shows up.
+// Naps of 95 (285 min a day, over the 4.5h day-sleep high → U4) plus three
+// split nights (U3) make a stretch suggestion with no overtired signal.
+const FIRST_AGE = 4.5;
+const firstDay = (k: number): DaySpec => ({
+  wake: hm(6, 30),
+  naps: [[80, 95], [105, 95], [110, 95]],
+  bedtime: hm(6, 30) + 80 + 95 + 105 + 95 + 110 + 95 + 130,
+  ...(k <= 3 ? { split: [hm(1, 0), 90] as [number, number] } : {}),
+});
+const firstLogs = fixture(14, firstDay);
+
+describe("first-window reference (one value across surfaces)", () => {
+  const coachAfterNight = (o: WakeWindowOverrides | null) =>
+    predictNextNap({ ageMonths: FIRST_AGE, sleeps: firstLogs, now: NOW, wakeWindowOverrides: o })!;
+  const firstNapOffset = (plan: ReturnType<typeof buildSleepPlan>) => {
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+    return toMin(plan.sampleDay.find((e) => e.activity === "Nap 1")!.time) - toMin(plan.sampleDay[0].time);
+  };
+  const workingFrom = (st: WakeWindowState, windowMin: number) =>
+    wakeWindowExplainer(st, "Lulu", windowMin).rows.find((r) => r.label === "Working from")!.value;
+
+  it("is the first-window median, not the overall or daypart median", () => {
+    const p = personalWakeWindow({ ageMonths: FIRST_AGE, logs: firstLogs, now: NOW });
+    expect(p.range).toEqual({ typical: 113, min: 80, max: 143 });
+    // Overall upper median: 105 (the split-night gaps count as windows too).
+    expect(p.personalMin).toBe(105);
+    expect(p.firstMin).toBe(80);
+  });
+
+  it("coach, suggestion, weekly block, sheet and plan agree with nothing accepted", () => {
+    const st = state(firstLogs, FIRST_AGE);
+    const pred = coachAfterNight(null);
+    expect(st.signals).toEqual(expect.arrayContaining(["U3", "U4"]));
+    expect(st.suggestion).toEqual({ kind: "stretch", fromMin: 80, toMin: 90 });
+    expect(pred.windowMin).toBe(80);
+    expect(pred.windowStart).toEqual(atDay(0, hm(6, 30) + 80 - 15));
+    expect(st.currentMin).toBe(80);
+    expect(weeklyWakeWindowBlock(st, { offerChange: true })!.currentMin).toBe(80);
+    expect(workingFrom(st, pred.windowMin)).toBe("about 80 min before the next sleep");
+    expect(suggestionCopy(st.suggestion!, "Lulu").body).toMatch(/first stretch of the day is about 80 min/);
+    expect(firstNapOffset(buildSleepPlan({ ageMonths: FIRST_AGE, logs: firstLogs, now: NOW }))).toBe(80);
+  });
+
+  it("accepting +15 moves the coach first window, the block and the plan to 95", () => {
+    const patch = wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 80, toMin: 95 }, NOW);
+    const o = parseWakeWindowOverrides(patch);
+    const st = state(firstLogs, FIRST_AGE, o);
+    const pred = coachAfterNight(o);
+    expect(pred.windowMin).toBe(95);
+    expect(pred.windowStart).toEqual(atDay(0, hm(6, 30) + 95 - 15));
+    expect(st.currentMin).toBe(95);
+    expect(weeklyWakeWindowBlock(st)!.currentMin).toBe(95);
+    expect(workingFrom(st, pred.windowMin)).toBe("about 95 min before the next sleep");
+    expect(
+      firstNapOffset(buildSleepPlan({ ageMonths: FIRST_AGE, logs: firstLogs, now: NOW, wakeWindowOverrides: o })),
+    ).toBe(95);
+  });
+
+  it("leaves later windows on the time-of-day median", () => {
+    const upToNap1 = firstLogs.filter((l) => new Date(l.started_at) < atDay(1, hm(8, 0)));
+    const o = parseWakeWindowOverrides(
+      wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 80, toMin: 95 }, NOW),
+    );
+    const later = predictNextNap({
+      ageMonths: FIRST_AGE,
+      sleeps: upToNap1,
+      now: atDay(1, hm(9, 30)),
+      wakeWindowOverrides: o,
+    })!;
+    // Woke 09:25: the accepted 95 does not apply, and the window is the same
+    // daypart median the coach has always used.
+    const seen = upToNap1.filter((l) => new Date(l.started_at) >= subDays(atDay(1, hm(9, 30)), 14));
+    expect(later.windowMin).not.toBe(95);
+    expect(later.windowMin).toBe(legacyCenterOffset(seen));
+  });
+
+  it("falls back to the age typical plus the first offset with no first windows", () => {
+    const p = personalWakeWindow({ ageMonths: 7, logs: [], now: NOW });
+    expect(p.firstMin).toBe(ageWakeWindow(7).typical - 20);
+  });
+
+  it("expires an accepted target once the engine's own first window reaches it", () => {
+    const at = (targetMin: number) =>
+      state(readyLogs, LULU_AGE, { targetMin, fromMin: 90, setAt: subDays(NOW, 30), dismissedAt: null });
+    expect(at(98).accepted).toBeNull();
+    expect(at(98).currentMin).toBe(98);
+    expect(at(99).accepted?.targetMin).toBe(99);
+  });
+});
+
+describe("minimum step (sub-5-minute suggestions)", () => {
+  it("matches the server's weekly-block validation", () => {
+    expect(MIN_SUGGESTION_STEP_MIN).toBe(MIN_STEP_MIN);
+  });
+
+  it("offers nothing when the clamp leaves a change under 5 min", () => {
+    // Accepted 159 at 5.8 mo; the next 10-min stretch clamps to the 162 ceiling.
+    const s = state(readyLogs, LULU_AGE, { targetMin: 159, fromMin: 98, setAt: subDays(NOW, 8), dismissedAt: null });
+    expect(s.signals).toEqual(expect.arrayContaining(["U1", "U4"]));
+    expect(s.suggestion).toBeNull();
+    expect(weeklyWakeWindowBlock(s)!.options).toEqual([0]);
+  });
+
+  it("never puts an option under 5 min in the weekly block", () => {
+    const s = state(readyLogs);
+    for (const toMin of [94, 96, 97, 98, 99, 100, 101, 102]) {
+      const options = weeklyWakeWindowBlock({ ...s, suggestion: { kind: "stretch", fromMin: 98, toMin } })!.options;
+      for (const x of options) expect(x === 0 || Math.abs(x) >= MIN_STEP_MIN, `${toMin}: ${x}`).toBe(true);
+    }
+  });
+
+  it("offers no change to a family with no saved plan", () => {
+    expect(weeklyWakeWindowBlock(state(readyLogs), { offerChange: false })!.options).toEqual([0]);
+  });
+});
+
+describe("saved plan columns (banner / push timing)", () => {
+  it("are the bracket values from before the engine", () => {
+    // Values on main before spec 002; SleepPlanReminderBanner, the sleep
+    // to-do and check-notifications time reminders off these.
+    const main: [number, number, number][] = [
+      [2, 45, 90],
+      [5.8, 75, 120],
+      [7, 120, 180],
+      [10, 150, 210],
+      [14, 180, 240],
+      [20, 240, 360],
+    ];
+    for (const [age, low, high] of main) {
+      expect(legacyWakeWindowColumns(getAgeBucket(age)), `${age} mo`).toEqual({
+        wake_window_low_min: low,
+        wake_window_high_min: high,
+      });
+      const plan = buildSleepPlan({ ageMonths: age, logs: luluLogs, now: NOW });
+      expect(legacyWakeWindowColumns(plan.bucket), `${age} mo plan`).toEqual({
+        wake_window_low_min: low,
+        wake_window_high_min: high,
+      });
+    }
   });
 });
 

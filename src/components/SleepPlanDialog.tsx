@@ -22,7 +22,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { sleepAgeMonthsAt } from "@/hooks/useSleepCoach";
-import { buildSleepPlan, NAPS_BY_BRACKET, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
+import {
+  buildSleepPlan,
+  legacyWakeWindowColumns,
+  NAPS_BY_BRACKET,
+  type PlanLog,
+  type SavedSleepPlan,
+} from "@/lib/sleepPlan";
 import {
   rawSleepPlanOverrides,
   useSaveSleepPlan,
@@ -231,8 +237,7 @@ export function SleepPlanDialog({
         wake_time: local.overrides.wake_time ? local.wake_time : null,
         bedtime_earliest: local.overrides.bedtime ? local.bedtime_earliest : null,
         bedtime_latest: local.overrides.bedtime ? local.bedtime_latest : null,
-        wake_window_low_min: plan.wakeWindow.low,
-        wake_window_high_min: plan.wakeWindow.high,
+        ...legacyWakeWindowColumns(plan.bucket),
         nap_count: local.overrides.nap_count ? local.nap_count : null,
         total_sleep_low: plan.totalSleep.low,
         total_sleep_high: plan.totalSleep.high,

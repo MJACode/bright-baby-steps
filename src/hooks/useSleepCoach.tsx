@@ -43,6 +43,9 @@ export interface SleepCoachData {
   /** One engine state for the coach card, the "Why" sheet and the weekly
    *  payload. Null suggestion when the saved plan couldn't be read. */
   wakeWindow: WakeWindowState;
+  /** A sleep_plans row exists for the child. Try it / Not now only write to
+   *  an existing row, so the suggestion card shows only when this is true. */
+  hasSavedPlan: boolean;
 }
 
 export function useSleepCoach(activeChild: ChildLite | null) {
@@ -78,7 +81,8 @@ export function useSleepCoach(activeChild: ChildLite | null) {
       // Without the saved decisions we can't tell whether a suggestion was
       // just dismissed, so offer none rather than re-offer it.
       const wakeWindow = planRes.error ? { ...state, suggestion: null } : state;
-      return { prediction, logs, ageMonths, wakeWindow };
+      const hasSavedPlan = !planRes.error && !!planRes.data;
+      return { prediction, logs, ageMonths, wakeWindow, hasSavedPlan };
     },
     enabled: !!activeChild,
     refetchInterval: 5 * 60 * 1000,

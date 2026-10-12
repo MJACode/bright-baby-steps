@@ -21,6 +21,7 @@ import {
   acceptedWakeWindow,
   ageWakeWindow,
   blendWakeWindow,
+  firstWindowMin,
   loggedDayCount,
   recentLogs,
   wakeWindowMedian,
@@ -34,6 +35,8 @@ export interface NapPrediction {
   windowEnd: Date;
   confidence: "high" | "medium" | "low";
   reason: string;
+  /** The wake window (minutes) this prediction used. */
+  windowMin: number;
 }
 
 /** Age typical from the wake-window engine — the same number the plan's
@@ -79,6 +82,7 @@ export function predictNextNap(opts: {
       windowEnd: addMinutes(start, 30),
       confidence: "low",
       reason: "Age-typical timing — logging a few naps makes this personal.",
+      windowMin: target,
     };
   }
 
@@ -91,11 +95,18 @@ export function predictNextNap(opts: {
     .filter((w) => bucket(getHours(w.wokeAt)) === b)
     .map((w) => w.minutes);
 
-  // FR-008: an accepted stretch only moves the first window of the day.
-  const accepted = last.type === "night" ? acceptedWakeWindow(opts.wakeWindowOverrides, range) : null;
+  // The first window of the day has its own reference (firstWindowMin), and
+  // FR-008: an accepted stretch only moves that window. Later windows read
+  // the time-of-day median.
+  const isFirst = last.type === "night";
+  const first = isFirst
+    ? firstWindowMin({ ageMonths: opts.ageMonths, range, windows, loggedDays }).firstMin
+    : null;
+  const accepted = first !== null ? acceptedWakeWindow(opts.wakeWindowOverrides, range, first) : null;
   const observed = wakeWindowMedian(sameBucket) ?? wakeWindowMedian(samples);
   const personal =
     accepted?.targetMin ??
+    first ??
     blendWakeWindow(observed, { range, windowCount: samples.length, loggedDays });
   const fromLogs = loggedDays >= PERSONAL_MIN_LOGGED_DAYS;
   const confidence: NapPrediction["confidence"] = fromLogs ? sampleConfidence(sameBucket.length) : "low";
@@ -114,10 +125,11 @@ export function predictNextNap(opts: {
       : confidence === "medium"
       ? `Based on a few ${b} naps — improving with more data.`
       : `Age-typical timing — this sharpens as naps get logged.`,
+    windowMin: personal,
   };
 }
 
-export type WakePrediction = NapPrediction;
+export type WakePrediction = Omit<NapPrediction, "windowMin">;
 
 /** Night wake predictions start once nights have begun to consolidate. */
 export const WAKE_PREDICTION_NIGHT_MIN_AGE_MO = 4;

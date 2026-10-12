@@ -108,7 +108,8 @@ export default function WeeklyInsightsPage() {
   const { activeChild } = useChildren();
   const coach = useSleepCoach(activeChild ?? null);
   const engine = coach.data?.wakeWindow ?? null;
-  const wakeWindowBlock = weeklyWakeWindowBlock(engine);
+  const hasSavedPlan = coach.data?.hasSavedPlan ?? false;
+  const wakeWindowBlock = weeklyWakeWindowBlock(engine, { offerChange: hasSavedPlan });
 
   const { data: digest, isLoading, refetch, isFetching } = useQuery<WeeklyDigest | null>({
     queryKey: ["weekly-insights", activeChild?.id],
@@ -247,8 +248,8 @@ export default function WeeklyInsightsPage() {
                 {key === "sleep" && offerSuggestion && engine?.suggestion && (
                   <WakeWindowSuggestionCard
                     child={activeChild}
-                    ageMonths={engine.ageMonths}
                     suggestion={engine.suggestion}
+                    hasSavedPlan={hasSavedPlan}
                     className="mt-1"
                   />
                 )}

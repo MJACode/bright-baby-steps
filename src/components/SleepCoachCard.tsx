@@ -174,8 +174,12 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
   );
   if (!wakeWindow || !activeChild) return shell;
 
-  // The explanation and the suggestion sit outside the PremiumGate blur: the
-  // prediction is Flare+, but how the number is built is for everyone.
+  const hasSavedPlan = data?.hasSavedPlan ?? false;
+  // The explanation sits outside the PremiumGate blur: the prediction is
+  // Flare+, but how the number is built is for everyone. The suggestion card
+  // gates itself. This branch only renders for a nap prediction — while the
+  // baby is asleep the card returned the wake prediction above, with no
+  // "Why this time?", because the sheet explains wake windows, not wakes.
   return (
     <div className="space-y-1">
       {shell}
@@ -183,8 +187,8 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
       {variant === "card" && wakeWindow.suggestion && (
         <WakeWindowSuggestionCard
           child={activeChild}
-          ageMonths={wakeWindow.ageMonths}
           suggestion={wakeWindow.suggestion}
+          hasSavedPlan={hasSavedPlan}
         />
       )}
       <WakeWindowWhySheet
@@ -192,7 +196,9 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
         onOpenChange={setWhyOpen}
         state={wakeWindow}
         child={activeChild}
+        workingFromMin={pred.windowMin}
         showSuggestion={variant === "strip"}
+        hasSavedPlan={hasSavedPlan}
       />
     </div>
   );

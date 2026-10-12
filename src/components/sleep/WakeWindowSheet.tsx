@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { PremiumGate } from "@/components/PremiumGate";
 import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { useWakeWindowDecision, type WakeWindowDecision } from "@/hooks/useSleepPlan";
 import { toast } from "@/hooks/use-toast";
@@ -21,31 +22,30 @@ export interface WakeWindowChild {
   name?: string | null;
 }
 
-/** Try it / Not now on one engine suggestion. Hidden for view-only access and
- *  until the child's owner is known (the row is keyed to the owner). */
+/** Try it / Not now on one engine suggestion. Flare+ only, and only for
+ *  roles that can edit the sleep plan (not viewers or caregivers, matching
+ *  SleepPage's canEditPlan). Needs a saved plan: the decision updates that
+ *  row and never creates one. */
 export function WakeWindowSuggestionCard({
   child,
-  ageMonths,
   suggestion,
+  hasSavedPlan,
   className,
 }: {
   child: WakeWindowChild;
-  ageMonths: number;
   suggestion: WakeWindowSuggestion;
+  hasSavedPlan: boolean;
   className?: string;
 }) {
   const { role, isResolved } = useCurrentRoleQuery(child.id);
   const decide = useWakeWindowDecision();
-  if (!child.parent_id || !isResolved || role === "viewer") return null;
+  if (!hasSavedPlan || !isResolved || role === "viewer" || role === "caregiver") return null;
   const copy = suggestionCopy(suggestion, child.name);
-  const ownerId = child.parent_id;
 
   const send = (decision: WakeWindowDecision) =>
     decide.mutate(
       {
         childId: child.id,
-        childOwnerId: ownerId,
-        ageMonths,
         decision,
         suggestion,
         role,
@@ -61,29 +61,31 @@ export function WakeWindowSuggestionCard({
     );
 
   return (
-    <div className={cn("rounded-xl border border-sleep/20 bg-card p-4 space-y-2", className)}>
-      <p className="text-sm font-bold leading-snug">{copy.title}</p>
-      <p className="text-sm text-foreground/85 leading-relaxed">{copy.body}</p>
-      <p className="text-sm text-foreground/85 leading-relaxed">{copy.cues}</p>
-      <p className="text-xs text-muted-foreground leading-relaxed">{copy.safeSleep}</p>
-      <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-        <Button
-          onClick={() => send("accept")}
-          disabled={decide.isPending}
-          className="min-h-[48px] flex-1 bg-sleep text-white hover:bg-sleep/90"
-        >
-          {copy.primaryLabel}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => send("dismiss")}
-          disabled={decide.isPending}
-          className="min-h-[48px] flex-1"
-        >
-          {copy.secondaryLabel}
-        </Button>
+    <PremiumGate feature="predictions" hideOnFree>
+      <div className={cn("rounded-xl border border-sleep/20 bg-card p-4 space-y-2", className)}>
+        <p className="text-sm font-bold leading-snug">{copy.title}</p>
+        <p className="text-sm text-foreground/85 leading-relaxed">{copy.body}</p>
+        <p className="text-sm text-foreground/85 leading-relaxed">{copy.cues}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{copy.safeSleep}</p>
+        <div className="flex flex-col gap-2 pt-1 sm:flex-row">
+          <Button
+            onClick={() => send("accept")}
+            disabled={decide.isPending}
+            className="min-h-[48px] flex-1 bg-sleep text-white hover:bg-sleep/90"
+          >
+            {copy.primaryLabel}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => send("dismiss")}
+            disabled={decide.isPending}
+            className="min-h-[48px] flex-1"
+          >
+            {copy.secondaryLabel}
+          </Button>
+        </div>
       </div>
-    </div>
+    </PremiumGate>
   );
 }
 
@@ -107,17 +109,22 @@ export function WakeWindowWhySheet({
   onOpenChange,
   state,
   child,
+  workingFromMin,
   showSuggestion,
+  hasSavedPlan,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   state: WakeWindowState;
   child: WakeWindowChild;
+  /** The window the prediction on screen used. */
+  workingFromMin: number;
   /** The strip variant has no inline suggestion card, so the sheet carries it. */
   showSuggestion?: boolean;
+  hasSavedPlan: boolean;
 }) {
   const [howOpen, setHowOpen] = useState(false);
-  const explainer = wakeWindowExplainer(state, child.name);
+  const explainer = wakeWindowExplainer(state, child.name, workingFromMin);
 
   return (
     <Drawer
@@ -177,8 +184,8 @@ export function WakeWindowWhySheet({
           {showSuggestion && state.suggestion && (
             <WakeWindowSuggestionCard
               child={child}
-              ageMonths={state.ageMonths}
               suggestion={state.suggestion}
+              hasSavedPlan={hasSavedPlan}
             />
           )}
 

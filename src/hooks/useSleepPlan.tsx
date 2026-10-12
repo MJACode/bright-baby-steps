@@ -2,9 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import type { SleepMethod } from "@/lib/sleepMethods";
-import { buildSleepPlan } from "@/lib/sleepPlan";
 import type { WakeWindowSuggestion } from "@/lib/wakeWindow";
-import { assertCanWrite, type Role } from "@/hooks/useCurrentRole";
+import {
+  ROLE_UNRESOLVED_MESSAGE,
+  VIEW_ONLY_MESSAGE,
+  assertCanWrite,
+  type Role,
+} from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
 
 export type SleepPlanRow = Database["public"]["Tables"]["sleep_plans"]["Row"];
@@ -118,17 +122,14 @@ export type WakeWindowDecision = "accept" | "dismiss";
 
 export interface WakeWindowDecisionInput {
   childId: string;
-  /** The child's owner — sleep_plans RLS pivots on parent_id. */
-  childOwnerId: string;
-  ageMonths: number;
   decision: WakeWindowDecision;
   suggestion: WakeWindowSuggestion;
   role: Role;
   roleResolved: boolean;
 }
 
-export const WAKE_WINDOW_NO_ACCESS_COPY =
-  "Only family members who can edit the sleep plan can change this. Ask the plan's owner to update it.";
+export const WAKE_WINDOW_SAVE_FAILED_COPY =
+  "We couldn't save that change. Check your connection, or ask the plan owner to make it.";
 
 /** The overrides keys an accept / dismiss writes. Pure, for tests. */
 export function wakeWindowDecisionPatch(
@@ -148,6 +149,11 @@ export function wakeWindowDecisionPatch(
   };
 }
 
+/**
+ * Accept / dismiss a wake-window suggestion on an EXISTING sleep plan. Never
+ * inserts: a sleep_plans row is what turns on sleep reminders (push and the
+ * in-app banner), so a suggestion tap must not create one.
+ */
 export function useWakeWindowDecision() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -163,59 +169,31 @@ export function useWakeWindowDecision() {
         .eq("child_id", input.childId)
         .maybeSingle();
       if (readError) throw readError;
+      if (!current) throw new Error(WAKE_WINDOW_SAVE_FAILED_COPY);
 
-      if (current) {
-        const { data, error } = await supabase
-          .from("sleep_plans")
-          .update({
-            overrides: { ...rawSleepPlanOverrides(current.overrides), ...patch } as SleepPlanInsert["overrides"],
-          })
-          .eq("child_id", input.childId)
-          .select("id")
-          .maybeSingle();
-        if (error) throw error;
-        if (!data) throw new Error(WAKE_WINDOW_NO_ACCESS_COPY);
-        return data;
-      }
-
-      const plan = buildSleepPlan({ ageMonths: input.ageMonths, logs: [] });
-      const row: SleepPlanInsert = {
-        child_id: input.childId,
-        parent_id: input.childOwnerId,
-        wake_window_low_min: plan.wakeWindow.low,
-        wake_window_high_min: plan.wakeWindow.high,
-        total_sleep_low: plan.totalSleep.low,
-        total_sleep_high: plan.totalSleep.high,
-        bucket: plan.bucket,
-        bucket_label: plan.bucketLabel,
-        overrides: patch as SleepPlanInsert["overrides"],
-      };
       const { data, error } = await supabase
         .from("sleep_plans")
-        .upsert(row, { onConflict: "child_id" })
+        .update({
+          overrides: { ...rawSleepPlanOverrides(current.overrides), ...patch } as SleepPlanInsert["overrides"],
+        })
+        .eq("child_id", input.childId)
         .select("id")
         .maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error(WAKE_WINDOW_NO_ACCESS_COPY);
+      if (!data) throw new Error(WAKE_WINDOW_SAVE_FAILED_COPY);
       return data;
     },
-    onSuccess: (_data, input) => {
-      queryClient.invalidateQueries({ queryKey: ["sleep-plan", input.childId] });
-      queryClient.invalidateQueries({ queryKey: ["sleep-coach", input.childId] });
-    },
+    onSettled: (_data, _err, input) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["sleep-plan", input.childId] }),
+        queryClient.invalidateQueries({ queryKey: ["sleep-coach", input.childId] }),
+      ]),
     onError: (err, input) => {
-      const known = err instanceof Error && (
-        err.message === WAKE_WINDOW_NO_ACCESS_COPY ||
-        /view-only|checking your access/i.test(err.message)
-      );
-      const rls = err instanceof Error && /row-level security/i.test(err.message);
+      const roleMessage =
+        err instanceof Error && (err.message === VIEW_ONLY_MESSAGE || err.message === ROLE_UNRESOLVED_MESSAGE);
       toast({
         title: input.decision === "accept" ? "Couldn't update the wake window" : "Couldn't save that",
-        description: known
-          ? (err as Error).message
-          : rls
-          ? WAKE_WINDOW_NO_ACCESS_COPY
-          : "Your plan hasn't changed. Check your connection and tap again.",
+        description: roleMessage ? (err as Error).message : WAKE_WINDOW_SAVE_FAILED_COPY,
         variant: "destructive",
       });
     },
