@@ -187,7 +187,7 @@ export function ageTypicalSleepCaption(ageMonths: number): string {
   const napPart =
     naps.typical === 0
       ? "with or without a nap"
-      : `${naps.typical} ${naps.typical === 1 ? "nap" : "naps"} a day`;
+      : `${naps.label ?? `${naps.typical} ${naps.typical === 1 ? "nap" : "naps"}`} a day`;
   return `Typical at ${BUCKET_LABEL[bucket]}: ${total.low}–${total.high} hours of sleep, ${napPart}.`;
 }
 

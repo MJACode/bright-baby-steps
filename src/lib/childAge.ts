@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, differenceInMonths, parseISO } from "date-fns";
+import { addMonths, differenceInCalendarDays, differenceInMonths, parseISO } from "date-fns";
 
 export const PREMATURE_CORRECTION_CUTOFF_MONTHS = 24;
 
@@ -46,6 +46,27 @@ export function ageInMonthsAt(
 ): number {
   if (parseChildDate(dob) > at) return 0;
   return differenceInMonths(at, getAgeAnchorDate(dob, isPremature, dueDate, at));
+}
+
+/**
+ * Months of age on `at` with the part-month as a fraction (5 months 24 days ≈
+ * 5.8), counted from the same anchor as `ageInMonthsAt`, whose whole number it
+ * always floors to. For values that should move smoothly between birthdays,
+ * like wake windows; whole-month cutoffs (`< 6`, `>= 4`) read it the same way.
+ */
+export function fractionalAgeInMonthsAt(
+  dob: string,
+  isPremature: boolean | null | undefined,
+  dueDate: string | null | undefined,
+  at: Date,
+): number {
+  if (parseChildDate(dob) > at) return 0;
+  const anchor = getAgeAnchorDate(dob, isPremature, dueDate, at);
+  const whole = differenceInMonths(at, anchor);
+  if (whole < 0) return 0;
+  const start = addMonths(anchor, whole).getTime();
+  const end = addMonths(anchor, whole + 1).getTime();
+  return whole + Math.min(0.999, Math.max(0, (at.getTime() - start) / (end - start)));
 }
 
 /**

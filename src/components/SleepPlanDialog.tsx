@@ -22,8 +22,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { sleepAgeMonthsAt } from "@/hooks/useSleepCoach";
-import { buildSleepPlan, NAPS_BY_BRACKET, type PlanLog, type SavedSleepPlan } from "@/lib/sleepPlan";
-import { useSaveSleepPlan, useSleepPlan, type FerberSchedule, type SleepPlanOverrides } from "@/hooks/useSleepPlan";
+import {
+  buildSleepPlan,
+  legacyWakeWindowColumns,
+  NAPS_BY_BRACKET,
+  type PlanLog,
+  type SavedSleepPlan,
+} from "@/lib/sleepPlan";
+import {
+  rawSleepPlanOverrides,
+  useSaveSleepPlan,
+  useSleepPlan,
+  type FerberSchedule,
+  type SleepPlanOverrides,
+} from "@/hooks/useSleepPlan";
+import { parseWakeWindowOverrides } from "@/lib/wakeWindow";
 import { SleepMethodPicker } from "@/components/SleepMethodPicker";
 import {
   DEFAULT_FERBER_INTERVALS,
@@ -158,16 +171,18 @@ export function SleepPlanDialog({
   const dob = ageChild?.date_of_birth;
   const isPremature = ageChild?.is_premature;
   const dueDate = ageChild?.due_date;
+  const savedOverridesJson = savedRow?.overrides;
   const plan = useMemo(
     () =>
       buildSleepPlan({
         ageMonths,
         logs,
         savedPlan: savedForBuild,
+        wakeWindowOverrides: parseWakeWindowOverrides(savedOverridesJson ?? null),
         ageMonthsAt: dob ? sleepAgeMonthsAt(dob, isPremature, dueDate) : undefined,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ageMonths, dob, isPremature, dueDate, logs, local],
+    [ageMonths, dob, isPremature, dueDate, logs, local, savedOverridesJson],
   );
 
   const showObserved = plan.observed.hasEnoughSignal && plan.observed.totalHours !== null;
@@ -222,14 +237,16 @@ export function SleepPlanDialog({
         wake_time: local.overrides.wake_time ? local.wake_time : null,
         bedtime_earliest: local.overrides.bedtime ? local.bedtime_earliest : null,
         bedtime_latest: local.overrides.bedtime ? local.bedtime_latest : null,
-        wake_window_low_min: plan.wakeWindow.low,
-        wake_window_high_min: plan.wakeWindow.high,
+        ...legacyWakeWindowColumns(plan.bucket),
         nap_count: local.overrides.nap_count ? local.nap_count : null,
         total_sleep_low: plan.totalSleep.low,
         total_sleep_high: plan.totalSleep.high,
         bucket: plan.bucket,
         bucket_label: plan.bucketLabel,
+        // Spread the saved object so keys this dialog doesn't edit (an
+        // accepted wake-window stretch) survive the upsert.
         overrides: {
+          ...rawSleepPlanOverrides(savedRow?.overrides),
           wake_time: !!local.overrides.wake_time,
           bedtime: !!local.overrides.bedtime,
           nap_count: !!local.overrides.nap_count,
@@ -471,7 +488,7 @@ export function SleepPlanDialog({
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {napAdjusted
                       ? `You're planning ${napValue}.`
-                      : `Around ${napTypical} is typical right now.`}
+                      : `${NAPS_BY_BRACKET[plan.bucket].label ?? `Around ${napTypical}`} is typical right now.`}
                   </p>
                   {napAdjusted && (
                     <button
@@ -608,10 +625,10 @@ export function SleepPlanDialog({
                   <p className="text-xs font-semibold uppercase tracking-wide text-foreground/60">
                     Wake windows
                   </p>
-                  <p className="font-display text-xl font-bold text-foreground">
+                  <p className="font-display text-base font-bold leading-snug text-foreground">
                     {plan.wakeWindow.display}
                   </p>
-                  <p className="text-xs text-foreground/70">between sleeps</p>
+                  <p className="text-xs text-foreground/70">between sleeps at this age</p>
                   <details className="group">
                     <summary className="cursor-pointer touch-target inline-flex items-center text-xs font-semibold text-sleep">
                       Why?
