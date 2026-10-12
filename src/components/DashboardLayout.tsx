@@ -69,7 +69,7 @@ export default function DashboardLayout() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  // Caregiver-role partners get a purpose-built UI (no tabs, briefing, or
+  // Caregiver-role partners get a purpose-built UI (no tabs or
   // analytics). The only routes they reach are the logging surfaces, in a
   // minimal shell whose single exit is back to CaregiverHome.
   if (!isOnboarding && role === "caregiver") {

@@ -10,7 +10,7 @@ const NOW = new Date(2024, 6, 15, 12);
 function input(overrides: Partial<SignsPromoInput> = {}): SignsPromoInput {
   return {
     child: { date_of_birth: "2024-01-15" },
-    briefingVisible: true,
+    hostVisible: true,
     now: NOW,
     schedule: DEFAULT_TRACKING_SCHEDULE,
     homeQuickTiles: ["food", "sleep", "diaper", "milestone"],
@@ -54,8 +54,8 @@ describe("signsPromoMode — first-time promo", () => {
     expect(signsPromoMode(input({ promoDismissed: true }))).toBeNull();
   });
 
-  it("hides when the briefing is hidden", () => {
-    expect(signsPromoMode(input({ briefingVisible: false }))).toBeNull();
+  it("hides when the host section is hidden", () => {
+    expect(signsPromoMode(input({ hostVisible: false }))).toBeNull();
   });
 
   it("hides for an expected baby and with no child", () => {
@@ -120,8 +120,8 @@ describe("signsPromoMode — comeback nudge", () => {
     expect(signsPromoMode(input({ started: true, lastActivityKey: null }))).toBeNull();
   });
 
-  it("keeps the age, briefing, and expected-baby gates", () => {
-    expect(signsPromoMode(started("2024-07-01", { briefingVisible: false }))).toBeNull();
+  it("keeps the age, host-section, and expected-baby gates", () => {
+    expect(signsPromoMode(started("2024-07-01", { hostVisible: false }))).toBeNull();
     expect(
       signsPromoMode(started("2024-07-01", { child: { date_of_birth: "2024-01-16" } })),
     ).toBeNull();

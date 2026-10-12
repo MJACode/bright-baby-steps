@@ -1,6 +1,6 @@
 // "What Grace Flare remembers" — the control surface for the per-child
 // personalization inputs that `loadMemoryContext` injects into the
-// briefing, weekly-insights, and visit-prep prompts.
+// weekly-insights and visit-prep prompts.
 //
 // Reached from Profile and from the AI surfaces themselves (Weekly insights),
 // not from the More list — this is a settings screen you visit when you wonder
@@ -71,7 +71,7 @@ export default function ChildContextPage() {
           <Sparkles className="w-7 h-7 text-primary" /> What Grace Flare remembers
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          The details behind {firstName}'s briefings, insights, and Visit Prep.
+          The details behind {firstName}'s insights and Visit Prep.
         </p>
       </div>
 
@@ -132,8 +132,8 @@ export default function ChildContextPage() {
         <CardContent className="p-4 space-y-3">
           <h2 className="text-base font-bold">Background details</h2>
           <p className="text-sm text-foreground leading-relaxed">
-            Grace Flare also keeps short notes from {firstName}'s briefings and
-            weekly insights, plus your sleep plan summary — things like routines
+            Grace Flare also keeps short notes from {firstName}'s weekly
+            insights, plus your sleep plan summary — things like routines
             and what helps them settle — to tailor suggestions. They're included
             in your data export.
           </p>
@@ -180,7 +180,7 @@ export default function ChildContextPage() {
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             This is the information Grace Flare uses to personalize {firstName}'s
-            briefings, insights, and Visit Prep. It never trains AI models and is never used
+            insights and Visit Prep. It never trains AI models and is never used
             for advertising. You can delete any of it, any time.
           </p>
           <div className="flex flex-wrap gap-2">

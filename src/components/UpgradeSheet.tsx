@@ -12,10 +12,6 @@ interface UpgradeSheetProps {
 }
 
 const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = {
-  "ai-insights": {
-    headline: "Want a daily briefing tailored to your baby?",
-    sub: "Flare+ reads your recent logs and gives you a quick daily read on sleep, feeding, and what's coming up.",
-  },
   "predictions": {
     headline: "Know when she'll need her next nap.",
     sub: "Your baby's next nap and feed, estimated from your own logs. The more you log, the sharper it gets.",
@@ -63,14 +59,14 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
 };
 
 const PERKS = [
-  { i: Sparkles, t: "Daily AI briefings + nap & feed predictions" },
+  { i: Sparkles, t: "Nap & feed predictions" },
   { i: Stethoscope, t: "AI visit prep for every checkup" },
   { i: Activity, t: "Cry clues" },
   { i: BarChart3, t: "Growth analytics + PDF exports" },
   { i: Users, t: "Add 2 more caregivers, synced live" },
 ];
 
-export function UpgradeSheet({ open, onOpenChange, feature = "ai-insights" }: UpgradeSheetProps) {
+export function UpgradeSheet({ open, onOpenChange, feature = "predictions" }: UpgradeSheetProps) {
   const navigate = useNavigate();
   const hook = FEATURE_HOOK[feature];
 

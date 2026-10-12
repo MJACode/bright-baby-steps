@@ -1,5 +1,4 @@
 import {
-  Sparkles,
   CalendarHeart,
   Moon,
   TrendingUp,
@@ -50,12 +49,6 @@ export const QUICK_TILES: QuickTile[] = [
 ];
 
 export const HOME_SECTIONS: { id: string; label: string; description: string; icon: LucideIcon }[] = [
-  {
-    id: "briefing",
-    label: "Today's Briefing",
-    description: "Your AI daily summary",
-    icon: Sparkles,
-  },
   {
     id: "whatToExpect",
     label: "What to Expect This Week",

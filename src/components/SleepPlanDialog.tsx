@@ -239,7 +239,7 @@ export function SleepPlanDialog({
         ferber_schedule: ferberSchedule,
       });
 
-      toast({ title: "Plan saved", description: "We'll reference it in your briefings." });
+      toast({ title: "Plan saved", description: "We'll reference it in your weekly insights and Visit Prep." });
       onOpenChange(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Couldn't save the plan. Try again in a moment.";
