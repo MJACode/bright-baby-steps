@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { format } from "date-fns";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
+import { ACTION_PLAN } from "@/services/allergenService";
 
 type Call = { table: string; op: string; payload?: unknown; filters: [string, unknown][] };
 type Injection = { table: string; op: string; result: "error" | "empty" };
@@ -114,7 +115,7 @@ describe("AllergenTracker", () => {
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Before you offer Peanuts")).toBeInTheDocument();
-    expect(within(dialog).getByText("Call 911 right away if you see")).toBeInTheDocument();
+    expect(within(dialog).getByText("Get emergency help now — call 911 if you see")).toBeInTheDocument();
     expect(db.calls).toHaveLength(0);
 
     fireEvent.click(within(dialog).getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
@@ -126,20 +127,20 @@ describe("AllergenTracker", () => {
     })));
   });
 
-  it("opens the 911 list by default during the 2-hour window", async () => {
+  it("opens the emergency list by default during the 2-hour window", async () => {
     db.introductions = [intro([{ id: "e1", logged_at: minutesAgo(30), exposure_number: 1, reaction_observed: false }])];
     await renderOpenPeanuts();
     expect(screen.getByText(/Watching until/)).toBeInTheDocument();
-    expect(screen.getByText("Call 911 right away if you see")).toBeInTheDocument();
+    expect(screen.getByText("Get emergency help now — call 911 if you see")).toBeInTheDocument();
   });
 
-  it("keeps the 911 list one tap away after the window closes", async () => {
+  it("keeps the emergency list one tap away after the window closes", async () => {
     db.introductions = [intro([{ id: "e1", logged_at: minutesAgo(300), exposure_number: 1, reaction_observed: false }])];
     await renderOpenPeanuts();
     expect(screen.queryByText(/Watching until/)).not.toBeInTheDocument();
-    expect(screen.queryByText("Call 911 right away if you see")).not.toBeInTheDocument();
+    expect(screen.queryByText("Get emergency help now — call 911 if you see")).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /What to watch for/ })[0]);
-    expect(screen.getByText("Call 911 right away if you see")).toBeInTheDocument();
+    expect(screen.getByText("Get emergency help now — call 911 if you see")).toBeInTheDocument();
   });
 
   it("logs a reaction against exposure #1 by updating it, not inserting a new exposure", async () => {
@@ -153,7 +154,7 @@ describe("AllergenTracker", () => {
     expect(save).toBeDisabled();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Hives" }));
-    expect(within(dialog).getByText("Call your pediatrician today")).toBeInTheDocument();
+    expect(within(dialog).getByText("Call your pediatrician now")).toBeInTheDocument();
     fireEvent.click(save);
 
     await waitFor(() => expect(writes("allergen_introductions", "update")).toHaveLength(1));
@@ -173,10 +174,22 @@ describe("AllergenTracker", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /Mild/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Trouble breathing or hoarse cry" }));
-    expect(within(dialog).getByText("Call 911 now")).toBeInTheDocument();
+    expect(within(dialog).getByText("Get emergency help now — call 911")).toBeInTheDocument();
+    expect(within(dialog).getByText(ACTION_PLAN)).toBeInTheDocument();
   });
 
-  it("opens the exposure #2 dialog and escalates two-area chips picked at None", async () => {
+  it("ends a note-level reaction with the action-plan line", async () => {
+    db.introductions = [intro([{ id: "e1", logged_at: minutesAgo(30), exposure_number: 1, reaction_observed: false }])];
+    await renderOpenPeanuts();
+    fireEvent.click(screen.getByRole("button", { name: /Log a reaction/ }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Fussiness" }));
+    expect(within(dialog).queryByText("Call your pediatrician now")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Get emergency help now — call 911")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(ACTION_PLAN)).toBeInTheDocument();
+  });
+
+  it("opens the exposure #2 dialog and routes two-area chips picked at None to the pediatrician", async () => {
     db.introductions = [intro([{ id: "e1", logged_at: minutesAgo(4 * 24 * 60), exposure_number: 1, reaction_observed: false }])];
     await renderOpenPeanuts();
     fireEvent.click(screen.getByRole("button", { name: /Log Exposure #2/ }));
@@ -184,9 +197,11 @@ describe("AllergenTracker", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Log Exposure #2")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Rash" }));
-    expect(within(dialog).getByText("Call your pediatrician today")).toBeInTheDocument();
+    expect(within(dialog).getByText("Call your pediatrician now")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Vomited once" }));
-    expect(within(dialog).getByText("Call 911 now")).toBeInTheDocument();
+    expect(within(dialog).getByText("Call your pediatrician now")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Get emergency help now — call 911")).not.toBeInTheDocument();
+    expect(within(dialog).getByText(ACTION_PLAN)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Save Exposure" }));
     await waitFor(() => expect(writes("allergen_introductions", "update")).toHaveLength(1));
@@ -207,7 +222,7 @@ describe("AllergenTracker", () => {
     await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
     const [shown] = toastSpy.mock.calls[0] as [{ title: string; description: string; variant?: string }];
     expect(shown.title).toBe("Reaction saved");
-    expect(shown.description).toMatch(/^Call your pediatrician today\. /);
+    expect(shown.description).toMatch(/^Call your pediatrician now\. Make an allergy action plan/);
     expect(shown.description).toMatch(/may not show this reaction/);
     expect(shown.variant).toBeUndefined();
   });
@@ -379,10 +394,10 @@ describe("AllergenTracker", () => {
     expect(line.textContent).toContain(format(storedEnd, "h:mm a"));
     const step3 = screen.getByText("Second Exposure").closest("div.flex-1") as HTMLElement;
     expect(within(step3).getByText(/Watching until/)).toBeInTheDocument();
-    expect(within(step3).getByText("Call 911 right away if you see")).toBeInTheDocument();
+    expect(within(step3).getByText("Get emergency help now — call 911 if you see")).toBeInTheDocument();
     const step1 = screen.getByText("First Exposure").closest("div.flex-1") as HTMLElement;
     expect(within(step1).queryByText(/Watching until/)).not.toBeInTheDocument();
-    expect(within(step1).queryByText("Call 911 right away if you see")).not.toBeInTheDocument();
+    expect(within(step1).queryByText("Get emergency help now — call 911 if you see")).not.toBeInTheDocument();
   });
 
   it("uses nut-free safe-form copy for a non-nut allergen", async () => {

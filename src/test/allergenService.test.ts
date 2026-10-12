@@ -21,6 +21,11 @@ import {
   NEXT_FEW_DAYS,
   ONCE_IT_GOES_WELL,
   GUIDANCE_FOOTER,
+  ACTION_PLAN,
+  REACTION_SAVED_TOAST,
+  EMERGENCY_BANNER_TITLE,
+  PEDIATRICIAN_BANNER_TITLE,
+  REACTION_NOTED_DESCRIPTION,
   type Severity,
   type ReactionLevel,
 } from "@/services/allergenService";
@@ -371,9 +376,9 @@ describe("classifyReaction", () => {
     ["Difficulty breathing", "emergency"],
     ["Coughing or wheezing", "emergency"],
     ["Swelling", "emergency"],
-    ["Hives all over", "emergency"],
-    ["Repeated vomiting", "emergency"],
     ["Pale, floppy, or very sleepy", "emergency"],
+    ["Hives all over", "pediatrician"],
+    ["Repeated vomiting", "pediatrician"],
     ["Hives", "pediatrician"],
     ["Rash", "pediatrician"],
     ["Vomiting", "pediatrician"],
@@ -389,29 +394,41 @@ describe("classifyReaction", () => {
     expect(classifyReaction(["Difficulty breathing"], "mild")).toBe("emergency");
   });
 
-  it("treats signs in two different body areas as an emergency", () => {
-    expect(classifyReaction(["Hives", "Vomiting"], "mild")).toBe("emergency");
-    expect(classifyReaction(["Rash", "Sneezing or runny nose"], "none")).toBe("emergency");
-    expect(classifyReaction(["Rash", "Diarrhea"], "none")).toBe("emergency");
+  const EMERGENCY_CHIPS = ["Difficulty breathing", "Coughing or wheezing", "Swelling", "Pale, floppy, or very sleepy"];
+
+  it("limits the emergency chips to airway, swelling, and circulation", () => {
+    expect(SYMPTOM_CHIPS.filter((c) => c.level === "emergency").map((c) => c.value).sort()).toEqual(
+      [...EMERGENCY_CHIPS].sort()
+    );
   });
 
-  it("does not treat two signs in the same area as an emergency", () => {
-    expect(classifyReaction(["Hives", "Rash"], "mild")).toBe("pediatrician");
-    expect(classifyReaction(["Vomiting", "Diarrhea"], "mild")).toBe("pediatrician");
+  it.each(EMERGENCY_CHIPS)("%s is an emergency at every severity", (value) => {
+    for (const sev of SEVERITIES) {
+      expect(classifyReaction([value], sev)).toBe("emergency");
+    }
   });
 
-  it("does not count area-less chips toward the combination rule", () => {
-    expect(classifyReaction(["Blood in stool", "Vomiting"], "none")).toBe("pediatrician");
-    expect(classifyReaction(["Fussiness", "Rash"], "none")).toBe("pediatrician");
+  it("routes Hives all over and Repeated vomiting to the pediatrician unless rated Severe", () => {
+    for (const value of ["Hives all over", "Repeated vomiting"]) {
+      expect(classifyReaction([value], "none")).toBe("pediatrician");
+      expect(classifyReaction([value], "mild")).toBe("pediatrician");
+      expect(classifyReaction([value], "moderate")).toBe("pediatrician");
+      expect(classifyReaction([value], "severe")).toBe("emergency");
+    }
+  });
+
+  it("routes signs in two body areas to the pediatrician, not 911", () => {
+    expect(classifyReaction(["Hives", "Vomiting"], "mild")).toBe("pediatrician");
+    expect(classifyReaction(["Rash", "Sneezing or runny nose"], "none")).toBe("pediatrician");
+    expect(classifyReaction(["Hives all over", "Repeated vomiting"], "moderate")).toBe("pediatrician");
+    expect(classifyReaction(["Rash", "Diarrhea"], "none")).toBe("pediatrician");
     expect(classifyReaction(["Fussiness", "Diarrhea"], "none")).toBe("note");
   });
 
-  it("matches the combination rule for every chip pair", () => {
+  it("takes the higher chip level for every chip pair", () => {
     for (const a of SYMPTOM_CHIPS) {
       for (const b of SYMPTOM_CHIPS) {
-        if (a.value === b.value) continue;
-        const crossArea = a.area !== null && b.area !== null && a.area !== b.area;
-        const expected = crossArea ? "emergency" : RANK[a.level] >= RANK[b.level] ? a.level : b.level;
+        const expected = RANK[a.level] >= RANK[b.level] ? a.level : b.level;
         expect(classifyReaction([a.value, b.value], "none")).toBe(expected);
       }
     }
@@ -428,7 +445,18 @@ describe("classifyReaction", () => {
     }
   });
 
-  it("treats unknown legacy strings as a note with no area", () => {
+  it("never lowers the level when a chip is added to any set", () => {
+    const values = SYMPTOM_CHIPS.map((c) => c.value);
+    for (const sev of SEVERITIES) {
+      for (const a of values) {
+        for (const b of values) {
+          expect(RANK[classifyReaction([a, b], sev)]).toBeGreaterThanOrEqual(RANK[classifyReaction([a], sev)]);
+        }
+      }
+    }
+  });
+
+  it("treats unknown legacy strings as a note", () => {
     expect(classifyReaction(["Sneezing"], "none")).toBe("note");
     expect(classifyReaction(["Sneezing", "Rash"], "none")).toBe("pediatrician");
     expect(classifyReaction(["Sneezing"], "severe")).toBe("emergency");
@@ -471,9 +499,26 @@ describe("allergen guidance copy", () => {
     const all = [...CALL_911.items, ...(CALL_911.followUp ?? [])].join(" ");
     expect(all).toMatch(/Trouble breathing/);
     expect(all).toMatch(/Swelling of the lips, tongue, or face/);
-    expect(all).toMatch(/two areas at once/);
+    expect(all).toMatch(/floppiness/);
+    expect(all).not.toMatch(/two areas at once|Repeated vomiting|Hives spreading/);
     expect(all).toMatch(/epinephrine, use it right away, then call 911/);
     expect(all).toMatch(/Don't wait to see if it passes/);
+  });
+
+  it("routes hives, two-area signs, and repeated vomiting to the pediatrician tier", () => {
+    const items = CALL_PEDIATRICIAN.items.join(" ");
+    expect(items).toMatch(/two areas at once/);
+    expect(items).toMatch(/Repeated vomiting/);
+    expect(items).toMatch(/Hives spreading across the body/);
+  });
+
+  it("ends every reaction surface with the action-plan prompt", () => {
+    expect(CALL_PEDIATRICIAN.followUp).toContain(ACTION_PLAN);
+    for (const toast of Object.values(REACTION_SAVED_TOAST)) {
+      expect(toast.description.endsWith(ACTION_PLAN)).toBe(true);
+    }
+    expect(REACTION_SAVED_TOAST.emergency.description).toMatch(/^Get emergency help now — call 911 if you haven't already\. /);
+    expect(REACTION_NOTED_DESCRIPTION).toMatch(/allergy action plan with your pediatrician/);
   });
 
   it("only mentions nut butter for nut allergens", () => {
@@ -492,6 +537,8 @@ describe("allergen guidance copy", () => {
       BEFORE_YOU_START_GENERAL: beforeYouStartFor("milk"),
       CALL_911, CALL_PEDIATRICIAN, USUALLY_NOT_A_REACTION,
       LATER_SAME_DAY, NEXT_FEW_DAYS, ONCE_IT_GOES_WELL, GUIDANCE_FOOTER,
+      ACTION_PLAN, REACTION_SAVED_TOAST, EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE,
+      REACTION_NOTED_DESCRIPTION,
     }).toMatchSnapshot();
   });
 });

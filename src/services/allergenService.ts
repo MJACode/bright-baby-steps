@@ -150,8 +150,11 @@ export function exposureAwaitingReaction<
 }
 
 // ─── Guidance copy ───────────────────────────────────────────────────────────
-// Reviewed by the pediatrician advisor (AAP 2019, NIAID 2017). Triage wording is
-// load-bearing: trim for fit if you must, never soften a threshold.
+// Reviewed by the pediatrician advisor (AAP 2019, NIAID 2017). On 2026-10-12 the
+// founder narrowed 911 to airway, swelling and circulation signs; hives all over,
+// repeated vomiting and two-area combinations route to the pediatrician, and every
+// reaction ends with ACTION_PLAN. Triage wording is load-bearing: trim for fit if
+// you must, but change a threshold only with a founder decision.
 
 export interface GuidanceSection {
   title: string;
@@ -183,30 +186,28 @@ export const CALL_911_EPINEPHRINE =
 export const CALL_911_POSITIONING = "Keep your baby lying down (on their side if vomiting) while you wait.";
 
 export const CALL_911: GuidanceSection = {
-  title: "Call 911 right away if you see",
+  title: "Get emergency help now — call 911 if you see",
   items: [
     "Trouble breathing, wheezing, a repeated cough, or a hoarse cry",
     "Swelling of the lips, tongue, or face",
-    "Hives spreading across the body",
-    "Repeated vomiting",
     "Pale or bluish skin, floppiness, or sudden unusual sleepiness",
-    "Signs in two areas at once, like hives plus vomiting — even if each seems mild",
   ],
   followUp: [CALL_911_EPINEPHRINE, CALL_911_POSITIONING],
 };
 
 export const CALL_PEDIATRICIAN_KEEP_WATCHING =
-  "Keep watching for the full 2 hours. If anything on the 911 list appears, call 911.";
+  "Keep watching for the full 2 hours. If anything on the emergency list appears, call 911.";
+
+export const ACTION_PLAN = "Make an allergy action plan with your pediatrician before offering it again.";
 
 export const CALL_PEDIATRICIAN: GuidanceSection = {
-  title: "Stop the food and call your pediatrician today if",
+  title: "Stop the food and call your pediatrician now if you see",
   items: [
-    "You see a few hives or a rash in one spot, a single vomit, or sneezing and a runny nose. Take a photo — it helps.",
+    "Hives spreading across the body, or signs in two areas at once (like hives plus vomiting)",
+    "Repeated vomiting",
+    "A few hives or a rash in one spot, a single vomit, or sneezing and a runny nose. Take a photo — it helps.",
   ],
-  followUp: [
-    CALL_PEDIATRICIAN_KEEP_WATCHING,
-    "Wait to offer this food again until your pediatrician says it's OK.",
-  ],
+  followUp: [CALL_PEDIATRICIAN_KEEP_WATCHING, ACTION_PLAN],
 };
 
 export const USUALLY_NOT_A_REACTION: GuidanceSection = {
@@ -263,9 +264,9 @@ export const EXPOSURE_LOGGED_TOAST = {
 } as const;
 
 export const REACTION_SAVED_TOAST: Record<Exclude<ReactionLevel, "none">, { title: string; description: string }> = {
-  emergency: { title: "Reaction saved", description: "Call 911 now if you haven't already." },
-  pediatrician: { title: "Reaction saved", description: "Call your pediatrician today." },
-  note: { title: "Reaction saved", description: "It's in your pediatrician report — mention it at your next visit." },
+  emergency: { title: "Reaction saved", description: `Get emergency help now — call 911 if you haven't already. ${ACTION_PLAN}` },
+  pediatrician: { title: "Reaction saved", description: `Call your pediatrician now. ${ACTION_PLAN}` },
+  note: { title: "Reaction saved", description: `It's in your pediatrician report. ${ACTION_PLAN}` },
 };
 
 export const SAVE_COPY = {
@@ -283,36 +284,37 @@ export const SAVE_COPY = {
     "We couldn't log the first exposure, so this allergen may show as In Progress. Remove its tracking, then start it again.",
 } as const;
 
-export const EMERGENCY_BANNER_TITLE = "Call 911 now";
-export const PEDIATRICIAN_BANNER_TITLE = "Call your pediatrician today";
+export const EMERGENCY_BANNER_TITLE = "Get emergency help now — call 911";
+export const PEDIATRICIAN_BANNER_TITLE = "Call your pediatrician now";
+
+export const REACTION_NOTED_DESCRIPTION =
+  "A reaction was noted. Make an allergy action plan with your pediatrician before offering it again — share this report at that visit.";
 
 // ─── Symptom chips + escalation ──────────────────────────────────────────────
 
 export type ReactionLevel = "none" | "note" | "pediatrician" | "emergency";
-export type BodyArea = "skin" | "breathing" | "gut" | "circulation";
 
 export interface SymptomChip {
   /** Stored verbatim in allergen_reactions.symptoms — never rename an existing value. */
   value: string;
   label: string;
-  area: BodyArea | null;
   level: Exclude<ReactionLevel, "none">;
 }
 
 export const SYMPTOM_CHIPS: readonly SymptomChip[] = [
-  { value: "Difficulty breathing", label: "Trouble breathing or hoarse cry", area: "breathing", level: "emergency" },
-  { value: "Coughing or wheezing", label: "Coughing or wheezing", area: "breathing", level: "emergency" },
-  { value: "Swelling", label: "Lip, face, or tongue swelling", area: "skin", level: "emergency" },
-  { value: "Hives all over", label: "Hives all over", area: "skin", level: "emergency" },
-  { value: "Repeated vomiting", label: "Repeated vomiting", area: "gut", level: "emergency" },
-  { value: "Pale, floppy, or very sleepy", label: "Pale, floppy, or very sleepy", area: "circulation", level: "emergency" },
-  { value: "Hives", label: "Hives", area: "skin", level: "pediatrician" },
-  { value: "Rash", label: "Rash", area: "skin", level: "pediatrician" },
-  { value: "Vomiting", label: "Vomited once", area: "gut", level: "pediatrician" },
-  { value: "Sneezing or runny nose", label: "Sneezing or runny nose", area: "breathing", level: "pediatrician" },
-  { value: "Blood in stool", label: "Blood in stool", area: null, level: "pediatrician" },
-  { value: "Diarrhea", label: "Diarrhea", area: "gut", level: "note" },
-  { value: "Fussiness", label: "Fussiness", area: null, level: "note" },
+  { value: "Difficulty breathing", label: "Trouble breathing or hoarse cry", level: "emergency" },
+  { value: "Coughing or wheezing", label: "Coughing or wheezing", level: "emergency" },
+  { value: "Swelling", label: "Lip, face, or tongue swelling", level: "emergency" },
+  { value: "Pale, floppy, or very sleepy", label: "Pale, floppy, or very sleepy", level: "emergency" },
+  { value: "Hives all over", label: "Hives all over", level: "pediatrician" },
+  { value: "Repeated vomiting", label: "Repeated vomiting", level: "pediatrician" },
+  { value: "Hives", label: "Hives", level: "pediatrician" },
+  { value: "Rash", label: "Rash", level: "pediatrician" },
+  { value: "Vomiting", label: "Vomited once", level: "pediatrician" },
+  { value: "Sneezing or runny nose", label: "Sneezing or runny nose", level: "pediatrician" },
+  { value: "Blood in stool", label: "Blood in stool", level: "pediatrician" },
+  { value: "Diarrhea", label: "Diarrhea", level: "note" },
+  { value: "Fussiness", label: "Fussiness", level: "note" },
 ];
 
 const CHIP_BY_VALUE = new Map(SYMPTOM_CHIPS.map((c) => [c.value, c]));
@@ -328,18 +330,15 @@ const SEVERITY_LEVEL: Record<Severity, ReactionLevel> = {
 
 const higher = (a: ReactionLevel, b: ReactionLevel): ReactionLevel => (LEVEL_RANK[b] > LEVEL_RANK[a] ? b : a);
 
-// Each input can only raise the level, never lower it. Signs in two different
-// body areas at once are an emergency even when each alone is mild (NIAID
-// anaphylaxis criterion). Unknown legacy strings count as a note with no area.
+// Each input can only raise the level, never lower it. Only airway, swelling,
+// and circulation signs reach 911 on their own; a self-rated "Severe" does too,
+// as the parent's judgement for what no chip describes. Unknown legacy strings
+// count as a note.
 export function classifyReaction(symptoms: readonly string[], severity: Severity): ReactionLevel {
   let level = SEVERITY_LEVEL[severity] ?? "none";
-  const areas = new Set<BodyArea>();
   for (const s of symptoms) {
-    const chip = CHIP_BY_VALUE.get(s);
-    level = higher(level, chip?.level ?? "note");
-    if (chip?.area) areas.add(chip.area);
+    level = higher(level, CHIP_BY_VALUE.get(s)?.level ?? "note");
   }
-  if (areas.size >= 2) level = "emergency";
   return level;
 }
 

@@ -2,6 +2,7 @@
 
 exports[`allergen guidance copy > matches the approved wording 1`] = `
 {
+  "ACTION_PLAN": "Make an allergy action plan with your pediatrician before offering it again.",
   "BEFORE_YOU_START_GENERAL": {
     "items": [
       "Talk to your pediatrician first if your baby has severe eczema or has reacted to a food before.",
@@ -30,23 +31,23 @@ exports[`allergen guidance copy > matches the approved wording 1`] = `
     "items": [
       "Trouble breathing, wheezing, a repeated cough, or a hoarse cry",
       "Swelling of the lips, tongue, or face",
-      "Hives spreading across the body",
-      "Repeated vomiting",
       "Pale or bluish skin, floppiness, or sudden unusual sleepiness",
-      "Signs in two areas at once, like hives plus vomiting — even if each seems mild",
     ],
-    "title": "Call 911 right away if you see",
+    "title": "Get emergency help now — call 911 if you see",
   },
   "CALL_PEDIATRICIAN": {
     "followUp": [
-      "Keep watching for the full 2 hours. If anything on the 911 list appears, call 911.",
-      "Wait to offer this food again until your pediatrician says it's OK.",
+      "Keep watching for the full 2 hours. If anything on the emergency list appears, call 911.",
+      "Make an allergy action plan with your pediatrician before offering it again.",
     ],
     "items": [
-      "You see a few hives or a rash in one spot, a single vomit, or sneezing and a runny nose. Take a photo — it helps.",
+      "Hives spreading across the body, or signs in two areas at once (like hives plus vomiting)",
+      "Repeated vomiting",
+      "A few hives or a rash in one spot, a single vomit, or sneezing and a runny nose. Take a photo — it helps.",
     ],
-    "title": "Stop the food and call your pediatrician today if",
+    "title": "Stop the food and call your pediatrician now if you see",
   },
+  "EMERGENCY_BANNER_TITLE": "Get emergency help now — call 911",
   "GUIDANCE_FOOTER": "Based on AAP (2019) and NIAID (2017) guidance. Your pediatrician knows your baby best.",
   "LATER_SAME_DAY": {
     "items": [
@@ -62,6 +63,22 @@ exports[`allergen guidance copy > matches the approved wording 1`] = `
     "title": "Over the next few days",
   },
   "ONCE_IT_GOES_WELL": "Keep it on the menu a few times a week to help your baby keep tolerating it.",
+  "PEDIATRICIAN_BANNER_TITLE": "Call your pediatrician now",
+  "REACTION_NOTED_DESCRIPTION": "A reaction was noted. Make an allergy action plan with your pediatrician before offering it again — share this report at that visit.",
+  "REACTION_SAVED_TOAST": {
+    "emergency": {
+      "description": "Get emergency help now — call 911 if you haven't already. Make an allergy action plan with your pediatrician before offering it again.",
+      "title": "Reaction saved",
+    },
+    "note": {
+      "description": "It's in your pediatrician report. Make an allergy action plan with your pediatrician before offering it again.",
+      "title": "Reaction saved",
+    },
+    "pediatrician": {
+      "description": "Call your pediatrician now. Make an allergy action plan with your pediatrician before offering it again.",
+      "title": "Reaction saved",
+    },
+  },
   "USUALLY_NOT_A_REACTION": {
     "items": [
       "Flat redness only where food touched the skin — no raised bumps — that fades within the hour while your baby acts normal. Raised welts are hives.",

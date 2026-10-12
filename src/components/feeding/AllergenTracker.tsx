@@ -40,7 +40,7 @@ import {
   CALL_PEDIATRICIAN, CALL_PEDIATRICIAN_KEEP_WATCHING, SAVE_COPY, USUALLY_NOT_A_REACTION,
   LATER_SAME_DAY, NEXT_FEW_DAYS, ONCE_IT_GOES_WELL, GUIDANCE_FOOTER,
   FIRST_EXPOSURE_HELPER, WAIT_STEP_HELPER, startIntroToast,
-  EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE,
+  EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE, ACTION_PLAN, REACTION_NOTED_DESCRIPTION,
   EXPOSURE_LOGGED_TOAST, REACTION_SAVED_TOAST, type GuidanceSection,
 } from "@/services/allergenService";
 
@@ -125,6 +125,7 @@ function ReactionBanner({ level }: { level: ReactionLevel }) {
           <p className="text-base font-bold text-destructive">{EMERGENCY_BANNER_TITLE}</p>
           <p className="text-sm font-semibold text-foreground">{CALL_911_EPINEPHRINE}</p>
           <p className="text-sm text-foreground">{CALL_911_POSITIONING}</p>
+          <p className="text-sm font-semibold text-foreground">{ACTION_PLAN}</p>
         </div>
       </div>
     );
@@ -136,9 +137,13 @@ function ReactionBanner({ level }: { level: ReactionLevel }) {
         <div className="space-y-1.5">
           <p className="text-base font-bold text-warning">{PEDIATRICIAN_BANNER_TITLE}</p>
           <p className="text-sm text-foreground">{CALL_PEDIATRICIAN_KEEP_WATCHING}</p>
+          <p className="text-sm font-semibold text-foreground">{ACTION_PLAN}</p>
         </div>
       </div>
     );
+  }
+  if (level === "note") {
+    return <p role="status" className="text-sm text-muted-foreground text-left">{ACTION_PLAN}</p>;
   }
   return null;
 }
@@ -813,7 +818,7 @@ export default function AllergenTracker() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {status === "introduced" ? `${selectedAllergen.name} is now part of ${activeChild.name}'s diet.` :
-                     status === "reaction_noted" ? "A reaction was noted. Share this report with your pediatrician." :
+                     status === "reaction_noted" ? REACTION_NOTED_DESCRIPTION :
                      "Log the second exposure after the wait to finish."}
                   </p>
                   {status === "introduced" && (
