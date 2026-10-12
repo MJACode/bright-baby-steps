@@ -253,7 +253,7 @@ describe("predictNextNap on the engine", () => {
   it("applies an accepted target to the first window of the day only", () => {
     const overrides: WakeWindowOverrides = {
       targetMin: 108,
-      fromMin: 98,
+      baseMin: 98,
       setAt: subDays(NOW, 2),
       dismissedAt: null,
     };
@@ -278,7 +278,7 @@ describe("predictNextNap on the engine", () => {
         ageMonths: LULU_AGE,
         sleeps: luluLogs,
         now: NOW,
-        wakeWindowOverrides: { targetMin, fromMin: 98, setAt: subDays(NOW, 2), dismissedAt: null },
+        wakeWindowOverrides: { targetMin, baseMin: 98, setAt: subDays(NOW, 2), dismissedAt: null },
       })!;
     expect(at(70).windowStart).toEqual(atDay(0, hm(6, 30) + 98 - 15));
     expect(at(240).windowStart).toEqual(atDay(0, hm(6, 30) + 162 - 15));
@@ -306,7 +306,7 @@ describe("one engine value across surfaces (SC-002)", () => {
   });
 
   it("all three move to an accepted stretch together", () => {
-    const o: WakeWindowOverrides = { targetMin: 108, fromMin: 98, setAt: subDays(NOW, 2), dismissedAt: null };
+    const o: WakeWindowOverrides = { targetMin: 108, baseMin: 98, setAt: subDays(NOW, 2), dismissedAt: null };
     const state = wakeWindowState({ ageMonths: LULU_AGE, logs: luluLogs, now: NOW, overrides: o });
     const plan = buildSleepPlan({ ageMonths: LULU_AGE, logs: luluLogs, now: NOW, wakeWindowOverrides: o });
     expect(state.currentMin).toBe(108);
@@ -412,7 +412,7 @@ describe("decision and gates (FR-006)", () => {
     const s = state(readyLogs);
     expect(s.signals).toEqual(expect.arrayContaining(["U1", "U4"]));
     expect(s.signals.some((c) => c.startsWith("O"))).toBe(false);
-    expect(s.suggestion).toEqual({ kind: "stretch", fromMin: 98, toMin: 108 });
+    expect(s.suggestion).toEqual({ kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 });
     const copy = suggestionCopy(s.suggestion!, "Lulu");
     expect(copy.body).toBe(
       "Lulu's first stretch of the day is about 98 min. You might try about 108 min this week and see how the first nap goes.",
@@ -435,11 +435,11 @@ describe("decision and gates (FR-006)", () => {
   });
 
   it("blocks within 7 days of an accept and 14 days of a dismiss", () => {
-    const accepted = state(readyLogs, LULU_AGE, { targetMin: 98, fromMin: 90, setAt: subDays(NOW, 6), dismissedAt: null });
+    const accepted = state(readyLogs, LULU_AGE, { targetMin: 98, baseMin: 90, setAt: subDays(NOW, 6), dismissedAt: null });
     expect(accepted.blockedReason).toBe("recently-changed");
-    const dismissed = state(readyLogs, LULU_AGE, { targetMin: null, fromMin: null, setAt: null, dismissedAt: subDays(NOW, 13) });
+    const dismissed = state(readyLogs, LULU_AGE, { targetMin: null, baseMin: null, setAt: null, dismissedAt: subDays(NOW, 13) });
     expect(dismissed.blockedReason).toBe("recently-dismissed");
-    const old = state(readyLogs, LULU_AGE, { targetMin: null, fromMin: null, setAt: null, dismissedAt: subDays(NOW, 14) });
+    const old = state(readyLogs, LULU_AGE, { targetMin: null, baseMin: null, setAt: null, dismissedAt: subDays(NOW, 14) });
     expect(old.suggestion?.kind).toBe("stretch");
   });
 
@@ -455,7 +455,7 @@ describe("decision and gates (FR-006)", () => {
     expect(at85.signals.filter((c) => c.startsWith("U")).length).toBe(2);
     expect(at85.suggestion).toBeNull();
     const at75 = state(logs, 7.5);
-    expect(at75.suggestion).toEqual({ kind: "stretch", fromMin: 170, toMin: 185 });
+    expect(at75.suggestion).toEqual({ kind: "stretch", fromMin: 170, toMin: 185, baseMin: 170 });
   });
 
   it("shortens on O2 alone, and on mixed signals stays put", () => {
@@ -480,9 +480,9 @@ describe("decision and gates (FR-006)", () => {
 
   it("offers a way back 5+ days after accepting when any overtired signal appears", () => {
     const short = neutralLogs(() => ({ ...NEUTRAL, naps: [[98, 30], [98, 30], [98, 30], [98, 30]], bedtime: hm(21, 0) }));
-    const o: WakeWindowOverrides = { targetMin: 108, fromMin: 98, setAt: subDays(NOW, 5), dismissedAt: null };
+    const o: WakeWindowOverrides = { targetMin: 108, baseMin: 98, setAt: subDays(NOW, 5), dismissedAt: null };
     const s = state(short, LULU_AGE, o);
-    expect(s.suggestion).toEqual({ kind: "revert", fromMin: 108, toMin: 98 });
+    expect(s.suggestion).toEqual({ kind: "revert", fromMin: 108, toMin: 98, baseMin: 98 });
     const copy = suggestionCopy(s.suggestion!, "Lulu");
     expect(copy.body).toBe(
       "You've been trying about 108 min for Lulu's first stretch of the day. You can go back to about 98 min any time.",
@@ -497,7 +497,7 @@ describe("decision and gates (FR-006)", () => {
   });
 
   it("expires an accepted target once the age min passes it", () => {
-    const o: WakeWindowOverrides = { targetMin: 80, fromMin: 70, setAt: subDays(NOW, 30), dismissedAt: null };
+    const o: WakeWindowOverrides = { targetMin: 80, baseMin: 70, setAt: subDays(NOW, 30), dismissedAt: null };
     expect(state(luluLogs, LULU_AGE, o).accepted).toBeNull();
   });
 });
@@ -514,7 +514,7 @@ describe("persistence (FR-007)", () => {
       }),
     ).toEqual({
       targetMin: 108,
-      fromMin: null,
+      baseMin: null,
       setAt: new Date("2026-10-10T07:00:00.000Z"),
       dismissedAt: null,
     });
@@ -524,23 +524,23 @@ describe("persistence (FR-007)", () => {
 
   it("writes accept, revert and dismiss as override patches", () => {
     const now = new Date("2026-10-12T07:00:00.000Z");
-    expect(wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 98, toMin: 108 }, now)).toEqual({
+    expect(wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 }, now)).toEqual({
       wake_window_target_min: 108,
       wake_window_from_min: 98,
       wake_window_set_at: now.toISOString(),
     });
-    expect(wakeWindowDecisionPatch("accept", { kind: "revert", fromMin: 108, toMin: 98 }, now)).toEqual({
+    expect(wakeWindowDecisionPatch("accept", { kind: "revert", fromMin: 108, toMin: 98, baseMin: 108 }, now)).toEqual({
       wake_window_target_min: null,
       wake_window_from_min: null,
       wake_window_set_at: now.toISOString(),
     });
-    expect(wakeWindowDecisionPatch("dismiss", { kind: "stretch", fromMin: 98, toMin: 108 }, now)).toEqual({
+    expect(wakeWindowDecisionPatch("dismiss", { kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 }, now)).toEqual({
       wake_window_dismissed_at: now.toISOString(),
     });
   });
 
   it("round-trips: an accepted patch becomes the engine's accepted target", () => {
-    const patch = wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 98, toMin: 108 }, NOW);
+    const patch = wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 }, NOW);
     const s = state(luluLogs, LULU_AGE, parseWakeWindowOverrides({ nap_count: true, ...patch }));
     expect(s.accepted?.targetMin).toBe(108);
     expect(s.currentMin).toBe(108);
@@ -573,7 +573,7 @@ describe("copy guardrails (FR-011)", () => {
     state([]),
     state(luluLogs),
     state(readyLogs),
-    state(luluLogs, LULU_AGE, { targetMin: 108, fromMin: 98, setAt: subDays(NOW, 2), dismissedAt: null }),
+    state(luluLogs, LULU_AGE, { targetMin: 108, baseMin: 98, setAt: subDays(NOW, 2), dismissedAt: null }),
   ];
   const kinds = ["stretch", "shorten", "revert"] as const;
 
@@ -581,7 +581,7 @@ describe("copy guardrails (FR-011)", () => {
     const lines: string[] = [];
     for (const name of ["Lulu", null, "  "]) {
       for (const kind of kinds) {
-        const c = suggestionCopy({ kind, fromMin: 98, toMin: kind === "stretch" ? 108 : 88 }, name);
+        const c = suggestionCopy({ kind, fromMin: 98, toMin: kind === "stretch" ? 108 : 88, baseMin: 98 }, name);
         expect(c.cues).toMatch(/^Cues come first/);
         expect(c.safeSleep).toMatch(/flat, empty crib/);
         lines.push(c.title, c.body, c.cues, c.safeSleep, c.primaryLabel, c.secondaryLabel);
@@ -597,7 +597,7 @@ describe("copy guardrails (FR-011)", () => {
   });
 
   it("falls back to 'your baby' without a name", () => {
-    const c = suggestionCopy({ kind: "stretch", fromMin: 98, toMin: 108 }, null);
+    const c = suggestionCopy({ kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 }, null);
     expect(c.body.startsWith("Your baby's first stretch")).toBe(true);
     expect(wakeWindowExplainer(state([]), undefined).rows[1].label).toBe("Your baby's last 14 days");
   });
@@ -647,7 +647,7 @@ describe("first-window reference (one value across surfaces)", () => {
     const st = state(firstLogs, FIRST_AGE);
     const pred = coachAfterNight(null);
     expect(st.signals).toEqual(expect.arrayContaining(["U3", "U4"]));
-    expect(st.suggestion).toEqual({ kind: "stretch", fromMin: 80, toMin: 90 });
+    expect(st.suggestion).toEqual({ kind: "stretch", fromMin: 80, toMin: 90, baseMin: 80 });
     expect(pred.windowMin).toBe(80);
     expect(pred.windowStart).toEqual(atDay(0, hm(6, 30) + 80 - 15));
     expect(st.currentMin).toBe(80);
@@ -658,7 +658,7 @@ describe("first-window reference (one value across surfaces)", () => {
   });
 
   it("accepting +15 moves the coach first window, the block and the plan to 95", () => {
-    const patch = wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 80, toMin: 95 }, NOW);
+    const patch = wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 80, toMin: 95, baseMin: 80 }, NOW);
     const o = parseWakeWindowOverrides(patch);
     const st = state(firstLogs, FIRST_AGE, o);
     const pred = coachAfterNight(o);
@@ -675,7 +675,7 @@ describe("first-window reference (one value across surfaces)", () => {
   it("leaves later windows on the time-of-day median", () => {
     const upToNap1 = firstLogs.filter((l) => new Date(l.started_at) < atDay(1, hm(8, 0)));
     const o = parseWakeWindowOverrides(
-      wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 80, toMin: 95 }, NOW),
+      wakeWindowDecisionPatch("accept", { kind: "stretch", fromMin: 80, toMin: 95, baseMin: 80 }, NOW),
     );
     const later = predictNextNap({
       ageMonths: FIRST_AGE,
@@ -697,10 +697,18 @@ describe("first-window reference (one value across surfaces)", () => {
 
   it("expires an accepted target once the engine's own first window reaches it", () => {
     const at = (targetMin: number) =>
-      state(readyLogs, LULU_AGE, { targetMin, fromMin: 90, setAt: subDays(NOW, 30), dismissedAt: null });
+      state(readyLogs, LULU_AGE, { targetMin, baseMin: 90, setAt: subDays(NOW, 30), dismissedAt: null });
     expect(at(98).accepted).toBeNull();
     expect(at(98).currentMin).toBe(98);
-    expect(at(99).accepted?.targetMin).toBe(99);
+    expect(at(103).accepted?.targetMin).toBe(103);
+  });
+
+  it("expires a target within 5 min of the engine's first window, so suggestions step from firstMin", () => {
+    // firstMin 98 at 5.8 mo; an accepted 101 left over from earlier.
+    const s = state(readyLogs, LULU_AGE, { targetMin: 101, baseMin: 90, setAt: subDays(NOW, 30), dismissedAt: null });
+    expect(s.accepted).toBeNull();
+    expect(s.currentMin).toBe(98);
+    expect(s.suggestion).toEqual({ kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 });
   });
 });
 
@@ -713,7 +721,7 @@ describe("accepting a suggestion lands on its toMin", () => {
       ...(before
         ? {
             wake_window_target_min: before.targetMin,
-            wake_window_from_min: before.fromMin,
+            wake_window_from_min: before.baseMin,
             wake_window_set_at: before.setAt?.toISOString(),
           }
         : {}),
@@ -731,13 +739,13 @@ describe("accepting a suggestion lands on its toMin", () => {
 
   it("shorten (O2 alone)", () => {
     const { s, after } = accept(shortLogs);
-    expect(s.suggestion).toEqual({ kind: "shorten", fromMin: 98, toMin: 89 });
+    expect(s.suggestion).toEqual({ kind: "shorten", fromMin: 98, toMin: 89, baseMin: 98 });
     expect(after.accepted).not.toBeNull();
     expect(after.currentMin).toBe(89);
   });
 
   it("revert clears the target and lands on firstMin", () => {
-    const before: WakeWindowOverrides = { targetMin: 108, fromMin: 98, setAt: subDays(NOW, 5), dismissedAt: null };
+    const before: WakeWindowOverrides = { targetMin: 108, baseMin: 98, setAt: subDays(NOW, 5), dismissedAt: null };
     const { s, after } = accept(shortLogs, before);
     expect(s.suggestion!.kind).toBe("revert");
     expect(after.accepted).toBeNull();
@@ -748,30 +756,58 @@ describe("accepting a suggestion lands on its toMin", () => {
   it("a stretch from an accepted shorten that reaches firstMin is offered as a way back", () => {
     // Accepted 89 under a first window of 98; a 10-min stretch would pass 98,
     // and stored as a stretch it would expire at once.
-    const before: WakeWindowOverrides = { targetMin: 89, fromMin: 98, setAt: subDays(NOW, 8), dismissedAt: null };
+    const before: WakeWindowOverrides = { targetMin: 89, baseMin: 98, setAt: subDays(NOW, 8), dismissedAt: null };
     const { s, after } = accept(readyLogs, before);
-    expect(s.suggestion).toEqual({ kind: "revert", fromMin: 89, toMin: 98 });
+    expect(s.suggestion).toEqual({ kind: "revert", fromMin: 89, toMin: 98, baseMin: 98 });
     expect(after.accepted).toBeNull();
     expect(after.currentMin).toBe(98);
   });
 
+  it("a stretch stacked on an accepted shorten, still below firstMin, sticks", () => {
+    // 7.5 mo, first windows 170 (range 113–188, step 15), stretch signals on.
+    const day = (long: boolean): DaySpec => ({ wake: hm(6, 30), naps: [[170, 125], [long ? 190 : 170, 125]], bedtime: hm(19, 30) });
+    const logs = fixture(14, (k) => day(k <= 7));
+    const before: WakeWindowOverrides = { targetMin: 130, baseMin: 170, setAt: subDays(NOW, 8), dismissedAt: null };
+    const s = state(logs, 7.5, before);
+    expect(s.firstMin).toBe(170);
+    expect(s.suggestion).toEqual({ kind: "stretch", fromMin: 130, toMin: 145, baseMin: 170 });
+    const after = state(
+      logs,
+      7.5,
+      parseWakeWindowOverrides({ ...wakeWindowDecisionPatch("accept", s.suggestion!, NOW) }),
+    );
+    expect(after.accepted).not.toBeNull();
+    expect(after.currentMin).toBe(145);
+  });
+
+  it("a shorten stacked on an accepted stretch, still above firstMin, sticks", () => {
+    // Through wakeWindowState the way back pre-empts this (any overtired
+    // signal past 5 days offers a revert), so check the saved shape directly.
+    const patch = wakeWindowDecisionPatch("accept", { kind: "shorten", fromMin: 118, toMin: 108, baseMin: 98 }, NOW);
+    expect(patch.wake_window_from_min).toBe(98);
+    const after = state(luluLogs, LULU_AGE, parseWakeWindowOverrides(patch));
+    expect(after.firstMin).toBe(98);
+    expect(after.accepted).not.toBeNull();
+    expect(after.currentMin).toBe(108);
+  });
+
   it("offers no way back up from an accepted shorten on overtired signals", () => {
-    const before: WakeWindowOverrides = { targetMin: 89, fromMin: 98, setAt: subDays(NOW, 8), dismissedAt: null };
+    const before: WakeWindowOverrides = { targetMin: 89, baseMin: 98, setAt: subDays(NOW, 8), dismissedAt: null };
     expect(state(shortLogs, LULU_AGE, before).suggestion?.kind).not.toBe("revert");
   });
 
   it("an accepted shorten holds until firstMin drops to it, and a stretch until firstMin reaches it", () => {
     const shorter = (targetMin: number) =>
-      state(luluLogs, LULU_AGE, { targetMin, fromMin: 108, setAt: subDays(NOW, 2), dismissedAt: null });
-    expect(shorter(95).currentMin).toBe(95);
+      state(luluLogs, LULU_AGE, { targetMin, baseMin: 108, setAt: subDays(NOW, 2), dismissedAt: null });
+    expect(shorter(92).currentMin).toBe(92);
     expect(shorter(98).accepted).toBeNull();
     const longer = (targetMin: number) =>
-      state(luluLogs, LULU_AGE, { targetMin, fromMin: 90, setAt: subDays(NOW, 2), dismissedAt: null });
+      state(luluLogs, LULU_AGE, { targetMin, baseMin: 90, setAt: subDays(NOW, 2), dismissedAt: null });
     expect(longer(105).currentMin).toBe(105);
     expect(longer(98).accepted).toBeNull();
     // No stored fromMin: only the age-min floor applies.
-    expect(state(luluLogs, LULU_AGE, { targetMin: 95, fromMin: null, setAt: null, dismissedAt: null }).currentMin).toBe(95);
-    expect(state(luluLogs, LULU_AGE, { targetMin: 80, fromMin: null, setAt: null, dismissedAt: null }).accepted).toBeNull();
+    expect(state(luluLogs, LULU_AGE, { targetMin: 92, baseMin: null, setAt: null, dismissedAt: null }).currentMin).toBe(92);
+    expect(state(luluLogs, LULU_AGE, { targetMin: 80, baseMin: null, setAt: null, dismissedAt: null }).accepted).toBeNull();
   });
 });
 
@@ -819,7 +855,7 @@ describe("minimum step (sub-5-minute suggestions)", () => {
 
   it("offers nothing when the clamp leaves a change under 5 min", () => {
     // Accepted 159 at 5.8 mo; the next 10-min stretch clamps to the 162 ceiling.
-    const s = state(readyLogs, LULU_AGE, { targetMin: 159, fromMin: 98, setAt: subDays(NOW, 8), dismissedAt: null });
+    const s = state(readyLogs, LULU_AGE, { targetMin: 159, baseMin: 98, setAt: subDays(NOW, 8), dismissedAt: null });
     expect(s.signals).toEqual(expect.arrayContaining(["U1", "U4"]));
     expect(s.suggestion).toBeNull();
     expect(weeklyWakeWindowBlock(s)!.options).toEqual([0]);
@@ -828,7 +864,7 @@ describe("minimum step (sub-5-minute suggestions)", () => {
   it("never puts an option under 5 min in the weekly block", () => {
     const s = state(readyLogs);
     for (const toMin of [94, 96, 97, 98, 99, 100, 101, 102]) {
-      const options = weeklyWakeWindowBlock({ ...s, suggestion: { kind: "stretch", fromMin: 98, toMin } })!.options;
+      const options = weeklyWakeWindowBlock({ ...s, suggestion: { kind: "stretch", fromMin: 98, toMin, baseMin: 98 } })!.options;
       for (const x of options) expect(x === 0 || Math.abs(x) >= MIN_STEP_MIN, `${toMin}: ${x}`).toBe(true);
     }
   });

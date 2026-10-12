@@ -44,7 +44,7 @@ function wrapper({ children }: { children: ReactNode }) {
 const input = {
   childId: "child-1",
   decision: "accept" as const,
-  suggestion: { kind: "stretch" as const, fromMin: 98, toMin: 108 },
+  suggestion: { kind: "stretch" as const, fromMin: 98, toMin: 108, baseMin: 98 },
   role: "owner" as const,
   roleResolved: true,
 };

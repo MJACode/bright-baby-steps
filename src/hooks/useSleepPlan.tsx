@@ -106,6 +106,8 @@ export function useSaveSleepPlan() {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["sleep-plan", variables.child_id] });
+      // The coach reads overrides and nap_count from this row.
+      queryClient.invalidateQueries({ queryKey: ["sleep-coach", variables.child_id] });
     },
   });
 }
@@ -144,7 +146,9 @@ export function wakeWindowDecisionPatch(
   }
   return {
     wake_window_target_min: suggestion.toMin,
-    wake_window_from_min: suggestion.fromMin,
+    // The engine's own first window, not the previous target: expiry reads
+    // which side of it the target sits.
+    wake_window_from_min: suggestion.baseMin,
     wake_window_set_at: at,
   };
 }

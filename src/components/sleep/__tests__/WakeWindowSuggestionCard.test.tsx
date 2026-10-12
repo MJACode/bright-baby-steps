@@ -22,7 +22,7 @@ const renderCard = (hasSavedPlan = true) =>
   render(
     <WakeWindowSuggestionCard
       child={{ id: "child-1", parent_id: "parent-1", name: "Lulu" }}
-      suggestion={{ kind: "stretch", fromMin: 98, toMin: 108 }}
+      suggestion={{ kind: "stretch", fromMin: 98, toMin: 108, baseMin: 98 }}
       hasSavedPlan={hasSavedPlan}
     />,
   );
