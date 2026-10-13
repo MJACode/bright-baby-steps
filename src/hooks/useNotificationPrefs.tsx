@@ -19,11 +19,12 @@ export type NotificationPrefs = {
   muted_categories: string[];
   daily_cap: number;
   daily_briefing: boolean;
+  push_enabled: boolean;
 };
 
 // Mirrors resolvePrefs() in supabase/functions/check-notifications/index.ts.
 // NULL / {} / partial blobs must resolve identically on both ends: quiet
-// 21:00–07:00, cap 3, briefing on, no mutes.
+// 21:00–07:00, cap 3, briefing on, push on, no mutes.
 export function resolvePrefs(raw: unknown): NotificationPrefs {
   const p = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<
     string,
@@ -42,6 +43,7 @@ export function resolvePrefs(raw: unknown): NotificationPrefs {
       : [],
     daily_cap: cap,
     daily_briefing: p.daily_briefing !== false,
+    push_enabled: p.push_enabled !== false,
   };
 }
 

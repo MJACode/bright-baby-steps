@@ -26,6 +26,7 @@ import ExportHistory from "@/components/ExportHistory";
 import PartnerManagement from "@/components/PartnerManagement";
 import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
 import { TrackingScheduleSettings } from "@/components/TrackingScheduleSettings";
+import { PushNotificationSetting } from "@/components/PushNotificationSetting";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -269,6 +270,12 @@ export default function ProfilePage() {
       <Card className="border-0 bg-muted/50">
         <CardContent className="p-4 space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notifications</p>
+
+          <PushNotificationSetting
+            pushEnabled={notifPrefs.push_enabled}
+            disabled={!notifPrefsReady}
+            onPushEnabledChange={(enabled) => saveNotifPrefs({ push_enabled: enabled })}
+          />
 
           <div className="space-y-2">
             <div>

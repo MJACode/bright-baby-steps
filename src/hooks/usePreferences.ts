@@ -16,6 +16,7 @@ export interface Preferences {
   homeQuickTiles: string[];
   homeSectionsMigrated: boolean;
   signsPromoDismissed: boolean;
+  pushSoftAskDismissed: boolean;
   /** ISO timestamp the Sign Language comeback nudge is hidden until. */
   signsNudgeSnoozedUntil: string | null;
   theme: ThemePreference;
@@ -35,6 +36,7 @@ const defaults: Preferences = {
   homeQuickTiles: ["food", "sleep", "diaper", "milestone"],
   homeSectionsMigrated: false,
   signsPromoDismissed: false,
+  pushSoftAskDismissed: false,
   signsNudgeSnoozedUntil: null,
   theme: "system",
 };
