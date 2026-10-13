@@ -59,7 +59,8 @@ export default function Dashboard() {
       />
 
       {/* "Today" card: this-week development line, then the Sign Language
-          promo/nudge. Both ride on the What to Expect toggle. */}
+          promo/nudge (both ride on the What to Expect toggle), then the
+          allergen "keep it on the menu" nudge, which shows regardless. */}
       <TodayCard
         activeChild={activeChild}
         showWhatToExpect={isVisible("whatToExpect")}

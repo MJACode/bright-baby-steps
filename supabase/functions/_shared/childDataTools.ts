@@ -184,7 +184,7 @@ export const CHILD_DATA_TOOLS: AnthropicTool[] = [
   {
     name: "get_allergens",
     description:
-      "Returns allergen introduction records for the child with nested exposure logs and any reactions. Each introduction has allergen_name, allergen_category, status (not_started/in_progress/completed/etc.), is_high_risk, pediatrician_cleared, exposures[], and reactions[]. Use this for allergen-introduction questions, exposure history, or when the parent asks whether something has been confirmed safe.",
+      "Returns allergen introduction records for the child with nested exposure logs and any reactions. Each introduction has allergen_name, allergen_category, status (not_started/in_progress/completed/etc.), is_high_risk, pediatrician_cleared, exposures[], and reactions[]. Status meanings: completed = the parent signed the allergen off as introduced, and it is now in maintenance (regular servings to keep it in the diet); in_progress with 2+ reaction-free exposures = waiting for the parent's sign-off. Exposures with exposure_number 3 or higher are maintenance servings. Use this for allergen-introduction questions, exposure history, or when the parent asks whether an allergen has been introduced or how regularly it is being served. Describe a completed allergen as introduced or on the menu; sign-off is a parent's record, not a medical finding.",
     input_schema: {
       type: "object",
       properties: { child_id: CHILD_ID_PROP },

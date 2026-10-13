@@ -33,7 +33,7 @@ vi.mock("@/hooks/useCurrentRole", async (importOriginal) => {
 vi.mock("@/components/AddChildDialog", () => ({ AddChildDialog: () => null }));
 
 const ALLERGENS = [{
-  id: "a1", name: "Peanuts", slug: "peanuts", sort_order: 1,
+  id: "a1", name: "Peanuts", slug: "peanut", sort_order: 1,
   introduction_age_weeks_min: 17, introduction_age_weeks_max: 26,
   clinical_guidance: "Offer early.", clinical_source: "AAP", common_forms: [],
 }];
@@ -290,7 +290,8 @@ describe("AllergenTracker", () => {
     })));
   });
 
-  it("logs a reaction to exposure #2 after auto-completion by updating that exposure", async () => {
+  // Renamed only: "completed" now means the parent signed off, not auto-completion.
+  it("logs a reaction to exposure #2 after sign-off by updating that exposure", async () => {
     db.introductions = [intro([
       { id: "e1", logged_at: minutesAgo(4 * 24 * 60), exposure_number: 1, reaction_observed: false },
       { id: "e2", logged_at: minutesAgo(30), exposure_number: 2, reaction_observed: false },
@@ -322,14 +323,29 @@ describe("AllergenTracker", () => {
     expect(screen.queryByRole("button", { name: /Log a reaction/ })).not.toBeInTheDocument();
   });
 
-  it("drops the unreachable mark-introduced controls", async () => {
+  // Changed for the sign-off model: #290 asserted these controls were gone
+  // because two clean exposures auto-completed. Now they wait for the parent,
+  // and Flag for Review routes into #290's "Log a reaction" flow on exposure #2.
+  it("asks for sign-off after two clean exposures; Flag for Review logs a reaction on exposure #2", async () => {
     db.introductions = [intro([
       { id: "e1", logged_at: minutesAgo(8 * 24 * 60), exposure_number: 1, reaction_observed: false },
       { id: "e2", logged_at: minutesAgo(4 * 24 * 60), exposure_number: 2, reaction_observed: false },
     ])];
     await renderOpenPeanuts();
+    expect(screen.getByText("Did Lulu eat a typical portion with no reaction?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Yes, it's on the menu/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Successfully Introduced/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Flag for Review/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Flag for Review/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Log a reaction to exposure #2")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hives" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save reaction" }));
+
+    await waitFor(() => expect(writes("allergen_introductions", "update")).toHaveLength(1));
+    expect(writes("allergen_exposure_logs", "insert")).toHaveLength(0);
+    expect(writes("allergen_exposure_logs", "update")[0].filters).toContainEqual(["id", "e2"]);
+    expect(writes("allergen_introductions", "update")[0].payload).toEqual({ status: "reaction_observed", completed_at: null });
   });
 
   it("saves a severity-only reaction with no chips", async () => {
@@ -365,8 +381,11 @@ describe("AllergenTracker", () => {
     const save = within(dialog).getByRole("button", { name: "Save Exposure" });
     fireEvent.click(save);
     fireEvent.click(save);
-    await waitFor(() => expect(writes("allergen_introductions", "update")).toHaveLength(1));
+    // Changed for the sign-off model: a clean #2 no longer writes the intro
+    // status, so wait on the toast instead of the auto-complete update.
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledTimes(1));
     expect(writes("allergen_exposure_logs", "insert")).toHaveLength(1);
+    expect(writes("allergen_introductions", "update")).toHaveLength(0);
   });
 
   it("starts once on a double tap of Start", async () => {
@@ -411,7 +430,7 @@ describe("AllergenTracker", () => {
       expect(within(dialog).getByText("Serve it in a baby-safe form — soft, thinned, or pureed.")).toBeInTheDocument();
       expect(within(dialog).queryByText(/nut butter/)).not.toBeInTheDocument();
     } finally {
-      ALLERGENS[0] = { ...ALLERGENS[0], name: "Peanuts", slug: "peanuts" };
+      ALLERGENS[0] = { ...ALLERGENS[0], name: "Peanuts", slug: "peanut" };
     }
   });
 });

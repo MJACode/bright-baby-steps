@@ -1,3 +1,5 @@
+Superseded 2026-10-13: founder approved sign-off + 'Keep it on the menu' (tap-to-log servings, in-app + push). See tasks/todo-allergen-maintenance.md. Tagging solids logs (option 2) remains a possible later enhancement.
+
 # Proposal — Allergen maintenance feeding (not started; needs founder decision)
 
 Raised 2026-10-12 while adding "what to watch for" guidance to the Allergen Tracker.

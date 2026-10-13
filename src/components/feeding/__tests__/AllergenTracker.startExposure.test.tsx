@@ -13,7 +13,7 @@ const { writes, failures, roleState } = vi.hoisted(() => ({
 
 const PEANUT = {
   id: "allergen-peanut",
-  slug: "peanuts",
+  slug: "peanut",
   name: "Peanut",
   sort_order: 1,
   introduction_age_weeks_min: 17,
