@@ -8,7 +8,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { ChevronDown, BookOpen, Hand } from "lucide-react";
+import { ChevronDown, BookOpen, Hand, UtensilsCrossed, X } from "lucide-react";
 import type { Preferences, SetPreferences } from "@/hooks/usePreferences";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -21,6 +21,12 @@ import { resolveTrackingSchedule, trackingDayKey } from "@/lib/trackingDay";
 import { useSignProgress } from "@/hooks/useSignProgress";
 import { useSignPractice } from "@/hooks/useSignPractice";
 import { useTrackingNow } from "@/hooks/useTrackingNow";
+import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData";
+import {
+  dueMaintenanceAllergenNames,
+  joinNames,
+  maintenanceRemindersActive,
+} from "@/services/allergenService";
 import {
   getDevelopmentContentForChild,
   DEV_CONTENT_DISCLAIMER,
@@ -65,7 +71,20 @@ export function TodayCard({
   const signProgress = useSignProgress(signsChildId);
   const signPractice = useSignPractice(signsChildId, todayKey);
 
+  const allergenChildId =
+    activeChild && !activeChild.is_expected && maintenanceRemindersActive(activeChild, now)
+      ? activeChild.id
+      : undefined;
+  const allergenCatalog = useAllergens(!!allergenChildId);
+  const allergenIntros = useAllergenIntroductions(allergenChildId);
+
   if (!activeChild) return null;
+
+  const allergenDismissKey = `${activeChild.id}:${todayKey}`;
+  const dueAllergens =
+    allergenChildId && prefs.allergenNudgeDismissedFor !== allergenDismissKey
+      ? dueMaintenanceAllergenNames(allergenCatalog.data ?? [], allergenIntros.data ?? [], now)
+      : [];
 
   const entry = getDevelopmentContentForChild(activeChild);
   const weekVisible = showWhatToExpect && !!entry;
@@ -85,7 +104,7 @@ export function TodayCard({
     lastActivityKey: lastSignActivityKey(signRows, signPractice.data ?? [], schedule),
   });
 
-  if (!weekVisible && !signsMode) return null;
+  if (!weekVisible && !signsMode && dueAllergens.length === 0) return null;
 
   const firstName = activeChild.name.split(" ")[0];
 
@@ -160,12 +179,42 @@ export function TodayCard({
             }
           />
         )}
+
+        {dueAllergens.length > 0 && (
+          <>
+            {(weekVisible || !!signsMode) && <div className="border-t border-border" />}
+            <div className="flex items-center gap-2">
+              <Link
+                to={ALLERGENS_PATH}
+                className="flex flex-1 items-center gap-3 min-w-0 touch-target min-h-[48px] text-left"
+              >
+                <span className="w-10 h-10 rounded-xl bg-feeding/15 flex items-center justify-center shrink-0">
+                  <UtensilsCrossed className="w-5 h-5 text-feeding" />
+                </span>
+                <span className="text-sm font-semibold leading-snug">
+                  Keep it on the menu: {joinNames(dueAllergens)} due this week
+                </span>
+              </Link>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Hide until tomorrow"
+                onClick={() => setPrefs({ allergenNudgeDismissedFor: allergenDismissKey })}
+                className="touch-target min-h-[48px] min-w-[48px] text-muted-foreground shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 const SIGNS_PATH = "/dashboard/signs";
+const ALLERGENS_PATH = "/dashboard/feeding?tab=allergens";
 
 interface SignsSlotBlockProps {
   divider: boolean;

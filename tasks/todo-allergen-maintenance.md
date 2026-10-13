@@ -13,22 +13,22 @@ professional guidance. Existing test data is left as-is.
 - Never say: prevents, safe, not allergic, cleared. DB status `safe` never reaches UI. Never suggest re-offering after a reaction without a doctor.
 
 ## Decisions
-- [ ] Sign-off: in_progress plus ≥2 reaction-free exposures → "Did {child} eat a typical portion with no reaction?" → **Yes, it's on the menu** (status completed) / **Flag for Review**
-- [ ] High-risk (is_high_risk or any reaction history) sign-off copy adds "check with your pediatrician first"
-- [ ] Maintenance serving = exposure log with exposure_number ≥ 3 (no migration)
-- [ ] Due = fewer servings than the target in the rolling last 7 days; Lapsed = no exposure in 14+ days
-- [ ] In-app: card progress "2 of 3 this week", Due badge, due-first sort, Home nudge
-- [ ] Push: `allergen_maintenance` type; no serving in 7+ days; at most 1 per child per 7 days, batching allergens; respects mutes, quiet hours, cap
+- [x] Sign-off: in_progress plus ≥2 reaction-free exposures → "Did {child} eat a typical portion with no reaction?" → **Yes, it's on the menu** (status completed) / **Flag for Review**
+- [x] High-risk (is_high_risk or any reaction history) sign-off copy adds "check with your pediatrician first"
+- [x] Maintenance serving = exposure log with exposure_number ≥ 3 (no migration)
+- [x] Due = fewer servings than the target in the rolling last 7 days; Lapsed = no exposure in 14+ days
+- [x] In-app: card progress "2 of 3 this week", Due badge, due-first sort, Home nudge
+- [x] Push: `allergen_maintenance` type; no serving in 7+ days; at most 1 per child per 7 days, batching allergens; respects mutes, quiet hours, cap
 
 ## Frontend (frontend agent)
-- [ ] allergenService status and removal logic; maintenance helpers
-- [ ] Sign-off card in the detail view
-- [ ] "Had it today" logging with MobileDateTimePicker (also back-dates exposure #2)
-- [ ] Overview progress, Due badge, sort; Home nudge
-- [ ] NotificationBell icon for `allergen_maintenance`
+- [x] allergenService status and removal logic; maintenance helpers
+- [x] Sign-off card in the detail view
+- [x] "Had it today" logging with MobileDateTimePicker (also back-dates exposure #2)
+- [x] Overview progress, Due badge, sort; Home nudge
+- [x] NotificationBell icon for `allergen_maintenance`
 
 ## Backend (backend agent)
-- [ ] check-notifications: `allergen_maintenance` producer + category + tests
+- [x] check-notifications: `allergen_maintenance` producer + category + tests
 
 ## Review
-- [ ] QA, then PR (no migration → auto-merge on green)
+- [x] QA, then PR (no migration → auto-merge on green)

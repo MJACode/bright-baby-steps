@@ -1,4 +1,16 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  ALLERGEN_MAINTENANCE_TYPE,
+  DEDUPE_DAYS as ALLERGEN_DEDUPE_DAYS,
+  isMaintenanceAge,
+  planAllergenMaintenance,
+  type MaintenanceAllergen,
+  type MaintenanceChild,
+  type MaintenanceIntro,
+  type MaintenanceLog,
+  type MaintenanceReaction,
+  type MaintenanceSend,
+} from "../_shared/allergenMaintenance.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,7 +154,9 @@ type NotificationPrefs = {
  *   appointments — appointment_reminder (cron: next_appointment + scheduled_visits)
  *   milestones   — milestone_age, weekly_development
  *   reminders    — diaper_reminder, sleep_reminder, sleep_plan_winddown,
- *                  sleep_window_15min, sleep_window_exceeded, sleep_off_plan
+ *                  sleep_window_15min, sleep_window_exceeded, sleep_off_plan,
+ *                  allergen_maintenance (the "Routine reminders" toggle covers
+ *                  feeds, so muting it mutes this too)
  *   insights     — daily_briefing (retired 2026-10-12; no longer produced.
  *                  Kept so historical rows still map to their category)
  *   finance      — finance_trump_claim, finance_529_newborn, finance_529_birthday
@@ -165,6 +179,7 @@ const TYPE_CATEGORY: Record<string, string> = {
   sleep_window_15min: "reminders",
   sleep_window_exceeded: "reminders",
   sleep_off_plan: "reminders",
+  allergen_maintenance: "reminders",
   daily_briefing: "insights",
   finance_trump_claim: "finance",
   finance_529_newborn: "finance",
@@ -182,8 +197,8 @@ function categoryOf(type: string): string {
  *       and are the only type allowed to exceed it)
  *   1 — time-sensitive sleep-plan nudges (stale in minutes, worthless later)
  *   2 — everything else (milestone_age, weekly_development,
- *       diaper_reminder, sleep_reminder, finance_* one-shots, unknown future
- *       types)
+ *       diaper_reminder, sleep_reminder, allergen_maintenance, finance_*
+ *       one-shots, unknown future types)
  */
 function capPriority(type: string): number {
   if (type === "appointment_reminder") return 0;
@@ -375,6 +390,120 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// --- Allergen maintenance ("Keep it on the menu") -----------------------------
+//
+// Batched reads for every eligible child (born, < 36 months) in one pass,
+// before the per-child loop; the loop only looks the result up so partner
+// copies, mutes, quiet hours and the cap all apply as for any other type.
+// Rules and copy live in ../_shared/allergenMaintenance.ts (unit-tested).
+// Any read error skips the type for this run (logged by error code only);
+// the next tick retries.
+
+// PostgREST caps a response at 1000 rows by default; page until a short page.
+const PAGE_SIZE = 1000;
+
+type PageResult<T> = { data: T[] | null; error: { code?: string } | null };
+
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<PageResult<T>>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await page(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(error.code ?? "read_failed");
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) return out;
+  }
+}
+
+async function loadAllergenMaintenance(
+  supabase: SupabaseClient,
+  children: MaintenanceChild[],
+  now: Date,
+): Promise<Map<string, string>> {
+  const eligible = children.filter((c) => isMaintenanceAge(c, now));
+  if (eligible.length === 0) return new Map<string, string>();
+  const childIds = eligible.map((c) => c.id);
+  const sinceIso = new Date(now.getTime() - ALLERGEN_DEDUPE_DAYS * DAY_MS).toISOString();
+
+  try {
+    const intros: MaintenanceIntro[] = [];
+    const reactions: MaintenanceReaction[] = [];
+    const recentSends: MaintenanceSend[] = [];
+    for (const batch of chunk(childIds, 200)) {
+      const [introRows, reactionRows, sendRows] = await Promise.all([
+        fetchAllPages<MaintenanceIntro>((from, to) =>
+          supabase
+            .from("allergen_introductions")
+            .select("id, child_id, allergen_id, status, completed_at")
+            .in("child_id", batch)
+            .eq("status", "completed")
+            .order("id")
+            .range(from, to)
+        ),
+        fetchAllPages<MaintenanceReaction>((from, to) =>
+          supabase
+            .from("allergen_reactions")
+            .select("exposure_log_id")
+            .in("child_id", batch)
+            .order("id")
+            .range(from, to)
+        ),
+        fetchAllPages<MaintenanceSend>((from, to) =>
+          supabase
+            .from("notifications")
+            .select("child_id, created_at")
+            .in("child_id", batch)
+            .eq("type", ALLERGEN_MAINTENANCE_TYPE)
+            .gte("created_at", sinceIso)
+            .order("id")
+            .range(from, to)
+        ),
+      ]);
+      intros.push(...introRows);
+      reactions.push(...reactionRows);
+      recentSends.push(...sendRows);
+    }
+    if (intros.length === 0) return new Map<string, string>();
+
+    const logs: MaintenanceLog[] = [];
+    for (const batch of chunk(intros.map((i) => i.id), 200)) {
+      logs.push(
+        ...(await fetchAllPages<MaintenanceLog>((from, to) =>
+          supabase
+            .from("allergen_exposure_logs")
+            .select("id, allergen_introduction_id, logged_at, reaction_observed")
+            .in("allergen_introduction_id", batch)
+            .order("id")
+            .range(from, to)
+        )),
+      );
+    }
+
+    const { data: allergens, error: allergenErr } = await supabase
+      .from("allergens")
+      .select("id, name, sort_order");
+    if (allergenErr) throw new Error(allergenErr.code ?? "read_failed");
+
+    return planAllergenMaintenance({
+      children: eligible,
+      intros,
+      logs,
+      reactions,
+      allergens: (allergens ?? []) as MaintenanceAllergen[],
+      recentSends,
+      now,
+    });
+  } catch (err) {
+    console.error(
+      "allergen_maintenance: read failed, skipping this run",
+      err instanceof Error ? err.message : "unknown_error",
+    );
+    return new Map<string, string>();
+  }
+}
+
 // -----------------------------------------------------------------------------
 
 Deno.serve(async (req) => {
@@ -401,6 +530,13 @@ Deno.serve(async (req) => {
   }
 
   const notifications: Array<{ user_id: string; child_id: string; message: string; type: string }> = [];
+
+  // child_id -> batched "another taste of …" message (see loadAllergenMaintenance).
+  const allergenMaintenanceByChild = await loadAllergenMaintenance(
+    supabase,
+    children as MaintenanceChild[],
+    now,
+  );
 
   // Additional users are entitled by seat: free 1, Flare+ 2, ranked by
   // seniority (migration 20260930100000). On a Flare+ lapse the longest-standing
@@ -576,6 +712,23 @@ Deno.serve(async (req) => {
             type: "weekly_development",
           });
         }
+      }
+    }
+
+    // 3c. Allergen maintenance — every signed-off allergen with no serving
+    // logged in 7+ days, batched into one message per child. The 7-day
+    // per-child dedupe (any recipient) was applied in the batched pre-load,
+    // because the shared 24h `recent` pull can't see that far back.
+    {
+      const message = allergenMaintenanceByChild.get(child.id);
+      if (message) {
+        notifications.push({
+          user_id: userId,
+          child_id: child.id,
+          message,
+          type: ALLERGEN_MAINTENANCE_TYPE,
+        });
+        recentTypes.add(ALLERGEN_MAINTENANCE_TYPE);
       }
     }
 

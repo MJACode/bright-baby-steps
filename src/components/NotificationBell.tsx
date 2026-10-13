@@ -77,6 +77,7 @@ export function NotificationBell() {
     finance_trump_claim: "🏦",
     finance_529_newborn: "🏦",
     finance_529_birthday: "🎂",
+    allergen_maintenance: "🍽️",
   };
 
   const typeRoute: Record<string, string> = {
@@ -84,6 +85,7 @@ export function NotificationBell() {
     finance_trump_claim: "/dashboard/financial",
     finance_529_newborn: "/dashboard/financial",
     finance_529_birthday: "/dashboard/financial",
+    allergen_maintenance: "/dashboard/feeding?tab=allergens",
   };
 
   return (

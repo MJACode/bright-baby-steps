@@ -515,19 +515,20 @@ function renderAllergens(h: PdfHelpers, data: ReportData) {
     const map: Record<string, string> = {
       not_started: "Not Started",
       in_progress: "In Progress",
-      completed: "Completed / Safe",
-      safe: "Completed / Safe",
+      // Legacy "safe" rows print the same as a parent's sign-off; the word never reaches the report.
+      completed: "Introduced",
+      safe: "Introduced",
       active: "In Progress",
       reaction_observed: "Reaction Noted",
     };
     return map[s] ?? s;
   };
 
-  const safe = allergens.filter((a: any) => ["completed", "safe"].includes(a.status));
+  const introduced = allergens.filter((a: any) => ["completed", "safe"].includes(a.status));
   const reacted = allergens.filter((a: any) => a.status === "reaction_observed");
   const inProgress = allergens.filter((a: any) => ["in_progress", "active"].includes(a.status));
 
-  h.bodyText(`Total: ${allergens.length}  |  Completed: ${safe.length}  |  Reactions: ${reacted.length}  |  In Progress: ${inProgress.length}`);
+  h.bodyText(`Total: ${allergens.length}  |  Introduced: ${introduced.length}  |  Reactions: ${reacted.length}  |  In Progress: ${inProgress.length}`);
   h.spacer(2);
 
   allergens.forEach((a: any) => {
