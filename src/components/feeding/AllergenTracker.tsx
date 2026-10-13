@@ -686,7 +686,8 @@ export default function AllergenTracker() {
     const maintenance = getMaintenanceState(intro, selectedAllergen.slug, now);
     const nextExposureNum = Math.max(0, ...exposures.map((e) => e.exposure_number)) + 1;
     // A new exposure or serving can't be back-dated before the latest one
-    // already logged (so a serving can't predate exposure #2 or the sign-off).
+    // already logged (so a serving can't predate exposure #2; it can still
+    // fall between exposure #2 and the sign-off).
     const latestExposureAt = exposures.length
       ? new Date(Math.max(...exposures.map((e) => new Date(e.logged_at).getTime())))
       : startMinDate;
