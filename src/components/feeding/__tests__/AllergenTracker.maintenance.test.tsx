@@ -208,12 +208,15 @@ describe("sign-off card", () => {
     expect(screen.getByText(/check with your pediatrician before you confirm/)).toBeInTheDocument();
   });
 
-  it("Flag for Review opens the reaction dialog", async () => {
+  // After merging #290: Flag for Review attaches the reaction to exposure #2
+  // through its "Log a reaction" flow instead of inserting an exposure #3.
+  it("Flag for Review opens Log a reaction for the latest exposure", async () => {
     await openPeanut();
     fireEvent.click(screen.getByRole("button", { name: /Flag for Review/ }));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("Log Exposure #3");
-    expect(dialog).toHaveTextContent("Symptoms Observed");
+    expect(dialog).toHaveTextContent("Log a reaction to exposure #2");
+    expect(dialog).toHaveTextContent("What do you see?");
+    expect(within(dialog).queryByText("When?")).not.toBeInTheDocument();
   });
 
   it("shows a viewer no write controls", async () => {
@@ -268,6 +271,8 @@ describe("keep it on the menu", () => {
     expect(writesTo("allergen_reactions", "insert")).toHaveLength(0);
     expect(writesTo("allergen_introductions", "update")).toHaveLength(0);
     await waitFor(() => expect(screen.queryByText("Log a serving of Peanut?")).not.toBeInTheDocument());
+    // Back-dated 5 hours, so the 2-hour watch is already over.
+    expect(toast).toHaveBeenCalledWith({ title: "Serving logged", description: "" });
   });
 
   it("won't let a serving predate the latest exposure", async () => {

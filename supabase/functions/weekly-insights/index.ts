@@ -3,6 +3,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { fireExtractMemory, loadMemoryContext } from "../_shared/memory.ts";
 import { formatCorrectedAgeSuffix, loadChildCore } from "../_shared/childContext.ts";
+import {
+  WAKE_WINDOW_PROMPT,
+  buildWakeWindowContext,
+  sanitizeWakeWindowOutput,
+  validateWakeWindowRequest,
+} from "../_shared/wakeWindowInsight.ts";
 
 // EdgeRuntime.waitUntil is provided by the Supabase Edge runtime but not in
 // Deno's lib types.
@@ -43,7 +49,12 @@ serve(async (req) => {
       });
     }
 
-    const { childId } = await req.json();
+    const body = await req.json().catch(() => null);
+    const childId = body !== null && typeof body === "object" ? body.childId : undefined;
+    // Optional engine summary (spec 002 FR-012). Invalid -> ignored, never 400.
+    const wakeWindowReq = validateWakeWindowRequest(
+      body !== null && typeof body === "object" ? body.wakeWindow : undefined,
+    );
     if (!childId) {
       return new Response(JSON.stringify({ error: "childId required" }), {
         status: 400,
@@ -161,6 +172,10 @@ Weekly summary (last 7 days):
       context += `\n- Active illnesses: ${illnesses.map(i => i.illness_name).join(", ")}`;
     }
 
+    if (wakeWindowReq) {
+      context += `\n\n${buildWakeWindowContext(wakeWindowReq, core.name)}`;
+    }
+
     const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "API key not configured" }), {
@@ -191,6 +206,11 @@ Rules:
     const systemContent: { type: string; text: string; cache_control?: { type: string } }[] = [
       { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
     ];
+    // Appended after the cached prefix so the base prompt's cache key is
+    // unchanged for requests without a wake-window block.
+    if (wakeWindowReq) {
+      systemContent.push({ type: "text", text: WAKE_WINDOW_PROMPT });
+    }
     if (memoryBlock) {
       systemContent.push({ type: "text", text: memoryBlock });
     }
@@ -207,7 +227,7 @@ Rules:
         system: systemContent,
         messages: [{ role: "user", content: context }],
         temperature: 0.7,
-        max_tokens: 600,
+        max_tokens: wakeWindowReq ? 800 : 600,
       }),
     });
 
@@ -223,12 +243,16 @@ Rules:
     const llmData = await response.json();
     const content2 = llmData.content?.[0]?.text || "";
 
-    let digest;
+    let digest: Record<string, unknown> | null = null;
     try {
       const cleaned = content2.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
       digest = JSON.parse(cleaned);
     } catch {
       console.error("Failed to parse weekly JSON:", content2);
+    }
+    // JSON.parse can succeed with null / an array / a scalar; only a plain
+    // object is a digest.
+    if (digest === null || typeof digest !== "object" || Array.isArray(digest)) {
       digest = {
         sleep: `${core.name} logged ${sleeps.length} sleep sessions this week, averaging about ${avgSleepHrs} hours per day.`,
         feeding: `${feedCount} feeds were logged this week across ${feedTypes.join(" and ") || "various"} types.`,
@@ -237,6 +261,15 @@ Rules:
           : `${milestonesAchieved} milestones achieved this week. Keep logging words to track language growth!`,
         tip: "Keep up the great routines — consistency is key at this age! 💛",
       };
+    }
+
+    // Wake-window read: only when the request block was valid. The model's
+    // choice must be one of the engine's options; otherwise the engine's own
+    // pick + a deterministic note. Never echo a model-invented field.
+    if (wakeWindowReq) {
+      digest.wakeWindow = sanitizeWakeWindowOutput(digest.wakeWindow, wakeWindowReq, core.name);
+    } else {
+      delete digest.wakeWindow;
     }
 
     digest.generatedAt = now.toISOString();
