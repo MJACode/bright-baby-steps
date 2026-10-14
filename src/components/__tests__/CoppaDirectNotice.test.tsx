@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
+import { CoppaDirectNotice, COPPA_DIRECT_NOTICE_VERSION } from "@/components/CoppaDirectNotice";
 
 const { rpc, from, toast } = vi.hoisted(() => ({
   rpc: vi.fn(),
@@ -40,7 +40,11 @@ describe("CoppaDirectNotice", () => {
     fillAndSign("  Jane A. Doe ");
 
     await waitFor(() => expect(onAcknowledged).toHaveBeenCalledTimes(1));
-    expect(rpc).toHaveBeenCalledWith("sign_coppa_direct_notice", { p_signed_name: "Jane A. Doe" });
+    expect(rpc).toHaveBeenCalledWith("sign_coppa_direct_notice", {
+      p_signed_name: "Jane A. Doe",
+      p_notice_version: COPPA_DIRECT_NOTICE_VERSION,
+    });
+    expect(COPPA_DIRECT_NOTICE_VERSION).toMatch(/^[0-9A-Za-z._-]{1,32}$/);
     expect(from).not.toHaveBeenCalled();
   });
 

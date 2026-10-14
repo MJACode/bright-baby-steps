@@ -8,6 +8,9 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
+// Bump whenever the direct-notice text below changes; the server records which version was signed.
+export const COPPA_DIRECT_NOTICE_VERSION = "2026-10-14";
+
 interface Props {
   onAcknowledged: () => void;
   onCancel?: () => void;
@@ -26,10 +29,11 @@ export function CoppaDirectNotice({ onAcknowledged, onCancel }: Props) {
   const handleConfirm = async () => {
     if (!canSubmit) return;
     setSaving(true);
-    // Server stamps the acknowledgement, signature, time, and IP. The first
-    // signature is kept; a repeat call returns it unchanged.
+    // Server stamps the acknowledgement, signature, notice version, time, and
+    // IP. The first signature is kept; a repeat call returns it unchanged.
     const { error } = await supabase.rpc("sign_coppa_direct_notice", {
       p_signed_name: trimmedName,
+      p_notice_version: COPPA_DIRECT_NOTICE_VERSION,
     });
     setSaving(false);
     if (error) {

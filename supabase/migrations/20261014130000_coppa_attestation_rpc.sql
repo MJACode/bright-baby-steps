@@ -18,10 +18,16 @@
 -- but had to leave these four writable for that client call.
 --
 -- What it does:
---   1. public.sign_coppa_direct_notice(p_signed_name text) RETURNS jsonb,
---      SECURITY DEFINER, search_path pinned. For auth.uid() it validates the
---      name and stamps all four columns with server now() and the request IP.
---   2. protect_profile_server_columns() also rejects client changes to the four
+--   0. New column profiles.coppa_direct_notice_version: which direct-notice
+--      text the parent signed (the client constant COPPA_DIRECT_NOTICE_VERSION
+--      in CoppaDirectNotice.tsx, bumped whenever the notice text changes).
+--      NULL on signatures made before this migration = the notice text as of
+--      2026-05-08 (v1).
+--   1. public.sign_coppa_direct_notice(p_signed_name text, p_notice_version text)
+--      RETURNS jsonb, SECURITY DEFINER, search_path pinned. For auth.uid() it
+--      validates the name and version and stamps the four coppa_* columns plus
+--      the version with server now() and the request IP.
+--   2. protect_profile_server_columns() also rejects client changes to the five
 --      coppa_* columns, and the trigger now fires on INSERT as well as UPDATE
 --      (the "Users can insert own profile" policy would otherwise let a client
 --      that somehow had no profile row insert one with forged consent values;
@@ -50,9 +56,40 @@
 SET LOCAL lock_timeout = '5s';
 
 -- ---------------------------------------------------------------------------
+-- 0. Notice-version column.
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS coppa_direct_notice_version text;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.profiles'::regclass
+      AND conname = 'profiles_coppa_direct_notice_version_check'
+  ) THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_coppa_direct_notice_version_check
+      CHECK (coppa_direct_notice_version IS NULL
+             OR (char_length(coppa_direct_notice_version) BETWEEN 1 AND 32
+                 AND coppa_direct_notice_version ~ '^[0-9A-Za-z._-]+$'));
+  END IF;
+END $$;
+
+COMMENT ON COLUMN public.profiles.coppa_direct_notice_version IS
+  'Version of the COPPA direct-notice text the parent signed (COPPA_DIRECT_NOTICE_VERSION in CoppaDirectNotice.tsx). Set once by sign_coppa_direct_notice. NULL on a signature = signed before versioning (notice text as of 2026-05-08, v1).';
+
+-- ---------------------------------------------------------------------------
 -- 1. Signing RPC.
 -- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.sign_coppa_direct_notice(p_signed_name text)
+-- Only the two-argument signature may exist. The one-argument draft was never
+-- applied anywhere; the DROP keeps a re-run (or a stray local copy) clean.
+DROP FUNCTION IF EXISTS public.sign_coppa_direct_notice(text);
+
+CREATE OR REPLACE FUNCTION public.sign_coppa_direct_notice(
+  p_signed_name text,
+  p_notice_version text
+)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -61,6 +98,7 @@ AS $$
 DECLARE
   v_uid uuid := auth.uid();
   v_name text;
+  v_version text;
   v_headers json;
   v_ip inet;
   v_row public.profiles%ROWTYPE;
@@ -88,6 +126,13 @@ BEGIN
       USING ERRCODE = '22023';
   END IF;
 
+  v_version := btrim(coalesce(p_notice_version, ''));
+  IF v_version = '' OR char_length(v_version) > 32
+     OR v_version !~ '^[0-9A-Za-z._-]+$' THEN
+    RAISE EXCEPTION 'This notice is out of date. Refresh the app and try again.'
+      USING ERRCODE = '22023';
+  END IF;
+
   BEGIN
     v_headers := nullif(current_setting('request.headers', true), '')::json;
     v_ip := nullif(btrim(coalesce(
@@ -104,7 +149,8 @@ BEGIN
   SET coppa_direct_notice_acknowledged_at = coalesce(coppa_direct_notice_acknowledged_at, now()),
       coppa_attestation_signed_name = v_name,
       coppa_attestation_signed_at = now(),
-      coppa_attestation_ip = v_ip
+      coppa_attestation_ip = v_ip,
+      coppa_direct_notice_version = v_version
   WHERE id = v_uid
     AND coppa_attestation_signed_at IS NULL
   RETURNING * INTO v_row;
@@ -114,6 +160,7 @@ BEGIN
       'acknowledged_at', v_row.coppa_direct_notice_acknowledged_at,
       'signed_at', v_row.coppa_attestation_signed_at,
       'signed_name', v_row.coppa_attestation_signed_name,
+      'notice_version', v_row.coppa_direct_notice_version,
       'already_signed', false
     );
   END IF;
@@ -128,17 +175,18 @@ BEGIN
     'acknowledged_at', v_row.coppa_direct_notice_acknowledged_at,
     'signed_at', v_row.coppa_attestation_signed_at,
     'signed_name', v_row.coppa_attestation_signed_name,
+    'notice_version', v_row.coppa_direct_notice_version,
     'already_signed', true
   );
 END;
 $$;
 
-COMMENT ON FUNCTION public.sign_coppa_direct_notice(text) IS
-  'COPPA direct notice + typed-name digital signature (email-plus VPC). Stamps coppa_direct_notice_acknowledged_at, coppa_attestation_signed_name/_at/_ip for auth.uid() with server time. First signature is the legal record; later calls return it unchanged (already_signed = true).';
+COMMENT ON FUNCTION public.sign_coppa_direct_notice(text, text) IS
+  'COPPA direct notice + typed-name digital signature (email-plus VPC). Stamps coppa_direct_notice_acknowledged_at, coppa_attestation_signed_name/_at/_ip and coppa_direct_notice_version for auth.uid() with server time. First signature is the legal record; later calls return it unchanged (already_signed = true).';
 
 -- Default EXECUTE is off since 20261008020000; grant explicitly.
-REVOKE EXECUTE ON FUNCTION public.sign_coppa_direct_notice(text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.sign_coppa_direct_notice(text) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.sign_coppa_direct_notice(text, text) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.sign_coppa_direct_notice(text, text) TO authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 2. Lock the coppa_* columns. Everything 20261014120000 protected is kept.
@@ -169,6 +217,7 @@ BEGIN
        OR NEW.coppa_attestation_signed_name IS NOT NULL
        OR NEW.coppa_attestation_signed_at IS NOT NULL
        OR NEW.coppa_attestation_ip IS NOT NULL
+       OR NEW.coppa_direct_notice_version IS NOT NULL
     THEN
       RAISE EXCEPTION 'profile server columns are read-only';
     END IF;
@@ -190,6 +239,7 @@ BEGIN
      OR NEW.coppa_attestation_signed_name IS DISTINCT FROM OLD.coppa_attestation_signed_name
      OR NEW.coppa_attestation_signed_at IS DISTINCT FROM OLD.coppa_attestation_signed_at
      OR NEW.coppa_attestation_ip IS DISTINCT FROM OLD.coppa_attestation_ip
+     OR NEW.coppa_direct_notice_version IS DISTINCT FROM OLD.coppa_direct_notice_version
   THEN
     RAISE EXCEPTION 'profile server columns are read-only';
   END IF;
@@ -230,6 +280,7 @@ BEGIN
   FOREACH v_col IN ARRAY ARRAY[
     'coppa_direct_notice_acknowledged_at', 'coppa_attestation_signed_name',
     'coppa_attestation_signed_at', 'coppa_attestation_ip',
+    'coppa_direct_notice_version',
     'vpc_completed_at', 'vpc_second_token', 'data_consent_given_at',
     'inactive_purge_warned_at', 'NEW.email IS DISTINCT FROM OLD.email'
   ] LOOP
@@ -238,21 +289,33 @@ BEGIN
     END IF;
   END LOOP;
 
+  IF to_regprocedure('public.sign_coppa_direct_notice(text)') IS NOT NULL THEN
+    RAISE EXCEPTION 'coppa_attestation: the one-argument sign_coppa_direct_notice must not exist';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.profiles'::regclass
+      AND conname = 'profiles_coppa_direct_notice_version_check'
+  ) THEN
+    RAISE EXCEPTION 'coppa_attestation: coppa_direct_notice_version CHECK missing';
+  END IF;
+
   IF NOT (SELECT prosecdef FROM pg_proc
-          WHERE oid = 'public.sign_coppa_direct_notice(text)'::regprocedure) THEN
+          WHERE oid = 'public.sign_coppa_direct_notice(text, text)'::regprocedure) THEN
     RAISE EXCEPTION 'coppa_attestation: sign_coppa_direct_notice is not SECURITY DEFINER';
   END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_proc
-    WHERE oid = 'public.sign_coppa_direct_notice(text)'::regprocedure
+    WHERE oid = 'public.sign_coppa_direct_notice(text, text)'::regprocedure
       AND proconfig @> ARRAY['search_path=public']
   ) THEN
     RAISE EXCEPTION 'coppa_attestation: sign_coppa_direct_notice search_path not pinned';
   END IF;
 
-  IF NOT has_function_privilege('authenticated', 'public.sign_coppa_direct_notice(text)', 'EXECUTE')
-     OR has_function_privilege('anon', 'public.sign_coppa_direct_notice(text)', 'EXECUTE') THEN
+  IF NOT has_function_privilege('authenticated', 'public.sign_coppa_direct_notice(text, text)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.sign_coppa_direct_notice(text, text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'coppa_attestation: sign_coppa_direct_notice must be executable by authenticated only';
   END IF;
 

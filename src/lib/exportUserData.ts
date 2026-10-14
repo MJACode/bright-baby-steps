@@ -47,7 +47,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
     table: "profiles",
     label: "profile",
     select:
-      "id, email, full_name, avatar_url, primary_interest, has_partner, notification_prefs, onboarding_completed_at, data_consent_given_at, data_consent_version, coppa_direct_notice_acknowledged_at, coppa_attestation_signed_name, coppa_attestation_signed_at, coppa_attestation_ip, vpc_method, vpc_first_confirmation_at, vpc_second_confirmation_at, vpc_completed_at, inactive_purge_warned_at, created_at, updated_at",
+      "id, email, full_name, avatar_url, primary_interest, has_partner, notification_prefs, onboarding_completed_at, data_consent_given_at, data_consent_version, coppa_direct_notice_acknowledged_at, coppa_attestation_signed_name, coppa_attestation_signed_at, coppa_attestation_ip, coppa_direct_notice_version, vpc_method, vpc_first_confirmation_at, vpc_second_confirmation_at, vpc_completed_at, inactive_purge_warned_at, created_at, updated_at",
     userColumn: "id",
   },
   { key: "chatMessages", table: "chat_messages", label: "insight messages" },

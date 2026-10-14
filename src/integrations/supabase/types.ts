@@ -2432,6 +2432,7 @@ export type Database = {
           coppa_attestation_signed_at: string | null
           coppa_attestation_signed_name: string | null
           coppa_direct_notice_acknowledged_at: string | null
+          coppa_direct_notice_version: string | null
           created_at: string
           data_consent_given_at: string | null
           data_consent_version: string | null
@@ -2457,6 +2458,7 @@ export type Database = {
           coppa_attestation_signed_at?: string | null
           coppa_attestation_signed_name?: string | null
           coppa_direct_notice_acknowledged_at?: string | null
+          coppa_direct_notice_version?: string | null
           created_at?: string
           data_consent_given_at?: string | null
           data_consent_version?: string | null
@@ -2482,6 +2484,7 @@ export type Database = {
           coppa_attestation_signed_at?: string | null
           coppa_attestation_signed_name?: string | null
           coppa_direct_notice_acknowledged_at?: string | null
+          coppa_direct_notice_version?: string | null
           created_at?: string
           data_consent_given_at?: string | null
           data_consent_version?: string | null
@@ -3621,7 +3624,7 @@ export type Database = {
       }
       revoke_my_mcp_connection: { Args: { _id: string }; Returns: boolean }
       sign_coppa_direct_notice: {
-        Args: { p_signed_name: string }
+        Args: { p_notice_version: string; p_signed_name: string }
         Returns: Json
       }
       set_sleep_todo_item_time: {
