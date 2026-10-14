@@ -50,7 +50,9 @@ export function PremiumGate({
 
   // Rendering children while loading keeps the layout fixed: a premium family
   // sees no flash, and a free one sees the same card simply blur in place.
-  if (isLoading || familyLoading) return <>{children}</>;
+  // hideOnFree content is an action a free user must never tap, so it waits
+  // for the answer instead of rendering through the loading state.
+  if (isLoading || familyLoading) return hideOnFree ? null : <>{children}</>;
   if (isPremium || (inheritsFamilyPlan && isChildOwnerPremium)) return <>{children}</>;
   // A caregiver isn't the one who'd pay for Flare+, so never pitch it to them.
   if (hideOnFree || (isResolved && role === "caregiver")) return null;

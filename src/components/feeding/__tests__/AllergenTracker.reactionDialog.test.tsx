@@ -3,14 +3,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 
 const FIRST_EXPOSURE_AT = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+const BACKDATED_AT = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
 
-const { writes } = vi.hoisted(() => ({
-  writes: [] as Array<{ table: string; op: "insert" | "update" | "delete"; payload?: Record<string, unknown> }>,
+const { writes, mockState } = vi.hoisted(() => ({
+  writes: [] as Array<{
+    table: string;
+    op: "insert" | "update" | "delete";
+    payload?: Record<string, unknown>;
+    eqs: Array<[string, unknown]>;
+  }>,
+  mockState: { failReactionInsert: false, exposureInsertCount: 0 },
 }));
 
 const PEANUT = {
   id: "allergen-peanut",
-  slug: "peanuts",
+  slug: "peanut",
   name: "Peanut",
   sort_order: 1,
   introduction_age_weeks_min: 17,
@@ -34,19 +41,32 @@ const INTRO = {
 
 vi.mock("@/integrations/supabase/client", () => {
   const makeChain = (table: string) => {
-    const state: { op?: "insert" | "update" | "delete"; payload?: Record<string, unknown> } = {};
+    const state: {
+      op?: "insert" | "update" | "delete";
+      payload?: Record<string, unknown>;
+      eqs: Array<[string, unknown]>;
+    } = { eqs: [] };
     const result = () => {
-      if (state.op) writes.push({ table, op: state.op, payload: state.payload });
+      if (state.op) writes.push({ table, op: state.op, payload: state.payload, eqs: state.eqs });
       if (state.op === "insert" && table === "allergen_exposure_logs") {
-        return { data: { id: "log-2", ...state.payload }, error: null };
+        mockState.exposureInsertCount += 1;
+        return { data: { id: `log-new-${mockState.exposureInsertCount}`, ...state.payload }, error: null };
       }
+      if (state.op === "insert" && table === "allergen_reactions" && mockState.failReactionInsert) {
+        return { data: null, error: { message: "network down" } };
+      }
+      // Updates echo a row; deletes return none, i.e. an RLS-blocked rollback.
+      if (state.op === "update") return { data: [{ id: "row" }], error: null };
       if (!state.op && table === "allergens") return { data: [PEANUT], error: null };
       if (!state.op && table === "allergen_introductions") return { data: [INTRO], error: null };
       return { data: [], error: null };
     };
     const chain: Record<string, unknown> = {
       select: () => chain,
-      eq: () => chain,
+      eq: (col: string, val: unknown) => {
+        state.eqs.push([col, val]);
+        return chain;
+      },
       in: () => chain,
       order: () => chain,
       insert: (payload: Record<string, unknown>) => {
@@ -90,10 +110,37 @@ vi.mock("@/hooks/useCurrentRole", async (importOriginal) => {
 
 vi.mock("@/components/AddChildDialog", () => ({ AddChildDialog: () => null }));
 
+// The real wheel picker can't be driven from jsdom.
+vi.mock("@/components/MobileDateTimePicker", () => ({
+  MobileDateTimePicker: ({ value, onChange, label }: { value: Date; onChange: (d: Date) => void; label?: string }) => (
+    <div>
+      <span data-testid="picker-label">{label}</span>
+      <span data-testid="picker-value">{value.toISOString()}</span>
+      <button type="button" onClick={() => onChange(new Date(BACKDATED_AT))}>back-date</button>
+    </div>
+  ),
+}));
+
 const inserts = (table: string) => writes.filter((w) => w.table === table && w.op === "insert");
+
+const renderTracker = () =>
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <AllergenTracker />
+    </QueryClientProvider>,
+  );
+
+const openExposureTwo = async () => {
+  renderTracker();
+  fireEvent.click(await screen.findByText("Peanut"));
+  fireEvent.click(await screen.findByRole("button", { name: /Log Exposure #2/ }));
+  return screen.findByRole("dialog");
+};
 
 beforeEach(() => {
   writes.length = 0;
+  mockState.failReactionInsert = false;
+  mockState.exposureInsertCount = 0;
 });
 
 describe("AllergenTracker reaction dialog", () => {
@@ -124,5 +171,123 @@ describe("AllergenTracker reaction dialog", () => {
     expect(inserts("allergen_reactions")).toHaveLength(0);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(inserts("allergen_exposure_logs")).toHaveLength(1);
+  });
+
+  it("retries a half-saved reaction against the orphaned exposure instead of inserting another", async () => {
+    mockState.failReactionInsert = true;
+    await openExposureTwo();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hives all over" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")).toHaveLength(1);
+    const retry = await screen.findByRole("button", { name: "Save reaction" });
+    expect(screen.getByRole("dialog")).toHaveTextContent("Log a reaction to exposure #2");
+
+    mockState.failReactionInsert = false;
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(2));
+    expect(inserts("allergen_exposure_logs")).toHaveLength(1);
+    expect(inserts("allergen_reactions")[1].payload).toMatchObject({
+      exposure_log_id: "log-new-1",
+      symptoms: ["Hives all over"],
+    });
+    const markReacted = writes.find(
+      (w) => w.table === "allergen_exposure_logs" && w.op === "update" && w.payload?.reaction_observed === true,
+    );
+    expect(markReacted?.eqs).toContainEqual(["id", "log-new-1"]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("reverts an auto-bumped Mild to None when the last chip is removed", async () => {
+    await openExposureTwo();
+
+    const chip = screen.getByRole("button", { name: "Hives all over" });
+    fireEvent.click(chip);
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")[0].payload).toMatchObject({ reaction_observed: false });
+    expect(inserts("allergen_reactions")).toHaveLength(0);
+  });
+
+  it("keeps a Mild the parent picked when the last chip is removed", async () => {
+    await openExposureTwo();
+
+    fireEvent.click(screen.getByRole("button", { name: /Mild/ }));
+    const chip = screen.getByRole("button", { name: "Hives all over" });
+    fireEvent.click(chip);
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")[0].payload).toMatchObject({ reaction_observed: true });
+    expect(inserts("allergen_reactions")[0].payload).toMatchObject({ severity: "mild", symptoms: [] });
+  });
+
+  it("keeps Mild when the parent confirms it after a chip bumped it", async () => {
+    await openExposureTwo();
+
+    const chip = screen.getByRole("button", { name: "Hives all over" });
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: /Mild/ }));
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_reactions")[0].payload).toMatchObject({ severity: "mild", symptoms: [] });
+  });
+
+  // Sign-off model: two clean exposures no longer auto-complete. Before it,
+  // this path wrote status "completed" here.
+  it("writes no status update for a clean exposure #2", async () => {
+    await openExposureTwo();
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+    await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(writes.filter((w) => w.table === "allergen_introductions" && w.op === "update")).toHaveLength(0);
+  });
+
+  it("writes the back-dated When? time as logged_at and starts the watch window there", async () => {
+    const dialog = await openExposureTwo();
+    expect(dialog).toHaveTextContent("When?");
+    const shown = new Date(screen.getByTestId("picker-value").textContent ?? "").getTime();
+    expect(Math.abs(Date.now() - shown)).toBeLessThan(60_000);
+
+    fireEvent.click(screen.getByRole("button", { name: "back-date" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_exposure_logs")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")[0].payload).toMatchObject({
+      exposure_number: 2,
+      logged_at: BACKDATED_AT,
+      observation_window_ends_at: new Date(new Date(BACKDATED_AT).getTime() + 2 * 60 * 60 * 1000).toISOString(),
+    });
+  });
+
+  it("saves a reaction at the chosen time and marks the introduction reaction_observed", async () => {
+    await openExposureTwo();
+    fireEvent.click(screen.getByRole("button", { name: "back-date" }));
+    fireEvent.click(screen.getByRole("button", { name: /Mild/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Hives" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(inserts("allergen_reactions")).toHaveLength(1));
+    expect(inserts("allergen_exposure_logs")[0].payload).toMatchObject({ reaction_observed: true, logged_at: BACKDATED_AT });
+    expect(inserts("allergen_reactions")[0].payload).toMatchObject({
+      severity: "mild",
+      symptoms: ["Hives"],
+      observed_at: BACKDATED_AT,
+    });
+    await waitFor(() =>
+      expect(writes.filter((w) => w.table === "allergen_introductions" && w.op === "update")).toHaveLength(1),
+    );
+    expect(writes.find((w) => w.table === "allergen_introductions" && w.op === "update")?.payload).toEqual({
+      status: "reaction_observed",
+      completed_at: null,
+    });
   });
 });

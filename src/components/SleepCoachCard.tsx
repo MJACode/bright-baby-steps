@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,11 @@ import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
 import { deriveCoachState, deriveWakeState } from "@/lib/sleepCoachState";
 import { PremiumGate } from "@/components/PremiumGate";
+import {
+  WakeWindowSuggestionCard,
+  WakeWindowWhyButton,
+  WakeWindowWhySheet,
+} from "@/components/sleep/WakeWindowSheet";
 import { cn } from "@/lib/utils";
 
 interface ChildLite {
@@ -23,6 +28,7 @@ interface ChildLite {
   is_premature?: boolean | null;
   due_date?: string | null;
   name?: string | null;
+  parent_id?: string | null;
   day_start_time?: string | null;
   night_start_time?: string | null;
 }
@@ -48,6 +54,7 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
   const schedule = useTrackingSchedule();
   const { toast } = useToast();
   const { wake, hungryOnWake, activeSleep, now } = useWakePrediction(activeChild);
+  const [whyOpen, setWhyOpen] = useState(false);
 
   // While the baby is asleep the card stops predicting the next nap and
   // predicts the wake instead.
@@ -144,7 +151,8 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
     }
   };
 
-  return (
+  const wakeWindow = data?.wakeWindow ?? null;
+  const shell = (
     <CoachShell
       variant={variant}
       pill={pill}
@@ -163,6 +171,36 @@ export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCard
         </Button>
       )}
     </CoachShell>
+  );
+  if (!wakeWindow || !activeChild) return shell;
+
+  const hasSavedPlan = data?.hasSavedPlan ?? false;
+  // The explanation sits outside the PremiumGate blur: the prediction is
+  // Flare+, but how the number is built is for everyone. The suggestion card
+  // gates itself. This branch only renders for a nap prediction — while the
+  // baby is asleep the card returned the wake prediction above, with no
+  // "Why this time?", because the sheet explains wake windows, not wakes.
+  return (
+    <div className="space-y-1">
+      {shell}
+      <WakeWindowWhyButton onClick={() => setWhyOpen(true)} className="px-1" />
+      {variant === "card" && wakeWindow.suggestion && (
+        <WakeWindowSuggestionCard
+          child={activeChild}
+          suggestion={wakeWindow.suggestion}
+          hasSavedPlan={hasSavedPlan}
+        />
+      )}
+      <WakeWindowWhySheet
+        open={whyOpen}
+        onOpenChange={setWhyOpen}
+        state={wakeWindow}
+        child={activeChild}
+        workingFromMin={pred.windowMin}
+        showSuggestion={variant === "strip"}
+        hasSavedPlan={hasSavedPlan}
+      />
+    </div>
   );
 }
 

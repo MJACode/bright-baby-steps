@@ -3148,6 +3148,22 @@ Legitimate callers keep working:
 
 ---
 
+## 2026-10-12 — Adaptive wake windows: derived wake-window summary added to weekly insights
+
+**Reviewer:** in-house (founder approved the feature 2026-10-12). **Risk level:** Low (no new data category, no new processor, no schema change).
+
+**What changed:** the Sleep Coach now computes one personalized wake window per child (`src/lib/wakeWindow.ts`, spec `specs/002-adaptive-wake-windows/`). Parents can accept or dismiss a suggested small change; the choice is stored in the existing `sleep_plans.overrides` jsonb (`wake_window_target_min`, `wake_window_from_min`, `wake_window_set_at`, `wake_window_dismissed_at`). The `weekly-insights` request may now include a `wakeWindow` block: the age-typical range, the child's current personal wake window in minutes, short signal codes derived from the last 7 days of sleep logs (e.g. "short naps after longer stretches"), and the allowed options. The model may only choose among those options; the server validates the answer and nothing changes until a parent taps "Try it".
+
+**Analysis:**
+- **Data sent to Anthropic.** Weekly insights already send the child's first name, age and a 7-day sleep summary (Privacy § 4: "the relevant logged activity"). The new block is derived from those same sleep logs (numbers and codes only, no free text, no timestamps). Within the existing disclosure; no Privacy, `/subprocessors`, FAQ or consent change.
+- **Storage.** The accepted target and dismissal timestamps live on the child's existing `sleep_plans` row under existing RLS, are included in Export My Data with the plan, and are deleted with the child or account. No retention change.
+- **Not medical advice.** Copy is suggestive and cue-led ("you might try", "follow your baby's lead"), never diagnostic, and includes the AAP safe-sleep line for naps that happen in a car seat or swing. No pediatrician prompt is triggered by wake-window length alone.
+- **Age gates.** No stretch suggestions under 4 months corrected age, or between 3.5–4.5 months.
+
+**Code refs:** `src/lib/wakeWindow.ts`, `src/components/SleepCoachCard.tsx`, `src/hooks/useSleepPlan.tsx`, `src/pages/dashboard/WeeklyInsightsPage.tsx`, `supabase/functions/weekly-insights/index.ts`, `supabase/functions/_shared/wakeWindowInsight.ts`, `supabase/functions/_shared/personas.ts`. Fill in the commit hash at merge.
+
+---
+
 ## 2026-10-12 — Signup consent stamped server-side; account-deletion Storage purge fixed; backup-retention and legacy-memory P0s closed
 
 **Reviewer:** in-house (founder approval 2026-10-12; Claude `backend`, live state checked with read-only SQL). **Risk level:** Medium (a consent record was missing for every account, and account deletion did not cover every Storage bucket) → resolved when this PR merges and the `migrate` + function-deploy jobs run. **Merging applies migration `20261013000000_signup_consent_stamp.sql` to production and needs founder approval first.**
