@@ -3398,7 +3398,7 @@ export type Database = {
     Functions: {
       _purge_user_data: { Args: { _uid: string }; Returns: undefined }
       accept_partner_invitation: {
-        Args: { _invite_code: string }
+        Args: { _consent: boolean; _invite_code: string }
         Returns: undefined
       }
       can_access_child: {

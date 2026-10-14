@@ -7,8 +7,8 @@
 //        - vpc_first_confirmation_at IS NOT NULL
 //        - vpc_completed_at IS NULL
 //      No minimum dwell is enforced — the regulation does not specify one.
-//   3. We mint a token, write it to profiles.vpc_second_token + expiry,
-//      and email a link to {APP_URL}/vpc-confirm?token=...
+//   3. We mint a token, store only its sha256 hash on profiles.vpc_second_token,
+//      and email the raw token to {APP_URL}/vpc-confirm?token=...
 //   4. The user clicks the link. The /vpc-confirm route calls the
 //      complete_vpc_second_confirmation() RPC, which validates the token and
 //      stamps vpc_completed_at — unlocking child INSERTs.
@@ -31,6 +31,16 @@ function generateToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Stored form of the token. The email still carries the raw token; the
+// profile row stores only this hash, so a session that can read profiles
+// cannot complete VPC without the inbox. Must match
+// complete_vpc_second_confirmation (sha256: + hex).
+async function hashToken(token: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const hex = Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+  return `sha256:${hex}`;
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -133,7 +143,7 @@ serve(async (req) => {
     const { error: updateErr } = await admin
       .from("profiles")
       .update({
-        vpc_second_token: token,
+        vpc_second_token: await hashToken(token),
         vpc_second_token_expires_at: expiresAt,
       })
       .eq("id", userId);

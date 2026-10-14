@@ -74,13 +74,13 @@ export default function AcceptInvite() {
   };
 
   const acceptInvite = async () => {
-    if (!invite || !user) return;
+    if (!invite || !user || !consentAcknowledged) return;
     setAccepting(true);
 
     try {
-      // Use secure RPC to accept invitation atomically
       const { error } = await supabase.rpc("accept_partner_invitation", {
         _invite_code: code!,
+        _consent: true,
       });
 
       if (error) throw error;

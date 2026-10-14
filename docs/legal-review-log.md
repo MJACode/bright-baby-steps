@@ -3230,3 +3230,24 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 2. Live Storage deletion is still untested. With a throwaway account, upload one file under `{uid}/` in `milestone-photos`, delete the account, and confirm the `delete-account` response reports `deleted: 1` and the object is gone. P1.
 3. Feedback screenshots: either create a private `feedback-screenshots` bucket with an own-folder INSERT policy and change `FeedbackDialog` to store the path (not a public URL), or remove the screenshot picker. P2.
 4. Decide on the VPC-gate / consent-column lockdown above. P0.
+
+---
+
+## 2026-10-14 — Security audit: COPPA column lock, invite consent, cron caller check, on-device invite QR
+
+**Reviewer:** in-house. **Risk level:** High (a signed-in parent could set `vpc_completed_at` and skip email #2; an unauthenticated caller could start the account-purge job) → fixed in code, **not applied**. **Merging applies `20261014120000_security_audit_fixes.sql` to production and needs founder approval first.** Do not merge until that approval.
+
+**What changed, and why it is in this log:**
+
+1. **VPC email-plus can no longer be self-completed.** A BEFORE UPDATE trigger rejects client changes to `vpc_*`, `email`, `inactive_purge_warned_at`, and `data_consent_*`. `postgres` and `service_role` still write them (`handle_new_user`, the email-confirmation trigger, `send-vpc-email`, `complete_vpc_second_confirmation`, the purge job). `CoppaDirectNotice` still writes the typed-name columns; the child-insert gate is still `vpc_completed_at`. The second-confirmation token is stored as `sha256:<hex>`. The email still carries the raw token. Existing tokens are hashed in the same migration, so a link already sent keeps working and a profile read no longer returns a usable token. Closes follow-up 4 of the 2026-10-12 entry.
+2. **Invite acceptance requires `_consent = true`.** The one-argument `accept_partner_invitation` is dropped. A re-accept stamps `consent_acknowledged_at` again. `AcceptInvite` sends true only when the checkbox is checked. An older bundled iOS build will fail this call until it is updated.
+3. **`partner_access.partner_id` cannot be pointed at a different user**, and the consent timestamp cannot be edited from the client. Role, pause, and revoke are unchanged.
+4. **Child `parent_id` cannot be changed**, and a partner cannot insert a child owned by someone else. That insert path also skipped the VPC trigger, which only checks the row when `parent_id` is the caller.
+5. **Cron functions require the service-role bearer.** `inactive-account-purge` and `reactivate-nudge` (`verify_jwt = false`) previously ran for any caller. The purge job now walks every page of users, not the first 200, so the 24-month deletion in Privacy § 8 is not capped at the first page.
+6. **Invite QR codes are drawn on the device.** The invite URL is no longer sent to api.qrserver.com. That host was not on `/subprocessors`. No new subprocessor is added (`qrcode` runs locally).
+
+**Disclosures.** No change to Privacy, Terms, FAQ, or `/subprocessors` wording. The QR change removes an undisclosed recipient rather than adding one.
+
+**Code refs:** `docs/security-audit-2026-10.md`, `supabase/migrations/20261014120000_security_audit_fixes.sql`, `supabase/functions/_shared/serviceRoleAuth.ts`, `supabase/functions/send-vpc-email/index.ts`, `src/pages/AcceptInvite.tsx`, `src/components/onboarding/InviteShareSheet.tsx`. Fill in the merge hash.
+
+**Follow-ups:** the ten `parent_id`-keyed tables listed in the audit (M2) are unchanged. Storage upload limits and the missing `feedback-screenshots` bucket are unchanged (see 2026-10-12).

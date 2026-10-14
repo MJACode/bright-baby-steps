@@ -11,6 +11,7 @@ import {
   type MaintenanceReaction,
   type MaintenanceSend,
 } from "../_shared/allergenMaintenance.ts";
+import { bearerMatchesSecret } from "../_shared/serviceRoleAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -512,7 +513,15 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  // verify_jwt accepts any valid user JWT. This function then reads every
+  // child with the service role, so the bearer has to be the cron's key.
+  if (!bearerMatchesSecret(req.headers.get("Authorization"), serviceRoleKey)) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   const now = new Date();
