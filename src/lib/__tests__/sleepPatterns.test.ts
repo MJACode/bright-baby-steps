@@ -22,7 +22,7 @@ import {
   wakeWindowSamples,
   type SleepLogRow,
 } from "@/lib/sleepPatterns";
-import { predictNextNap } from "@/lib/sleepCoach";
+import { napBlockedBySleepInProgress, predictNextNap } from "@/lib/sleepCoach";
 import { ageWakeWindow, blendWakeWindow, firstWindowMin, loggedDayCount } from "@/lib/wakeWindow";
 import { detectTriageReasons } from "@/lib/sleepTriage";
 import type { TrackingSchedule } from "@/lib/trackingDay";
@@ -289,7 +289,9 @@ describe("predictNextNap reads the shared wake-window engine", () => {
     },
     {
       name: "uses age-typical timing when nothing has finished yet",
-      sleeps: [sleep(at(2026, 9, 3, 7, 30), null)],
+      // A manual row can have a null end without a timer running. An open
+      // timer is a different case — it suppresses the nap entirely.
+      sleeps: [sleep(at(2026, 9, 3, 7, 30), null, "nap", { source: "manual" })],
       now: at(2026, 9, 3, 8, 0),
       lastWake: null,
       // The engine's 6-month typical (135 min) from now, window opening 30 min early.
@@ -349,6 +351,81 @@ describe("predictNextNap reads the shared wake-window engine", () => {
       expect(prediction?.windowEnd).toEqual(new Date(center.getTime() + 15 * 60_000));
     });
   }
+});
+
+describe("predictNextNap while a sleep timer is running", () => {
+  // Seven logged days, and three evening wakes that are each followed by
+  // another nap the same evening (so they count as evening samples). The last
+  // wake is itself an evening nap with nothing after it — the shape behind
+  // "Based on a few evening naps" while the next window is already open.
+  const history: SleepLogRow[] = [];
+  for (let day = 1; day <= 7; day++) {
+    history.push(sleep(at(2026, 9, day, 9, 0), at(2026, 9, day, 10, 0)));
+  }
+  for (const day of [4, 5, 6]) {
+    history.push(
+      sleep(at(2026, 9, day, 16, 20), at(2026, 9, day, 17, 0)),
+      sleep(at(2026, 9, day, 19, 0), at(2026, 9, day, 19, 30)),
+    );
+  }
+  history.push(sleep(at(2026, 9, 7, 16, 50), at(2026, 9, 7, 17, 30)));
+  const now = at(2026, 9, 7, 19, 55);
+
+  it("quotes the evening window once the baby is awake", () => {
+    const pred = predictNextNap({ ageMonths: 5, sleeps: history, now });
+    expect(pred?.reason).toBe("Based on a few evening naps — improving with more data.");
+  });
+
+  it("returns nothing while the night timer is in progress", () => {
+    const asleep = [...history, sleep(at(2026, 9, 7, 19, 5), null, "night")];
+    expect(predictNextNap({ ageMonths: 5, sleeps: asleep, now })).toBeNull();
+  });
+
+  it("returns nothing while a nap timer is in progress", () => {
+    const asleep = [...history, sleep(at(2026, 9, 7, 19, 5), null, "nap")];
+    expect(predictNextNap({ ageMonths: 5, sleeps: asleep, now })).toBeNull();
+  });
+
+  it("returns nothing for a timer left running past 12 hours", () => {
+    // The banner still says "in progress". A nap prediction would contradict it.
+    const forgotten = [...history, sleep(at(2026, 9, 7, 6, 0), null, "nap")];
+    expect(predictNextNap({ ageMonths: 5, sleeps: forgotten, now })).toBeNull();
+  });
+
+  it("does not treat a voice or manual row with no end as a running timer", () => {
+    const voice = [
+      ...history,
+      sleep(at(2026, 9, 7, 19, 5), null, "night", { source: "voice" }),
+    ];
+    expect(predictNextNap({ ageMonths: 5, sleeps: voice, now })?.reason).toBe(
+      "Based on a few evening naps — improving with more data.",
+    );
+  });
+});
+
+describe("napBlockedBySleepInProgress", () => {
+  const open = sleep(at(2026, 9, 7, 19, 5), null, "night");
+  const done = sleep(at(2026, 9, 7, 17, 0), at(2026, 9, 7, 17, 35));
+
+  it("blocks when the banner timer is on, even if coach logs have not caught up", () => {
+    expect(napBlockedBySleepInProgress([done], true)).toBe(true);
+    expect(napBlockedBySleepInProgress(undefined, true)).toBe(true);
+  });
+
+  it("blocks when the logs still contain the open timer", () => {
+    expect(napBlockedBySleepInProgress([done, open], false)).toBe(true);
+  });
+
+  it("does not block for a finished day or a non-timer null end", () => {
+    expect(napBlockedBySleepInProgress([done], false)).toBe(false);
+    expect(
+      napBlockedBySleepInProgress(
+        [sleep(at(2026, 9, 7, 19, 5), null, "night", { source: "manual" })],
+        false,
+      ),
+    ).toBe(false);
+    expect(napBlockedBySleepInProgress(null, false)).toBe(false);
+  });
 });
 
 describe("nightlyBedtimes", () => {

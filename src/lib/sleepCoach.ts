@@ -6,6 +6,7 @@ import {
   observedNapDurationMin,
 } from "@/lib/sleepPlan";
 import {
+  isOngoingSleep,
   nightlyWakeTimes,
   ongoingSleepElapsedSeconds,
   sampleConfidence,
@@ -28,7 +29,31 @@ import {
   type WakeWindowOverrides,
 } from "@/lib/wakeWindow";
 
-interface Sleep { started_at: string; ended_at: string | null; sleep_type?: string | null; }
+interface Sleep {
+  started_at: string;
+  ended_at: string | null;
+  sleep_type?: string | null;
+  /** Absent on older callers. Only `"timer"` with a null end is a live session. */
+  source?: string | null;
+}
+
+/**
+ * Whether the Home nap prediction must stand down.
+ *
+ * True when the banner's timer row is on (`activeTimer` — including a timer
+ * the wake hook has called stale) or the same logs the prediction was built
+ * from still contain an open timer. Voice and manual rows with a null end are
+ * not a session.
+ */
+export function napBlockedBySleepInProgress(
+  logs: { ended_at: string | null; source?: string | null }[] | null | undefined,
+  activeTimer: boolean,
+): boolean {
+  if (activeTimer) return true;
+  return !!logs?.some((log) =>
+    isOngoingSleep({ ended_at: log.ended_at, source: log.source ?? null }),
+  );
+}
 
 export interface NapPrediction {
   windowStart: Date;
@@ -60,6 +85,17 @@ export function predictNextNap(opts: {
   napCount?: number | null;
 }): NapPrediction | null {
   const now = opts.now ?? new Date();
+  // A running timer means this baby is asleep. The next nap is the one after
+  // they wake — quoting the previous wake ("likely sleepy") contradicts the
+  // timer the banner is counting. Only timer rows count; a voice or manual
+  // log can have a null end without a session running. A timer left on past
+  // the 12h "forgotten" mark still counts here: the banner keeps saying
+  // "in progress" until it is stopped, so a nap prediction would still be
+  // the contradiction. Stopping or discarding the timer brings the next nap
+  // back. Wake timing is a separate prediction (`predictWake`).
+  if (opts.sleeps.some((s) => isOngoingSleep({ ended_at: s.ended_at, source: s.source ?? null }))) {
+    return null;
+  }
   const range = ageWakeWindow(opts.ageMonths);
   const recent = recentLogs(opts.sleeps, now);
   const completed = recent
