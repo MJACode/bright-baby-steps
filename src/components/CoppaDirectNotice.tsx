@@ -9,12 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
 interface Props {
-  userId: string;
   onAcknowledged: () => void;
   onCancel?: () => void;
 }
 
-export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
+export function CoppaDirectNotice({ onAcknowledged, onCancel }: Props) {
   const [saving, setSaving] = useState(false);
   const [signedName, setSignedName] = useState("");
   const [isGuardian, setIsGuardian] = useState(false);
@@ -27,15 +26,11 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
   const handleConfirm = async () => {
     if (!canSubmit) return;
     setSaving(true);
-    const now = new Date().toISOString();
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        coppa_direct_notice_acknowledged_at: now,
-        coppa_attestation_signed_name: trimmedName,
-        coppa_attestation_signed_at: now,
-      })
-      .eq("id", userId);
+    // Server stamps the acknowledgement, signature, time, and IP. The first
+    // signature is kept; a repeat call returns it unchanged.
+    const { error } = await supabase.rpc("sign_coppa_direct_notice", {
+      p_signed_name: trimmedName,
+    });
     setSaving(false);
     if (error) {
       toast({ title: "Could not save your acknowledgement.", description: error.message, variant: "destructive" });

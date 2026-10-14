@@ -3620,6 +3620,10 @@ export type Database = {
         Returns: undefined
       }
       revoke_my_mcp_connection: { Args: { _id: string }; Returns: boolean }
+      sign_coppa_direct_notice: {
+        Args: { p_signed_name: string }
+        Returns: Json
+      }
       set_sleep_todo_item_time: {
         Args: {
           p_child_id: string
