@@ -176,7 +176,7 @@ describe("push copy (lock-screen rule)", () => {
     for (const type of PRODUCED) {
       const copy = pushCopyFor(type);
       expect(copy, type).not.toBe(GENERIC_PUSH_COPY);
-      expect(copy.route, type).toMatch(/^\/dashboard(\/[a-z-]+)?$/);
+      expect(copy.route, type).toMatch(/^\/dashboard(\/[a-z-]+)?(\?tab=[a-z-]+)?$/);
     }
   });
 
@@ -207,7 +207,7 @@ describe("push copy (lock-screen rule)", () => {
       aps: { alert: { title: "Keep it on the menu", body: PUSH_COPY.allergen_maintenance.body }, sound: "default" },
       notification_id: "n9",
       type: "allergen_maintenance",
-      route: "/dashboard/feeding",
+      route: "/dashboard/feeding?tab=allergens",
       child_id: "c9",
     });
   });

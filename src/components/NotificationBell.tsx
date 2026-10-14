@@ -79,6 +79,7 @@ export function NotificationBell() {
     finance_trump_claim: "🏦",
     finance_529_newborn: "🏦",
     finance_529_birthday: "🎂",
+    allergen_maintenance: "🍽️",
   };
 
   return (

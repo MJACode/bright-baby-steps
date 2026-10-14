@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
@@ -23,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
   ShieldAlert, AlertTriangle, Check, Clock, Play, ArrowLeft,
-  ChevronRight, ChevronDown, Info, AlertCircle, Timer, Stethoscope, Trash2, Undo2, Eye,
+  ChevronRight, ChevronDown, Info, AlertCircle, Timer, Stethoscope, Trash2, Undo2, Eye, UtensilsCrossed,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -38,10 +39,12 @@ import {
   SYMPTOM_CHIPS, classifyReaction, resolveReactionSeverity, isReaction, type ReactionLevel,
   beforeYouStartFor, CALL_911, CALL_911_EPINEPHRINE, CALL_911_POSITIONING,
   CALL_PEDIATRICIAN, CALL_PEDIATRICIAN_KEEP_WATCHING, SAVE_COPY, USUALLY_NOT_A_REACTION,
-  LATER_SAME_DAY, NEXT_FEW_DAYS, ONCE_IT_GOES_WELL, GUIDANCE_FOOTER,
+  LATER_SAME_DAY, NEXT_FEW_DAYS, GUIDANCE_FOOTER,
   FIRST_EXPOSURE_HELPER, WAIT_STEP_HELPER, startIntroToast,
   EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE, ACTION_PLAN, REACTION_NOTED_DESCRIPTION,
-  EXPOSURE_LOGGED_TOAST, REACTION_SAVED_TOAST, type GuidanceSection,
+  exposureLoggedToast, EXPOSURE_LOGGED_TOAST, REACTION_SAVED_TOAST, type GuidanceSection,
+  isAwaitingSignOff, getMaintenanceState, maintenanceGuidance, maintenanceRemindersActive,
+  sortDueIntroducedFirst,
 } from "@/services/allergenService";
 
 const REACTION_INPUT_HINT = "Pick how strong it is or what you see to save.";
@@ -160,14 +163,41 @@ type ReactionTarget =
 
 type SaveExposureInput = {
   target: ReactionTarget;
+  /** When a new exposure happened; ignored for a reaction on an existing one. */
+  at?: Date;
+  /** Earliest allowed time for `at` (the latest exposure already logged). */
+  notBefore?: Date;
   severity: Severity;
   symptoms: string[];
   notes: string;
 };
 
+// Carries copy we wrote for the parent, so onError can show it verbatim
+// without ever passing raw PostgREST text through.
+class AllergenWriteError extends Error {}
+
+function describeAllergenWriteError(err: unknown, title: string): { title: string; description: string } {
+  if (err instanceof Error && (err.message === VIEW_ONLY_MESSAGE || err.message === ROLE_UNRESOLVED_MESSAGE)) {
+    return { title, description: err.message };
+  }
+  if (isRlsViewerDenied(err)) return { title, description: VIEW_ONLY_MESSAGE };
+  if (err instanceof AllergenWriteError) return { title, description: err.message };
+  return { title, description: "Nothing was saved. Check your connection and try again." };
+}
+
+const clampToNow = (d: Date) => {
+  const now = new Date();
+  return d.getTime() > now.getTime() ? now : d;
+};
+
+const clampPick = (d: Date, min?: Date) => {
+  const clamped = clampToNow(d);
+  return min && clamped.getTime() < min.getTime() ? min : clamped;
+};
+
 // The exposure row outlived a failed reaction insert. Carrying its id lets a
 // retry attach the reaction to it instead of inserting a duplicate exposure.
-class ReactionHalfSavedError extends Error {
+class ReactionHalfSavedError extends AllergenWriteError {
   constructor(readonly orphanExposureId: string) {
     super(SAVE_COPY.reactionHalfSaved);
   }
@@ -227,31 +257,14 @@ export default function AllergenTracker() {
   const [undoExposureOpen, setUndoExposureOpen] = useState(false);
   const [removeEntryOpen, setRemoveEntryOpen] = useState(false);
 
-  const [startOpen, setStartOpen] = useState(false);
-  const [startAt, setStartAt] = useState<Date>(() => new Date());
+  // One time-picker dialog serves both the first exposure and a maintenance serving.
+  const [timeDialog, setTimeDialog] = useState<"start" | "serving" | null>(null);
+  const [pickedAt, setPickedAt] = useState<Date>(() => new Date());
+  const [exposureAt, setExposureAt] = useState<Date>(() => new Date());
 
   // Queries
-  const { data: allergens, isLoading: allergensLoading } = useQuery({
-    queryKey: ["allergens"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("allergens").select("*").order("sort_order");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: introductions, isLoading: introsLoading } = useQuery({
-    queryKey: ["allergen-introductions", activeChild?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("allergen_introductions")
-        .select("*, allergen_exposure_logs(*)")
-        .eq("child_id", activeChild!.id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!activeChild,
-  });
+  const { data: allergens, isLoading: allergensLoading } = useAllergens();
+  const { data: introductions, isLoading: introsLoading } = useAllergenIntroductions(activeChild?.id);
 
   const { data: reactions } = useQuery({
     queryKey: ["allergen-reactions", activeChild?.id],
@@ -272,8 +285,7 @@ export default function AllergenTracker() {
     mutationFn: async ({ allergenId, at }: { allergenId: string; at: Date }) => {
       assertCanWrite(roleResolved, role);
 
-      const now = new Date();
-      const loggedAt = (at.getTime() > now.getTime() ? now : at).toISOString();
+      const loggedAt = clampToNow(at).toISOString();
 
       const { data, error } = await supabase.from("allergen_introductions").insert({
         allergen_id: allergenId,
@@ -308,14 +320,14 @@ export default function AllergenTracker() {
       return { allergenId: data.allergen_id as string, exposure };
     },
     onSuccess: ({ allergenId, exposure }) => {
-      setStartOpen(false);
+      setTimeDialog(null);
       setSelectedAllergenId(allergenId);
       toast(startIntroToast(exposure));
     },
     onError: (err, { allergenId }) => {
       // Close when retrying can't help: a half-saved intro, or a partner already started it.
       const duplicate = (err as { code?: string })?.code === "23505";
-      if (duplicate || (err instanceof StartExposureError && !err.rolledBack)) setStartOpen(false);
+      if (duplicate || (err instanceof StartExposureError && !err.rolledBack)) setTimeDialog(null);
       const allergenName = allergens?.find((a) => a.id === allergenId)?.name;
       toast({ ...describeStartExposureError(err, allergenName), variant: "destructive" });
     },
@@ -326,8 +338,13 @@ export default function AllergenTracker() {
   });
 
   const openStartDialog = () => {
-    setStartAt(new Date());
-    setStartOpen(true);
+    setPickedAt(new Date());
+    setTimeDialog("start");
+  };
+
+  const openServingDialog = () => {
+    setPickedAt(new Date());
+    setTimeDialog("serving");
   };
 
   const childDob = activeChild ? parseChildDate(activeChild.date_of_birth) : undefined;
@@ -338,10 +355,11 @@ export default function AllergenTracker() {
   // pediatrician export). Every reaction also moves the introduction to
   // "reaction_observed" — that stored status is what the export reads.
   const saveExposure = useMutation({
-    mutationFn: async ({ target, severity: rawSeverity, symptoms, notes }: SaveExposureInput) => {
+    mutationFn: async ({ target, at, notBefore, severity: rawSeverity, symptoms, notes }: SaveExposureInput) => {
       assertCanWrite(roleResolved, role);
       const reacted = isReaction(rawSeverity, symptoms);
       const severity = resolveReactionSeverity(rawSeverity, symptoms);
+      let newExposure: { exposure_number: number; logged_at: string; observation_window_ends_at: string } | null = null;
 
       let exposureId: string;
       if (target.mode === "existing_exposure") {
@@ -351,15 +369,23 @@ export default function AllergenTracker() {
           .eq("id", target.exposureId)
           .select("id");
         if (error) throw error;
-        if (!data?.length) throw new Error(SAVE_COPY.exposureGone);
+        if (!data?.length) throw new AllergenWriteError(SAVE_COPY.exposureGone);
         exposureId = target.exposureId;
       } else {
+        // Written explicitly so a back-dated exposure's watch window starts at
+        // logged_at, never at insert time.
+        const loggedAt = clampPick(at ?? new Date(), notBefore).toISOString();
+        newExposure = {
+          exposure_number: target.exposureNum,
+          logged_at: loggedAt,
+          observation_window_ends_at: exposureWatchEnd({ logged_at: loggedAt }).toISOString(),
+        };
         const { data, error } = await supabase.from("allergen_exposure_logs").insert({
           allergen_id: target.allergenId,
           allergen_introduction_id: target.introId,
           child_id: activeChild!.id,
           parent_id: user!.id,
-          exposure_number: target.exposureNum,
+          ...newExposure,
           reaction_observed: reacted,
         }).select("id").single();
         if (error) throw error;
@@ -374,6 +400,7 @@ export default function AllergenTracker() {
           severity,
           symptoms,
           parent_description: notes, // verbatim — never summarize
+          ...(newExposure ? { observed_at: newExposure.logged_at } : {}),
         });
         if (rxError) {
           // An RLS-blocked rollback returns zero rows and no error, so a missing
@@ -383,33 +410,34 @@ export default function AllergenTracker() {
                 .update({ reaction_observed: target.previousReactionObserved }).eq("id", exposureId).select("id")
             : await supabase.from("allergen_exposure_logs").delete().eq("id", exposureId).select("id");
           if (rollbackError || !rolledBack?.length) throw new ReactionHalfSavedError(exposureId);
-          throw new Error(SAVE_COPY.reactionNotSaved);
+          throw new AllergenWriteError(SAVE_COPY.reactionNotSaved);
         }
       }
 
-      const nextIntro = reacted
-        ? { status: "reaction_observed", completed_at: null }
-        : target.mode === "new_exposure" && target.exposureNum >= 2
-          ? { status: "completed", completed_at: new Date().toISOString() }
-          : null;
+      // Only a reaction moves the stored status. A clean exposure never
+      // completes the intro: that takes the parent's explicit sign-off.
       // The exposure is already saved, so a failed status write is a warning,
       // not an error — throwing would invite a retry that duplicates the log.
       let warning: string | null = null;
-      if (nextIntro) {
+      if (reacted) {
         const { data, error } = await supabase
-          .from("allergen_introductions").update(nextIntro).eq("id", target.introId).select("id");
-        if (error || !data?.length) {
-          warning = reacted ? SAVE_COPY.reactionStatusStale : SAVE_COPY.exposureStatusStale;
-        }
+          .from("allergen_introductions")
+          .update({ status: "reaction_observed", completed_at: null })
+          .eq("id", target.introId)
+          .select("id");
+        if (error || !data?.length) warning = SAVE_COPY.reactionStatusStale;
       }
-      return { level: classifyReaction(symptoms, severity), reacted, warning };
+      return { level: classifyReaction(symptoms, severity), reacted, warning, newExposure };
     },
-    onSuccess: ({ level, reacted, warning }) => {
+    onSuccess: ({ level, reacted, warning, newExposure }) => {
       closeReactionDialog();
+      setTimeDialog(null);
       // The triage line is safety copy: a stale-status warning rides along
       // after it and never replaces it (TOAST_LIMIT is 1, so one toast).
-      const base = reacted && level !== "none" ? REACTION_SAVED_TOAST[level] : EXPOSURE_LOGGED_TOAST;
-      toast(warning ? { title: base.title, description: `${base.description} ${warning}` } : base);
+      const base = reacted && level !== "none"
+        ? REACTION_SAVED_TOAST[level]
+        : newExposure ? exposureLoggedToast(newExposure) : EXPOSURE_LOGGED_TOAST;
+      toast(warning ? { title: base.title, description: `${base.description} ${warning}`.trim() } : base);
     },
     onError: (err, { target }) => {
       if (err instanceof ReactionHalfSavedError && target.mode === "new_exposure") {
@@ -423,11 +451,7 @@ export default function AllergenTracker() {
           previousReactionObserved: true,
         });
       }
-      toast({
-        title: "Couldn't save that",
-        description: err instanceof Error ? err.message : "Check your connection and try again.",
-        variant: "destructive",
-      });
+      toast({ ...describeAllergenWriteError(err, "Couldn't save that"), variant: "destructive" });
     },
     onSettled: () => {
       saveInFlight.current = false;
@@ -436,16 +460,39 @@ export default function AllergenTracker() {
     },
   });
 
+  const markIntroduced = useMutation({
+    mutationFn: async ({ introId }: { introId: string; allergenName: string; slug: string }) => {
+      assertCanWrite(roleResolved, role);
+      // Scoped to in_progress so a reaction logged on another device isn't overwritten.
+      const { data, error } = await supabase.from("allergen_introductions").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      }).eq("id", introId).eq("status", "in_progress").select("id");
+      if (error) throw error;
+      if (!data?.length) {
+        throw new AllergenWriteError("This allergen changed on another device. We've refreshed it, so check it and try again.");
+      }
+    },
+    onSuccess: (_data, { allergenName, slug }) => {
+      toast({ title: `${allergenName} is on the menu`, description: `${maintenanceGuidance(slug)} keeps it there.` });
+    },
+    onError: (err) => {
+      toast({ ...describeAllergenWriteError(err, "Couldn't confirm that"), variant: "destructive" });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] }),
+  });
+
   // Reactions hang off exposure logs, exposure logs off the introduction, so
   // removal always walks child → parent. Explicit deletes rather than relying on
   // FK cascades, which aren't guaranteed on these tables.
   const removeExposure = useMutation({
     mutationFn: async ({
-      introId, exposureId, remaining,
+      introId, exposureId, remaining, current,
     }: {
       introId: string;
       exposureId: string;
       remaining: { logged_at: string; reaction_observed: boolean | null }[];
+      current: { status: string; completed_at: string | null };
     }) => {
       assertCanWrite(roleResolved, role);
 
@@ -456,14 +503,16 @@ export default function AllergenTracker() {
       const { data: deletedLogs, error: logError } = await supabase
         .from("allergen_exposure_logs").delete().eq("id", exposureId).select("id");
       if (logError) throw logError;
-      if (!deletedLogs?.length) throw new Error("That exposure is no longer yours to remove.");
+      if (!deletedLogs?.length) throw new AllergenWriteError("That exposure is no longer yours to remove.");
 
-      const next = introStateAfterExposureRemoval(remaining);
+      const next = introStateAfterExposureRemoval(remaining, current);
       const { error: introError } = await supabase.from("allergen_introductions").update({
         status: next.status,
         completed_at: next.completed_at,
       }).eq("id", introId);
-      if (introError) throw introError;
+      if (introError) {
+        throw new AllergenWriteError("The exposure was removed, but this allergen's status didn't update. Refresh the page to see it.");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
@@ -472,11 +521,7 @@ export default function AllergenTracker() {
       toast({ title: "Exposure removed", description: "The rest of this protocol is unchanged." });
     },
     onError: (err) => {
-      toast({
-        title: "Couldn't remove that exposure",
-        description: err instanceof Error ? err.message : "Check your connection and try again.",
-        variant: "destructive",
-      });
+      toast({ ...describeAllergenWriteError(err, "Couldn't remove that exposure"), variant: "destructive" });
     },
   });
 
@@ -501,7 +546,7 @@ export default function AllergenTracker() {
       const { data: deletedIntro, error } = await supabase
         .from("allergen_introductions").delete().eq("id", introId).select("id");
       if (error) throw error;
-      if (!deletedIntro?.length) throw new Error("This entry is no longer yours to remove.");
+      if (!deletedIntro?.length) throw new AllergenWriteError("This entry is no longer yours to remove.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
@@ -511,11 +556,7 @@ export default function AllergenTracker() {
       toast({ title: "Tracking removed", description: "You can start this allergen again whenever you're ready." });
     },
     onError: (err) => {
-      toast({
-        title: "Couldn't remove this entry",
-        description: err instanceof Error ? err.message : "Check your connection and try again.",
-        variant: "destructive",
-      });
+      toast({ ...describeAllergenWriteError(err, "Couldn't remove this entry"), variant: "destructive" });
     },
   });
 
@@ -532,17 +573,18 @@ export default function AllergenTracker() {
     resetReactionForm();
   };
 
-  const openReactionDialog = (target: ReactionTarget, initialSeverity: Severity = "none") => {
+  const openReactionDialog = (target: ReactionTarget, initialSeverity: Severity = "none", at: Date = new Date()) => {
     resetReactionForm();
     setReactionTarget(target);
     setSeverity(initialSeverity);
+    setExposureAt(at);
     setReactionDialog(true);
   };
 
   const submitStart = (allergenId: string) => {
     if (startInFlight.current) return;
     startInFlight.current = true;
-    startIntro.mutate({ allergenId, at: startAt });
+    startIntro.mutate({ allergenId, at: pickedAt });
   };
 
   const submitSave = (input: SaveExposureInput) => {
@@ -552,6 +594,9 @@ export default function AllergenTracker() {
   };
 
   const getIntro = (allergenId: string) => introductions?.find((i) => i.allergen_id === allergenId);
+
+  const now = new Date();
+  const remindersActive = activeChild ? maintenanceRemindersActive(activeChild, now) : false;
 
   // Computed values
   const totalAllergens = allergens?.length ?? 0;
@@ -618,8 +663,9 @@ export default function AllergenTracker() {
   if (selectedAllergen) {
     const intro = selectedIntro;
     const status = getAllergenStatus(intro);
-    const statusCfg = getStatusConfig(status);
     const exposures = intro?.allergen_exposure_logs ?? [];
+    const awaitingSignOff = isAwaitingSignOff(intro);
+    const statusCfg = getStatusConfig(status, { awaitingSignOff });
     const sortedExposures = [...exposures].sort((a, b) => a.exposure_number - b.exposure_number);
     const lastExposure = sortedExposures[sortedExposures.length - 1];
     const canLogNext = canLogNextExposure(exposures);
@@ -636,17 +682,33 @@ export default function AllergenTracker() {
     const awaitingReaction = canWrite
       ? exposureAwaitingReaction(intro, allergenReactions.map((r) => r.exposure_log_id))
       : null;
+    const signOffNeedsPediatrician = isHighRisk || (reactions?.length ?? 0) > 0;
+    const maintenance = getMaintenanceState(intro, selectedAllergen.slug, now);
+    const nextExposureNum = Math.max(0, ...exposures.map((e) => e.exposure_number)) + 1;
+    // A new exposure or serving can't be back-dated before the latest one
+    // already logged (so a serving can't predate exposure #2; it can still
+    // fall between exposure #2 and the sign-off).
+    const latestExposureAt = exposures.length
+      ? new Date(Math.max(...exposures.map((e) => new Date(e.logged_at).getTime())))
+      : startMinDate;
+    const newExposureTarget = (exposureNum: number): ReactionTarget | null => intro
+      ? { mode: "new_exposure", introId: intro.id, allergenId: selectedAllergen.id, exposureNum }
+      : null;
+    const openLatestReaction = () => {
+      if (!awaitingReaction || !intro) return;
+      openReactionDialog({
+        mode: "existing_exposure",
+        introId: intro.id,
+        exposureId: awaitingReaction.id,
+        exposureNum: awaitingReaction.exposure_number,
+        previousReactionObserved: awaitingReaction.reaction_observed,
+      });
+    };
     const logReactionButton = awaitingReaction && intro && (
       <Button
         variant="outline"
         className="touch-target h-12 w-full mt-2 gap-2 font-semibold border-destructive/30 text-destructive hover:text-destructive hover:bg-destructive/10"
-        onClick={() => openReactionDialog({
-          mode: "existing_exposure",
-          introId: intro.id,
-          exposureId: awaitingReaction.id,
-          exposureNum: awaitingReaction.exposure_number,
-          previousReactionObserved: awaitingReaction.reaction_observed,
-        })}
+        onClick={openLatestReaction}
       >
         <AlertTriangle className="w-4 h-4" />
         {awaitingReaction.exposure_number > 1
@@ -837,19 +899,16 @@ export default function AllergenTracker() {
                   <p className="text-sm font-bold">
                     {status === "introduced" ? "Successfully Introduced!" :
                      status === "reaction_noted" ? "Review with Pediatrician" :
-                     "Introduced after two exposures with no reaction"}
+                     awaitingSignOff ? "Ready to confirm" :
+                     "Confirm after two exposures with no reaction"}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {status === "introduced" ? `${selectedAllergen.name} is now part of ${activeChild.name}'s diet.` :
                      status === "reaction_noted" ? REACTION_NOTED_DESCRIPTION :
-                     "Log the second exposure after the wait to finish."}
+                     awaitingSignOff ? "Two reaction-free tastes are logged." :
+                     "Log the second exposure after the wait."}
                   </p>
-                  {status === "introduced" && (
-                    <>
-                      <p className="text-xs text-muted-foreground mt-1">{ONCE_IT_GOES_WELL}</p>
-                      {logReactionButton}
-                    </>
-                  )}
+                  {status === "introduced" && logReactionButton}
                 </div>
               </div>
             </CardContent>
@@ -867,18 +926,102 @@ export default function AllergenTracker() {
           </Button>
         )}
 
-        {status === "in_progress" && sortedExposures.length >= 1 && canLogNext && canWrite && (
+        {status === "in_progress" && sortedExposures.length === 1 && canLogNext && canWrite && intro && (
           <Button
             className="w-full touch-target h-14 text-base font-bold gap-2 bg-warning hover:bg-warning/90 text-warning-foreground"
-            onClick={() => openReactionDialog({
-              mode: "new_exposure",
-              introId: intro!.id,
-              allergenId: selectedAllergen.id,
-              exposureNum: sortedExposures.length + 1,
-            })}
+            onClick={() => {
+              const target = newExposureTarget(nextExposureNum);
+              if (target) openReactionDialog(target);
+            }}
           >
-            <Clock className="w-5 h-5" /> Log Exposure #{sortedExposures.length + 1}
+            <Clock className="w-5 h-5" /> Log Exposure #{nextExposureNum}
           </Button>
+        )}
+
+        {awaitingSignOff && canWrite && intro && (
+          <Card className="border-0 bg-primary/10">
+            <CardContent className="p-4 space-y-3">
+              <h3 className="font-display font-bold text-base">
+                Did {activeChild.name} eat a typical portion with no reaction?
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Two reaction-free tastes is a great sign. Confirming moves {selectedAllergen.name} to keeping it on the menu.
+              </p>
+              {signOffNeedsPediatrician && (
+                <p className="text-sm text-foreground">
+                  Because {activeChild.name} has a higher allergy risk, check with your pediatrician before you confirm.
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  className="touch-target h-12 gap-1 font-bold"
+                  disabled={markIntroduced.isPending}
+                  onClick={() => markIntroduced.mutate({
+                    introId: intro.id, allergenName: selectedAllergen.name, slug: selectedAllergen.slug,
+                  })}
+                >
+                  <Check className="w-4 h-4" /> Yes, it's on the menu
+                </Button>
+                <Button
+                  variant="outline"
+                  className="touch-target h-12 gap-1 border-destructive/30 text-destructive font-bold"
+                  disabled={markIntroduced.isPending || !awaitingReaction}
+                  onClick={openLatestReaction}
+                >
+                  <Stethoscope className="w-4 h-4" /> Flag for Review
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {maintenance && (
+          <Card className="border-0 bg-feeding-bg">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-display font-bold text-base flex items-center gap-2">
+                  <UtensilsCrossed className="w-4 h-4 text-feeding" /> Keep it on the menu
+                </h3>
+                {remindersActive && maintenance.due && (
+                  <Badge className="text-xs bg-accent/15 text-accent border-accent/30">Due</Badge>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <p className="text-sm font-semibold">{maintenance.servings} of {maintenance.target} this week</p>
+                <Progress value={Math.min(100, (maintenance.servings / maintenance.target) * 100)} className="h-2" />
+                <p className="text-xs text-muted-foreground">{maintenanceGuidance(selectedAllergen.slug)}</p>
+              </div>
+              {canWrite && (
+                <Button
+                  className="w-full touch-target h-12 gap-2 font-bold bg-feeding hover:bg-feeding/90"
+                  onClick={openServingDialog}
+                  disabled={saveExposure.isPending}
+                >
+                  <Check className="w-4 h-4" /> Had it today
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {maintenance?.lapsed && remindersActive && (
+          <Card className="border-0 bg-secondary">
+            <CardContent className="p-4 flex items-start gap-3">
+              <Info className="w-5 h-5 text-feeding shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-semibold">
+                  Time for another taste of {selectedAllergen.name}. Regular servings help keep it on the menu.
+                </p>
+                <p className="text-xs text-muted-foreground">{FIRST_EXPOSURE_HELPER}</p>
+                <WatchForSection key={`${selectedAllergen.id}-lapsed`} defaultOpen={false}>
+                  <GuidanceBlock section={CALL_911} tone="destructive" />
+                  <GuidanceBlock section={CALL_PEDIATRICIAN} tone="warning" />
+                  <GuidanceBlock section={USUALLY_NOT_A_REACTION} tone="muted" />
+                  <GuidanceBlock section={LATER_SAME_DAY} tone="warning" />
+                </WatchForSection>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Reaction history */}
@@ -936,57 +1079,115 @@ export default function AllergenTracker() {
           </div>
         )}
 
-        {/* ─── BEFORE-YOU-START DIALOG ─── */}
-        <Dialog open={startOpen} onOpenChange={(open) => { if (!startIntro.isPending) setStartOpen(open); }}>
+        {/* ─── BEFORE-YOU-START / SERVING DIALOG ─── */}
+        <Dialog
+          open={timeDialog !== null}
+          onOpenChange={(open) => { if (!open && !startIntro.isPending && !saveExposure.isPending) setTimeDialog(null); }}
+        >
           <DialogContent className="max-w-sm max-h-[85vh] overflow-y-auto">
-            <DialogHeader className="text-left">
-              <DialogTitle className="font-display text-lg">Before you offer {selectedAllergen.name}</DialogTitle>
-              <DialogDescription>
-                This starts the 2-hour watch and the 3-day wait for {activeChild.name}.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 text-left">
-              <div className="space-y-2">
-                <p className="text-sm font-bold">{beforeYouStart.title}</p>
-                <ul className="space-y-2">
-                  {beforeYouStart.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-sm">
-                      <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <GuidanceBlock section={CALL_911} tone="destructive" />
-              <div className="space-y-1">
-                <MobileDateTimePicker
-                  value={startAt}
-                  onChange={(d) => setStartAt(d > new Date() ? new Date() : d)}
-                  maxDate={new Date()}
-                  minDate={startMinDate}
-                  label="When did you offer it?"
-                />
-                <p className="text-xs text-muted-foreground">Already offered it? Set the time you did.</p>
-              </div>
-              <div className="space-y-2">
-                <Button
-                  className="w-full touch-target h-12 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
-                  onClick={() => submitStart(selectedAllergen.id)}
-                  disabled={startIntro.isPending}
-                >
-                  <Play className="w-5 h-5" />
-                  {startIntro.isPending ? "Starting..." : "Start — I'll watch for 2 hours"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full touch-target h-12 font-semibold"
-                  onClick={() => setStartOpen(false)}
-                  disabled={startIntro.isPending}
-                >
-                  Not yet
-                </Button>
-              </div>
-            </div>
+            {timeDialog === "serving" ? (
+              <>
+                <DialogHeader className="text-left">
+                  <DialogTitle className="font-display text-lg">Log a serving of {selectedAllergen.name}?</DialogTitle>
+                  <DialogDescription>It counts toward this week's servings.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 text-left">
+                  <MobileDateTimePicker
+                    value={pickedAt}
+                    onChange={(d) => setPickedAt(clampPick(d, latestExposureAt))}
+                    maxDate={new Date()}
+                    minDate={latestExposureAt}
+                    label={`When did ${activeChild.name} have it?`}
+                  />
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="touch-target px-0 font-semibold text-destructive"
+                    onClick={() => {
+                      const target = newExposureTarget(nextExposureNum);
+                      // Close this dialog first: two Radix focus traps fight when both are open.
+                      setTimeDialog(null);
+                      if (target) openReactionDialog(target, "mild", pickedAt);
+                    }}
+                  >
+                    Noticed a reaction?
+                  </Button>
+                  <div className="space-y-2">
+                    <Button
+                      className="w-full touch-target h-12 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
+                      disabled={saveExposure.isPending}
+                      onClick={() => {
+                        const target = newExposureTarget(nextExposureNum);
+                        if (target) submitSave({
+                          target, at: pickedAt, notBefore: latestExposureAt, severity: "none", symptoms: [], notes: "",
+                        });
+                      }}
+                    >
+                      {saveExposure.isPending ? "Logging..." : "Log serving"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full touch-target h-12 font-semibold"
+                      onClick={() => setTimeDialog(null)}
+                      disabled={saveExposure.isPending}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <DialogHeader className="text-left">
+                  <DialogTitle className="font-display text-lg">Before you offer {selectedAllergen.name}</DialogTitle>
+                  <DialogDescription>
+                    This starts the 2-hour watch and the 3-day wait for {activeChild.name}.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 text-left">
+                  <div className="space-y-2">
+                    <p className="text-sm font-bold">{beforeYouStart.title}</p>
+                    <ul className="space-y-2">
+                      {beforeYouStart.items.map((item) => (
+                        <li key={item} className="flex items-start gap-2 text-sm">
+                          <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <GuidanceBlock section={CALL_911} tone="destructive" />
+                  <div className="space-y-1">
+                    <MobileDateTimePicker
+                      value={pickedAt}
+                      onChange={(d) => setPickedAt(clampPick(d, startMinDate))}
+                      maxDate={new Date()}
+                      minDate={startMinDate}
+                      label="When did you offer it?"
+                    />
+                    <p className="text-xs text-muted-foreground">Already offered it? Set the time you did.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Button
+                      className="w-full touch-target h-12 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
+                      onClick={() => submitStart(selectedAllergen.id)}
+                      disabled={startIntro.isPending}
+                    >
+                      <Play className="w-5 h-5" />
+                      {startIntro.isPending ? "Starting..." : "Start — I'll watch for 2 hours"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full touch-target h-12 font-semibold"
+                      onClick={() => setTimeDialog(null)}
+                      disabled={startIntro.isPending}
+                    >
+                      Not yet
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -1004,6 +1205,16 @@ export default function AllergenTracker() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-5 text-left">
+              {reactionTarget?.mode === "new_exposure" && (
+                <MobileDateTimePicker
+                  value={exposureAt}
+                  onChange={(d) => setExposureAt(clampPick(d, latestExposureAt))}
+                  maxDate={new Date()}
+                  minDate={latestExposureAt}
+                  label="When?"
+                />
+              )}
+
               {/* Severity — large color-coded buttons */}
               <div className="space-y-2">
                 <Label className="text-sm font-bold">
@@ -1092,7 +1303,8 @@ export default function AllergenTracker() {
               <Button
                 className="w-full touch-target h-12 text-base font-bold"
                 onClick={() => reactionTarget && submitSave({
-                  target: reactionTarget, severity, symptoms, notes: reactionNotes,
+                  target: reactionTarget, at: exposureAt, notBefore: latestExposureAt,
+                  severity, symptoms, notes: reactionNotes,
                 })}
                 disabled={saveExposure.isPending || needsReactionInput}
               >
@@ -1129,6 +1341,7 @@ export default function AllergenTracker() {
                     introId: intro.id,
                     exposureId: lastExposure.id,
                     remaining: sortedExposures.filter((ex) => ex.id !== lastExposure.id),
+                    current: { status: intro.status, completed_at: intro.completed_at },
                   });
                 }}
               >
@@ -1216,10 +1429,15 @@ export default function AllergenTracker() {
 
       {/* Allergen grid */}
       <div className="grid gap-3 sm:grid-cols-2">
-        {allergens?.map((allergen) => {
+        {sortDueIntroducedFirst(
+          allergens ?? [],
+          (a) => getAllergenStatus(getIntro(a.id)) === "introduced",
+          (a) => remindersActive && !!getMaintenanceState(getIntro(a.id), a.slug, now)?.due,
+        ).map((allergen) => {
           const intro = getIntro(allergen.id);
           const status = getAllergenStatus(intro);
-          const statusCfg = getStatusConfig(status);
+          const statusCfg = getStatusConfig(status, { awaitingSignOff: isAwaitingSignOff(intro) });
+          const maintenance = getMaintenanceState(intro, allergen.slug, now);
           const exposures = intro?.allergen_exposure_logs ?? [];
           const emoji = allergenEmoji[allergen.slug] ?? "🍽️";
           const isHighRisk = intro?.is_high_risk ?? false;
@@ -1263,8 +1481,19 @@ export default function AllergenTracker() {
                   )}
                 </div>
 
+                {maintenance && (
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      {maintenance.servings} of {maintenance.target} this week
+                    </p>
+                    {remindersActive && maintenance.due && (
+                      <Badge className="text-xs bg-accent/15 text-accent border-accent/30">Due</Badge>
+                    )}
+                  </div>
+                )}
+
                 {/* Protocol progress dots */}
-                {status !== "not_started" && (
+                {status !== "not_started" && !maintenance && (
                   <div className="flex gap-1.5 mt-2">
                     {[1, 2].map((step) => (
                       <div key={step} className={cn(

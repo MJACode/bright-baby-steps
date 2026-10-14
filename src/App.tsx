@@ -106,7 +106,7 @@ const App = () => (
                 <Route path="sleep/history" element={<SleepHistoryPage />} />
                 <Route path="diapers" element={<DiapersPage />} />
                 <Route path="feeding" element={<FeedingPage />} />
-                <Route path="allergens" element={<Navigate to="/dashboard/feeding" replace />} />
+                <Route path="allergens" element={<Navigate to="/dashboard/feeding?tab=allergens" replace />} />
                 <Route path="milestones" element={<MilestonesPage />} />
                 <Route
                   path="signs"

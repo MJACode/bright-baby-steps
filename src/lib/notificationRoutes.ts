@@ -3,6 +3,7 @@ const TYPE_ROUTES: Record<string, string> = {
   finance_trump_claim: "/dashboard/financial",
   finance_529_newborn: "/dashboard/financial",
   finance_529_birthday: "/dashboard/financial",
+  allergen_maintenance: "/dashboard/feeding?tab=allergens",
 };
 
 export function routeForNotificationType(type: string): string | null {

@@ -61,7 +61,7 @@ export const PUSH_COPY: Record<string, PushCopy> = {
   allergen_maintenance: {
     title: "Keep it on the menu",
     body: "Time for another regular serving. Tap to see which foods.",
-    route: "/dashboard/feeding",
+    route: "/dashboard/feeding?tab=allergens",
   },
   // Finance one-shots: no health detail, but the name still goes.
   finance_trump_claim: {

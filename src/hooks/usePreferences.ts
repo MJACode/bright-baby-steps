@@ -19,6 +19,8 @@ export interface Preferences {
   pushSoftAskDismissed: boolean;
   /** ISO timestamp the Sign Language comeback nudge is hidden until. */
   signsNudgeSnoozedUntil: string | null;
+  /** `${childId}:${trackingDayKey}` the Home allergen nudge was hidden for. */
+  allergenNudgeDismissedFor: string | null;
   theme: ThemePreference;
 }
 
@@ -38,6 +40,7 @@ const defaults: Preferences = {
   signsPromoDismissed: false,
   pushSoftAskDismissed: false,
   signsNudgeSnoozedUntil: null,
+  allergenNudgeDismissedFor: null,
   theme: "system",
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing

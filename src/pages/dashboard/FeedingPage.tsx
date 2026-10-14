@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UtensilsCrossed, ShieldAlert, Pill, ArrowLeft } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
+import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData";
+import { getAllergenStatus } from "@/services/allergenService";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,8 +13,24 @@ import AllergenTracker from "@/components/feeding/AllergenTracker";
 import SupplementTracker from "@/components/feeding/SupplementTracker";
 import { PageInstructions } from "@/components/PageInstructions";
 
+const FEEDING_TABS = ["feeding", "supplements", "allergens"];
+
 export default function FeedingPage() {
-  const [tab, setTab] = useState("feeding");
+  // Controlled by ?tab= so the Home allergen nudge and push links land on the
+  // right tab even when the page is already mounted.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paramTab = searchParams.get("tab");
+  const tab = paramTab && FEEDING_TABS.includes(paramTab) ? paramTab : "feeding";
+  const setTab = (next: string) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === "feeding") params.delete("tab");
+        else params.set("tab", next);
+        return params;
+      },
+      { replace: true },
+    );
   const { activeChild } = useChildren();
   const [solidDraft, setSolidDraft] = useState<SolidFeedDraft | null>(null);
   const [pendingResume, setPendingResume] = useState<SolidFeedDraft | null>(null);
@@ -30,29 +47,10 @@ export default function FeedingPage() {
     setTab("feeding");
   };
 
-  const { data: introductions } = useQuery({
-    queryKey: ["allergen-introductions", activeChild?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("allergen_introductions")
-        .select("*, allergen_exposure_logs(*)")
-        .eq("child_id", activeChild!.id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!activeChild,
-  });
+  const { data: introductions } = useAllergenIntroductions(activeChild?.id);
+  const { data: allergens } = useAllergens();
 
-  const { data: allergens } = useQuery({
-    queryKey: ["allergens"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("allergens").select("id").order("sort_order");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const completedCount = introductions?.filter(i => (i.allergen_exposure_logs?.length ?? 0) >= 3).length ?? 0;
+  const completedCount = introductions?.filter((i) => getAllergenStatus(i) === "introduced").length ?? 0;
   const totalAllergens = allergens?.length ?? 0;
 
   return (
@@ -60,7 +58,7 @@ export default function FeedingPage() {
       <PageInstructions tint="feeding">
         <p><strong>Feeding</strong> logs nursing, bottle, and solids. Nursing and bottle have live timers that keep running if you close the app.</p>
         <p><strong>Vitamins</strong> tracks vitamin D and other supplements.</p>
-        <p><strong>Allergens</strong> walks through the 9 common allergen introductions safely.</p>
+        <p><strong>Allergens</strong> walks you through introducing the 9 common allergens, then helps you keep them on the menu.</p>
       </PageInstructions>
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3 h-14 p-1 bg-muted/60">

@@ -95,7 +95,8 @@ export function useChildContext(childId?: string) {
           .from("allergen_introductions")
           .select("status, allergen_id, allergens(name)")
           .eq("child_id", childId)
-          .in("status", ["introduced", "monitoring"]),
+          // "completed" is the parent's sign-off; "safe" is a legacy value for the same thing.
+          .in("status", ["completed", "safe"]),
         supabase
           .from("illness_logs")
           .select("illness_name")
@@ -133,7 +134,7 @@ export function useChildContext(childId?: string) {
 
       // 6. Extract allergens & illnesses
       const confirmedAllergens = (allergenRes.data || [])
-        .map((a: any) => `${a.allergens?.name || "Unknown"} (${a.status})`)
+        .map((a: any) => `${a.allergens?.name || "Unknown"} (Introduced)`)
         .filter(Boolean);
 
       const activeIllnesses = (illnessRes.data || [])
