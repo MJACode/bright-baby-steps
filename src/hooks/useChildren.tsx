@@ -5,8 +5,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { differenceInMonths, differenceInWeeks, differenceInDays } from "date-fns";
 import { ageInMonthsAt, getAgeAnchorDate, parseChildDate } from "@/lib/childAge";
 
-export const DELETE_CHILD_NOT_OWNER_MESSAGE =
-  "Only the parent who added this child can delete their profile. If that's you, refresh the app and try again.";
+// Zero rows deleted: the profile was already deleted (another device or a stale
+// tab) or the caller isn't the owner. The button is owner-only, so lead with the first.
+export const DELETE_CHILD_NOT_DELETED_MESSAGE =
+  "This profile may already be deleted, or only the parent who added it can delete it. Refresh the app to check.";
 export const DELETE_CHILD_FAILED_MESSAGE =
   "Check your connection and try again.";
 
@@ -75,7 +77,7 @@ export function useChildren() {
         console.error("Could not delete child", error);
         throw new Error(DELETE_CHILD_FAILED_MESSAGE);
       }
-      if (!data || data.length === 0) throw new Error(DELETE_CHILD_NOT_OWNER_MESSAGE);
+      if (!data || data.length === 0) throw new Error(DELETE_CHILD_NOT_DELETED_MESSAGE);
       return { id };
     },
     onSuccess: async ({ id }) => {

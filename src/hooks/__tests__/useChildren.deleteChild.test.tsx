@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { DELETE_CHILD_FAILED_MESSAGE, DELETE_CHILD_NOT_OWNER_MESSAGE, useChildren } from "@/hooks/useChildren";
+import { DELETE_CHILD_FAILED_MESSAGE, DELETE_CHILD_NOT_DELETED_MESSAGE, useChildren } from "@/hooks/useChildren";
 
 const db = vi.hoisted(() => ({
   children: [] as { id: string; name: string; parent_id: string; date_of_birth: string }[],
@@ -94,7 +94,7 @@ describe("useChildren.deleteChild", () => {
     db.deleteResult = { data: [], error: null };
     await expect(
       act(() => result.current.deleteChild.mutateAsync({ id: "child-a" })),
-    ).rejects.toThrow(DELETE_CHILD_NOT_OWNER_MESSAGE);
+    ).rejects.toThrow(DELETE_CHILD_NOT_DELETED_MESSAGE);
     expect(result.current.children.map((c) => c.id)).toEqual(["child-a", "child-b"]);
   });
 

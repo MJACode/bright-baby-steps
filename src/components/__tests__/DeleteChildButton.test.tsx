@@ -120,14 +120,14 @@ describe("Delete child action", () => {
     const { onOpenChange } = renderDialog(ada);
     openConfirm();
     fireEvent.change(screen.getByLabelText("Type Ada to confirm"), { target: { value: "Ada" } });
-    state.mutateAsync.mockRejectedValue(new Error("Only the parent who added this child can delete their profile."));
+    state.mutateAsync.mockRejectedValue(new Error("This profile may already be deleted, or only the parent who added it can delete it."));
     fireEvent.click(screen.getAllByRole("button", { name: "Delete Ada's profile" }).at(-1)!);
 
     await waitFor(() =>
       expect(state.toast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Couldn't delete Ada's profile",
-          description: "Only the parent who added this child can delete their profile.",
+          description: "This profile may already be deleted, or only the parent who added it can delete it.",
           variant: "destructive",
         }),
       ),
