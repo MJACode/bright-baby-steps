@@ -5,6 +5,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { differenceInMonths, differenceInWeeks, differenceInDays } from "date-fns";
 import { ageInMonthsAt, getAgeAnchorDate, parseChildDate } from "@/lib/childAge";
 
+export const DELETE_CHILD_NOT_OWNER_MESSAGE =
+  "Only the parent who added this child can delete their profile. If that's you, refresh the app and try again.";
+export const DELETE_CHILD_FAILED_MESSAGE =
+  "Check your connection and try again.";
+
 export function useChildren() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -57,6 +62,44 @@ export function useChildren() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["children"] }),
   });
 
+  // RLS lets only the owner delete a child, and a denied DELETE returns zero
+  // rows with no error, so the row count is the only signal it happened.
+  const deleteChild = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const { data, error } = await supabase
+        .from("children")
+        .delete()
+        .eq("id", id)
+        .select("id");
+      if (error) {
+        console.error("Could not delete child", error);
+        throw new Error(DELETE_CHILD_FAILED_MESSAGE);
+      }
+      if (!data || data.length === 0) throw new Error(DELETE_CHILD_NOT_OWNER_MESSAGE);
+      return { id };
+    },
+    onSuccess: async ({ id }) => {
+      const remaining = (queryClient.getQueryData<NonNullable<typeof children>>(["children"]) ?? [])
+        .filter((c) => c.id !== id);
+      queryClient.setQueryData(["children"], remaining);
+
+      try {
+        if (localStorage.getItem("active-child-id") === id) {
+          if (remaining[0]) localStorage.setItem("active-child-id", remaining[0].id);
+          else localStorage.removeItem("active-child-id");
+        }
+      } catch { /* storage unavailable; activeChild falls back to children[0] */ }
+      setSelectedChildIdState((current) => (current === id ? remaining[0]?.id ?? null : current));
+
+      // Every cached query that names the deleted child is now about a row
+      // that no longer exists — drop them rather than refetch.
+      const isAboutChild = (q: { queryKey: readonly unknown[] }) => JSON.stringify(q.queryKey).includes(id);
+      await queryClient.cancelQueries({ predicate: isAboutChild });
+      queryClient.removeQueries({ predicate: isAboutChild });
+      return queryClient.invalidateQueries({ queryKey: ["children"] });
+    },
+  });
+
   const setSelectedChildId = useCallback((id: string) => {
     setSelectedChildIdState(id);
     try { localStorage.setItem("active-child-id", id); } catch {}
@@ -68,7 +111,7 @@ export function useChildren() {
     return found ?? children[0];
   }, [children, selectedChildId]);
 
-  return { children: children ?? [], isLoading, isFetching, addChild, updateChild, activeChild, setSelectedChildId };
+  return { children: children ?? [], isLoading, isFetching, addChild, updateChild, deleteChild, activeChild, setSelectedChildId };
 }
 
 export {
