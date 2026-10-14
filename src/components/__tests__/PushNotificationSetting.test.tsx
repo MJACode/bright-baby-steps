@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PushNotificationSetting } from "@/components/PushNotificationSetting";
+import { PUSH_ENABLE_FAILED_TOAST } from "@/lib/pushNotifications";
 
 const h = vi.hoisted(() => ({
   supported: true,
@@ -67,6 +68,17 @@ describe("PushNotificationSetting", () => {
     await waitFor(() => expect(h.request).toHaveBeenCalledTimes(1));
     expect(onChange).not.toHaveBeenCalled();
     await waitFor(() => expect(h.toast).toHaveBeenCalledWith({ title: "Push notifications are on" }));
+  });
+
+  it("shows fixed, parent-readable copy instead of the native error", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    h.permission = "prompt";
+    h.request.mockRejectedValueOnce(new Error("UNUserNotificationCenter error 1"));
+    const { toggle } = renderSetting(true);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(h.toast).toHaveBeenCalledWith(PUSH_ENABLE_FAILED_TOAST));
+    expect(JSON.stringify(h.toast.mock.calls)).not.toContain("UNUserNotificationCenter");
+    err.mockRestore();
   });
 
   it("saves push_enabled without re-prompting when iOS blocks it", () => {

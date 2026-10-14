@@ -42,6 +42,7 @@ import {
   pushEnvironment,
   requestPushPermission,
   routeForPush,
+  UNREGISTER_TIMEOUT_MS,
   unregisterPush,
 } from "@/lib/pushNotifications";
 
@@ -147,6 +148,28 @@ describe("unregisterPush", () => {
     err.mockRestore();
   });
 
+  it("gives up on a hung RPC after the timeout, so sign-out isn't blocked", async () => {
+    vi.useFakeTimers();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      localStorage.setItem("push_device_token", "apns-token");
+      h.rpc.mockImplementationOnce(() => new Promise(() => {}));
+      let settled = false;
+      const done = unregisterPush().then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(UNREGISTER_TIMEOUT_MS - 1);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await done;
+      expect(settled).toBe(true);
+      expect(localStorage.getItem("push_device_token")).toBeNull();
+    } finally {
+      err.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("skips the RPC when this device never registered", async () => {
     await unregisterPush();
     expect(h.rpc).not.toHaveBeenCalled();
@@ -189,6 +212,10 @@ describe("routeForPush", () => {
   it("only follows in-app paths", () => {
     expect(routeForPush({ route: "https://evil.example" })).toBeNull();
     expect(routeForPush({ route: "//evil.example" })).toBeNull();
+    expect(routeForPush({ route: "/\\evil.example" })).toBeNull();
+    expect(routeForPush({ route: "/\\/evil.example" })).toBeNull();
+    expect(routeForPush({ route: "/dashboard\\..\\x" })).toBeNull();
+    expect(routeForPush({ route: "dashboard" })).toBeNull();
     expect(routeForPush(null)).toBeNull();
     expect(routeForPush({ route: "/dashboard" })).toBe("/dashboard");
   });

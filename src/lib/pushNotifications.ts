@@ -34,6 +34,14 @@ export function pushEnvironment(): PushEnvironment {
   return import.meta.env.MODE === "production" ? "production" : "sandbox";
 }
 
+// Native registration errors are APNs/plugin internals, not something a
+// parent can act on, so both enable surfaces show this instead.
+export const PUSH_ENABLE_FAILED_TOAST = {
+  title: "Couldn't turn on notifications",
+  description: "Try again, or check Settings → Grace Flare → Notifications.",
+  variant: "destructive",
+} as const;
+
 function normalize(state: string): PushPermission {
   if (state === "granted") return "granted";
   if (state === "denied") return "denied";
@@ -80,20 +88,30 @@ export async function handleRegistration(token: Token): Promise<void> {
   if (error) console.error("register_push_device failed", error.message);
 }
 
+export const UNREGISTER_TIMEOUT_MS = 3000;
+
 // Runs before the session is cleared so the RPC still has auth.uid(). The
 // local token is forgotten even if the call fails: the next sign-in on this
-// device re-registers the same token to whoever signs in.
+// device re-registers the same token to whoever signs in. The RPC races a
+// timeout because a hung request (offline, captive portal) would otherwise
+// leave the parent stuck on Sign out.
 export async function unregisterPush(): Promise<void> {
   if (!isPushSupported()) return;
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return;
   localStorage.removeItem(TOKEN_KEY);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), UNREGISTER_TIMEOUT_MS);
+  });
   try {
-    const { error } = await rpc("unregister_push_device", { p_token: token });
-    if (error) console.error("unregister_push_device failed", error.message);
+    const result = await Promise.race([rpc("unregister_push_device", { p_token: token }), timeout]);
+    if (result === "timeout") console.error("unregister_push_device timed out");
+    else if (result.error) console.error("unregister_push_device failed", result.error.message);
   } catch (err) {
-    // Sign-out must never be blocked by this.
     console.error("unregister_push_device failed", err);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -101,7 +119,14 @@ export function routeForPush(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const { route, type } = data as Record<string, unknown>;
   // In-app paths only — never follow a protocol-relative or absolute URL.
-  if (typeof route === "string" && route.startsWith("/") && !route.startsWith("//")) {
+  // WHATWG URL parsing treats a backslash as "/", so "/\\evil.example"
+  // resolves as protocol-relative too.
+  if (
+    typeof route === "string" &&
+    route.startsWith("/") &&
+    !route.startsWith("//") &&
+    !route.includes("\\")
+  ) {
     return route;
   }
   if (typeof type === "string") return routeForNotificationType(type);

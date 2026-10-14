@@ -4,7 +4,7 @@ import { usePushPermission } from "@/hooks/usePushPermission";
 import { useNotificationPrefs } from "@/hooks/useNotificationPrefs";
 import { usePreferences } from "@/hooks/usePreferences";
 import { toast } from "@/hooks/use-toast";
-import { isPushSupported } from "@/lib/pushNotifications";
+import { isPushSupported, PUSH_ENABLE_FAILED_TOAST } from "@/lib/pushNotifications";
 
 // Pre-permission ask inside the notification sheet: the parent is already
 // looking at notifications, so this is the moment the iOS prompt makes sense.
@@ -27,11 +27,8 @@ function PushSoftAskCard() {
       const next = await request();
       if (next === "granted") toast({ title: "Push notifications are on" });
     } catch (err) {
-      toast({
-        title: "Couldn't turn on push notifications",
-        description: `${err instanceof Error ? err.message : String(err)}. You can turn them on later in Profile & Settings.`,
-        variant: "destructive",
-      });
+      console.error("Push permission request failed", err);
+      toast(PUSH_ENABLE_FAILED_TOAST);
     }
   };
 
@@ -42,7 +39,7 @@ function PushSoftAskCard() {
         <div>
           <p className="text-sm font-semibold">Get these on your lock screen</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Reminders and updates reach you even when Grace Flare is closed.
+            Reminders, development updates, and occasional savings tips reach you even when Grace Flare is closed.
           </p>
         </div>
       </div>

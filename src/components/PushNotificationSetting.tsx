@@ -1,6 +1,7 @@
 import { Switch } from "@/components/ui/switch";
 import { usePushPermission } from "@/hooks/usePushPermission";
 import { toast } from "@/hooks/use-toast";
+import { PUSH_ENABLE_FAILED_TOAST } from "@/lib/pushNotifications";
 
 interface PushNotificationSettingProps {
   pushEnabled: boolean;
@@ -31,11 +32,8 @@ export function PushNotificationSetting({
       const next = await request();
       if (next === "granted") toast({ title: "Push notifications are on" });
     } catch (err) {
-      toast({
-        title: "Couldn't turn on push notifications",
-        description: `${err instanceof Error ? err.message : String(err)}. Try again in a moment.`,
-        variant: "destructive",
-      });
+      console.error("Push permission request failed", err);
+      toast(PUSH_ENABLE_FAILED_TOAST);
     }
   };
 
@@ -45,7 +43,7 @@ export function PushNotificationSetting({
         <div>
           <p className="text-sm font-semibold">Push notifications</p>
           <p className="text-xs text-muted-foreground">
-            Reminders and updates on your lock screen, even when the app is closed
+            Reminders, development updates, and occasional savings tips on your lock screen, even when the app is closed
           </p>
         </div>
         <Switch
