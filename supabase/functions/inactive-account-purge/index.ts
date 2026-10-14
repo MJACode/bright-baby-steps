@@ -19,6 +19,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { bearerMatchesSecret } from "../_shared/serviceRoleAuth.ts";
 import { purgeUserStorage } from "../_shared/storagePurge.ts";
 
 const INACTIVE_THRESHOLD_DAYS = 730; // 24 months
@@ -114,13 +115,19 @@ async function sendWarningEmail(args: {
   return true;
 }
 
-serve(async () => {
+serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const resendKey = Deno.env.get("RESEND_API_KEY");
     const fromEmail = Deno.env.get("VPC_FROM_EMAIL") ?? "Grace Flare <noreply@graceflare.com>";
     const appUrl = Deno.env.get("APP_URL") ?? "https://graceflare.com";
+
+    // verify_jwt is false, and this function deletes accounts. Reject every
+    // caller except the cron's service-role bearer before any read or write.
+    if (!bearerMatchesSecret(req.headers.get("Authorization"), serviceKey)) {
+      return jsonResponse({ error: "unauthorized" }, 401);
+    }
 
     if (!supabaseUrl || !serviceKey) return jsonResponse({ error: "supabase_misconfigured" }, 500);
     if (!resendKey) return jsonResponse({ error: "resend_misconfigured" }, 500);
@@ -135,44 +142,51 @@ serve(async () => {
     ).toISOString();
 
     // ── Pull candidate users ─────────────────────────────────────────
-    // We need both auth.users (for last_sign_in_at + email) and profiles
-    // (for inactive_purge_warned_at). The cleanest path is the admin Auth
-    // API for the listing; profile reads are batched.
-    const { data: usersResp, error: usersErr } = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: BATCH_LIMIT,
-    });
-    if (usersErr) return jsonResponse({ error: "list_users_failed", detail: usersErr.message }, 500);
-
+    // listUsers is paged. Stopping at page 1 would leave every account past
+    // the first 200 outside the 24-month purge (Privacy § 8).
     const candidates: ProfileWithEmail[] = [];
-    for (const u of usersResp.users) {
-      const lastSignIn = u.last_sign_in_at ?? u.created_at;
-      if (!lastSignIn) continue;
-      if (lastSignIn > inactiveCutoffIso) continue;
-      candidates.push({
-        id: u.id,
-        email: u.email ?? null,
-        last_sign_in_at: lastSignIn,
-        inactive_purge_warned_at: null, // filled below
+    let examined = 0;
+    const MAX_PAGES = 50;
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const { data: usersResp, error: usersErr } = await admin.auth.admin.listUsers({
+        page,
+        perPage: BATCH_LIMIT,
       });
+      if (usersErr) return jsonResponse({ error: "list_users_failed", detail: usersErr.message }, 500);
+      const users = usersResp.users ?? [];
+      examined += users.length;
+      for (const u of users) {
+        const lastSignIn = u.last_sign_in_at ?? u.created_at;
+        if (!lastSignIn) continue;
+        if (lastSignIn > inactiveCutoffIso) continue;
+        candidates.push({
+          id: u.id,
+          email: u.email ?? null,
+          last_sign_in_at: lastSignIn,
+          inactive_purge_warned_at: null, // filled below
+        });
+      }
+      if (users.length < BATCH_LIMIT) break;
     }
 
     if (candidates.length === 0) {
-      return jsonResponse({ ok: true, warned: 0, purged: 0, cancelled: 0, examined: usersResp.users.length });
+      return jsonResponse({ ok: true, warned: 0, purged: 0, cancelled: 0, examined });
     }
 
-    // Fetch warning timestamps for the candidate uids
-    const { data: profileRows, error: profErr } = await admin
-      .from("profiles")
-      .select("id, inactive_purge_warned_at")
-      .in("id", candidates.map((c) => c.id));
-
-    if (profErr) return jsonResponse({ error: "profile_read_failed", detail: profErr.message }, 500);
-
+    // Fetch warning timestamps for the candidate uids, in chunks so a long
+    // id list does not overflow the PostgREST URL.
     const warnedAtById = new Map<string, string | null>();
-    for (const row of profileRows ?? []) {
-      const r = row as { id: string; inactive_purge_warned_at: string | null };
-      warnedAtById.set(r.id, r.inactive_purge_warned_at);
+    for (let i = 0; i < candidates.length; i += 100) {
+      const ids = candidates.slice(i, i + 100).map((c) => c.id);
+      const { data: profileRows, error: profErr } = await admin
+        .from("profiles")
+        .select("id, inactive_purge_warned_at")
+        .in("id", ids);
+      if (profErr) return jsonResponse({ error: "profile_read_failed", detail: profErr.message }, 500);
+      for (const row of profileRows ?? []) {
+        const r = row as { id: string; inactive_purge_warned_at: string | null };
+        warnedAtById.set(r.id, r.inactive_purge_warned_at);
+      }
     }
 
     let warnedCount = 0;
@@ -234,7 +248,7 @@ serve(async () => {
 
     return jsonResponse({
       ok: true,
-      examined: usersResp.users.length,
+      examined,
       candidates: candidates.length,
       warned: warnedCount,
       purged: purgedCount,

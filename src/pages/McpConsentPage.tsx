@@ -60,6 +60,21 @@ export default function McpConsentPage() {
       ? childNames[0]
       : childNames.slice(0, -1).join(", ") + " and " + childNames[childNames.length - 1];
 
+  // https, or http only for localhost. The edge function already checks this
+  // for registered clients; the page checks again because it navigates itself.
+  const isSafeWebRedirect = (uri: string): boolean => {
+    try {
+      const u = new URL(uri);
+      return (
+        u.protocol === "https:" ||
+        (u.protocol === "http:" &&
+          (u.hostname === "localhost" || u.hostname === "127.0.0.1"))
+      );
+    } catch {
+      return false;
+    }
+  };
+
   const handleApprove = async () => {
     setSubmitting(true);
     setError(null);
@@ -108,6 +123,11 @@ export default function McpConsentPage() {
         return;
       }
       const { redirect } = await res.json();
+      if (typeof redirect !== "string" || !isSafeWebRedirect(redirect)) {
+        setError("We couldn't complete the connection. Close this window and try adding the connector in Claude again.");
+        setSubmitting(false);
+        return;
+      }
       window.location.href = redirect;
     } catch (err: unknown) {
       const message =
@@ -119,29 +139,12 @@ export default function McpConsentPage() {
     }
   };
 
-  // Only bounce back to the client's redirect_uri if it's a sane web scheme.
-  // The legitimate flow always arrives here via the backend's /oauth/authorize,
-  // which has already validated redirect_uri against the registered client — but
-  // this route is directly reachable, so guard against a crafted redirect_uri
-  // (javascript:, data:, etc.) being used as a one-click open-redirect on deny.
-  const isSafeWebRedirect = (uri: string): boolean => {
-    try {
-      const u = new URL(uri);
-      return (
-        u.protocol === "https:" ||
-        (u.protocol === "http:" &&
-          (u.hostname === "localhost" || u.hostname === "127.0.0.1"))
-      );
-    } catch {
-      return false;
-    }
-  };
-
   const handleDeny = () => {
     if (redirectUri && isSafeWebRedirect(redirectUri)) {
-      const denyUrl =
-        redirectUri + "?error=access_denied" + (state ? "&state=" + encodeURIComponent(state) : "");
-      window.location.href = denyUrl;
+      const denyUrl = new URL(redirectUri);
+      denyUrl.searchParams.set("error", "access_denied");
+      if (state) denyUrl.searchParams.set("state", state);
+      window.location.href = denyUrl.toString();
       return;
     }
     // No safe redirect target — don't open-redirect; show an in-page cancelled state.
