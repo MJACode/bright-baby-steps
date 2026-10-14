@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useChildren } from "@/hooks/useChildren";
 import { toast } from "@/hooks/use-toast";
 
-export function childFirstName(name: string): string {
+function childFirstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? "";
 }
 
