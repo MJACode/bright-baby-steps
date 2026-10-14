@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 // push_devices isn't in the generated Supabase types until they're regenerated
-// after the 20261014000000_push_devices migration; drop it from here then.
+// after the 20261014130000_push_devices migration; drop it from here then.
 type PendingTable = "push_devices";
 type TableName = keyof Database["public"]["Tables"] | PendingTable;
 

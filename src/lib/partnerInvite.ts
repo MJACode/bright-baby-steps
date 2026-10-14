@@ -106,6 +106,9 @@ export function describePartnerError(
       ? `The free plan includes ${FREE_ADDITIONAL_USERS} additional person. Remove someone, or upgrade to Flare+ for ${MAX_ADDITIONAL_USERS}.`
       : `Flare+ includes ${MAX_ADDITIONAL_USERS} additional people. Remove someone to free up a spot.`;
   }
+  if (message.includes("CONSENT_REQUIRED")) {
+    return "Check the box to confirm you agree before joining.";
+  }
   if (message.includes("Invalid or expired")) {
     return "This invite has expired or has already been used.";
   }

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { format } from "date-fns";
@@ -7,8 +8,9 @@ import { useWakePrediction } from "@/hooks/useWakePrediction";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
 import { formatApproxClock } from "@/lib/gentleTime";
+import { napBlockedBySleepInProgress } from "@/lib/sleepCoach";
 import { pickBandEvent } from "@/lib/nextEvent";
-import { firstNameOrBaby, sleepCoachShowing } from "@/lib/sleepCoachState";
+import { deriveWakeState, firstNameOrBaby, sleepCoachShowing } from "@/lib/sleepCoachState";
 
 interface NextEventBandProps {
   activeChild: (FeedCoachChild & { name?: string | null }) | null;
@@ -43,14 +45,43 @@ export function NextEventBand({
   const { data: coach } = useSleepCoach(activeChild);
   const feed = useFeedCoach(activeChild);
   // The hook's tick keeps `minutesAway` fresh and lets the hand-off to the
-  // coach card fire; its `activeSleep` already drops a stale (>12h) timer.
-  const { wake, hungryOnWake, activeSleep, now } = useWakePrediction(activeChild);
+  // coach card fire. `activeSleep` drops a stale (>12h) timer; `sleepTimerOn`
+  // does not — the banner still shows that timer, so a nap prediction would
+  // contradict it. Coach logs cover the same open timer when the active-session
+  // query hasn't landed yet.
+  const { wake, hungryOnWake, activeSleep, sleepTimerOn, now } = useWakePrediction(activeChild);
   const { prefs } = usePreferences();
   const calmMode = prefs.calmMode;
 
-  // No "likely sleepy" while the baby is already asleep — the band falls back
-  // to the feed side, which still matters for when they wake.
-  const nap = activeSleep ? null : coach?.prediction ?? null;
+  // No "likely sleepy" while a sleep timer is running. The nap engine also
+  // returns null for an open timer; this covers the refetch gap, when the
+  // cached prediction was computed before the timer row was in the logs.
+  const asleep = napBlockedBySleepInProgress(coach?.logs, sleepTimerOn);
+  const nap = asleep ? null : coach?.prediction ?? null;
+
+  // Sleep Coach owns the wake line when that section is on screen. When it
+  // isn't, this band is the only prediction surface — say when she'll likely
+  // wake instead of leaving the glance blank or falling through to a nap.
+  // The "hungry when they wake" sentence stays with Feed Coach when that
+  // card is on screen.
+  if (asleep && wake && !sleepCoachVisible) {
+    const wakeState = deriveWakeState(now, wake, calmMode, {
+      hungryOnWake,
+      childName: activeChild?.name,
+      isNight: activeSleep?.sleep_type === "night",
+    });
+    return (
+      <BandCard>
+        <p className="text-sm text-foreground leading-snug">{wakeState.title}</p>
+        {/* Feed Coach already headlines this sentence when that section is on. */}
+        {hungryOnWake && !feedCoachVisible && (
+          <p className="text-sm text-foreground/85 leading-snug mt-1">{wakeState.cue}</p>
+        )}
+        {wake.reason && <Reason>{wake.reason}</Reason>}
+      </BandCard>
+    );
+  }
+
   const hunger = feed.prediction;
   const napOwned =
     sleepCoachVisible &&
@@ -79,6 +110,23 @@ export function NextEventBand({
   const sample = pick.type === "nap" ? nap!.reason : hunger!.reason;
 
   return (
+    <BandCard>
+      {hungryOnWake && pick.type === "feed" ? (
+        <p className="text-sm text-foreground leading-snug">
+          {firstNameOrBaby(activeChild?.name)} may be <strong>hungry</strong> when they wake.
+        </p>
+      ) : (
+        <p className="text-sm text-foreground leading-snug">
+          Likely <strong>{verb}</strong> {whenText}.
+        </p>
+      )}
+      {sample && <Reason>{sample}</Reason>}
+    </BandCard>
+  );
+}
+
+function BandCard({ children }: { children: ReactNode }) {
+  return (
     <PremiumGate feature="predictions" variant="blur">
       <Card className="border border-primary/15 bg-gradient-to-br from-primary/8 to-accent/8">
         <CardContent className="p-4">
@@ -88,20 +136,13 @@ export function NextEventBand({
               Coach predicts
             </span>
           </div>
-          {hungryOnWake && pick.type === "feed" ? (
-            <p className="text-sm text-foreground leading-snug">
-              {firstNameOrBaby(activeChild?.name)} may be <strong>hungry</strong> when they wake.
-            </p>
-          ) : (
-            <p className="text-sm text-foreground leading-snug">
-              Likely <strong>{verb}</strong> {whenText}.
-            </p>
-          )}
-          {sample && (
-            <p className="text-[11px] text-muted-foreground mt-1">{sample}</p>
-          )}
+          {children}
         </CardContent>
       </Card>
     </PremiumGate>
   );
+}
+
+function Reason({ children }: { children: ReactNode }) {
+  return <p className="text-[11px] text-muted-foreground mt-1">{children}</p>;
 }

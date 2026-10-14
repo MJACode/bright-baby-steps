@@ -85,6 +85,16 @@ describe("describePartnerError", () => {
     expect(msg).not.toContain("SEAT_LIMIT_REACHED");
   });
 
+  it("asks the invitee to confirm consent", () => {
+    const msg = describePartnerError(
+      { message: "CONSENT_REQUIRED: confirm you agree before accepting" },
+      "fallback",
+      "invitee",
+    );
+    expect(msg).toContain("Check the box");
+    expect(msg).not.toContain("CONSENT_REQUIRED");
+  });
+
   it("falls back for anything it doesn't recognize", () => {
     expect(describePartnerError(new Error("network down"), "fallback")).toBe("fallback");
     expect(describePartnerError(null, "fallback")).toBe("fallback");

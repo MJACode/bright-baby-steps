@@ -25,13 +25,13 @@
 //     days_until: number         // 7 or 1
 //   }
 //
-// Security: caller passes the parent's JWT via Authorization. The function
-// verifies the JWT and the recipient `email` matches the authenticated user.
-// This prevents a compromised caller from sending arbitrary appointment
-// reminders to other addresses.
+// Security: the cron calls with the service-role key as Bearer (compared in
+// full, not by an unverified JWT role claim). A parent's JWT is accepted only
+// when the recipient email matches that user.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { bearerMatchesSecret } from "../_shared/serviceRoleAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -186,26 +186,11 @@ serve(async (req) => {
     if (!supabaseUrl || !serviceKey) return jsonResponse({ error: "supabase_misconfigured" }, 500);
     if (!resendKey) return jsonResponse({ error: "resend_misconfigured" }, 500);
 
-    // Caller-identity gate. This function has two legitimate callers:
-    //   1. `check-notifications` cron → invokes with the project's service-role
-    //      JWT. The cron has already verified the row's parent_id and looked
-    //      up `auth.users.email`, so we trust it to pass a valid recipient.
-    //   2. (Future) a UI surface → invokes with the user's own JWT. In that
-    //      path we require recipient == authenticated user's email.
-    //
-    // We decode the JWT once and branch on the `role` claim. Service-role
-    // JWTs have `role: "service_role"`; user JWTs have `role: "authenticated"`.
-    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-    let isServiceRole = false;
-    try {
-      const [, payloadB64] = token.split(".");
-      const claims = JSON.parse(
-        atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")),
-      );
-      isServiceRole = claims?.role === "service_role";
-    } catch {
-      // fall through to user-JWT path
-    }
+    // Caller-identity gate. verify_jwt is false, so a decoded `role` claim is
+    // not evidence. Two legitimate callers:
+    //   1. `check-notifications` sends the service-role key as Bearer.
+    //   2. A signed-in parent, whose JWT must match the recipient email.
+    const isServiceRole = bearerMatchesSecret(authHeader, serviceKey);
 
     let payload: ReminderPayload;
     try {
@@ -233,8 +218,12 @@ serve(async (req) => {
 
     if (!isServiceRole) {
       // User-JWT path: recipient must match the authenticated user's email.
-      const userClient = createClient(supabaseUrl, serviceKey, {
+      // Use the anon key here so this client cannot bypass RLS on its own.
+      const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+      if (!anonKey) return jsonResponse({ error: "supabase_misconfigured" }, 500);
+      const userClient = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false, autoRefreshToken: false },
       });
       const { data: userData, error: userErr } = await userClient.auth.getUser();
       if (userErr || !userData?.user) return jsonResponse({ error: "unauthorized" }, 401);

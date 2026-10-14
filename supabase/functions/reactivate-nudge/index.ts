@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { bearerMatchesSecret } from "../_shared/serviceRoleAuth.ts";
 
 interface StaleRow {
   user_id: string;
@@ -7,11 +8,19 @@ interface StaleRow {
   child_name: string;
 }
 
-serve(async () => {
-  const sb = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+serve(async (req) => {
+  // verify_jwt is false. The cron sends the Vault service-role key as Bearer.
+  // Anything else — including a forged JWT whose payload says service_role —
+  // is rejected before the service-role client is created.
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!bearerMatchesSecret(req.headers.get("Authorization"), serviceKey)) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
   const cutoff = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
 
   const { data: stale, error } = await sb.rpc("users_with_no_logs_since", { since: cutoff });

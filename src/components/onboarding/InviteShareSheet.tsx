@@ -240,18 +240,36 @@ function ShareTile({
 }
 
 function QrPanel({ url, onBack }: { url: string; onBack: () => void }) {
-  // Use a public QR endpoint — keeps the bundle tiny.
-  // Server-rendered PNG, 240px square.
-  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(url)}`;
+  // Drawn on the device. The invite URL is a credential for the child's
+  // records, so it is not sent to a QR rendering service.
+  const [qrSrc, setQrSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    import("qrcode")
+      .then((mod) => mod.toDataURL(url, { width: 240, margin: 1, errorCorrectionLevel: "M" }))
+      .then((dataUrl) => {
+        if (!cancelled) setQrSrc(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setQrSrc(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
   return (
     <div className="flex flex-col items-center gap-4 py-2">
-      <img
-        src={qrSrc}
-        alt="Invite QR code"
-        width={240}
-        height={240}
-        className="rounded-2xl border border-border bg-white p-2"
-      />
+      {qrSrc ? (
+        <img
+          src={qrSrc}
+          alt="Invite QR code"
+          width={240}
+          height={240}
+          className="rounded-2xl border border-border bg-white p-2"
+        />
+      ) : (
+        <div className="w-[240px] h-[240px] rounded-2xl border border-border bg-muted" aria-hidden />
+      )}
       <p className="text-xs text-muted-foreground text-center max-w-[260px]">
         Have them open the camera and point at this code.
       </p>

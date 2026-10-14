@@ -14,6 +14,12 @@ export interface WakePredictionData {
   hungryOnWake: boolean;
   /** The running sleep, or null when there is none or its timer is stale (>12h). */
   activeSleep: ReturnType<typeof useActiveSleep>["active"] | null;
+  /**
+   * The banner's timer row, including one the wake hook calls stale. Nap
+   * predictions stand down for this whole time — the banner still says
+   * "in progress".
+   */
+  sleepTimerOn: boolean;
   /** The clock `wake` was computed against; ticks every 30s. */
   now: Date;
 }
@@ -54,6 +60,7 @@ export function useWakePrediction(activeChild: FeedCoachChild | null): WakePredi
     wake,
     hungryOnWake: wakeHungerOverlaps(wake, feed.prediction),
     activeSleep: active,
+    sleepTimerOn: !!rawActive,
     now,
   };
 }
