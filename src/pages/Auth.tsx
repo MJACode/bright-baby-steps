@@ -14,6 +14,9 @@ import { Baby, Globe } from "lucide-react";
 
 type View = "login" | "signup" | "forgot" | "pending";
 
+// Recorded server-side by handle_new_user from signup metadata (no session exists yet under "Confirm email").
+const DATA_CONSENT_VERSION = "1.0";
+
 export default function Auth() {
   const { session, loading } = useAuth();
   const geo = useGeoBlock();
@@ -128,16 +131,14 @@ export default function Auth() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth`,
-            data: { full_name: fullName, ...(pendingInviteCode ? { pending_invite: pendingInviteCode } : {}) },
+            data: {
+              full_name: fullName,
+              data_consent_version: DATA_CONSENT_VERSION,
+              ...(pendingInviteCode ? { pending_invite: pendingInviteCode } : {}),
+            },
           },
         });
         if (error) throw error;
-        if (signUpData.user) {
-          await supabase.from("profiles").update({
-            data_consent_given_at: new Date().toISOString(),
-            data_consent_version: "1.0",
-          }).eq("id", signUpData.user.id);
-        }
         // First half of COPPA email-plus VPC. Requires Supabase Auth's "Confirm
         // email" setting to be ON; when it is, signUpData.session is null and we
         // flip to the "pending" view. The auth.users trigger

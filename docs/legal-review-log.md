@@ -3161,3 +3161,72 @@ Legitimate callers keep working:
 - **Age gates.** No stretch suggestions under 4 months corrected age, or between 3.5–4.5 months.
 
 **Code refs:** `src/lib/wakeWindow.ts`, `src/components/SleepCoachCard.tsx`, `src/hooks/useSleepPlan.tsx`, `src/pages/dashboard/WeeklyInsightsPage.tsx`, `supabase/functions/weekly-insights/index.ts`, `supabase/functions/_shared/wakeWindowInsight.ts`, `supabase/functions/_shared/personas.ts`. Fill in the commit hash at merge.
+
+---
+
+## 2026-10-12 — Signup consent stamped server-side; account-deletion Storage purge fixed; backup-retention and legacy-memory P0s closed
+
+**Reviewer:** in-house (founder approval 2026-10-12; Claude `backend`, live state checked with read-only SQL). **Risk level:** Medium (a consent record was missing for every account, and account deletion did not cover every Storage bucket) → resolved when this PR merges and the `migrate` + function-deploy jobs run. **Merging applies migration `20261013000000_signup_consent_stamp.sql` to production and needs founder approval first.**
+
+### 1. Signup Terms/Privacy consent was never recorded (fixed going forward)
+
+**What was wrong.** The signup form requires the Terms/Privacy checkbox, but the timestamp was written by a client `profiles` UPDATE right after `signUp()`. With "Confirm email" on there's no session yet, so the UPDATE matched no row under RLS (since `20261009000000` it gets a permission error, which the code ignored). Live on 2026-10-12: `data_consent_given_at` is NULL on **all 5 profiles**. This closes the P2 in the 2026-10-09 entry.
+
+**Fix.** `Auth.tsx` now sends `data_consent_version` in signup user metadata and no longer runs the client UPDATE (commit 94e5ba8). The `handle_new_user()` trigger on `auth.users` copies that value into `profiles.data_consent_version` and stamps `data_consent_given_at` with the **server's** `now()`. It never uses a client timestamp. The stamp is only written when the key is present: accounts created from the dashboard or admin API, which have no consent metadata, stay NULL. The trigger also copies the signup `full_name`. That value has always been sent but was never stored, so partner "logged by" names fell back to "Family". The trigger keeps its earlier behavior (insert `id`, `email`) and has no client EXECUTE grant. The migration fails if the function stops stamping consent, loses SECURITY DEFINER, becomes client-callable, or has no enabled `auth.users` trigger. Tested locally (Postgres 16): applied twice, then insert with metadata, insert without metadata, insert with blank metadata, then the assertion's negative path.
+
+**Signup paths checked.** `Auth.tsx` is the only `supabase.auth.signUp` call. There is no OAuth / OTP / ID-token signup. Partner invitees sign up through the same `/auth` form (AcceptInvite → `/auth`, with the invite code carried in the same metadata), so they get the same stamp.
+
+**Existing 5 accounts: no backfill, by decision.** We will not fabricate a consent timestamp. What each account does carry (live, 2026-10-12):
+
+| Created | Signup metadata | `vpc_method` / VPC email #1 | VPC complete | Direct notice ack | Typed-name attestation | Partner consent (`partner_access.consent_acknowledged_at`) |
+|---|---|---|---|---|---|---|
+| 2026-04-24 | full_name only | email-plus / yes | no | no | no | yes (1) |
+| 2026-05-08 | full_name only | email-plus / yes | no | yes | no | — |
+| 2026-05-09 | full_name only | email-plus / yes | yes | yes | yes | — |
+| 2026-05-23 | full_name only | email-plus / yes | yes | yes | yes | — |
+| 2026-10-08 | none (dashboard/admin-created, confirmed at insert) | none / no | no | no | no | yes (1) |
+
+Two accounts have the full COPPA record (direct notice, typed-name signature, email #2). Two partner accounts have an invite-acceptance consent stamp. The 2026-04-24 and 2026-05-08 accounts have only the signup email confirmation, plus, for 05-08, the direct-notice acknowledgement. All 5 look like pre-launch / founder test accounts. `data_consent_given_at` stays NULL for all 5.
+
+### 2. Account-deletion Storage purge did not match the real buckets (fixed)
+
+**What was wrong.** `delete-account` and `inactive-account-purge` each kept their own list, `["feedback-screenshots", "milestone-photos"]`. Live buckets are `child-photos`, `milestone-photos` and `pediatrician-exports`, all private. `feedback-screenshots` does not exist. So `child-photos` and `pediatrician-exports` were never purged. Three more bugs: listing was one folder deep, so files in sub-folders were skipped. `delete-account` removed a page and then advanced the offset, which skips a page for any user with more than 1,000 files. `inactive-account-purge` read only the first 1,000.
+
+**Storage map (live policies + code, 2026-10-12).** Every bucket's policies pin the first folder to the owner's uid (`{uid}/...`). No bucket uses a child-scoped path.
+
+| Bucket | Live? | Writer today | Objects on live | Purged before | Purged now |
+|---|---|---|---|---|---|
+| `child-photos` | yes, private | none | 0 | no | yes |
+| `milestone-photos` | yes, private | none (milestone photos retired 2026-06-21) | 1 (an orphan from 2026-05-27, under an existing user's uid) | top level only | yes, recursive |
+| `pediatrician-exports` | yes, private | none | 0 | no | yes |
+| `feedback-screenshots` | **no** | `FeedbackDialog` → `{uid}/{ts}.{ext}` | — | listed, errored | listed; "bucket not found" is reported and the purge continues |
+
+**Fix.** One shared list and helper in `supabase/functions/_shared/storagePurge.ts`, used by both functions. It walks sub-folders, lists everything before removing anything, removes in batches, keeps going if one bucket fails, reports found / deleted / error for each bucket, and refuses a non-UUID uid (an empty prefix would list every user's files). Storage still runs before the SQL purge. No bucket is child-scoped, so nothing needs the children rows the SQL purge deletes. `src/test/storagePurge.server.test.ts` (vitest, so it runs in CI's `npm test`) covers this with a fake Storage client: nested folders, pagination plus batching with no skipped pages, one bucket's list error, another bucket's remove error, a missing bucket, an empty user, the non-UUID guard and the depth guard. This **stands in for the "end-to-end test in dev" P0**. There is no dev project, so a live Storage deletion is still unproven (see follow-up 2).
+
+**Feedback screenshots are broken on live.** The bucket doesn't exist, so every screenshot upload fails. The user sees "Failed to upload screenshot. Sending feedback without it." and the text feedback still saves. Even with the bucket in place, the code would still fail: there is no INSERT policy on live. `20260407000003` (which created the bucket and its INSERT policy) is recorded as applied in `schema_migrations`, but both the bucket and the INSERT policy are now missing on live, removed by some path outside the repo's migrations. Only the own-read SELECT policy from `20260416000000` is left. The code also stores a `getPublicUrl` link to what would be a private bucket. No bucket was created in this pass.
+
+**Single-child deletion.** The app has no delete-child path (`useChildren` has add and update only; deleting a child is owner-only per the 2026-10-09 decision, but there's no UI). So no child-delete can leave files behind today. Privacy § 8, however, says "When you delete your account or a child's record, primary database records are removed within 7 days. Files in object storage are deleted within 30 days." A parent can only delete a child's record through a `/rights-request` handled by hand.
+
+### 3. Backup retention (P0 closed)
+
+Supabase docs, "Database Backups" (https://supabase.com/docs/guides/platform/backups, read 2026-10-12): Free plan: no automatic backups. Pro: last 7 days of daily backups. Team: 14 days. Enterprise: "up to 30 days". Point-in-Time Recovery add-on retention: 7, 14 or 28 days (https://supabase.com/docs/guides/platform/manage-your-usage/point-in-time-recovery), and enabling PITR replaces daily backups. Database backups do not contain Storage objects. **Every plan's maximum is 30 days or less, so "no longer than 30 days" (Privacy § 8) holds whatever tier the project is on.** One caveat: the project's tier and PITR setting couldn't be read with the tools available. Only an Enterprise contract with custom retention could exceed 30 days. The founder can confirm in the dashboard (Organization → Billing for the plan; Database → Backups for the daily-backup / PITR window). We take no off-platform dumps: no `pg_dump` / `db dump` in `.github/` or `scripts/`.
+
+### 4. Legacy AI-memory cleanup (P0 closed)
+
+Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memories` is in `schema_migrations`. `child_memories` has 0 rows (0 before the 2026-10-07 cutoff), and `ai_memories` has 0 rows.
+
+### Found in this pass, not fixed (founder decision needed)
+
+- **P0 — the COPPA VPC gate can be bypassed by the parent's own client.** `profiles` has an `UPDATE` policy `auth.uid() = id` with no column restriction, and `authenticated` holds UPDATE on every column. A signed-in parent can PATCH their own `vpc_completed_at` (and `vpc_*`, `coppa_attestation_*`, `data_consent_*`) through PostgREST. `enforce_vpc_on_child_insert` trusts `vpc_completed_at`, so this skips VPC email #2 and the typed-name signature. Fix: column-level `REVOKE UPDATE` on the consent/VPC columns from `authenticated` (or a BEFORE UPDATE guard trigger), after checking the client writers (`CoppaDirectNotice.tsx`, `OnboardingWizard.tsx`, `useNotificationPrefs`) and moving any consent stamp they write into a SECURITY DEFINER RPC. The same gap makes `data_consent_given_at` editable by the user, which weakens it as an audit record.
+- **P1 — Privacy § 8 promises child-record deletion that has no self-serve path** (see item 2).
+- **P2 — `inactive-account-purge` examines only the first 200 auth users** (`listUsers` page 1). It doesn't matter at today's 5 accounts, but past 200 users some accounts would never be warned or purged.
+
+**Disclosures.** No change to Privacy, Terms, FAQ or `/subprocessors` wording.
+
+**Code refs:** this PR (`claude/consent-stamp-and-legal-p0s`): `supabase/migrations/20261013000000_signup_consent_stamp.sql`, `supabase/functions/_shared/storagePurge.ts`, `supabase/functions/delete-account/index.ts`, `supabase/functions/inactive-account-purge/index.ts`, `src/test/storagePurge.server.test.ts`, `src/pages/Auth.tsx` (94e5ba8). Fill in the merge hash.
+
+**Follow-ups:**
+1. After merge: confirm on live that `pg_get_functiondef('public.handle_new_user()')` stamps consent and `has_function_privilege('authenticated', 'public.handle_new_user()', 'EXECUTE')` is false. After the next real signup, confirm that profile has `data_consent_version = '1.0'` and a non-null `data_consent_given_at`. Re-run the security advisor. P0 at merge.
+2. Live Storage deletion is still untested. With a throwaway account, upload one file under `{uid}/` in `milestone-photos`, delete the account, and confirm the `delete-account` response reports `deleted: 1` and the object is gone. P1.
+3. Feedback screenshots: either create a private `feedback-screenshots` bucket with an own-folder INSERT policy and change `FeedbackDialog` to store the path (not a public URL), or remove the screenshot picker. P2.
+4. Decide on the VPC-gate / consent-column lockdown above. P0.

@@ -19,11 +19,11 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { purgeUserStorage } from "../_shared/storagePurge.ts";
 
 const INACTIVE_THRESHOLD_DAYS = 730; // 24 months
 const WARNING_GRACE_DAYS = 30;
 const BATCH_LIMIT = 200;
-const STORAGE_BUCKETS = ["feedback-screenshots", "milestone-photos"] as const;
 
 interface ProfileWithEmail {
   id: string;
@@ -80,31 +80,6 @@ function warningEmailText(appUrl: string, deletionDate: string): string {
     "",
     "Grace Flare LLC — privacy questions: privacy@graceflare.com",
   ].join("\n");
-}
-
-// Storage cleanup must use the Storage admin API (HTTP path) — direct
-// `DELETE FROM storage.objects` is blocked by `storage.protect_delete()`
-// even from SECURITY DEFINER PL/pgSQL. We do it here, before the SQL
-// purge, so the on-disk files are gone before the DB references are.
-async function purgeUserStorage(
-  admin: ReturnType<typeof createClient>,
-  uid: string,
-): Promise<void> {
-  for (const bucket of STORAGE_BUCKETS) {
-    const { data: objects, error: listErr } = await admin.storage
-      .from(bucket)
-      .list(uid, { limit: 1000 });
-    if (listErr) {
-      console.error(`storage.list ${bucket}/${uid}/* failed`, uid, listErr.message);
-      continue;
-    }
-    if (!objects || objects.length === 0) continue;
-    const paths = objects.map((o) => `${uid}/${o.name}`);
-    const { error: removeErr } = await admin.storage.from(bucket).remove(paths);
-    if (removeErr) {
-      console.error(`storage.remove ${bucket}/${uid}/* failed`, uid, removeErr.message);
-    }
-  }
 }
 
 async function sendWarningEmail(args: {
@@ -218,9 +193,12 @@ serve(async () => {
         continue;
       }
 
-      // Stage 2 — purge eligible. Storage first, then DB.
+      // Stage 2 — purge eligible. Storage first, then DB. Storage goes
+      // through the Storage HTTP API (storage.protect_delete() blocks SQL
+      // deletes); see _shared/storagePurge.ts for the bucket list. A bucket
+      // failure is logged there and does not block the DB purge.
       if (warnedAt && warnedAt < purgeCutoffIso) {
-        await purgeUserStorage(admin, c.id);
+        await purgeUserStorage(admin.storage, c.id);
         const { error: purgeErr } = await admin.rpc("purge_inactive_account", {
           _target_uid: c.id,
         });
