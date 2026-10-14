@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useChildren } from "@/hooks/useChildren";
+import { useAuth } from "@/hooks/useAuth";
 import { useChildMemories } from "@/hooks/useChildMemories";
 import { CHILD_INTERESTS, TEMPERAMENTS } from "@/lib/childInterests";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +33,7 @@ import { Sparkles, Pencil, Trash2, Shield } from "lucide-react";
 
 export default function ChildContextPage() {
   const { activeChild } = useChildren();
+  const { user } = useAuth();
 
   const [editingChild, setEditingChild] = useState(false);
 
@@ -184,9 +186,16 @@ export default function ChildContextPage() {
             for advertising. You can delete any of it, any time.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm" className="touch-target text-sm">
-              <Link to="/dashboard/profile">Manage child data</Link>
-            </Button>
+            {user && activeChild.parent_id === user.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="touch-target text-sm"
+                onClick={() => setEditingChild(true)}
+              >
+                Edit or delete {firstName}'s profile
+              </Button>
+            )}
             <Button asChild variant="ghost" size="sm" className="touch-target text-sm text-muted-foreground">
               <Link to="/privacy">Privacy Policy</Link>
             </Button>

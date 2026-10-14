@@ -99,7 +99,9 @@ export function CoppaDirectNotice({ userId, onAcknowledged, onCancel }: Props) {
           <p className="font-medium text-foreground">Your rights as a parent</p>
           <p className="text-foreground/80">
             You can review, delete, or stop further collection of your child's
-            data at any time. Manage from Profile → Manage Child Data, or email{" "}
+            data at any time. Review it with Profile → Export My Data. Delete a
+            child from Edit Child (tap their name at the top, then the pencil), or
+            everything from Profile → Delete Account. Or email{" "}
             <a href="mailto:coppa@graceflare.com" className="text-primary underline">
               coppa@graceflare.com
             </a>
