@@ -1,7 +1,9 @@
 -- SECURITY / COPPA: the typed-name digital signature and the direct-notice
 -- acknowledgement are written by the server, never by the client.
 --
--- Version 20261014130000 sorts after 20261014120000_security_audit_fixes.sql.
+-- Version 20261014140000 sorts after 20261014120000_security_audit_fixes.sql. (Renamed from
+-- 20261014130000, which open PR #295 also uses; the migrate job skips a version
+-- it has already recorded and still exits 0, so a clash would silently skip one file.)
 -- Idempotent: CREATE OR REPLACE FUNCTION, DROP TRIGGER IF EXISTS + CREATE,
 -- REVOKE/GRANT. A re-run is a no-op. No transaction control: the CI migrate
 -- job wraps the file in BEGIN/COMMIT, so any RAISE EXCEPTION rolls it back.
