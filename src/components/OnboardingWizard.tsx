@@ -653,7 +653,6 @@ export function OnboardingWizard() {
           {needsDirectNotice && user && (
             <div className="mt-4 rounded-xl border border-border bg-card p-4">
               <CoppaDirectNotice
-                userId={user.id}
                 onAcknowledged={() => {
                   setNeedsDirectNotice(false);
                   saveAndAdvance();

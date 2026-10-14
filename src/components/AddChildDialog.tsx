@@ -222,7 +222,6 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
       </DialogHeader>
       {showDirectNotice ? (
         <CoppaDirectNotice
-          userId={user.id}
           onAcknowledged={() => setDirectNoticeAck(true)}
           onCancel={() => setOpen(false)}
         />
