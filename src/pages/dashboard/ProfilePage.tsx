@@ -98,8 +98,8 @@ export default function ProfilePage() {
     if (!user) return;
     setDeletingAccount(true);
     try {
-      // Goes through the delete-account edge function so Storage objects in
-      // feedback-screenshots/{uid}/* and milestone-photos/{uid}/* are
+      // Goes through the delete-account edge function so the user's objects in
+      // every bucket listed in supabase/functions/_shared/storagePurge.ts are
       // purged via the Storage admin API before the DB rows are removed —
       // direct DELETE FROM storage.objects is blocked by the project's
       // protect_delete() trigger.
@@ -109,7 +109,7 @@ export default function ProfilePage() {
       if (error) throw error;
       await signOut();
     } catch {
-      toast({ title: "Deletion failed", description: "Contact support@babysteps.app if this continues.", variant: "destructive" });
+      toast({ title: "Deletion failed", description: "Your account wasn't deleted. Try again, or email privacy@graceflare.com and we'll delete it for you.", variant: "destructive" });
     } finally {
       setDeletingAccount(false);
     }

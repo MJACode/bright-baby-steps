@@ -3251,3 +3251,27 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 **Code refs:** `docs/security-audit-2026-10.md`, `supabase/migrations/20261014120000_security_audit_fixes.sql`, `supabase/functions/_shared/serviceRoleAuth.ts`, `supabase/functions/send-vpc-email/index.ts`, `src/pages/AcceptInvite.tsx`, `src/components/onboarding/InviteShareSheet.tsx`. Fill in the merge hash.
 
 **Follow-ups:** the ten `parent_id`-keyed tables listed in the audit (M2) are unchanged. Storage upload limits and the missing `feedback-screenshots` bucket are unchanged (see 2026-10-12).
+
+---
+
+## 2026-10-14 — Self-serve single-child deletion: Privacy / FAQ / direct-notice copy
+
+**Reviewer:** in-house (legal agent pre-review; founder approved the feature 2026-10-14). **Risk level:** High → resolved in copy (policy and signed direct notice named a non-existent "Profile → Manage Child Data" control; § 9 promised child-record file deletion with no self-serve path). Not a material change under Privacy § 11 or 16 CFR § 312.4(b): adds a deletion path, no change to collection, use or disclosure. No renewed VPC.
+
+**What changed:**
+1. App: the account owner can delete one child (child switcher → Edit Child → "Delete {name}'s profile" → type first name → confirm; also from the child context page). Child-scoped rows cascade immediately (all FKs to `children` CASCADE since `20261006010000_child_delete_cascade_gaps.sql`). Partners cannot delete (owner-only DELETE policy, `20261008010000`; `protect_child_owner`, `20261014120000`). Account deletion unchanged.
+2. Privacy § 9: child delete = linked records immediately; legacy account-level milestone photos (1 object on live, feature retired 2026-06-21) remain until account deletion or a rights request; account delete = 7 days records / 30 days files; backups ≤30 days for both.
+3. Privacy § 7 parental rights, § 8 Deletion bullet, FAQ delete Q&A, CoppaDirectNotice "Your rights": real paths (Export My Data; Edit Child delete; Delete Account; coppa@).
+4. ChildContextPage "Manage child data" self-link replaced by an owner-only "Edit or delete {name}'s profile" button.
+5. ProfilePage delete-failure toast: support@babysteps.app → privacy@graceflare.com.
+6. PrivacyPage "Last reviewed" → October 14, 2026; § 11 wording aligned. Effective date unchanged.
+
+**Closes:** 2026-10-07 follow-up 4 ("Manage Child Data" names a non-existent control); 2026-10-12 P1 (child-record deletion promised with no self-serve path).
+
+**Code refs:** PR #298. Fill in the merge hash.
+
+**Follow-ups:**
+1. Purge or return the single legacy milestone-photos object (email owner, offer export), then drop the § 9 legacy-photo sentence. P2.
+2. Stamp a direct-notice version with the COPPA attestation, so records show which notice text a parent signed. P1.
+3. Historical chat rows with `child_id IS NULL` survive single-child deletion (removed on account deletion); copy says "records linked to that child". Decide whether to purge. P2.
+4. Optional courtesy email to existing parents with the corrected rights paths.

@@ -14,6 +14,7 @@ import { VpcGateMessage } from "@/components/VpcGateMessage";
 import { CoppaDirectNotice } from "@/components/CoppaDirectNotice";
 import { RetroactiveMilestoneCatchUp } from "@/components/onboarding/RetroactiveMilestoneCatchUp";
 import { CHILD_INTERESTS, MAX_INTERESTS, TEMPERAMENTS } from "@/lib/childInterests";
+import { DeleteChildButton } from "@/components/DeleteChildButton";
 
 interface ChildData {
   id: string;
@@ -25,6 +26,7 @@ interface ChildData {
   is_expected?: boolean | null;
   interests?: string[] | null;
   temperament?: string | null;
+  parent_id?: string;
 }
 
 interface AddChildDialogProps {
@@ -348,6 +350,11 @@ export function AddChildDialog({ trigger, child, open: controlledOpen, onOpenCha
           </Button>
         </div>
       </form>
+      {isEditMode && child && user && child.parent_id === user.id && (
+        <div className="border-t border-border pt-3">
+          <DeleteChildButton child={child} onDeleted={() => setOpen(false)} />
+        </div>
+      )}
       </>
       )}
     </DialogContent>
