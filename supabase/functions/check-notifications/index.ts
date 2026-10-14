@@ -5,6 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Server push (APNs): see _shared/apns.ts and _shared/pushNotify.ts.
+import { readApnsConfig, sendApns, type ApnsEnvironment } from "../_shared/apns.ts";
+import {
+  fanOutPushes,
+  type InsertedNotification,
+  type PushDevice,
+  type PushFanoutStats,
+} from "../_shared/pushNotify.ts";
+
 // --- Helpers (shared across all sleep-plan notification types) ---------------
 
 type SleepLogRow = {
@@ -132,6 +141,9 @@ type NotificationPrefs = {
   quiet_end: string;
   muted_categories: string[];
   daily_cap: number;
+  // Server push (APNs) for rows that survive the filter. Default true; only an
+  // explicit `false` opts out. In-app rows are unaffected.
+  push_enabled: boolean;
 };
 
 /**
@@ -221,6 +233,7 @@ function resolvePrefs(raw: unknown): NotificationPrefs {
         )
       : [],
     daily_cap: cap,
+    push_enabled: p.push_enabled !== false,
   };
 }
 
@@ -1128,12 +1141,43 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Insert all surviving notifications
+  // Insert all surviving notifications, then push exactly the rows that
+  // landed (so pushes inherit mutes, quiet hours and the cap). Push copy is
+  // fixed per type and never carries the child's name: see _shared/pushNotify.ts.
+  let push: PushFanoutStats | null = null;
   if (toInsert.length > 0) {
-    await supabase.from("notifications").insert(toInsert);
+    const { data: inserted, error: insertErr } = await supabase
+      .from("notifications")
+      .insert(toInsert)
+      .select("id, user_id, child_id, type");
+    if (insertErr) {
+      console.error("notifications insert failed", insertErr.code ?? null);
+    } else {
+      const apnsConfig = readApnsConfig();
+      if (!apnsConfig) console.log("push: APNS_* secrets not set, in-app only");
+      push = await fanOutPushes((inserted ?? []) as InsertedNotification[], {
+        enabled: apnsConfig !== null,
+        pushEnabled: (uid) => prefsFor(uid).push_enabled,
+        loadDevices: async (userIds) => {
+          const { data, error } = await supabase
+            .from("push_devices")
+            .select("user_id, token, environment")
+            .in("user_id", userIds);
+          if (error) throw new Error(error.code ?? "read_failed");
+          return (data ?? []) as PushDevice[];
+        },
+        pruneTokens: async (tokens) => {
+          const { error } = await supabase.from("push_devices").delete().in("token", tokens);
+          if (error) throw new Error(error.code ?? "delete_failed");
+        },
+        send: (token, env: ApnsEnvironment, payload) => sendApns(token, env, payload, { config: apnsConfig }),
+      });
+      // Counts only: never tokens, user ids or copy.
+      console.log("push", JSON.stringify(push));
+    }
   }
 
-  return new Response(JSON.stringify({ processed: toInsert.length, suppressed }), {
+  return new Response(JSON.stringify({ processed: toInsert.length, suppressed, push }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });
