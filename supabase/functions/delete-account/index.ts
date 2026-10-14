@@ -4,9 +4,9 @@
 //   The hosted Supabase project has the `storage.protect_delete()` trigger
 //   which blocks `DELETE FROM storage.objects` even from SECURITY DEFINER
 //   functions. We have to use the Storage admin API (HTTP path) to actually
-//   purge `feedback-screenshots/{uid}/*` and `milestone-photos/{uid}/*`,
-//   and HTTP calls don't belong in PL/pgSQL. So this function is the
-//   orchestrator: verify the caller, list + remove storage objects via the
+//   purge every `{uid}/*` object in the buckets listed in
+//   `_shared/storagePurge.ts` (USER_STORAGE_BUCKETS), and HTTP calls don't
+//   belong in PL/pgSQL. So this function is the orchestrator: verify the caller, list + remove storage objects via the
 //   service-role storage client, then call the SQL `delete_user_account()`
 //   RPC (which is itself SECURITY DEFINER and uses `auth.uid()`) using a
 //   user-scoped client so the RPC sees the right uid.
@@ -16,8 +16,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-
-const STORAGE_BUCKETS = ["feedback-screenshots", "milestone-photos"] as const;
+import { purgeUserStorage } from "../_shared/storagePurge.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -31,50 +30,6 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
-}
-
-// Paginate Storage list calls — a single .list({ limit: 1000 }) silently leaves
-// any extras behind, which would violate PrivacyPage § 8's "we delete all your
-// files" promise for users with many milestone photos.
-const STORAGE_PAGE_SIZE = 1000;
-
-async function purgeUserStorage(
-  admin: ReturnType<typeof createClient>,
-  uid: string,
-): Promise<{ bucket: string; deleted: number }[]> {
-  const results: { bucket: string; deleted: number }[] = [];
-  for (const bucket of STORAGE_BUCKETS) {
-    let bucketDeleted = 0;
-    let offset = 0;
-    let pageHadError = false;
-    // Loop until a page returns fewer rows than the page size. Each page is
-    // deleted before fetching the next so we don't accumulate paths in memory.
-    while (!pageHadError) {
-      const { data: objects, error: listErr } = await admin.storage
-        .from(bucket)
-        .list(uid, { limit: STORAGE_PAGE_SIZE, offset });
-      if (listErr) {
-        console.error(`storage.list ${bucket}/${uid}/* failed`, listErr.message);
-        pageHadError = true;
-        break;
-      }
-      if (!objects || objects.length === 0) break;
-      const paths = objects.map((o) => `${uid}/${o.name}`);
-      const { error: removeErr } = await admin.storage.from(bucket).remove(paths);
-      if (removeErr) {
-        console.error(`storage.remove ${bucket}/${uid}/* failed`, removeErr.message);
-        pageHadError = true;
-        break;
-      }
-      bucketDeleted += paths.length;
-      if (objects.length < STORAGE_PAGE_SIZE) break;
-      // Remove + re-list at offset 0 also works, but remove() is eventually
-      // consistent — advancing the offset is safer against duplicate work.
-      offset += STORAGE_PAGE_SIZE;
-    }
-    results.push({ bucket, deleted: bucketDeleted });
-  }
-  return results;
 }
 
 serve(async (req) => {
@@ -118,8 +73,10 @@ serve(async (req) => {
   });
 
   // Storage cleanup first. If a bucket fails we log and continue — the SQL
-  // helper will still run and the orphaned files can be swept later.
-  const storageResults = await purgeUserStorage(admin, uid);
+  // helper will still run and the orphaned files can be swept later. No
+  // bucket is child-scoped (all keys are `{uid}/...`), so nothing here needs
+  // the children rows the RPC is about to delete.
+  const storageResults = await purgeUserStorage(admin.storage, uid);
 
   const { error: rpcErr } = await userClient.rpc("delete_user_account");
   if (rpcErr) {
