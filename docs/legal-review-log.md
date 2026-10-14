@@ -3230,3 +3230,27 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 2. Live Storage deletion is still untested. With a throwaway account, upload one file under `{uid}/` in `milestone-photos`, delete the account, and confirm the `delete-account` response reports `deleted: 1` and the object is gone. P1.
 3. Feedback screenshots: either create a private `feedback-screenshots` bucket with an own-folder INSERT policy and change `FeedbackDialog` to store the path (not a public URL), or remove the screenshot picker. P2.
 4. Decide on the VPC-gate / consent-column lockdown above. P0.
+
+---
+
+## 2026-10-14 — iOS server push (APNs): shipped dormant
+
+**Reviewer:** in-house (`legal` agent pre-review, founder decisions). **Risk level:** Low while dormant. Opt-in feature, no new child data category.
+**Scope:** `supabase/migrations/20261014000000_push_devices.sql`, `supabase/functions/_shared/apns.ts`, `supabase/functions/_shared/pushNotify.ts`, `supabase/functions/check-notifications/index.ts` (push fan-out), `src/lib/pushNotifications.ts`, `src/components/PushSoftAsk.tsx`, `src/components/PushNotificationSetting.tsx`, `src/components/PushBridge.tsx`, `src/lib/exportUserData.ts`. PR #295.
+
+**Founder decisions (2026-10-14):**
+- **Not going live yet.** Push ships dormant: the app build flag `VITE_PUSH_ENABLED` is off, so the app registers no device token and the push UI is hidden. `APNS_*` secrets stay unset, so the sender sends nothing. While dormant, no push token is collected and nothing goes to Apple, so Privacy, Terms and `/subprocessors` wording is **deferred to go-live** (below).
+- **Opt-in for every role.** A push goes only to a user whose `notification_prefs.push_enabled` is explicitly `true`, set by tapping "Turn on". Co-parents and caregivers both get pushes once they opt in. Viewers never get pushes; they still see the in-app bell.
+- **Export My Data includes `push_devices`**, raw token included. The token can't be used to sign in, and it's the parent's own data.
+
+**Controls in code:** owner-only RLS, with SELECT/DELETE only for `authenticated` (writes go through SECURITY DEFINER RPCs that check token format and keep at most 10 devices). Tokens are deleted on sign-out (best effort, 3 s timeout), on account deletion (`auth.users` cascade), when Apple reports them dead, and by the daily purge of tokens unused for 90 days (`push-devices-stale-purge-daily`). The payload to Apple is fixed per-type lock-screen copy plus an in-app route only: no child name, no health detail, no ids (denylist test). Pushes respect mutes, quiet hours (appointment reminders are in-app only during quiet hours) and the daily cap. Logs hold counts only.
+
+**COPPA:** the token is a persistent identifier collected from the parent's device and keyed to the parent's or partner's account, so it is the parent's personal information. Even on the conservative view, it is used only to deliver reminders the parent asked for (support for internal operations, 16 CFR § 312.5(c)(7)). No child-linked identifier goes to Apple. No VPC or direct-notice change. No re-engagement or marketing pushes: `reactivation` does not go through the push fan-out, and any future one needs a new review (Apple Guideline 4.5.4).
+
+**Go-live checklist (P0 before setting `VITE_PUSH_ENABLED=true` or the `APNS_*` secrets):**
+1. Privacy § 2 (push token), § 3 (purpose and lock-screen rule), § 5 (Apple as delivery service under the Apple Developer Program License Agreement, not a DPA), § 9 (retention, including the 90-day purge and the offline sign-out caveat). Use the pre-review redlines in the PR #295 thread.
+2. Add Apple (APNs) to `/subprocessors` and honor the 30-day subscriber notice in Privacy § 5. Email subscribers, or record that there are none, at least 30 days before go-live.
+3. Optional Terms § 8 line: reminders may be delayed or not delivered.
+4. Counsel questions still open: (a) is the ADPLA a sufficient CCPA service-provider contract for Apple; (b) can subprocessor notice for an opt-in feature run at the same time as launch.
+
+**Note:** Privacy page numbering has moved (retention is § 9, geo-block § 12). CLAUDE.md still cites § 8 / § 11.

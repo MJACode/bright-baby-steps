@@ -250,7 +250,10 @@ function resolvePrefs(raw: unknown): NotificationPrefs {
         )
       : [],
     daily_cap: cap,
-    push_enabled: p.push_enabled !== false,
+    // Push is opt-in for every role (founder, 2026-10-14): only an explicit
+    // true from a "Turn on" tap counts. A missing key (new account, or an old
+    // app build that rebuilt the prefs object without it) means off.
+    push_enabled: p.push_enabled === true,
   };
 }
 
