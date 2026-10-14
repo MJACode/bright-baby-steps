@@ -21,10 +21,15 @@ vi.mock("@/hooks/use-toast", () => ({ toast: h.toast }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 
 beforeEach(() => {
+  vi.stubEnv("VITE_PUSH_ENABLED", "true");
   h.supported = true;
   h.permission = "granted";
   h.request.mockClear();
   h.toast.mockClear();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 const renderSetting = (pushEnabled: boolean) => {
@@ -42,6 +47,19 @@ describe("PushNotificationSetting", () => {
       <PushNotificationSetting pushEnabled disabled={false} onPushEnabledChange={vi.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders nothing while the push flag is off", () => {
+    vi.stubEnv("VITE_PUSH_ENABLED", "");
+    const { container } = render(
+      <PushNotificationSetting pushEnabled disabled={false} onPushEnabledChange={vi.fn()} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("shows off for a parent who hasn't opted in, even when iOS already allows it", () => {
+    const { toggle } = renderSetting(false);
+    expect(toggle).not.toBeChecked();
   });
 
   it("turns push_enabled off", () => {
@@ -98,10 +116,12 @@ describe("PushNotificationSetting", () => {
 });
 
 describe("resolvePrefs push_enabled", () => {
-  it("defaults on and only an explicit false turns it off", async () => {
+  it("defaults off and only an explicit true opts in", async () => {
     const { resolvePrefs } = await import("@/hooks/useNotificationPrefs");
-    expect(resolvePrefs(null).push_enabled).toBe(true);
-    expect(resolvePrefs({}).push_enabled).toBe(true);
+    expect(resolvePrefs(null).push_enabled).toBe(false);
+    expect(resolvePrefs({}).push_enabled).toBe(false);
     expect(resolvePrefs({ push_enabled: false }).push_enabled).toBe(false);
+    expect(resolvePrefs({ push_enabled: "true" }).push_enabled).toBe(false);
+    expect(resolvePrefs({ push_enabled: true }).push_enabled).toBe(true);
   });
 });

@@ -38,7 +38,9 @@ vi.mock("@/integrations/supabase/client", () => ({
 import {
   attachPushListeners,
   getPushPermission,
+  handleRegistration,
   initPush,
+  isPushFeatureEnabled,
   pushEnvironment,
   requestPushPermission,
   routeForPush,
@@ -49,6 +51,7 @@ import {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
+  vi.stubEnv("VITE_PUSH_ENABLED", "true");
   h.native = true;
   h.platform = "ios";
   h.receive = "granted";
@@ -57,6 +60,49 @@ beforeEach(() => {
   h.register.mockClear();
   h.requestPermissions.mockClear();
   localStorage.clear();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("isPushFeatureEnabled", () => {
+  it("is on only for the exact string \"true\"", () => {
+    expect(isPushFeatureEnabled()).toBe(true);
+    for (const v of ["", "false", "1", "TRUE", "yes"]) {
+      vi.stubEnv("VITE_PUSH_ENABLED", v);
+      expect(isPushFeatureEnabled()).toBe(false);
+    }
+  });
+});
+
+describe("with the push flag off", () => {
+  beforeEach(() => {
+    vi.stubEnv("VITE_PUSH_ENABLED", "");
+  });
+
+  it("never registers a token, even when iOS already allows notifications", async () => {
+    h.receive = "granted";
+    await initPush("user-1");
+    expect(await requestPushPermission()).toBe("unsupported");
+    await handleRegistration({ value: "apns-token" } satisfies Token);
+    expect(h.register).not.toHaveBeenCalled();
+    expect(h.requestPermissions).not.toHaveBeenCalled();
+    expect(h.rpc).not.toHaveBeenCalled();
+    expect(localStorage.getItem("push_device_token")).toBeNull();
+  });
+
+  it("attaches only the tap listener", async () => {
+    const navigate = vi.fn();
+    attachPushListeners(navigate);
+    await flush();
+    expect([...h.listeners.keys()]).toEqual(["pushNotificationActionPerformed"]);
+    h.listeners.get("pushNotificationActionPerformed")!({
+      actionId: "tap",
+      notification: { id: "1", data: { route: "/dashboard" } },
+    } as ActionPerformed);
+    expect(navigate).toHaveBeenCalledWith("/dashboard");
+  });
 });
 
 describe("on web", () => {

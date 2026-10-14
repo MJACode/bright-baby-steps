@@ -155,8 +155,8 @@ type NotificationPrefs = {
   quiet_end: string;
   muted_categories: string[];
   daily_cap: number;
-  // Server push (APNs) for rows that survive the filter. Default true; only an
-  // explicit `false` opts out. In-app rows are unaffected.
+  // Server push (APNs) for rows that survive the filter. Default false; only an
+  // explicit `true` opts in. In-app rows are unaffected.
   push_enabled: boolean;
 };
 

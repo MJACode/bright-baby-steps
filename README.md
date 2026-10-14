@@ -48,6 +48,7 @@ npm run dev
 |---|---|
 | `VITE_SUPABASE_URL` | Your Supabase project URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/publishable key |
+| `VITE_PUSH_ENABLED` | Optional. `"true"` turns on server push (APNs token registration, the notification-sheet soft-ask, the Profile switch). Anything else or absent leaves push dormant. Build-time, so set it in the build environment (e.g. Codemagic) |
 
 ## Supabase Edge Functions
 

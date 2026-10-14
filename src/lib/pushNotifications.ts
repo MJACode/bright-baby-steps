@@ -17,6 +17,14 @@ type UntypedRpc = (
 const rpc = (fn: string, args: Record<string, unknown>) =>
   (supabase.rpc as unknown as UntypedRpc).call(supabase, fn, args);
 
+// Build-time kill switch: push ships dormant until a build sets
+// VITE_PUSH_ENABLED=true. Sleep and nursing timers request iOS notification
+// permission through LocalNotifications, so without this gate initPush would
+// register an APNs token for any parent who allowed those.
+export function isPushFeatureEnabled(): boolean {
+  return import.meta.env.VITE_PUSH_ENABLED === "true";
+}
+
 // iOS only: Android would need an FCM config we don't ship, and calling
 // register() there without one crashes the app.
 export function isPushSupported(): boolean {
@@ -57,7 +65,7 @@ export async function getPushPermission(): Promise<PushPermission> {
 // Shows the one-shot iOS system prompt, so only call it from a tap the parent
 // made to turn notifications on — never on launch or sign-in.
 export async function requestPushPermission(): Promise<PushPermission> {
-  if (!isPushSupported()) return "unsupported";
+  if (!isPushFeatureEnabled() || !isPushSupported()) return "unsupported";
   const { receive } = await PushNotifications.requestPermissions();
   const state = normalize(receive);
   if (state === "granted") await PushNotifications.register();
@@ -69,7 +77,7 @@ export async function requestPushPermission(): Promise<PushPermission> {
 // also refreshes last_seen_at server-side and picks up a permission the parent
 // granted in iOS Settings while the app was backgrounded.
 export async function initPush(userId: string | null | undefined): Promise<void> {
-  if (!userId || !isPushSupported()) return;
+  if (!userId || !isPushFeatureEnabled() || !isPushSupported()) return;
   try {
     if ((await getPushPermission()) === "granted") await PushNotifications.register();
   } catch (err) {
@@ -78,6 +86,7 @@ export async function initPush(userId: string | null | undefined): Promise<void>
 }
 
 export async function handleRegistration(token: Token): Promise<void> {
+  if (!isPushFeatureEnabled()) return;
   localStorage.setItem(TOKEN_KEY, token.value);
   const { error } = await rpc("register_push_device", {
     p_token: token.value,
@@ -136,17 +145,21 @@ export function routeForPush(data: unknown): string | null {
 export function attachPushListeners(navigate: (route: string) => void): () => void {
   if (!isPushSupported()) return () => {};
   const handles: Promise<PluginListenerHandle>[] = [
-    PushNotifications.addListener("registration", (token) => {
-      void handleRegistration(token);
-    }),
-    PushNotifications.addListener("registrationError", (err) => {
-      console.error("APNs registration error", err.error);
-    }),
     PushNotifications.addListener("pushNotificationActionPerformed", (action: ActionPerformed) => {
       const route = routeForPush(action.notification.data);
       if (route) navigate(route);
     }),
   ];
+  if (isPushFeatureEnabled()) {
+    handles.push(
+      PushNotifications.addListener("registration", (token) => {
+        void handleRegistration(token);
+      }),
+      PushNotifications.addListener("registrationError", (err) => {
+        console.error("APNs registration error", err.error);
+      }),
+    );
+  }
   return () => {
     handles.forEach((h) => void h.then((l) => l.remove()));
   };

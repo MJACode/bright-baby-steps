@@ -73,6 +73,13 @@ describe("fanOutPushes", () => {
     expect(d.loadDevices.mock.calls[0][0]).toEqual(["owner"]);
   });
 
+  it("pushes nobody who hasn't opted in, without reading devices", async () => {
+    const d = deps({ pushEnabled: () => false });
+    expect(await fanOutPushes(ROWS, d)).toMatchObject({ sent: 0, optedOut: 2 });
+    expect(d.loadDevices).not.toHaveBeenCalled();
+    expect(d.send).not.toHaveBeenCalled();
+  });
+
   it("prunes tokens APNs reports dead and keeps the rest", async () => {
     const d = deps({
       send: vi.fn(async (token: string): Promise<ApnsResult> =>

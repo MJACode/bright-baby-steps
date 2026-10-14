@@ -1,7 +1,7 @@
 import { Switch } from "@/components/ui/switch";
 import { usePushPermission } from "@/hooks/usePushPermission";
 import { toast } from "@/hooks/use-toast";
-import { PUSH_ENABLE_FAILED_TOAST } from "@/lib/pushNotifications";
+import { isPushFeatureEnabled, PUSH_ENABLE_FAILED_TOAST } from "@/lib/pushNotifications";
 
 interface PushNotificationSettingProps {
   pushEnabled: boolean;
@@ -9,7 +9,11 @@ interface PushNotificationSettingProps {
   onPushEnabledChange: (enabled: boolean) => void;
 }
 
-export function PushNotificationSetting({
+export function PushNotificationSetting(props: PushNotificationSettingProps) {
+  return isPushFeatureEnabled() ? <PushNotificationSwitch {...props} /> : null;
+}
+
+function PushNotificationSwitch({
   pushEnabled,
   disabled,
   onPushEnabledChange,
