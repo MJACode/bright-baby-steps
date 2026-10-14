@@ -6,7 +6,7 @@
 //
 // LOCK-SCREEN RULE: a push is readable by anyone holding the phone, so push
 // copy NEVER contains the child's name, and never names a health detail
-// (allergen, sleep pattern, appointment kind). The in-app row keeps its full
+// (allergen, sleep pattern, that an appointment exists). The in-app row keeps its full
 // personalised `message`; the push gets the fixed, generic copy below, keyed
 // by type. Unknown types fall back to a fully generic alert rather than
 // leaking a message we haven't reviewed. Rationale per type is next to each
@@ -35,12 +35,13 @@ export const PUSH_COPY: Record<string, PushCopy> = {
     body: "See what to expect this week.",
     route: "/dashboard/milestones",
   },
-  // In-app: "{name}'s appointment is tomorrow / in a week". A named child's
-  // medical appointment is health detail; "an appointment" without who/when
-  // is not. Covers both the 1-day and 7-day cues.
+  // In-app: "{name}'s appointment is tomorrow / in a week". Even "an
+  // appointment" or "Visit Prep" on a lock screen says the child is seeing a
+  // clinician, so the push only says something is on the calendar. Covers
+  // both the 1-day and 7-day cues.
   appointment_reminder: {
-    title: "Appointment coming up",
-    body: "Tap to review your Visit Prep questions.",
+    title: "Coming up on your calendar",
+    body: "Tap to see what's next.",
     route: "/dashboard/calendar",
   },
   // In-app: "Wind-down for {name}'s nap in ~N min"
@@ -100,15 +101,30 @@ export type InsertedNotification = {
 
 export type PushDevice = { user_id: string; token: string; environment: ApnsEnvironment };
 
-export function buildPushPayload(n: InsertedNotification): ApnsPayload {
+// Partner roles (public.partner_role) whose copies of a notification are
+// pushed. Viewers never get pushes (founder decision 2026-10-14): they keep
+// the in-app row only. Caregivers are pending a founder decision; dropping
+// "caregiver" here is the whole change.
+export const PUSH_ROLES: readonly string[] = ["coparent", "caregiver"];
+
+export function partnerRoleGetsPush(role: string | null | undefined): boolean {
+  return typeof role === "string" && PUSH_ROLES.includes(role);
+}
+
+/** Key for "this recipient, for this child" (a user can partner several families). */
+export function recipientKey(userId: string, childId: string | null): string {
+  return `${userId}:${childId ?? ""}`;
+}
+
+// Payload minimisation: the payload carries the fixed alert and the in-app
+// route ONLY. No child_id, notification id or type: the payload transits
+// Apple and sits on the device, and the app needs nothing else to open the
+// right screen (it reads `route` on tap).
+export function buildPushPayload(n: Pick<InsertedNotification, "type">): ApnsPayload {
   const copy = pushCopyFor(n.type);
   return {
     aps: { alert: { title: copy.title, body: copy.body }, sound: "default" },
-    notification_id: n.id,
-    type: n.type,
     route: copy.route,
-    // Opaque id (never shown) so the app can switch to the right child.
-    child_id: n.child_id,
   };
 }
 
@@ -116,6 +132,11 @@ export type PushFanoutDeps = {
   /** False when APNs secrets are missing: skip everything, including DB reads. */
   enabled: boolean;
   pushEnabled: (userId: string) => boolean;
+  /**
+   * True = the row stays in-app only (viewer partner copy, or a row that
+   * survived quiet hours only via the appointment_reminder exemption).
+   */
+  holdPush?: (row: InsertedNotification) => boolean;
   /** Called with at most 200 ids per call (PostgREST URL length). */
   loadDevices: (userIds: string[]) => Promise<PushDevice[]>;
   pruneTokens: (tokens: string[]) => Promise<void>;
@@ -129,6 +150,8 @@ export type PushFanoutStats = {
   failed: number;
   /** Recipients skipped because push_enabled is false. */
   optedOut: number;
+  /** Rows kept in-app only by holdPush (viewer role / quiet hours). */
+  held: number;
   disabled: boolean;
 };
 
@@ -140,11 +163,22 @@ export async function fanOutPushes(
   rows: InsertedNotification[],
   deps: PushFanoutDeps,
 ): Promise<PushFanoutStats> {
-  const stats: PushFanoutStats = { sent: 0, pruned: 0, failed: 0, optedOut: 0, disabled: !deps.enabled };
+  const stats: PushFanoutStats = {
+    sent: 0,
+    pruned: 0,
+    failed: 0,
+    optedOut: 0,
+    held: 0,
+    disabled: !deps.enabled,
+  };
   if (!deps.enabled || rows.length === 0) return stats;
 
   const optedOutUsers = new Set<string>();
   const wanted = rows.filter((r) => {
+    if (deps.holdPush?.(r)) {
+      stats.held++;
+      return false;
+    }
     if (deps.pushEnabled(r.user_id)) return true;
     optedOutUsers.add(r.user_id);
     return false;

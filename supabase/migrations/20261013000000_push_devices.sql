@@ -23,10 +23,18 @@
 --   delete_user_account() / purge_inactive_account() both go through it. Per
 --   lessons-backend 2026-05-24 the purge helper is NOT redefined here.
 --
--- Privileges (20261009000000 / 20261008020000 conventions): new tables give
---   anon nothing and authenticated S/I/U/D; new functions give EXECUTE to
---   nobody, so the RPCs are granted to authenticated explicitly. No logged-out
---   page touches this table, so there is no anon grant.
+-- Privileges: anon gets nothing. authenticated gets SELECT + DELETE only:
+--   every write goes through register_push_device, which is the one place the
+--   token format, the token move and the 10-device cap are enforced. A direct
+--   INSERT/UPDATE grant would let a client bypass the cap, so there is neither
+--   a grant nor a policy for those commands. New functions give EXECUTE to
+--   nobody (20261009000000), so the RPCs are granted to authenticated
+--   explicitly.
+--
+-- Stale-token purge (legal P1): pg_cron job `push-devices-stale-purge-daily`
+--   deletes rows not seen for 90 days. register_push_device bumps
+--   last_seen_at on every app launch / resume, so only installs that haven't
+--   opened the app in 90 days (or were deleted without a sign-out) go.
 --
 -- Idempotent: IF NOT EXISTS / DROP POLICY IF EXISTS / CREATE OR REPLACE.
 
@@ -55,23 +63,16 @@ CREATE INDEX IF NOT EXISTS push_devices_user_id_idx ON public.push_devices (user
 
 ALTER TABLE public.push_devices ENABLE ROW LEVEL SECURITY;
 
--- Owner-only, all four commands. UPDATE carries an explicit WITH CHECK so a
--- row can never be re-pointed at another user through PostgREST.
+-- Owner-only SELECT and DELETE. No INSERT/UPDATE policy (and no grant):
+-- writes go through the SECURITY DEFINER RPCs below. The DROPs keep a re-run
+-- clean if an earlier draft of this file created them.
 DROP POLICY IF EXISTS push_devices_select ON public.push_devices;
 CREATE POLICY push_devices_select ON public.push_devices
   FOR SELECT TO authenticated
   USING (user_id = auth.uid());
 
 DROP POLICY IF EXISTS push_devices_insert ON public.push_devices;
-CREATE POLICY push_devices_insert ON public.push_devices
-  FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid());
-
 DROP POLICY IF EXISTS push_devices_update ON public.push_devices;
-CREATE POLICY push_devices_update ON public.push_devices
-  FOR UPDATE TO authenticated
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
 
 DROP POLICY IF EXISTS push_devices_delete ON public.push_devices;
 CREATE POLICY push_devices_delete ON public.push_devices
@@ -79,10 +80,9 @@ CREATE POLICY push_devices_delete ON public.push_devices
   USING (user_id = auth.uid());
 
 -- Belt and braces on top of the 20261009 default ACL: anon gets nothing,
--- authenticated gets plain DML only (no TRUNCATE / REFERENCES / TRIGGER /
--- MAINTAIN).
+-- authenticated gets SELECT + DELETE only (see header).
 REVOKE ALL ON TABLE public.push_devices FROM PUBLIC, anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.push_devices TO authenticated;
+GRANT SELECT, DELETE ON TABLE public.push_devices TO authenticated;
 GRANT ALL ON TABLE public.push_devices TO service_role;
 
 -- ---------------------------------------------------------------------------
@@ -158,6 +158,31 @@ GRANT EXECUTE ON FUNCTION public.register_push_device(text, text) TO authenticat
 GRANT EXECUTE ON FUNCTION public.unregister_push_device(text) TO authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 90-day stale-token purge (legal P1). Pure SQL in pg_cron, no edge function
+-- and no Vault secret needed. Runs as the job owner (postgres), so RLS does
+-- not apply. Idempotent: unschedule-if-exists, then schedule (same pattern as
+-- 20260507050000_cron_jobs_use_vault.sql). 03:15 UTC sits clear of
+-- inactive-account-purge-daily (02:30) and the 3-hourly check-notifications.
+-- ---------------------------------------------------------------------------
+DO $cron$
+BEGIN
+  PERFORM cron.unschedule('push-devices-stale-purge-daily')
+  FROM cron.job WHERE jobname = 'push-devices-stale-purge-daily';
+EXCEPTION WHEN undefined_function THEN
+  NULL;
+END
+$cron$;
+
+SELECT cron.schedule(
+  'push-devices-stale-purge-daily',
+  '15 3 * * *',
+  $job$DELETE FROM public.push_devices WHERE last_seen_at < now() - interval '90 days'$job$
+);
+
+-- Stale-purge filter.
+CREATE INDEX IF NOT EXISTS push_devices_last_seen_at_idx ON public.push_devices (last_seen_at);
+
+-- ---------------------------------------------------------------------------
 -- Hard assertions: fail (and roll back) instead of reporting success.
 -- ---------------------------------------------------------------------------
 DO $$
@@ -170,8 +195,14 @@ BEGIN
 
   SELECT count(*) INTO _n FROM pg_policies
   WHERE schemaname = 'public' AND tablename = 'push_devices';
-  IF _n <> 4 THEN
-    RAISE EXCEPTION 'push_devices: expected 4 policies, found %', _n;
+  IF _n <> 2 THEN
+    RAISE EXCEPTION 'push_devices: expected 2 policies (SELECT, DELETE), found %', _n;
+  END IF;
+
+  SELECT count(*) INTO _n FROM pg_policies
+  WHERE schemaname = 'public' AND tablename = 'push_devices' AND cmd IN ('INSERT', 'UPDATE');
+  IF _n <> 0 THEN
+    RAISE EXCEPTION 'push_devices: unexpected INSERT/UPDATE policy';
   END IF;
 
   SELECT count(*) INTO _n FROM pg_policies
@@ -186,6 +217,16 @@ BEGIN
      OR has_table_privilege('anon', 'public.push_devices', 'DELETE')
      OR has_table_privilege('authenticated', 'public.push_devices', 'TRUNCATE') THEN
     RAISE EXCEPTION 'push_devices: anon or TRUNCATE privilege present';
+  END IF;
+
+  -- Writes must go through register_push_device (format + 10-device cap).
+  IF has_table_privilege('authenticated', 'public.push_devices', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.push_devices', 'UPDATE') THEN
+    RAISE EXCEPTION 'push_devices: authenticated has INSERT or UPDATE';
+  END IF;
+  IF NOT has_table_privilege('authenticated', 'public.push_devices', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.push_devices', 'DELETE') THEN
+    RAISE EXCEPTION 'push_devices: authenticated missing SELECT or DELETE';
   END IF;
 
   IF has_function_privilege('anon', 'public.register_push_device(text, text)', 'EXECUTE')
@@ -205,6 +246,11 @@ BEGIN
     AND confdeltype = 'c';
   IF _n <> 1 THEN
     RAISE EXCEPTION 'push_devices: missing ON DELETE CASCADE to auth.users';
+  END IF;
+
+  SELECT count(*) INTO _n FROM cron.job WHERE jobname = 'push-devices-stale-purge-daily';
+  IF _n <> 1 THEN
+    RAISE EXCEPTION 'push_devices: expected 1 stale-purge cron job, found %', _n;
   END IF;
 END;
 $$;

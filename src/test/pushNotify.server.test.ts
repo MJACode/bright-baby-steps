@@ -4,9 +4,12 @@ import type { ApnsResult } from "../../supabase/functions/_shared/apns";
 import {
   GENERIC_PUSH_COPY,
   PUSH_COPY,
+  PUSH_ROLES,
   buildPushPayload,
   fanOutPushes,
+  partnerRoleGetsPush,
   pushCopyFor,
+  recipientKey,
   type InsertedNotification,
   type PushDevice,
   type PushFanoutDeps,
@@ -152,6 +155,76 @@ describe("fanOutPushes", () => {
   });
 });
 
+describe("push gating (viewer role, quiet hours)", () => {
+  // Mirrors the check-notifications wiring: viewer copies are recorded in a
+  // (partner, child) set during the partner fan-out; quiet-hours recipients in
+  // a user set from the restraint filter. Both rows were already INSERTED
+  // (in-app) by the time fanOutPushes sees them.
+  const partnerRows: InsertedNotification[] = [
+    { id: "o", user_id: "owner", child_id: "c1", type: "diaper_reminder" },
+    { id: "v", user_id: "viewer", child_id: "c1", type: "diaper_reminder" },
+    { id: "p", user_id: "coparent", child_id: "c1", type: "diaper_reminder" },
+  ];
+  const partnerDevices: PushDevice[] = [
+    { user_id: "owner", token: tok("1"), environment: "production" },
+    { user_id: "viewer", token: tok("2"), environment: "production" },
+    { user_id: "coparent", token: tok("3"), environment: "production" },
+  ];
+  const loadDevices = vi.fn(async (ids: string[]) => partnerDevices.filter((d) => ids.includes(d.user_id)));
+
+  function gate(roles: Record<string, string>, quietUsers = new Set<string>()) {
+    const noPush = new Set<string>();
+    for (const [partnerId, role] of Object.entries(roles)) {
+      if (!partnerRoleGetsPush(role)) noPush.add(recipientKey(partnerId, "c1"));
+    }
+    return (row: InsertedNotification) =>
+      quietUsers.has(row.user_id) || noPush.has(recipientKey(row.user_id, row.child_id));
+  }
+
+  it("PUSH_ROLES: coparent and caregiver push, viewer never does", () => {
+    expect([...PUSH_ROLES].sort()).toEqual(["caregiver", "coparent"]);
+    expect(partnerRoleGetsPush("coparent")).toBe(true);
+    expect(partnerRoleGetsPush("caregiver")).toBe(true);
+    expect(partnerRoleGetsPush("viewer")).toBe(false);
+    expect(partnerRoleGetsPush(null)).toBe(false);
+    expect(partnerRoleGetsPush("bogus")).toBe(false);
+  });
+
+  it("viewer copy (inserted in-app) is not pushed; coparent and owner are", async () => {
+    const d = deps({ loadDevices, holdPush: gate({ viewer: "viewer", coparent: "coparent" }) });
+    const stats = await fanOutPushes(partnerRows, d);
+    expect(stats).toMatchObject({ sent: 2, held: 1 });
+    expect(d.send.mock.calls.map((c) => c[0]).sort()).toEqual([tok("1"), tok("3")]);
+  });
+
+  it("viewer hold is per child: the same person as a coparent elsewhere still gets pushed", async () => {
+    const rows: InsertedNotification[] = [
+      { id: "a", user_id: "viewer", child_id: "c1", type: "diaper_reminder" },
+      { id: "b", user_id: "viewer", child_id: "c2", type: "diaper_reminder" },
+    ];
+    const d = deps({ loadDevices, holdPush: gate({ viewer: "viewer" }) });
+    expect(await fanOutPushes(rows, d)).toMatchObject({ sent: 1, held: 1 });
+  });
+
+  it("an appointment_reminder that survived quiet hours stays in-app only", async () => {
+    const rows: InsertedNotification[] = [
+      { id: "q", user_id: "owner", child_id: "c1", type: "appointment_reminder" },
+      { id: "r", user_id: "coparent", child_id: "c1", type: "appointment_reminder" },
+    ];
+    const d = deps({ loadDevices, holdPush: gate({ coparent: "coparent" }, new Set(["owner"])) });
+    const stats = await fanOutPushes(rows, d);
+    expect(stats).toMatchObject({ sent: 1, held: 1 });
+    expect(d.send.mock.calls.map((c) => c[0])).toEqual([tok("3")]);
+  });
+
+  it("does not read devices when every row is held", async () => {
+    const d = deps({ loadDevices, holdPush: () => true });
+    loadDevices.mockClear();
+    expect(await fanOutPushes(partnerRows, d)).toMatchObject({ sent: 0, held: 3 });
+    expect(loadDevices).not.toHaveBeenCalled();
+  });
+});
+
 describe("push copy (lock-screen rule)", () => {
   // Every type check-notifications produces (TYPE_CATEGORY keys minus the
   // retired daily_briefing / reactivate-nudge's reactivation) plus
@@ -186,14 +259,41 @@ describe("push copy (lock-screen rule)", () => {
     }
   });
 
-  it("never names an allergen or a sleep pattern", () => {
-    const text = Object.values(PUSH_COPY)
-      .map((c) => `${c.title} ${c.body}`)
-      .join(" ")
-      .toLowerCase();
-    for (const word of ["peanut", "egg", "milk", "dairy", "wheat", "soy", "fish", "sesame", "nut", "short naps", "trending"]) {
-      expect(text).not.toContain(word);
+  // Lock-screen denylist: every title/body, including the generic fallback.
+  // Substring match on lower-cased text, so "nut" also catches "peanut",
+  // "tree nut", "nuts"; "nap" is deliberately NOT listed (generic "nap
+  // window" copy is fine), but nap *patterns* are.
+  const ALL_COPY = [...Object.entries(PUSH_COPY), ["GENERIC", GENERIC_PUSH_COPY] as const];
+  const DENYLIST = [
+    // allergens
+    "peanut", "egg", "milk", "dairy", "wheat", "gluten", "soy", "sesame", "fish", "shellfish", "nut",
+    "allergen", "allergy", "allergic", "reaction", "hives", "rash", "epipen",
+    // illness / meds
+    "fever", "temperature", "medication", "medicine", "dose", "vaccine", "vaccination", "shot",
+    "sick", "illness", "vomit", "diarrh", "symptom",
+    // clinical / appointment kind
+    "doctor", "pediatric", "clinic", "checkup", "check-up", "well visit", "well-child", "appointment",
+    "visit prep", "therap", "speech", "delay", "diagnos",
+    // sleep patterns (the child's data, not a generic nudge)
+    "short nap", "trending", "later", "earlier", "regression", "night waking", "overtired",
+    // growth / feeding detail
+    "weight", "percentile", "formula", "breast",
+  ];
+
+  it.each(ALL_COPY)("%s: no placeholder and no denylisted health word", (_type, copy) => {
+    for (const field of [copy.title, copy.body]) {
+      expect(field).not.toContain("{");
+      expect(field).not.toContain("${");
+      const lower = field.toLowerCase();
+      for (const word of DENYLIST) expect(lower, `"${field}" contains "${word}"`).not.toContain(word);
     }
+  });
+
+  it("appointment_reminder push says only that something is on the calendar", () => {
+    expect(PUSH_COPY.appointment_reminder).toMatchObject({
+      title: "Coming up on your calendar",
+      body: "Tap to see what's next.",
+    });
   });
 
   it("falls back to generic copy for unknown types (and is not fooled by prototype keys)", () => {
@@ -201,14 +301,13 @@ describe("push copy (lock-screen rule)", () => {
     expect(pushCopyFor("toString")).toBe(GENERIC_PUSH_COPY);
   });
 
-  it("builds the payload from the row id/type, never the row message", () => {
-    const payload = buildPushPayload({ id: "n9", user_id: "u", child_id: "c9", type: "allergen_maintenance" });
+  it("payload is minimal: fixed alert + route only (no child_id, notification_id or type)", () => {
+    const payload = buildPushPayload({ id: "n9", user_id: "u", child_id: "c9", type: "allergen_maintenance" } as InsertedNotification);
     expect(payload).toEqual({
       aps: { alert: { title: "Keep it on the menu", body: PUSH_COPY.allergen_maintenance.body }, sound: "default" },
-      notification_id: "n9",
-      type: "allergen_maintenance",
       route: "/dashboard/feeding?tab=allergens",
-      child_id: "c9",
     });
+    expect(Object.keys(payload).sort()).toEqual(["aps", "route"]);
+    expect(JSON.stringify(payload)).not.toMatch(/c9|n9|allergen_maintenance/);
   });
 });
