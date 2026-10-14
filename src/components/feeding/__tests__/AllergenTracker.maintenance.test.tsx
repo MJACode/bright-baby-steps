@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 import { toast } from "@/hooks/use-toast";
+import { insertAllergenExposure } from "@/services/allergenExposureWrite";
 
 const DAY = 24 * 60 * 60 * 1000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
@@ -20,9 +21,22 @@ const { writes, state } = vi.hoisted(() => ({
     role: "owner",
     dob: "2026-01-01",
     intro: null as Record<string, unknown> | null,
+    otherIntros: [] as Record<string, unknown>[],
     reactions: [] as Record<string, unknown>[],
   },
 }));
+
+const EGG = {
+  id: "allergen-egg",
+  slug: "egg",
+  name: "Egg",
+  sort_order: 2,
+  introduction_age_weeks_min: 17,
+  introduction_age_weeks_max: 26,
+  clinical_guidance: "Offer well-cooked egg.",
+  clinical_source: "AAP",
+  common_forms: [],
+};
 
 const PEANUT = {
   id: "allergen-peanut",
@@ -65,8 +79,10 @@ vi.mock("@/integrations/supabase/client", () => {
         return { data: { id: "log-new", ...s.payload }, error: null };
       }
       if (s.op === "update" || s.op === "delete") return { data: [{ id: s.filters.id }], error: null };
-      if (!s.op && table === "allergens") return { data: [PEANUT], error: null };
-      if (!s.op && table === "allergen_introductions") return { data: state.intro ? [state.intro] : [], error: null };
+      if (!s.op && table === "allergens") return { data: [PEANUT, EGG], error: null };
+      if (!s.op && table === "allergen_introductions") {
+        return { data: [...(state.intro ? [state.intro] : []), ...state.otherIntros], error: null };
+      }
       if (!s.op && table === "allergen_reactions") return { data: state.reactions, error: null };
       return { data: [], error: null };
     };
@@ -119,6 +135,13 @@ vi.mock("@/hooks/useCurrentRole", async (importOriginal) => {
 
 vi.mock("@/components/AddChildDialog", () => ({ AddChildDialog: () => null }));
 
+// Pass-through spy: proves "Had it today" writes through the shared helper
+// that FeedingLog's allergen chips also use.
+vi.mock("@/services/allergenExposureWrite", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/allergenExposureWrite")>();
+  return { ...actual, insertAllergenExposure: vi.fn(actual.insertAllergenExposure) };
+});
+
 // The real wheel picker can't be driven from jsdom.
 vi.mock("@/components/MobileDateTimePicker", () => ({
   MobileDateTimePicker: ({
@@ -158,8 +181,10 @@ beforeEach(() => {
   state.role = "owner";
   state.dob = "2026-01-01";
   state.intro = null;
+  state.otherIntros = [];
   state.reactions = [];
   vi.mocked(toast).mockClear();
+  vi.mocked(insertAllergenExposure).mockClear();
 });
 
 describe("sign-off card", () => {
@@ -236,6 +261,112 @@ describe("protocol exposure #2", () => {
     await openPeanut();
     expect(screen.queryByRole("button", { name: /Log Exposure #2/ })).not.toBeInTheDocument();
   });
+
+  it("has no 3-day gate: exposure #2 logs the next day without a question", async () => {
+    state.intro = makeIntro("in_progress", [log(1, 26 * 60 * 60 * 1000)]);
+    await openPeanut();
+    expect(screen.getByText("Offer it again")).toBeInTheDocument();
+    expect(screen.getByText("Offer it again in the next few days, once today's watch is done.")).toBeInTheDocument();
+    expect(screen.queryByText(/Wait until|3-day wait|Wait 3 Days/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Log Exposure #2/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(writesTo("allergen_exposure_logs", "insert")).toHaveLength(1));
+    expect(writesTo("allergen_exposure_logs", "insert")[0].payload).toMatchObject({ exposure_number: 2 });
+    expect(screen.queryByText("Today's watch isn't done yet — log it anyway?")).not.toBeInTheDocument();
+  });
+
+  it("asks before logging exposure #2 on the same day as #1, and only writes on Log it anyway", async () => {
+    state.intro = makeIntro("in_progress", [log(1, 1000)]);
+    await openPeanut();
+    fireEvent.click(screen.getByRole("button", { name: /Log Exposure #2/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save Exposure" }));
+
+    expect(await screen.findByText("Today's watch isn't done yet — log it anyway?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change the time" }));
+    await waitFor(() =>
+      expect(screen.queryByText("Today's watch isn't done yet — log it anyway?")).not.toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Log it anyway" }));
+    await waitFor(() => expect(writesTo("allergen_exposure_logs", "insert")).toHaveLength(1));
+    expect(writesTo("allergen_exposure_logs", "insert")[0].payload).toMatchObject({ exposure_number: 2 });
+  });
+
+  it("never holds a same-day reaction behind the question", async () => {
+    state.intro = makeIntro("in_progress", [log(1, 1000)]);
+    await openPeanut();
+    fireEvent.click(screen.getByRole("button", { name: /Log Exposure #2/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Mild/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
+
+    await waitFor(() => expect(writesTo("allergen_exposure_logs", "insert")).toHaveLength(1));
+    expect(writesTo("allergen_reactions", "insert")).toHaveLength(1);
+    expect(screen.queryByText("Today's watch isn't done yet — log it anyway?")).not.toBeInTheDocument();
+  });
+
+  it("shows a nudge from day 4 when exposure #2 isn't logged yet", async () => {
+    state.intro = makeIntro("in_progress", [log(1, 4 * DAY)]);
+    await openPeanut();
+    expect(
+      screen.getByText("Ready for another taste of Peanut? Offering it again soon keeps the introduction on track."),
+    ).toBeInTheDocument();
+  });
+
+  it("no nudge on the day of exposure #1", async () => {
+    state.intro = makeIntro("in_progress", [log(1, 1000)]);
+    await openPeanut();
+    expect(screen.queryByText(/Ready for another taste/)).not.toBeInTheDocument();
+  });
+});
+
+describe("spacing between new allergens", () => {
+  const eggStartedAgo = (ms: number) => ({
+    ...makeIntro("in_progress", [{ ...log(1, ms), id: "egg-log-1" }]),
+    id: "intro-egg",
+    allergen_id: EGG.id,
+  });
+  const SPACING = /You started egg .+ ago\. Waiting a few days between new allergens makes it easier to tell which food caused a reaction, if one happens\./;
+
+  it("shows a soft note when another allergen started within 72 h; Not yet closes it", async () => {
+    state.otherIntros = [eggStartedAgo(49 * 60 * 60 * 1000)];
+    await openPeanut();
+    fireEvent.click(screen.getByRole("button", { name: /Start First Exposure/ }));
+
+    expect(await screen.findByText(SPACING)).toHaveTextContent("You started egg 2 days ago.");
+    expect(screen.queryByText("Before you offer Peanut")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Not yet" }));
+    await waitFor(() => expect(screen.queryByText(SPACING)).not.toBeInTheDocument());
+    expect(screen.queryByText("Before you offer Peanut")).not.toBeInTheDocument();
+    expect(writes).toHaveLength(0);
+  });
+
+  it("Start now continues to the start dialog", async () => {
+    state.otherIntros = [eggStartedAgo(5 * 60 * 60 * 1000)];
+    await openPeanut();
+    fireEvent.click(screen.getByRole("button", { name: /Start First Exposure/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Start now" }));
+    expect(await screen.findByText("Before you offer Peanut")).toBeInTheDocument();
+  });
+
+  it("goes straight to the start dialog when the other allergen started 72+ h ago", async () => {
+    state.otherIntros = [eggStartedAgo(72 * 60 * 60 * 1000)];
+    await openPeanut();
+    fireEvent.click(screen.getByRole("button", { name: /Start First Exposure/ }));
+    expect(await screen.findByText("Before you offer Peanut")).toBeInTheDocument();
+    expect(screen.queryByText(SPACING)).not.toBeInTheDocument();
+  });
+
+  it("never shows for a maintenance serving", async () => {
+    state.intro = makeIntro("completed", [log(1, 12 * DAY), log(2, 8 * DAY), log(3, 2 * DAY)]);
+    state.otherIntros = [eggStartedAgo(60 * 60 * 1000)];
+    await openPeanut();
+    fireEvent.click(screen.getByRole("button", { name: /Had it today/ }));
+    expect(await screen.findByText("Log a serving of Peanut?")).toBeInTheDocument();
+    expect(screen.queryByText(SPACING)).not.toBeInTheDocument();
+  });
 });
 
 describe("keep it on the menu", () => {
@@ -268,6 +399,7 @@ describe("keep it on the menu", () => {
       logged_at: BACKDATED_AT,
       reaction_observed: false,
     });
+    expect(insertAllergenExposure).toHaveBeenCalledTimes(1);
     expect(writesTo("allergen_reactions", "insert")).toHaveLength(0);
     expect(writesTo("allergen_introductions", "update")).toHaveLength(0);
     await waitFor(() => expect(screen.queryByText("Log a serving of Peanut?")).not.toBeInTheDocument());

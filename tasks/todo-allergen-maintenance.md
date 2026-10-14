@@ -32,3 +32,10 @@ professional guidance. Existing test data is left as-is.
 
 ## Review
 - [x] QA, then PR (no migration → auto-merge on green)
+
+## Follow-up (founder-approved 2026-10-14)
+- [x] No hard 3-day gate on exposure #2. Step 2 is "Offer it again"; same-calendar-day #2 asks "Today's watch isn't done yet — log it anyway?" (a reaction save is never held behind it); in-app nudge on the step from day 4
+- [x] Soft spacing note before a DIFFERENT allergen's first exposure within 72 h of another's first exposure ([Start now] / [Not yet]); never on servings
+- [x] FeedingLog solid feeds: optional chips for signed-off allergens; one serving per chip via `insertAllergenExposure` (shared with "Had it today"); not logged when "Reaction noted" is ticked; carried through the View Allergen Tracker draft
+- [x] Server: also remind when under the weekly target in the rolling 7 days and the latest exposure is 4+ days old (lapse is the zero-servings case)
+- [x] Viewers never get `allergen_maintenance` (in-app or push); a failed role read drops every partner copy of that type

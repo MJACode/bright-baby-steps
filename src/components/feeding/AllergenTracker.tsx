@@ -32,20 +32,24 @@ import { toast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   allergenEmoji, getAllergenStatus, getStatusConfig,
-  getDaysSinceLastExposure, canLogNextExposure, getNextExposureDate,
-  introStateAfterExposureRemoval,
+  introStateAfterExposureRemoval, clampExposureTime, nextExposureSlot, isSameCalendarDay,
+  SECOND_EXPOSURE_STEP_TITLE, SECOND_EXPOSURE_STEP_HELPER, isSecondExposureNudgeDue, secondExposureNudge,
+  SAME_DAY_SECOND_EXPOSURE_TITLE, SAME_DAY_SECOND_EXPOSURE_DESCRIPTION,
+  SAME_DAY_SECOND_EXPOSURE_CONFIRM, SAME_DAY_SECOND_EXPOSURE_CANCEL,
+  recentOtherFirstExposure, spacingNoteText, SPACING_NOTE_TITLE, SPACING_NOTE_START, SPACING_NOTE_NOT_YET,
   severityConfig, type Severity, type AllergenStatus,
   exposureWatchEnd, isExposureInWatchWindow, exposureAwaitingReaction,
   SYMPTOM_CHIPS, classifyReaction, resolveReactionSeverity, isReaction, type ReactionLevel,
   beforeYouStartFor, CALL_911, CALL_911_EPINEPHRINE, CALL_911_POSITIONING,
   CALL_PEDIATRICIAN, CALL_PEDIATRICIAN_KEEP_WATCHING, SAVE_COPY, USUALLY_NOT_A_REACTION,
   LATER_SAME_DAY, NEXT_FEW_DAYS, GUIDANCE_FOOTER,
-  FIRST_EXPOSURE_HELPER, WAIT_STEP_HELPER, startIntroToast,
+  FIRST_EXPOSURE_HELPER, startIntroToast,
   EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE, ACTION_PLAN, REACTION_NOTED_DESCRIPTION,
   exposureLoggedToast, EXPOSURE_LOGGED_TOAST, REACTION_SAVED_TOAST, type GuidanceSection,
   isAwaitingSignOff, getMaintenanceState, maintenanceGuidance, maintenanceRemindersActive,
   sortDueIntroducedFirst,
 } from "@/services/allergenService";
+import { insertAllergenExposure, type InsertedExposure } from "@/services/allergenExposureWrite";
 
 const REACTION_INPUT_HINT = "Pick how strong it is or what you see to save.";
 
@@ -185,16 +189,6 @@ function describeAllergenWriteError(err: unknown, title: string): { title: strin
   return { title, description: "Nothing was saved. Check your connection and try again." };
 }
 
-const clampToNow = (d: Date) => {
-  const now = new Date();
-  return d.getTime() > now.getTime() ? now : d;
-};
-
-const clampPick = (d: Date, min?: Date) => {
-  const clamped = clampToNow(d);
-  return min && clamped.getTime() < min.getTime() ? min : clamped;
-};
-
 // The exposure row outlived a failed reaction insert. Carrying its id lets a
 // retry attach the reaction to it instead of inserting a duplicate exposure.
 class ReactionHalfSavedError extends AllergenWriteError {
@@ -260,6 +254,8 @@ export default function AllergenTracker() {
   // One time-picker dialog serves both the first exposure and a maintenance serving.
   const [timeDialog, setTimeDialog] = useState<"start" | "serving" | null>(null);
   const [pickedAt, setPickedAt] = useState<Date>(() => new Date());
+  const [spacingNote, setSpacingNote] = useState<string | null>(null);
+  const [sameDayConfirm, setSameDayConfirm] = useState<SaveExposureInput | null>(null);
   const [exposureAt, setExposureAt] = useState<Date>(() => new Date());
 
   // Queries
@@ -285,7 +281,7 @@ export default function AllergenTracker() {
     mutationFn: async ({ allergenId, at }: { allergenId: string; at: Date }) => {
       assertCanWrite(roleResolved, role);
 
-      const loggedAt = clampToNow(at).toISOString();
+      const loggedAt = clampExposureTime(at).toISOString();
 
       const { data, error } = await supabase.from("allergen_introductions").insert({
         allergen_id: allergenId,
@@ -359,7 +355,7 @@ export default function AllergenTracker() {
       assertCanWrite(roleResolved, role);
       const reacted = isReaction(rawSeverity, symptoms);
       const severity = resolveReactionSeverity(rawSeverity, symptoms);
-      let newExposure: { exposure_number: number; logged_at: string; observation_window_ends_at: string } | null = null;
+      let newExposure: InsertedExposure | null = null;
 
       let exposureId: string;
       if (target.mode === "existing_exposure") {
@@ -372,24 +368,18 @@ export default function AllergenTracker() {
         if (!data?.length) throw new AllergenWriteError(SAVE_COPY.exposureGone);
         exposureId = target.exposureId;
       } else {
-        // Written explicitly so a back-dated exposure's watch window starts at
-        // logged_at, never at insert time.
-        const loggedAt = clampPick(at ?? new Date(), notBefore).toISOString();
-        newExposure = {
-          exposure_number: target.exposureNum,
-          logged_at: loggedAt,
-          observation_window_ends_at: exposureWatchEnd({ logged_at: loggedAt }).toISOString(),
-        };
-        const { data, error } = await supabase.from("allergen_exposure_logs").insert({
-          allergen_id: target.allergenId,
-          allergen_introduction_id: target.introId,
-          child_id: activeChild!.id,
-          parent_id: user!.id,
-          ...newExposure,
-          reaction_observed: reacted,
-        }).select("id").single();
-        if (error) throw error;
-        exposureId = data.id;
+        const inserted = await insertAllergenExposure({
+          childId: activeChild!.id,
+          parentId: user!.id,
+          allergenId: target.allergenId,
+          introId: target.introId,
+          exposureNumber: target.exposureNum,
+          at: at ?? new Date(),
+          notBefore,
+          reacted,
+        });
+        newExposure = inserted.exposure;
+        exposureId = inserted.id;
       }
 
       if (reacted) {
@@ -668,9 +658,6 @@ export default function AllergenTracker() {
     const statusCfg = getStatusConfig(status, { awaitingSignOff });
     const sortedExposures = [...exposures].sort((a, b) => a.exposure_number - b.exposure_number);
     const lastExposure = sortedExposures[sortedExposures.length - 1];
-    const canLogNext = canLogNextExposure(exposures);
-    const nextDate = getNextExposureDate(exposures);
-    const daysSince = getDaysSinceLastExposure(exposures);
     const allergenReactions = reactions?.filter((r) =>
       exposures.some((e) => e.id === r.exposure_log_id)
     ) ?? [];
@@ -684,13 +671,25 @@ export default function AllergenTracker() {
       : null;
     const signOffNeedsPediatrician = isHighRisk || (reactions?.length ?? 0) > 0;
     const maintenance = getMaintenanceState(intro, selectedAllergen.slug, now);
-    const nextExposureNum = Math.max(0, ...exposures.map((e) => e.exposure_number)) + 1;
-    // A new exposure or serving can't be back-dated before the latest one
-    // already logged (so a serving can't predate exposure #2; it can still
-    // fall between exposure #2 and the sign-off).
-    const latestExposureAt = exposures.length
-      ? new Date(Math.max(...exposures.map((e) => new Date(e.logged_at).getTime())))
-      : startMinDate;
+    const slot = nextExposureSlot(exposures);
+    const nextExposureNum = slot.exposureNumber;
+    const latestExposureAt = slot.notBefore ?? startMinDate;
+    const showSecondExposureNudge = canWrite && status === "in_progress" && sortedExposures.length === 1
+      && !!firstExposure && isSecondExposureNudgeDue(firstExposure.logged_at, now);
+    const onStartTap = () => {
+      const recent = recentOtherFirstExposure(introductions ?? [], selectedAllergen.id, new Date());
+      const otherName = recent && allergens?.find((a) => a.id === recent.allergenId)?.name;
+      if (recent && otherName) setSpacingNote(spacingNoteText(otherName, recent.loggedAt, new Date()));
+      else openStartDialog();
+    };
+    // Same-day #2 asks first; a reaction is never held behind a question.
+    const saveOrConfirm = (input: SaveExposureInput) => {
+      const needsConfirm = input.target.mode === "new_exposure" && input.target.exposureNum === 2
+        && !isReaction(input.severity, input.symptoms) && !!firstExposure
+        && isSameCalendarDay(clampExposureTime(input.at ?? new Date(), input.notBefore), firstExposure.logged_at);
+      if (needsConfirm) setSameDayConfirm(input);
+      else submitSave(input);
+    };
     const newExposureTarget = (exposureNum: number): ReactionTarget | null => intro
       ? { mode: "new_exposure", introId: intro.id, allergenId: selectedAllergen.id, exposureNum }
       : null;
@@ -813,7 +812,7 @@ export default function AllergenTracker() {
             </CardContent>
           </Card>
 
-          {/* Step 2: 3-Day Wait */}
+          {/* Step 2: Offer it again */}
           <Card className={cn("border-0 transition-all",
             sortedExposures.length === 1 ? "bg-warning/10 ring-1 ring-warning/30" :
             sortedExposures.length >= 2 ? "bg-success/10" : "bg-secondary"
@@ -827,21 +826,12 @@ export default function AllergenTracker() {
                   {sortedExposures.length >= 2 ? <Check className="w-4 h-4" /> : <Timer className="w-4 h-4" />}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-bold">Wait 3 Days</p>
-                  <p className="text-xs text-muted-foreground">{WAIT_STEP_HELPER}</p>
-                  {sortedExposures.length === 1 && nextDate && (
-                    <div className="mt-2">
-                      {canLogNext ? (
-                        <Badge className="bg-success/15 text-success text-xs">✅ 3-day wait complete — ready for next exposure</Badge>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <Badge className="bg-warning/15 text-warning text-xs">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Wait until {format(nextDate, "MMM d")} ({3 - (daysSince ?? 0)} days remaining)
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
+                  <p className="text-sm font-bold">{SECOND_EXPOSURE_STEP_TITLE}</p>
+                  <p className="text-xs text-muted-foreground">{SECOND_EXPOSURE_STEP_HELPER}</p>
+                  {showSecondExposureNudge && (
+                    <p className="text-sm font-semibold text-foreground mt-2">
+                      {secondExposureNudge(selectedAllergen.name)}
+                    </p>
                   )}
                   <WatchForSection key={selectedAllergen.id} defaultOpen={false}>
                     <GuidanceBlock section={NEXT_FEW_DAYS} tone="warning" />
@@ -906,7 +896,7 @@ export default function AllergenTracker() {
                     {status === "introduced" ? `${selectedAllergen.name} is now part of ${activeChild.name}'s diet.` :
                      status === "reaction_noted" ? REACTION_NOTED_DESCRIPTION :
                      awaitingSignOff ? "Two reaction-free tastes are logged." :
-                     "Log the second exposure after the wait."}
+                     "Log the second exposure when you offer it again."}
                   </p>
                   {status === "introduced" && logReactionButton}
                 </div>
@@ -919,14 +909,14 @@ export default function AllergenTracker() {
         {status === "not_started" && canWrite && (
           <Button
             className="w-full touch-target h-14 text-base font-bold gap-2 bg-feeding hover:bg-feeding/90"
-            onClick={openStartDialog}
+            onClick={onStartTap}
             disabled={startIntro.isPending}
           >
             <Play className="w-5 h-5" /> Start First Exposure
           </Button>
         )}
 
-        {status === "in_progress" && sortedExposures.length === 1 && canLogNext && canWrite && intro && (
+        {status === "in_progress" && sortedExposures.length === 1 && canWrite && intro && (
           <Button
             className="w-full touch-target h-14 text-base font-bold gap-2 bg-warning hover:bg-warning/90 text-warning-foreground"
             onClick={() => {
@@ -1094,7 +1084,7 @@ export default function AllergenTracker() {
                 <div className="space-y-4 text-left">
                   <MobileDateTimePicker
                     value={pickedAt}
-                    onChange={(d) => setPickedAt(clampPick(d, latestExposureAt))}
+                    onChange={(d) => setPickedAt(clampExposureTime(d, latestExposureAt))}
                     maxDate={new Date()}
                     minDate={latestExposureAt}
                     label={`When did ${activeChild.name} have it?`}
@@ -1141,7 +1131,7 @@ export default function AllergenTracker() {
                 <DialogHeader className="text-left">
                   <DialogTitle className="font-display text-lg">Before you offer {selectedAllergen.name}</DialogTitle>
                   <DialogDescription>
-                    This starts the 2-hour watch and the 3-day wait for {activeChild.name}.
+                    This starts the 2-hour watch for {activeChild.name}.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 text-left">
@@ -1160,7 +1150,7 @@ export default function AllergenTracker() {
                   <div className="space-y-1">
                     <MobileDateTimePicker
                       value={pickedAt}
-                      onChange={(d) => setPickedAt(clampPick(d, startMinDate))}
+                      onChange={(d) => setPickedAt(clampExposureTime(d, startMinDate))}
                       maxDate={new Date()}
                       minDate={startMinDate}
                       label="When did you offer it?"
@@ -1208,7 +1198,7 @@ export default function AllergenTracker() {
               {reactionTarget?.mode === "new_exposure" && (
                 <MobileDateTimePicker
                   value={exposureAt}
-                  onChange={(d) => setExposureAt(clampPick(d, latestExposureAt))}
+                  onChange={(d) => setExposureAt(clampExposureTime(d, latestExposureAt))}
                   maxDate={new Date()}
                   minDate={latestExposureAt}
                   label="When?"
@@ -1302,7 +1292,7 @@ export default function AllergenTracker() {
               )}
               <Button
                 className="w-full touch-target h-12 text-base font-bold"
-                onClick={() => reactionTarget && submitSave({
+                onClick={() => reactionTarget && saveOrConfirm({
                   target: reactionTarget, at: exposureAt, notBefore: latestExposureAt,
                   severity, symptoms, notes: reactionNotes,
                 })}
@@ -1315,6 +1305,49 @@ export default function AllergenTracker() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={sameDayConfirm !== null} onOpenChange={(open) => { if (!open) setSameDayConfirm(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">{SAME_DAY_SECOND_EXPOSURE_TITLE}</AlertDialogTitle>
+              <AlertDialogDescription>{SAME_DAY_SECOND_EXPOSURE_DESCRIPTION}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="touch-target">{SAME_DAY_SECOND_EXPOSURE_CANCEL}</AlertDialogCancel>
+              <AlertDialogAction
+                className="touch-target"
+                onClick={() => {
+                  const input = sameDayConfirm;
+                  setSameDayConfirm(null);
+                  if (input) submitSave(input);
+                }}
+              >
+                {SAME_DAY_SECOND_EXPOSURE_CONFIRM}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={spacingNote !== null} onOpenChange={(open) => { if (!open) setSpacingNote(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="font-display">{SPACING_NOTE_TITLE}</AlertDialogTitle>
+              <AlertDialogDescription>{spacingNote}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="touch-target">{SPACING_NOTE_NOT_YET}</AlertDialogCancel>
+              <AlertDialogAction
+                className="touch-target"
+                onClick={() => {
+                  setSpacingNote(null);
+                  openStartDialog();
+                }}
+              >
+                {SPACING_NOTE_START}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Undo the most recent exposure, keeping the rest of the protocol */}
         <AlertDialog open={undoExposureOpen} onOpenChange={setUndoExposureOpen}>

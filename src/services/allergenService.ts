@@ -67,30 +67,104 @@ export function getStatusConfig(status: AllergenStatus, opts: { awaitingSignOff?
   }
 }
 
-// Calculate days since last exposure for 3-day wait rule
-export function getDaysSinceLastExposure(exposureLogs: { logged_at: string }[]): number | null {
-  if (exposureLogs.length === 0) return null;
-  const sorted = [...exposureLogs].sort((a, b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
-  const lastDate = new Date(sorted[0].logged_at);
-  const now = new Date();
-  return Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// ── Exposure #2 and spacing between new allergens ──
+// Founder decision 2026-10-14: no hard wait before exposure #2. Same-day #2
+// asks first; a different allergen started within 72 h gets a soft note.
+
+export const SECOND_EXPOSURE_STEP_TITLE = "Offer it again";
+export const SECOND_EXPOSURE_STEP_HELPER = "Offer it again in the next few days, once today's watch is done.";
+export const SAME_DAY_SECOND_EXPOSURE_TITLE = "Today's watch isn't done yet — log it anyway?";
+export const SAME_DAY_SECOND_EXPOSURE_DESCRIPTION =
+  "Most families offer the second taste on another day, so any later signs from the first one have time to show.";
+export const SAME_DAY_SECOND_EXPOSURE_CONFIRM = "Log it anyway";
+export const SAME_DAY_SECOND_EXPOSURE_CANCEL = "Change the time";
+export const SECOND_EXPOSURE_NUDGE_DAYS = 4;
+
+export function secondExposureNudge(allergenName: string): string {
+  return `Ready for another taste of ${allergenName}? Offering it again soon keeps the introduction on track.`;
 }
 
-// Check if 3-day wait period has passed
-export function canLogNextExposure(exposureLogs: { logged_at: string }[]): boolean {
-  const days = getDaysSinceLastExposure(exposureLogs);
-  if (days === null) return true; // no exposures yet
-  return days >= 3;
+// Calendar day in the device's zone, which is the parent's "today".
+export function isSameCalendarDay(a: Date | string, b: Date | string): boolean {
+  const x = new Date(a);
+  const y = new Date(b);
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
 }
 
-// Get the wait-until date for next exposure
-export function getNextExposureDate(exposureLogs: { logged_at: string }[]): Date | null {
-  if (exposureLogs.length === 0) return null;
-  const sorted = [...exposureLogs].sort((a, b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime());
-  const lastDate = new Date(sorted[0].logged_at);
-  const nextDate = new Date(lastDate);
-  nextDate.setDate(nextDate.getDate() + 3);
-  return nextDate;
+function calendarDaysBetween(from: Date, to: Date): number {
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((b.getTime() - a.getTime()) / DAY_MS);
+}
+
+// Day 1 is the day of exposure #1, so the nudge appears from day 4 on.
+export function isSecondExposureNudgeDue(firstExposureAt: string, now: Date): boolean {
+  return calendarDaysBetween(new Date(firstExposureAt), now) >= SECOND_EXPOSURE_NUDGE_DAYS - 1;
+}
+
+export const NEW_ALLERGEN_SPACING_HOURS = 72;
+export const SPACING_NOTE_TITLE = "Starting another new allergen?";
+export const SPACING_NOTE_START = "Start now";
+export const SPACING_NOTE_NOT_YET = "Not yet";
+
+// Lower-case common name: "Cow's Milk (Dairy)" -> "cow's milk".
+export function spokenAllergenName(name: string): string {
+  return name.replace(/\s*\([^)]*\)/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function elapsedPhrase(ms: number): string {
+  const hours = Math.floor(ms / (60 * 60 * 1000));
+  if (hours < 1) return "less than an hour";
+  if (hours < 24) return hours === 1 ? "1 hour" : `${hours} hours`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+export function spacingNoteText(otherAllergenName: string, startedAt: string, now: Date): string {
+  const elapsed = Math.max(0, now.getTime() - new Date(startedAt).getTime());
+  return `You started ${spokenAllergenName(otherAllergenName)} ${elapsedPhrase(elapsed)} ago. Waiting a few days between new allergens makes it easier to tell which food caused a reaction, if one happens.`;
+}
+
+// The most recent first exposure of a DIFFERENT allergen inside the 72 h
+// window, or null. Only exposure #1 counts: a maintenance serving or a
+// second taste isn't a new allergen.
+export function recentOtherFirstExposure<
+  I extends { allergen_id: string; allergen_exposure_logs?: { exposure_number: number; logged_at: string }[] },
+>(intros: readonly I[], allergenId: string, now: Date): { allergenId: string; loggedAt: string } | null {
+  let best: { allergenId: string; loggedAt: string; t: number } | null = null;
+  for (const intro of intros) {
+    if (intro.allergen_id === allergenId) continue;
+    const first = intro.allergen_exposure_logs?.find((e) => e.exposure_number === 1);
+    if (!first) continue;
+    const t = new Date(first.logged_at).getTime();
+    if (Number.isNaN(t) || now.getTime() - t >= NEW_ALLERGEN_SPACING_HOURS * 60 * 60 * 1000) continue;
+    if (!best || t > best.t) best = { allergenId: intro.allergen_id, loggedAt: first.logged_at, t };
+  }
+  return best ? { allergenId: best.allergenId, loggedAt: best.loggedAt } : null;
+}
+
+// ── Logging the next exposure ──
+
+// Never in the future, never before `min`.
+export function clampExposureTime(d: Date, min?: Date, now: Date = new Date()): Date {
+  const clamped = d.getTime() > now.getTime() ? now : d;
+  return min && clamped.getTime() < min.getTime() ? min : clamped;
+}
+
+// The next exposure gets the next number, and can't be back-dated before the
+// latest one already logged (so a serving can't predate exposure #2).
+export function nextExposureSlot(logs: readonly { exposure_number: number; logged_at: string }[]): {
+  exposureNumber: number;
+  notBefore: Date | undefined;
+} {
+  return {
+    exposureNumber: Math.max(0, ...logs.map((e) => e.exposure_number)) + 1,
+    notBefore: logs.length
+      ? new Date(Math.max(...logs.map((e) => new Date(e.logged_at).getTime())))
+      : undefined,
+  };
 }
 
 // Where an introduction lands after one of its exposures is removed.
@@ -118,7 +192,6 @@ export function introStateAfterExposureRemoval(
 
 // ── "Keep it on the menu" maintenance ──
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 export const MAINTENANCE_WINDOW_DAYS = 7;
 export const MAINTENANCE_LAPSE_DAYS = 14;
 export const MAINTENANCE_AGE_CAP_MONTHS = 36;
@@ -371,8 +444,6 @@ export const GUIDANCE_FOOTER =
   "Based on AAP (2019) and NIAID (2017) guidance. Your pediatrician knows your baby best.";
 
 export const FIRST_EXPOSURE_HELPER = "Offer a small taste and stay close for 2 hours.";
-export const WAIT_STEP_HELPER =
-  "Many families wait a few days before offering it again, to watch for later signs.";
 export const START_INTRO_TOAST_TITLE = "First exposure logged";
 
 // Exposure #1 can be back-dated, so the watch line is only true while the
@@ -385,9 +456,23 @@ export function startIntroToast(
   if (isExposureInWatchWindow(exposure, now)) {
     parts.push(`Keep watching until ${format(exposureWatchEnd(exposure), "h:mm a")}.`);
   }
-  const next = getNextExposureDate([exposure]);
-  if (next) parts.push(`Next exposure on ${format(next, "MMM d")}.`);
+  parts.push(SECOND_EXPOSURE_STEP_HELPER);
   return { title: START_INTRO_TOAST_TITLE, description: parts.join(" ") };
+}
+
+// ── Allergen chips on a solid feed ──
+
+export const FEED_ALLERGEN_CHIPS_LABEL = "Allergens in this meal (optional)";
+export const FEED_ALLERGEN_CHIPS_HELPER = "Each one counts as a serving toward keeping it on the menu.";
+export const FEED_ALLERGEN_CHIPS_REACTION_NOTE =
+  "Log a reaction on the allergen itself in the Allergen Tracker, so it reaches your pediatrician report.";
+
+export function feedServingsLoggedText(names: string[]): string {
+  return `Counted as a serving of ${joinNames(names.map(spokenAllergenName))}.`;
+}
+
+export function feedServingsFailedText(names: string[]): string {
+  return `The feed saved, but the serving of ${joinNames(names.map(spokenAllergenName))} didn't. Tap "Had it today" in the Allergen Tracker to add it.`;
 }
 
 export const EXPOSURE_LOGGED_TOAST = {
