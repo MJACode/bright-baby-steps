@@ -266,7 +266,7 @@ describe("protocol exposure #2", () => {
     state.intro = makeIntro("in_progress", [log(1, 26 * 60 * 60 * 1000)]);
     await openPeanut();
     expect(screen.getByText("Offer it again")).toBeInTheDocument();
-    expect(screen.getByText("Offer it again in the next few days, once today's watch is done.")).toBeInTheDocument();
+    expect(screen.getByText("Offer it again on another day, in the next few days.")).toBeInTheDocument();
     expect(screen.queryByText(/Wait until|3-day wait|Wait 3 Days/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Log Exposure #2/ }));
@@ -274,7 +274,7 @@ describe("protocol exposure #2", () => {
 
     await waitFor(() => expect(writesTo("allergen_exposure_logs", "insert")).toHaveLength(1));
     expect(writesTo("allergen_exposure_logs", "insert")[0].payload).toMatchObject({ exposure_number: 2 });
-    expect(screen.queryByText("Today's watch isn't done yet — log it anyway?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Offer the second taste today?")).not.toBeInTheDocument();
   });
 
   it("asks before logging exposure #2 on the same day as #1, and only writes on Log it anyway", async () => {
@@ -283,10 +283,10 @@ describe("protocol exposure #2", () => {
     fireEvent.click(screen.getByRole("button", { name: /Log Exposure #2/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Save Exposure" }));
 
-    expect(await screen.findByText("Today's watch isn't done yet — log it anyway?")).toBeInTheDocument();
+    expect(await screen.findByText("Offer the second taste today?")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Change the time" }));
     await waitFor(() =>
-      expect(screen.queryByText("Today's watch isn't done yet — log it anyway?")).not.toBeInTheDocument(),
+      expect(screen.queryByText("Offer the second taste today?")).not.toBeInTheDocument(),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save Exposure" }));
@@ -304,14 +304,14 @@ describe("protocol exposure #2", () => {
 
     await waitFor(() => expect(writesTo("allergen_exposure_logs", "insert")).toHaveLength(1));
     expect(writesTo("allergen_reactions", "insert")).toHaveLength(1);
-    expect(screen.queryByText("Today's watch isn't done yet — log it anyway?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Offer the second taste today?")).not.toBeInTheDocument();
   });
 
   it("shows a nudge from day 4 when exposure #2 isn't logged yet", async () => {
     state.intro = makeIntro("in_progress", [log(1, 4 * DAY)]);
     await openPeanut();
     expect(
-      screen.getByText("Ready for another taste of Peanut? Offering it again soon keeps the introduction on track."),
+      screen.getByText("Ready for another taste of peanut? Offering it again soon keeps the introduction on track."),
     ).toBeInTheDocument();
   });
 

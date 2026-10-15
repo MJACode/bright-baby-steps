@@ -373,7 +373,13 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       const allergen = introducedAllergens.find((a) => a.id === allergenId);
       const intro = introductions?.find((i) => i.allergen_id === allergenId);
       if (!allergen || !intro) continue;
-      const slot = nextExposureSlot(intro.allergen_exposure_logs ?? []);
+      // Read this intro's logs fresh: the cached list can be stale if another
+      // device logged a serving, and there's no unique constraint on the number.
+      const { data: freshLogs } = await supabase
+        .from("allergen_exposure_logs")
+        .select("exposure_number, logged_at")
+        .eq("allergen_introduction_id", intro.id);
+      const slot = nextExposureSlot(freshLogs ?? intro.allergen_exposure_logs ?? []);
       try {
         await insertAllergenExposure({
           childId: activeChild!.id,

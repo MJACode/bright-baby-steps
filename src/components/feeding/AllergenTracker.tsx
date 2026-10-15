@@ -33,7 +33,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import {
   allergenEmoji, getAllergenStatus, getStatusConfig,
   introStateAfterExposureRemoval, clampExposureTime, nextExposureSlot, isSameCalendarDay,
-  SECOND_EXPOSURE_STEP_TITLE, SECOND_EXPOSURE_STEP_HELPER, isSecondExposureNudgeDue, secondExposureNudge,
+  SECOND_EXPOSURE_STEP_TITLE, SECOND_EXPOSURE_STEP_HELPER, isSecondExposureNudgeDue, secondExposureNudge, spokenAllergenName,
   SAME_DAY_SECOND_EXPOSURE_TITLE, SAME_DAY_SECOND_EXPOSURE_DESCRIPTION,
   SAME_DAY_SECOND_EXPOSURE_CONFIRM, SAME_DAY_SECOND_EXPOSURE_CANCEL,
   recentOtherFirstExposure, spacingNoteText, SPACING_NOTE_TITLE, SPACING_NOTE_START, SPACING_NOTE_NOT_YET,
@@ -830,7 +830,7 @@ export default function AllergenTracker() {
                   <p className="text-xs text-muted-foreground">{SECOND_EXPOSURE_STEP_HELPER}</p>
                   {showSecondExposureNudge && (
                     <p className="text-sm font-semibold text-foreground mt-2">
-                      {secondExposureNudge(selectedAllergen.name)}
+                      {secondExposureNudge(spokenAllergenName(selectedAllergen.name))}
                     </p>
                   )}
                   <WatchForSection key={selectedAllergen.id} defaultOpen={false}>

@@ -1025,10 +1025,10 @@ describe("exposureLoggedToast", () => {
 describe("exposure #2 without a hard wait", () => {
   it("uses the new step copy and never names a fixed next date", () => {
     expect(SECOND_EXPOSURE_STEP_TITLE).toBe("Offer it again");
-    expect(SECOND_EXPOSURE_STEP_HELPER).toBe("Offer it again in the next few days, once today's watch is done.");
-    expect(SAME_DAY_SECOND_EXPOSURE_TITLE).toBe("Today's watch isn't done yet — log it anyway?");
+    expect(SECOND_EXPOSURE_STEP_HELPER).toBe("Offer it again on another day, in the next few days.");
+    expect(SAME_DAY_SECOND_EXPOSURE_TITLE).toBe("Offer the second taste today?");
     const toast = startIntroToast({ logged_at: "2024-06-15T11:30:00Z" }, new Date("2024-06-15T12:00:00Z"));
-    expect(toast.description).toMatch(/^Keep watching until .+\. Offer it again in the next few days, once today's watch is done\.$/);
+    expect(toast.description).toMatch(/^Keep watching until .+\. Offer it again on another day, in the next few days\.$/);
     expect(toast.description).not.toMatch(/Next exposure|3-day|wait until/i);
   });
 

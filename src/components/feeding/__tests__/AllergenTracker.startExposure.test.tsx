@@ -242,7 +242,7 @@ describe("AllergenTracker start first exposure", () => {
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "First exposure logged",
-          description: expect.stringContaining("Offer it again in the next few days"),
+          description: expect.stringContaining("Offer it again on another day, in the next few days"),
         }),
       ),
     );

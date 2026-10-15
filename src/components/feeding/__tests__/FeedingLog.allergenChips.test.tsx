@@ -47,7 +47,7 @@ const INTROS = [
 
 vi.mock("@/integrations/supabase/client", () => {
   const makeChain = (table: string) => {
-    const s: { op?: Write["op"]; payload?: Record<string, unknown> } = {};
+    const s: { op?: Write["op"]; payload?: Record<string, unknown>; introId?: string } = {};
     const result = () => {
       if (s.op) writes.push({ table, op: s.op, payload: s.payload ?? {} });
       if (s.op === "insert" && table === "allergen_exposure_logs") {
@@ -56,6 +56,9 @@ vi.mock("@/integrations/supabase/client", () => {
           : { data: { id: `log-${writes.length}` }, error: null };
       }
       if (s.op) return { data: [], error: null };
+      if (table === "allergen_exposure_logs") {
+        return { data: INTROS.find((i) => i.id === s.introId)?.allergen_exposure_logs ?? [], error: null };
+      }
       if (table === "allergens") return { data: [PEANUT, EGG, MILK, SESAME], error: null };
       if (table === "allergen_introductions") return { data: INTROS, error: null };
       if (table === "children") {
@@ -66,7 +69,10 @@ vi.mock("@/integrations/supabase/client", () => {
     };
     const chain: Record<string, unknown> = {
       select: () => chain,
-      eq: () => chain,
+      eq: (col: string, val: unknown) => {
+        if (col === "allergen_introduction_id") s.introId = val as string;
+        return chain;
+      },
       is: () => chain,
       in: () => chain,
       gte: () => chain,

@@ -74,8 +74,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // asks first; a different allergen started within 72 h gets a soft note.
 
 export const SECOND_EXPOSURE_STEP_TITLE = "Offer it again";
-export const SECOND_EXPOSURE_STEP_HELPER = "Offer it again in the next few days, once today's watch is done.";
-export const SAME_DAY_SECOND_EXPOSURE_TITLE = "Today's watch isn't done yet — log it anyway?";
+export const SECOND_EXPOSURE_STEP_HELPER = "Offer it again on another day, in the next few days.";
+export const SAME_DAY_SECOND_EXPOSURE_TITLE = "Offer the second taste today?";
 export const SAME_DAY_SECOND_EXPOSURE_DESCRIPTION =
   "Most families offer the second taste on another day, so any later signs from the first one have time to show.";
 export const SAME_DAY_SECOND_EXPOSURE_CONFIRM = "Log it anyway";
