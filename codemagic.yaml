@@ -342,6 +342,51 @@ workflows:
           ruby watch/project/inject_watch_target.rb
           ruby widgets/project/inject_widgets_target.rb
 
+      - name: Add Push Notifications capability
+        # Alert pushes via APNs (@capacitor/push-notifications). Adds
+        # ios-push-glue/AppDelegate+Push.swift (forwards the device token to
+        # the plugin) and, when the App Store profile allows it, the
+        # aps-environment=production entitlement (ios-push-glue/App.entitlements
+        # → CODE_SIGN_ENTITLEMENTS on the App target). See
+        # ios-push-glue/inject_push_capability.rb.
+        #
+        # The entitlement is gated on the profile: archive fails outright if the
+        # app claims aps-environment but its profile doesn't carry it, which is
+        # the case until Push Notifications is enabled on com.graceflare.app in
+        # the Apple Developer portal and the App Store profile is regenerated.
+        # Until then the build still ships, just without push (a warning is
+        # logged). No UIBackgroundModes / remote-notification: alert pushes
+        # don't need it, and declaring it invites App Review questions.
+        script: |
+          set -e
+          APS_ENV=$(python3 - "${IOS_PROFILE_UUID:-}" <<'PY'
+          import glob, os, plistlib, subprocess, sys
+          uuid = sys.argv[1]
+          dirs = [
+              os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+              os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+          ]
+          for d in dirs:
+              for p in glob.glob(os.path.join(d, "*")):
+                  try:
+                      pl = plistlib.loads(subprocess.run(["security", "cms", "-D", "-i", p], capture_output=True).stdout)
+                  except Exception:
+                      continue
+                  if uuid and pl.get("UUID") == uuid:
+                      print(pl.get("Entitlements", {}).get("aps-environment", ""))
+                      sys.exit(0)
+          PY
+          )
+          echo "App Store profile ${IOS_PROFILE_UUID:-<unresolved>} aps-environment: '${APS_ENV}'"
+          if [ "$APS_ENV" = "production" ]; then
+            ruby ios-push-glue/inject_push_capability.rb --entitlement
+          else
+            echo "WARNING: provisioning profile has no production aps-environment."
+            echo "         Enable Push Notifications on ${BUNDLE_ID} in the Apple Developer"
+            echo "         portal and regenerate the App Store profile. Building without push."
+            ruby ios-push-glue/inject_push_capability.rb
+          fi
+
       - name: Bump CFBundleVersion (all targets)
         # App Store Connect rejects an upload whose CFBundleVersion matches any
         # previous build. Unix timestamp = guaranteed monotonic uniqueness.

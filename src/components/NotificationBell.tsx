@@ -8,6 +8,8 @@ import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { routeForNotificationType } from "@/lib/notificationRoutes";
+import { PushSoftAsk } from "@/components/PushSoftAsk";
 
 interface Notification {
   id: string;
@@ -80,14 +82,6 @@ export function NotificationBell() {
     allergen_maintenance: "🍽️",
   };
 
-  const typeRoute: Record<string, string> = {
-    daily_briefing: "/dashboard",
-    finance_trump_claim: "/dashboard/financial",
-    finance_529_newborn: "/dashboard/financial",
-    finance_529_birthday: "/dashboard/financial",
-    allergen_maintenance: "/dashboard/feeding?tab=allergens",
-  };
-
   return (
     <Sheet open={open} onOpenChange={handleOpen}>
       <SheetTrigger asChild>
@@ -105,6 +99,7 @@ export function NotificationBell() {
           <SheetTitle className="text-sm">Notifications</SheetTitle>
         </SheetHeader>
         <div className="overflow-y-auto">
+          <PushSoftAsk />
           {notifications.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground text-sm">
               No notifications yet ✨
@@ -112,7 +107,7 @@ export function NotificationBell() {
           ) : (
             <div className="divide-y divide-border">
               {notifications.map((n) => {
-                const route = typeRoute[n.type];
+                const route = routeForNotificationType(n.type);
                 const body = (
                   <>
                     <p className="leading-snug">

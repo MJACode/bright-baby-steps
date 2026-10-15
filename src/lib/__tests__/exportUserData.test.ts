@@ -52,8 +52,16 @@ describe("EXPORT_TABLES", () => {
   it("never includes credential or token tables or columns", () => {
     for (const entry of EXPORT_TABLES) {
       expect(entry.table).not.toMatch(/token|secret/i);
-      expect(entry.select ?? "").not.toMatch(/token|secret|invite_code/i);
+      // An APNs device token is the parent's own device identifier, not a
+      // credential: it can't sign anyone in, and only our APNs key can push to it.
+      const select = entry.table === "push_devices" ? entry.select?.replace(/\btoken\b/, "") : entry.select;
+      expect(select ?? "").not.toMatch(/token|secret|invite_code/i);
     }
+    expect(EXPORT_TABLES.find((e) => e.table === "push_devices")).toMatchObject({
+      key: "pushDevices",
+      userColumn: "user_id",
+      select: "platform, environment, created_at, last_seen_at, token",
+    });
     // These two tables hold credentials, so they must use an explicit column list, never "*".
     expect(EXPORT_TABLES.find((e) => e.table === "profiles")?.select).toBeDefined();
     expect(EXPORT_TABLES.find((e) => e.table === "partner_invitations")?.select).toBeDefined();

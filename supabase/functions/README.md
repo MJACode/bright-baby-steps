@@ -26,3 +26,34 @@ it deploys **all** functions here with
 - **Migrations:** write them so they could run twice safely (`IF NOT EXISTS`,
   `DROP ... IF EXISTS`), and keep them transaction-safe (no
   `CREATE INDEX CONCURRENTLY`). Merging the PR applies them to production.
+
+## Secrets
+
+Set in Supabase dashboard → Edge Functions → Secrets (never in the repo).
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are
+provided by the platform.
+
+| Secret | Used by | Notes |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | briefing, weekly-insights, chat, extract-memory, generate-activity-plan, generate-sign-plan, generate-speech-class, visit-prep-questions | |
+| `RESEND_API_KEY` | send-vpc-email, send-visit-reminder-email, inactive-account-purge | |
+| `VPC_FROM_EMAIL` | send-vpc-email, send-visit-reminder-email, inactive-account-purge | Resend-verified sender |
+| `APP_URL` | the three email senders, mcp | deployed frontend origin |
+| `JWT_SECRET` | mcp (via `_shared/mintUserJwt.ts`) | |
+| `APNS_KEY` | check-notifications (`_shared/apns.ts`) | Full contents of the APNs `AuthKey_XXXXXXXXXX.p8` (PKCS#8 PEM). Real newlines or `\n` escapes both work. |
+| `APNS_KEY_ID` | check-notifications | 10-char Key ID of that key (Apple Developer → Keys) |
+| `APNS_TEAM_ID` | check-notifications | 10-char Apple Developer Team ID |
+| `APNS_TOPIC` | check-notifications | Optional. Defaults to `com.graceflare.app` |
+
+If any of `APNS_KEY` / `APNS_KEY_ID` / `APNS_TEAM_ID` is missing,
+check-notifications logs `push: APNS_* secrets not set, in-app only` and
+keeps inserting in-app notifications; nothing else changes. One `.p8` key
+works for both the production and sandbox APNs hosts; each device row in
+`public.push_devices` records which one its token belongs to.
+
+Who gets a push: only rows that were actually inserted (after mutes, quiet
+hours and the daily cap), and of those not viewer-partner copies
+(`PUSH_ROLES` in `_shared/pushNotify.ts`) and not an `appointment_reminder`
+that survived quiet hours; those stay in-app only. The payload is the fixed
+alert plus `route`, nothing else. Rows in `push_devices` unseen for 90 days
+are deleted daily by the pg_cron job `push-devices-stale-purge-daily`.
