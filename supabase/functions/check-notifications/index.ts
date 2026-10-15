@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import {
   ALLERGEN_MAINTENANCE_TYPE,
   DEDUPE_DAYS as ALLERGEN_DEDUPE_DAYS,
+  dropViewerAllergenCopies,
   isMaintenanceAge,
   planAllergenMaintenance,
   type MaintenanceAllergen,
@@ -492,7 +493,7 @@ async function loadAllergenMaintenance(
         ...(await fetchAllPages<MaintenanceLog>((from, to) =>
           supabase
             .from("allergen_exposure_logs")
-            .select("id, allergen_introduction_id, logged_at, reaction_observed")
+            .select("id, allergen_introduction_id, exposure_number, logged_at, reaction_observed")
             .in("allergen_introduction_id", batch)
             .order("id")
             .range(from, to)
@@ -502,7 +503,7 @@ async function loadAllergenMaintenance(
 
     const { data: allergens, error: allergenErr } = await supabase
       .from("allergens")
-      .select("id, name, sort_order");
+      .select("id, slug, name, sort_order");
     if (allergenErr) throw new Error(allergenErr.code ?? "read_failed");
 
     return planAllergenMaintenance({
@@ -747,8 +748,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 3c. Allergen maintenance — every signed-off allergen with no serving
-    // logged in 7+ days, batched into one message per child. The 7-day
+    // 3c. Allergen maintenance — every signed-off allergen under its weekly
+    // serving target with no exposure in 4+ days, batched into one message
+    // per child. Viewer copies are dropped after the loop. The 7-day
     // per-child dedupe (any recipient) was applied in the batched pre-load,
     // because the shared 24h `recent` pull can't see that far back.
     {
@@ -1084,6 +1086,33 @@ Deno.serve(async (req) => {
           });
         }
       }
+    }
+  }
+
+  // Viewers never get allergen_maintenance, in-app or push: it asks for a
+  // serving they can't log. Only runs when a partner copy of that type was
+  // queued, and a failed role read drops every partner copy (fail closed).
+  {
+    const ownerByChild = new Map<string, string>(
+      (children as Array<{ id: string; parent_id: string }>).map((c) => [c.id, c.parent_id]),
+    );
+    const partnerAllergenCopies = notifications.filter(
+      (n) => n.type === ALLERGEN_MAINTENANCE_TYPE && n.user_id !== ownerByChild.get(n.child_id),
+    );
+    if (partnerAllergenCopies.length > 0) {
+      const owners = [...new Set(partnerAllergenCopies.map((n) => ownerByChild.get(n.child_id)!))];
+      const { data: viewerRows, error: viewerErr } = await supabase
+        .from("partner_access")
+        .select("owner_id, partner_id")
+        .in("owner_id", owners)
+        .eq("role", "viewer");
+      if (viewerErr) console.error("allergen_maintenance: viewer read failed", viewerErr.code ?? null);
+      const kept = dropViewerAllergenCopies(
+        notifications,
+        ownerByChild,
+        viewerErr ? null : (viewerRows ?? []) as Array<{ owner_id: string; partner_id: string }>,
+      );
+      notifications.splice(0, notifications.length, ...kept);
     }
   }
 

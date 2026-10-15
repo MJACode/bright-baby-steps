@@ -123,7 +123,7 @@ describe("AllergenTracker", () => {
     expect(writes("allergen_introductions", "insert")).toHaveLength(1);
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({
       title: "First exposure logged",
-      description: expect.stringMatching(/^Keep watching until .+\. Next exposure on /),
+      description: expect.stringMatching(/^Keep watching until .+\. Offer it again on another day, in the next few days\.$/),
     })));
   });
 

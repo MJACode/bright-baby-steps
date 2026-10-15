@@ -137,7 +137,7 @@ describe("AllergenTracker start first exposure", () => {
   it("opens a confirmation without writing, and writes once on confirm", async () => {
     await openPeanut();
 
-    expect(screen.getByText("This starts the 2-hour watch and the 3-day wait for Rae.")).toBeInTheDocument();
+    expect(screen.getByText("This starts the 2-hour watch for Rae.")).toBeInTheDocument();
     expect(screen.getByTestId("picker-label")).toHaveTextContent("When did you offer it?");
     expect(inserts("allergen_introductions")).toHaveLength(0);
 
@@ -233,7 +233,7 @@ describe("AllergenTracker start first exposure", () => {
     expect(Math.abs(Date.now() - shown)).toBeLessThan(60_000);
   });
 
-  it("says the next exposure date in the success toast", async () => {
+  it("says to offer it again in the next few days, with no fixed date", async () => {
     await openPeanut();
 
     fireEvent.click(screen.getByRole("button", { name: /Start — I'll watch for 2 hours/ }));
@@ -242,7 +242,7 @@ describe("AllergenTracker start first exposure", () => {
       expect(toast).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "First exposure logged",
-          description: expect.stringContaining("Next exposure on"),
+          description: expect.stringContaining("Offer it again on another day, in the next few days"),
         }),
       ),
     );

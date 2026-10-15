@@ -6,6 +6,7 @@ export type SolidFeedDraft = {
   reactionNoted: boolean;
   reactionDescription: string;
   notes: string;
+  allergenIds: string[];
 };
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
@@ -41,6 +42,14 @@ import { useLogHistory } from "@/hooks/useLogHistory";
 import { summarizeFeedingDay } from "@/lib/logDaySummary";
 import { deriveEnd, formatOverlapRange } from "@/lib/sessionAnchor";
 import type { Tables } from "@/integrations/supabase/types";
+import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import {
+  allergenEmoji, getAllergenStatus, nextExposureSlot,
+  FEED_ALLERGEN_CHIPS_LABEL, FEED_ALLERGEN_CHIPS_HELPER, FEED_ALLERGEN_CHIPS_REACTION_NOTE,
+  feedServingsLoggedText, feedServingsFailedText,
+} from "@/services/allergenService";
+import { insertAllergenExposure } from "@/services/allergenExposureWrite";
 
 type FeedingLogRow = Tables<"feeding_logs">;
 
@@ -125,6 +134,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const [reactionNoted, setReactionNoted] = useState(false);
   const [reactionDescription, setReactionDescription] = useState("");
   const [notes, setNotes] = useState("");
+  const [allergenIds, setAllergenIds] = useState<string[]>([]);
   const [loggedAt, setLoggedAt] = useState<Date>(new Date());
 
   const handleTimerDuration = useCallback((minutes: number) => {
@@ -192,6 +202,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       setReactionNoted(pendingResume.reactionNoted);
       setReactionDescription(pendingResume.reactionDescription);
       setNotes(pendingResume.notes);
+      setAllergenIds(pendingResume.allergenIds);
       setDialogOpen(true);
       onConsumeResume?.();
     }
@@ -264,7 +275,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const resetForm = () => {
     setEditingId(null);
     setEditingRow(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setDerivedStart(new Date());
+    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setAllergenIds([]); setDerivedStart(new Date());
   };
 
   // Every close goes through here. Radix only calls onOpenChange for closes it
@@ -338,53 +349,118 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     logged_at: loggedAt.toISOString(),
   });
 
+  // Allergen chips: only introduced (signed-off) allergens, only on a new
+  // solid feed. Each chip is one maintenance serving, written through the same
+  // helper as the tracker's "Had it today".
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
+  const canLogServings = roleResolved && role !== "viewer";
+  const { data: allergens } = useAllergens(feedType === "solid");
+  const { data: introductions } = useAllergenIntroductions(feedType === "solid" ? activeChild?.id : undefined);
+  const introducedAllergens = (allergens ?? []).filter(
+    (a) => getAllergenStatus(introductions?.find((i) => i.allergen_id === a.id)) === "introduced",
+  );
+  const showAllergenChips = feedType === "solid" && !editingId && canLogServings && introducedAllergens.length > 0;
+  // A reaction belongs on the allergen itself (reaction row, status, triage),
+  // so a feed with "Reaction noted" logs no clean servings.
+  const servingAllergenIds = showAllergenChips && !reactionNoted
+    ? allergenIds.filter((id) => introducedAllergens.some((a) => a.id === id))
+    : [];
+
+  const logFeedServings = async (): Promise<{ logged: string[]; failed: string[] }> => {
+    const logged: string[] = [];
+    const failed: string[] = [];
+    for (const allergenId of servingAllergenIds) {
+      const allergen = introducedAllergens.find((a) => a.id === allergenId);
+      const intro = introductions?.find((i) => i.allergen_id === allergenId);
+      if (!allergen || !intro) continue;
+      // Read this intro's logs fresh: the cached list can be stale if another
+      // device logged a serving, and there's no unique constraint on the number.
+      const { data: freshLogs } = await supabase
+        .from("allergen_exposure_logs")
+        .select("exposure_number, logged_at")
+        .eq("allergen_introduction_id", intro.id);
+      const slot = nextExposureSlot(freshLogs ?? intro.allergen_exposure_logs ?? []);
+      try {
+        await insertAllergenExposure({
+          childId: activeChild!.id,
+          parentId: user!.id,
+          allergenId,
+          introId: intro.id,
+          exposureNumber: slot.exposureNumber,
+          at: loggedAt,
+          notBefore: slot.notBefore,
+          reacted: false,
+        });
+        logged.push(allergen.name);
+      } catch (err) {
+        // The feed is already saved, so this is reported, not thrown: a
+        // retry would insert the feed twice.
+        console.error("allergen serving insert failed", (err as { code?: string })?.code ?? null);
+        failed.push(allergen.name);
+      }
+    }
+    return { logged, failed };
+  };
+
+  const saveFeedRow = async () => {
+    if (editingId) {
+      // Editing an existing completed log.
+      const { error } = await supabase.from("feeding_logs").update(getPayload()).eq("id", editingId);
+      if (error) throw error;
+      return;
+    }
+    if (activeRow && activeRow.feeding_type === feedType) {
+      // Finalize the active (timer-started) row. We must clear the in-progress
+      // markers so the row leaves the "active" set (duration_minutes IS NULL).
+      // The feeding_type guard prevents finalizing (and silently overwriting)
+      // an active row of a different type — e.g. a watch-started bottle row
+      // bound to activeRow while the user has switched the form to Solid; in
+      // that case we fall through to a fresh INSERT and leave the row intact.
+      const payload = getPayload();
+      const { error } = await supabase
+        .from("feeding_logs")
+        .update({
+          ...payload,
+          // Use max(1, x) to guarantee the row leaves the active set even
+          // if the timer hadn't ticked a full minute yet.
+          duration_minutes: payload.duration_minutes ?? 1,
+          active_side: null,
+          side_started_at: null,
+          // Mid-session precision carriers — see useActiveFeed's stop(). The
+          // recorded minutes are the record once the row is finished.
+          duration_seconds_left: null,
+          duration_seconds_right: null,
+        })
+        .eq("id", activeRow.id);
+      if (error) throw error;
+      return;
+    }
+    // Pure manual entry — no active session was running.
+    const { error } = await supabase.from("feeding_logs").insert({
+      ...getPayload(),
+      child_id: activeChild!.id,
+      parent_id: user!.id,
+    });
+    if (error) throw error;
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (editingId) {
-        // Editing an existing completed log.
-        const { error } = await supabase.from("feeding_logs").update(getPayload()).eq("id", editingId);
-        if (error) throw error;
-        return;
-      }
-      if (activeRow && activeRow.feeding_type === feedType) {
-        // Finalize the active (timer-started) row. We must clear the in-progress
-        // markers so the row leaves the "active" set (duration_minutes IS NULL).
-        // The feeding_type guard prevents finalizing (and silently overwriting)
-        // an active row of a different type — e.g. a watch-started bottle row
-        // bound to activeRow while the user has switched the form to Solid; in
-        // that case we fall through to a fresh INSERT and leave the row intact.
-        const payload = getPayload();
-        const { error } = await supabase
-          .from("feeding_logs")
-          .update({
-            ...payload,
-            // Use max(1, x) to guarantee the row leaves the active set even
-            // if the timer hadn't ticked a full minute yet.
-            duration_minutes: payload.duration_minutes ?? 1,
-            active_side: null,
-            side_started_at: null,
-            // Mid-session precision carriers — see useActiveFeed's stop(). The
-            // recorded minutes are the record once the row is finished.
-            duration_seconds_left: null,
-            duration_seconds_right: null,
-          })
-          .eq("id", activeRow.id);
-        if (error) throw error;
-        return;
-      }
-      // Pure manual entry — no active session was running.
-      const { error } = await supabase.from("feeding_logs").insert({
-        ...getPayload(),
-        child_id: activeChild!.id,
-        parent_id: user!.id,
-      });
-      if (error) throw error;
+      await saveFeedRow();
+      return logFeedServings();
     },
-    onSuccess: () => {
+    onSuccess: ({ logged, failed }) => {
       invalidateAfterLogWrite(queryClient);
       queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", activeChild?.id] });
+      if (logged.length > 0 || failed.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
+      }
       closeDialog();
-      toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼" });
+      const description = [
+        logged.length > 0 ? feedServingsLoggedText(logged) : "",
+        failed.length > 0 ? feedServingsFailedText(failed) : "",
+      ].filter(Boolean).join(" ");
+      toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼", ...(description ? { description } : {}) });
     },
     onError: (err) => {
       toast({
@@ -515,6 +591,45 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                     </Select>
                   </div>
 
+                  {showAllergenChips && (
+                    <div className="space-y-2">
+                      <Label>{FEED_ALLERGEN_CHIPS_LABEL}</Label>
+                      {reactionNoted ? (
+                        <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_REACTION_NOTE}</p>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-2">
+                            {introducedAllergens.map((a) => {
+                              const selected = allergenIds.includes(a.id);
+                              return (
+                                <Button
+                                  key={a.id}
+                                  type="button"
+                                  size="sm"
+                                  variant={selected ? "default" : "outline"}
+                                  aria-pressed={selected}
+                                  className={cn(
+                                    "touch-target h-auto min-h-[48px] text-sm gap-1.5",
+                                    selected && "bg-feeding hover:bg-feeding/90",
+                                  )}
+                                  onClick={() =>
+                                    setAllergenIds((prev) =>
+                                      selected ? prev.filter((id) => id !== a.id) : [...prev, a.id],
+                                    )
+                                  }
+                                >
+                                  <span aria-hidden="true">{allergenEmoji[a.slug] ?? "🍽️"}</span>
+                                  {a.name}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_HELPER}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
                     <Checkbox
                       id="reaction-noted"
@@ -548,7 +663,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                       onClick={() => {
                         // The draft above is what crosses the tab switch, and
                         // pendingResume puts it back on the way in.
-                        onNavigateToAllergens({ foodDesc, foodCategory, reactionNoted, reactionDescription, notes });
+                        onNavigateToAllergens({ foodDesc, foodCategory, reactionNoted, reactionDescription, notes, allergenIds });
                         closeDialog();
                       }}
                     >

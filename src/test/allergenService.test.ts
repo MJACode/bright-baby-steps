@@ -1,8 +1,5 @@
 import {
   getAllergenStatus,
-  getDaysSinceLastExposure,
-  canLogNextExposure,
-  getNextExposureDate,
   introStateAfterExposureRemoval,
   isAwaitingSignOff,
   getStatusConfig,
@@ -43,6 +40,19 @@ import {
   type Severity,
   type ReactionLevel,
   exposureLoggedToast,
+  startIntroToast,
+  recentOtherFirstExposure,
+  spacingNoteText,
+  spokenAllergenName,
+  isSameCalendarDay,
+  isSecondExposureNudgeDue,
+  nextExposureSlot,
+  clampExposureTime,
+  feedServingsLoggedText,
+  feedServingsFailedText,
+  SECOND_EXPOSURE_STEP_TITLE,
+  SECOND_EXPOSURE_STEP_HELPER,
+  SAME_DAY_SECOND_EXPOSURE_TITLE,
 } from "@/services/allergenService";
 
 // Mock supabase to prevent real network initialisation
@@ -126,100 +136,6 @@ describe("getAllergenStatus", () => {
 
   it("treats missing allergen_exposure_logs as empty array", () => {
     expect(getAllergenStatus({ status: "in_progress" })).toBe("in_progress");
-  });
-});
-
-// ── getDaysSinceLastExposure ──────────────────────────────────────────────────
-
-describe("getDaysSinceLastExposure", () => {
-  const NOW = new Date("2024-06-15T12:00:00Z");
-
-  beforeEach(() => vi.setSystemTime(NOW));
-  afterEach(() => vi.useRealTimers());
-
-  it("returns null for empty log array", () => {
-    expect(getDaysSinceLastExposure([])).toBeNull();
-  });
-
-  it("returns 0 when last exposure was today", () => {
-    expect(getDaysSinceLastExposure([{ logged_at: "2024-06-15T08:00:00Z" }])).toBe(0);
-  });
-
-  it("returns 1 when last exposure was yesterday", () => {
-    expect(getDaysSinceLastExposure([{ logged_at: "2024-06-14T08:00:00Z" }])).toBe(1);
-  });
-
-  it("returns 3 when last exposure was 3 days ago", () => {
-    expect(getDaysSinceLastExposure([{ logged_at: "2024-06-12T08:00:00Z" }])).toBe(3);
-  });
-
-  it("picks the most recent log when given multiple entries", () => {
-    const logs = [
-      { logged_at: "2024-06-10T08:00:00Z" }, // 5 days ago
-      { logged_at: "2024-06-13T08:00:00Z" }, // 2 days ago
-      { logged_at: "2024-06-12T08:00:00Z" }, // 3 days ago
-    ];
-    expect(getDaysSinceLastExposure(logs)).toBe(2);
-  });
-});
-
-// ── canLogNextExposure ────────────────────────────────────────────────────────
-
-describe("canLogNextExposure", () => {
-  const NOW = new Date("2024-06-15T12:00:00Z");
-
-  beforeEach(() => vi.setSystemTime(NOW));
-  afterEach(() => vi.useRealTimers());
-
-  it("returns true when there are no exposure logs", () => {
-    expect(canLogNextExposure([])).toBe(true);
-  });
-
-  it("returns false when last exposure was 0 days ago (today)", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-15T08:00:00Z" }])).toBe(false);
-  });
-
-  it("returns false when last exposure was 2 days ago", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-13T08:00:00Z" }])).toBe(false);
-  });
-
-  it("returns true when last exposure was exactly 3 days ago", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-12T08:00:00Z" }])).toBe(true);
-  });
-
-  it("returns true when last exposure was more than 3 days ago", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-08T08:00:00Z" }])).toBe(true);
-  });
-});
-
-// ── getNextExposureDate ───────────────────────────────────────────────────────
-
-describe("getNextExposureDate", () => {
-  it("returns null when there are no logs", () => {
-    expect(getNextExposureDate([])).toBeNull();
-  });
-
-  it("returns last exposure date + 3 days", () => {
-    const result = getNextExposureDate([{ logged_at: "2024-06-12T08:00:00Z" }]);
-    expect(result).not.toBeNull();
-    expect(result!.toISOString().startsWith("2024-06-15")).toBe(true);
-  });
-
-  it("uses the most recent log when multiple entries exist", () => {
-    const logs = [
-      { logged_at: "2024-06-10T08:00:00Z" },
-      { logged_at: "2024-06-14T08:00:00Z" }, // most recent
-    ];
-    const result = getNextExposureDate(logs);
-    expect(result).not.toBeNull();
-    expect(result!.toISOString().startsWith("2024-06-17")).toBe(true);
-  });
-
-  it("does not mutate the original logs array", () => {
-    const logs = [{ logged_at: "2024-06-10T08:00:00Z" }, { logged_at: "2024-06-12T08:00:00Z" }];
-    const copy = [...logs];
-    getNextExposureDate(logs);
-    expect(logs).toEqual(copy);
   });
 });
 
@@ -537,100 +453,6 @@ describe("getAllergenStatus", () => {
 
   it("treats missing allergen_exposure_logs as empty array", () => {
     expect(getAllergenStatus({ status: "in_progress" })).toBe("in_progress");
-  });
-});
-
-// ── getDaysSinceLastExposure ──────────────────────────────────────────────────
-
-describe("getDaysSinceLastExposure", () => {
-  const NOW = new Date("2024-06-15T12:00:00Z");
-
-  beforeEach(() => vi.setSystemTime(NOW));
-  afterEach(() => vi.useRealTimers());
-
-  it("returns null for empty log array", () => {
-    expect(getDaysSinceLastExposure([])).toBeNull();
-  });
-
-  it("returns 0 when last exposure was today", () => {
-    expect(getDaysSinceLastExposure([{ logged_at: "2024-06-15T08:00:00Z" }])).toBe(0);
-  });
-
-  it("returns 1 when last exposure was yesterday", () => {
-    expect(getDaysSinceLastExposure([{ logged_at: "2024-06-14T08:00:00Z" }])).toBe(1);
-  });
-
-  it("returns 3 when last exposure was 3 days ago", () => {
-    expect(getDaysSinceLastExposure([{ logged_at: "2024-06-12T08:00:00Z" }])).toBe(3);
-  });
-
-  it("picks the most recent log when given multiple entries", () => {
-    const logs = [
-      { logged_at: "2024-06-10T08:00:00Z" }, // 5 days ago
-      { logged_at: "2024-06-13T08:00:00Z" }, // 2 days ago
-      { logged_at: "2024-06-12T08:00:00Z" }, // 3 days ago
-    ];
-    expect(getDaysSinceLastExposure(logs)).toBe(2);
-  });
-});
-
-// ── canLogNextExposure ────────────────────────────────────────────────────────
-
-describe("canLogNextExposure", () => {
-  const NOW = new Date("2024-06-15T12:00:00Z");
-
-  beforeEach(() => vi.setSystemTime(NOW));
-  afterEach(() => vi.useRealTimers());
-
-  it("returns true when there are no exposure logs", () => {
-    expect(canLogNextExposure([])).toBe(true);
-  });
-
-  it("returns false when last exposure was 0 days ago (today)", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-15T08:00:00Z" }])).toBe(false);
-  });
-
-  it("returns false when last exposure was 2 days ago", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-13T08:00:00Z" }])).toBe(false);
-  });
-
-  it("returns true when last exposure was exactly 3 days ago", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-12T08:00:00Z" }])).toBe(true);
-  });
-
-  it("returns true when last exposure was more than 3 days ago", () => {
-    expect(canLogNextExposure([{ logged_at: "2024-06-08T08:00:00Z" }])).toBe(true);
-  });
-});
-
-// ── getNextExposureDate ───────────────────────────────────────────────────────
-
-describe("getNextExposureDate", () => {
-  it("returns null when there are no logs", () => {
-    expect(getNextExposureDate([])).toBeNull();
-  });
-
-  it("returns last exposure date + 3 days", () => {
-    const result = getNextExposureDate([{ logged_at: "2024-06-12T08:00:00Z" }]);
-    expect(result).not.toBeNull();
-    expect(result!.toISOString().startsWith("2024-06-15")).toBe(true);
-  });
-
-  it("uses the most recent log when multiple entries exist", () => {
-    const logs = [
-      { logged_at: "2024-06-10T08:00:00Z" },
-      { logged_at: "2024-06-14T08:00:00Z" }, // most recent
-    ];
-    const result = getNextExposureDate(logs);
-    expect(result).not.toBeNull();
-    expect(result!.toISOString().startsWith("2024-06-17")).toBe(true);
-  });
-
-  it("does not mutate the original logs array", () => {
-    const logs = [{ logged_at: "2024-06-10T08:00:00Z" }, { logged_at: "2024-06-12T08:00:00Z" }];
-    const copy = [...logs];
-    getNextExposureDate(logs);
-    expect(logs).toEqual(copy);
   });
 });
 
@@ -1195,5 +1017,101 @@ describe("exposureLoggedToast", () => {
 
   it("calls exposure #3 and later a serving", () => {
     expect(exposureLoggedToast({ exposure_number: 3, logged_at: "2024-06-15T11:30:00Z" }, NOW).title).toBe("Serving logged");
+  });
+});
+
+// ── No 3-day gate (founder follow-up 2026-10-14) ──────────────────────────────
+
+describe("exposure #2 without a hard wait", () => {
+  it("uses the new step copy and never names a fixed next date", () => {
+    expect(SECOND_EXPOSURE_STEP_TITLE).toBe("Offer it again");
+    expect(SECOND_EXPOSURE_STEP_HELPER).toBe("Offer it again on another day, in the next few days.");
+    expect(SAME_DAY_SECOND_EXPOSURE_TITLE).toBe("Offer the second taste today?");
+    const toast = startIntroToast({ logged_at: "2024-06-15T11:30:00Z" }, new Date("2024-06-15T12:00:00Z"));
+    expect(toast.description).toMatch(/^Keep watching until .+\. Offer it again on another day, in the next few days\.$/);
+    expect(toast.description).not.toMatch(/Next exposure|3-day|wait until/i);
+  });
+
+  it("isSameCalendarDay compares local calendar days", () => {
+    expect(isSameCalendarDay(new Date(2024, 5, 15, 0, 1), new Date(2024, 5, 15, 23, 59))).toBe(true);
+    expect(isSameCalendarDay(new Date(2024, 5, 15, 23, 59), new Date(2024, 5, 16, 0, 1))).toBe(false);
+  });
+
+  it("nudges for exposure #2 from day 4 (3 calendar days after #1)", () => {
+    const first = new Date(2024, 5, 10, 18, 0).toISOString();
+    expect(isSecondExposureNudgeDue(first, new Date(2024, 5, 12, 23, 59))).toBe(false);
+    expect(isSecondExposureNudgeDue(first, new Date(2024, 5, 13, 0, 1))).toBe(true);
+  });
+});
+
+describe("spacing between new allergens", () => {
+  const NOW = new Date("2024-06-15T12:00:00Z");
+  const H = 60 * 60 * 1000;
+  const firstAt = (msAgo: number) => new Date(NOW.getTime() - msAgo).toISOString();
+  const intro = (allergen_id: string, msAgo: number, exposure_number = 1) => ({
+    allergen_id,
+    allergen_exposure_logs: [{ exposure_number, logged_at: firstAt(msAgo) }],
+  });
+
+  it("finds another allergen's first exposure inside 72 h", () => {
+    expect(recentOtherFirstExposure([intro("egg", 48 * H)], "peanut", NOW)).toEqual({
+      allergenId: "egg",
+      loggedAt: firstAt(48 * H),
+    });
+  });
+
+  it("72 h boundary: a minute inside shows, exactly 72 h does not", () => {
+    expect(recentOtherFirstExposure([intro("egg", 72 * H - 60_000)], "peanut", NOW)).not.toBeNull();
+    expect(recentOtherFirstExposure([intro("egg", 72 * H)], "peanut", NOW)).toBeNull();
+  });
+
+  it("ignores the same allergen and anything that isn't exposure #1", () => {
+    expect(recentOtherFirstExposure([intro("peanut", H)], "peanut", NOW)).toBeNull();
+    expect(recentOtherFirstExposure([intro("egg", H, 2)], "peanut", NOW)).toBeNull();
+    expect(recentOtherFirstExposure([intro("egg", H, 3)], "peanut", NOW)).toBeNull();
+  });
+
+  it("picks the most recent of several", () => {
+    const out = recentOtherFirstExposure([intro("egg", 60 * H), intro("milk", 10 * H)], "peanut", NOW);
+    expect(out?.allergenId).toBe("milk");
+  });
+
+  it("says how long ago, in plain words", () => {
+    const tail = "Waiting a few days between new allergens makes it easier to tell which food caused a reaction, if one happens.";
+    expect(spacingNoteText("Egg", firstAt(49 * H), NOW)).toBe(`You started egg 2 days ago. ${tail}`);
+    expect(spacingNoteText("Cow's Milk (Dairy)", firstAt(25 * H), NOW)).toBe(`You started cow's milk 1 day ago. ${tail}`);
+    expect(spacingNoteText("Egg", firstAt(5 * H), NOW)).toBe(`You started egg 5 hours ago. ${tail}`);
+    expect(spacingNoteText("Egg", firstAt(10 * 60_000), NOW)).toBe(`You started egg less than an hour ago. ${tail}`);
+    expect(spokenAllergenName("Tree Nuts")).toBe("tree nuts");
+  });
+});
+
+describe("next exposure slot and clamping", () => {
+  it("numbers the next exposure and floors it at the latest one", () => {
+    expect(nextExposureSlot([])).toEqual({ exposureNumber: 1, notBefore: undefined });
+    const slot = nextExposureSlot([
+      { exposure_number: 1, logged_at: "2024-06-01T08:00:00Z" },
+      { exposure_number: 3, logged_at: "2024-06-10T08:00:00Z" },
+      { exposure_number: 2, logged_at: "2024-06-05T08:00:00Z" },
+    ]);
+    expect(slot.exposureNumber).toBe(4);
+    expect(slot.notBefore?.toISOString()).toBe("2024-06-10T08:00:00.000Z");
+  });
+
+  it("clamps into [min, now]", () => {
+    const now = new Date("2024-06-15T12:00:00Z");
+    const min = new Date("2024-06-10T00:00:00Z");
+    expect(clampExposureTime(new Date("2024-06-16T00:00:00Z"), min, now)).toEqual(now);
+    expect(clampExposureTime(new Date("2024-06-01T00:00:00Z"), min, now)).toEqual(min);
+    expect(clampExposureTime(new Date("2024-06-12T00:00:00Z"), min, now)).toEqual(new Date("2024-06-12T00:00:00Z"));
+  });
+});
+
+describe("feed serving toast copy", () => {
+  it("names the servings in spoken form", () => {
+    expect(feedServingsLoggedText(["Egg", "Peanut"])).toBe("Counted as a serving of egg and peanut.");
+    expect(feedServingsFailedText(["Cow's Milk (Dairy)"])).toBe(
+      'The feed saved, but the serving of cow\'s milk didn\'t. Tap "Had it today" in the Allergen Tracker to add it.',
+    );
   });
 });
