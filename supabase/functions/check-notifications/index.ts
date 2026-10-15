@@ -19,6 +19,17 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Server push (APNs): see _shared/apns.ts and _shared/pushNotify.ts.
+import { readApnsConfig, sendApns, type ApnsEnvironment } from "../_shared/apns.ts";
+import {
+  fanOutPushes,
+  partnerRoleGetsPush,
+  recipientKey,
+  type InsertedNotification,
+  type PushDevice,
+  type PushFanoutStats,
+} from "../_shared/pushNotify.ts";
+
 // --- Helpers (shared across all sleep-plan notification types) ---------------
 
 type SleepLogRow = {
@@ -146,6 +157,9 @@ type NotificationPrefs = {
   quiet_end: string;
   muted_categories: string[];
   daily_cap: number;
+  // Server push (APNs) for rows that survive the filter. Default false; only an
+  // explicit `true` opts in. In-app rows are unaffected.
+  push_enabled: boolean;
 };
 
 /**
@@ -238,6 +252,10 @@ function resolvePrefs(raw: unknown): NotificationPrefs {
         )
       : [],
     daily_cap: cap,
+    // Push is opt-in for every role (founder, 2026-10-14): only an explicit
+    // true from a "Turn on" tap counts. A missing key (new account, or an old
+    // app build that rebuilt the prefs object without it) means off.
+    push_enabled: p.push_enabled === true,
   };
 }
 
@@ -555,19 +573,24 @@ Deno.serve(async (req) => {
   // every partner RLS policy calls (partner_within_entitlement, EXECUTE granted
   // to service_role only) so push recipients match who can actually open the
   // child. Memoized per owner: the owner loop revisits the same user once per
-  // child.
-  const entitledPartnersByOwner = new Map<string, string[]>();
-  const entitledPartners = async (ownerId: string): Promise<string[]> => {
+  // child. `role` rides along so viewer copies can be held back from push
+  // (PUSH_ROLES in _shared/pushNotify.ts).
+  type EntitledPartner = { partner_id: string; role: string | null };
+  // (partner, child) pairs whose copies are in-app only: see the partner
+  // fan-out at the end of the child loop.
+  const noPushRecipients = new Set<string>();
+  const entitledPartnersByOwner = new Map<string, EntitledPartner[]>();
+  const entitledPartners = async (ownerId: string): Promise<EntitledPartner[]> => {
     const cached = entitledPartnersByOwner.get(ownerId);
     if (cached !== undefined) return cached;
     const { data: rows } = await supabase
       .from("partner_access")
-      .select("partner_id")
+      .select("partner_id, role")
       .eq("owner_id", ownerId)
       .eq("status", "active");
-    const candidates = (rows ?? []).map((p: { partner_id: string }) => p.partner_id);
+    const candidates = (rows ?? []) as EntitledPartner[];
     const checks = await Promise.all(
-      candidates.map(async (partnerId: string) => {
+      candidates.map(async ({ partner_id: partnerId }) => {
         const { data, error } = await supabase.rpc("partner_within_entitlement", {
           _owner_id: ownerId,
           _user_id: partnerId,
@@ -576,7 +599,7 @@ Deno.serve(async (req) => {
         return !error && data === true;
       }),
     );
-    const entitled = candidates.filter((_: string, i: number) => checks[i]);
+    const entitled = candidates.filter((_, i) => checks[i]);
     entitledPartnersByOwner.set(ownerId, entitled);
     return entitled;
   };
@@ -1046,13 +1069,16 @@ Deno.serve(async (req) => {
     // covers all 5 sleep-plan types plus the legacy 4 and the visit reminders.
     // Partners outside the owner's seat entitlement are skipped: RLS won't let
     // them open the child, so a push would just be a dead-end tap.
-    const partnerIds = await entitledPartners(userId);
-    const partners = partnerIds.length > 0
-      ? partnerIds.map((partner_id) => ({ partner_id }))
-      : null;
+    // Viewer copies still land in-app; they're only kept off push. Keyed by
+    // (partner, child) because the same person can be a coparent in one
+    // family and a viewer in another.
+    const partners = await entitledPartners(userId);
 
-    if (partners) {
+    if (partners.length > 0) {
       for (const partner of partners) {
+        if (!partnerRoleGetsPush(partner.role)) {
+          noPushRecipients.add(recipientKey(partner.partner_id, child.id));
+        }
         for (const notif of notifications.filter((n) => n.user_id === userId && n.child_id === child.id)) {
           notifications.push({
             ...notif,
@@ -1279,6 +1305,9 @@ Deno.serve(async (req) => {
 
   const toInsert: QueuedNotif[] = [];
   let suppressed = 0;
+  // Recipients inside their quiet hours this tick. Anything they still get
+  // (only appointment_reminder survives) is in-app only: no buzz at 2am.
+  const quietUsers = new Set<string>();
 
   for (const [uid, queued] of byUser) {
     const prefs = prefsFor(uid);
@@ -1291,7 +1320,10 @@ Deno.serve(async (req) => {
     );
 
     let kept = queued.filter((n) => !muted.has(categoryOf(n.type)));
-    if (quiet) kept = kept.filter((n) => n.type === "appointment_reminder");
+    if (quiet) {
+      quietUsers.add(uid);
+      kept = kept.filter((n) => n.type === "appointment_reminder");
+    }
     suppressed += queued.length - kept.length;
 
     const existingToday = (recentByUser.get(uid) || []).filter(
@@ -1319,12 +1351,46 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Insert all surviving notifications
+  // Insert all surviving notifications, then push exactly the rows that
+  // landed (so pushes inherit mutes, quiet hours and the cap), minus viewer
+  // copies and quiet-hours survivors, which stay in-app only. Push copy is
+  // fixed per type and never carries the child's name: see _shared/pushNotify.ts.
+  let push: PushFanoutStats | null = null;
   if (toInsert.length > 0) {
-    await supabase.from("notifications").insert(toInsert);
+    const { data: inserted, error: insertErr } = await supabase
+      .from("notifications")
+      .insert(toInsert)
+      .select("id, user_id, child_id, type");
+    if (insertErr) {
+      console.error("notifications insert failed", insertErr.code ?? null);
+    } else {
+      const apnsConfig = readApnsConfig();
+      if (!apnsConfig) console.log("push: APNS_* secrets not set, in-app only");
+      push = await fanOutPushes((inserted ?? []) as InsertedNotification[], {
+        enabled: apnsConfig !== null,
+        pushEnabled: (uid) => prefsFor(uid).push_enabled,
+        holdPush: (row) =>
+          quietUsers.has(row.user_id) || noPushRecipients.has(recipientKey(row.user_id, row.child_id)),
+        loadDevices: async (userIds) => {
+          const { data, error } = await supabase
+            .from("push_devices")
+            .select("user_id, token, environment")
+            .in("user_id", userIds);
+          if (error) throw new Error(error.code ?? "read_failed");
+          return (data ?? []) as PushDevice[];
+        },
+        pruneTokens: async (tokens) => {
+          const { error } = await supabase.from("push_devices").delete().in("token", tokens);
+          if (error) throw new Error(error.code ?? "delete_failed");
+        },
+        send: (token, env: ApnsEnvironment, payload) => sendApns(token, env, payload, { config: apnsConfig }),
+      });
+      // Counts only: never tokens, user ids or copy.
+      console.log("push", JSON.stringify(push));
+    }
   }
 
-  return new Response(JSON.stringify({ processed: toInsert.length, suppressed }), {
+  return new Response(JSON.stringify({ processed: toInsert.length, suppressed, push }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

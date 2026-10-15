@@ -1,7 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
-type TableName = keyof Database["public"]["Tables"];
+// push_devices isn't in the generated Supabase types until they're regenerated
+// after the 20261014130000_push_devices migration; drop it from here then.
+type PendingTable = "push_devices";
+type TableName = keyof Database["public"]["Tables"] | PendingTable;
 
 export interface ExportTable {
   /** Top-level key in the downloaded JSON. Existing keys must never be renamed. */
@@ -100,6 +103,13 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { key: "notifications", table: "notifications", label: "notifications", userColumn: "user_id" },
   { key: "feedback", table: "feedback", label: "feedback", userColumn: "user_id" },
   { key: "subscriptions", table: "subscriptions", label: "subscription", userColumn: "user_id" },
+  {
+    key: "pushDevices",
+    table: "push_devices",
+    label: "push notification devices",
+    userColumn: "user_id",
+    select: "platform, environment, created_at, last_seen_at, token",
+  },
 ];
 
 export class ExportReadError extends Error {
