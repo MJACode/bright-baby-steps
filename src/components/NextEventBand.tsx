@@ -10,7 +10,12 @@ import { usePreferences } from "@/hooks/usePreferences";
 import { formatApproxClock } from "@/lib/gentleTime";
 import { napBlockedBySleepInProgress } from "@/lib/sleepCoach";
 import { pickBandEvent } from "@/lib/nextEvent";
-import { deriveWakeState, firstNameOrBaby, sleepCoachShowing } from "@/lib/sleepCoachState";
+import {
+  deriveWakeState,
+  firstNameOrBaby,
+  hungryOnWakeCopy,
+  sleepCoachShowing,
+} from "@/lib/sleepCoachState";
 
 interface NextEventBandProps {
   activeChild: (FeedCoachChild & { name?: string | null }) | null;
@@ -18,6 +23,12 @@ interface NextEventBandProps {
   feedCoachVisible?: boolean;
   /** Whether the Sleep Coach card is also on this screen. See `pickBandEvent`. */
   sleepCoachVisible?: boolean;
+  /**
+   * Show the sleep side and the feed side together, sooner first, instead of
+   * only the sooner one. For screens with no coach cards (CaregiverHome), where
+   * the band is the only prediction surface. Ignores the `*Visible` flags.
+   */
+  showBoth?: boolean;
 }
 
 /**
@@ -41,6 +52,7 @@ export function NextEventBand({
   activeChild,
   feedCoachVisible = false,
   sleepCoachVisible = false,
+  showBoth = false,
 }: NextEventBandProps) {
   const { data: coach } = useSleepCoach(activeChild);
   const feed = useFeedCoach(activeChild);
@@ -58,6 +70,73 @@ export function NextEventBand({
   // cached prediction was computed before the timer row was in the logs.
   const asleep = napBlockedBySleepInProgress(coach?.logs, sleepTimerOn);
   const nap = asleep ? null : coach?.prediction ?? null;
+
+  if (showBoth) {
+    const rows: { key: string; sortAt: number; node: ReactNode }[] = [];
+    if (asleep && wake) {
+      const wakeState = deriveWakeState(now, wake, calmMode, {
+        hungryOnWake,
+        childName: activeChild?.name,
+        isNight: activeSleep?.sleep_type === "night",
+      });
+      rows.push({
+        key: "sleep",
+        sortAt: -Infinity,
+        node: (
+          <>
+            <p className="text-sm text-foreground leading-snug">{wakeState.title}</p>
+            {wake.reason && <Reason>{wake.reason}</Reason>}
+          </>
+        ),
+      });
+    } else if (nap) {
+      rows.push({
+        key: "sleep",
+        sortAt: nap.windowStart.getTime(),
+        node: (
+          <>
+            <p className="text-sm text-foreground leading-snug">
+              Likely <strong>sleepy</strong> {whenText(nap.windowStart, now, calmMode)}.
+            </p>
+            {nap.reason && <Reason>{nap.reason}</Reason>}
+          </>
+        ),
+      });
+    }
+    if (asleep && hungryOnWake) {
+      rows.push({
+        key: "feed",
+        // The wake row sorts first, so this row always follows it.
+        sortAt: Infinity,
+        node: <p className="text-sm text-foreground leading-snug">{hungryOnWakeCopy(activeChild?.name)}</p>,
+      });
+    } else if (feed.prediction) {
+      const hunger = feed.prediction;
+      rows.push({
+        key: "feed",
+        sortAt: hunger.windowStart.getTime(),
+        node: (
+          <>
+            <p className="text-sm text-foreground leading-snug">
+              Likely <strong>hungry</strong> {whenText(hunger.windowStart, now, calmMode)}.
+            </p>
+            {hunger.reason && <Reason>{hunger.reason}</Reason>}
+          </>
+        ),
+      });
+    }
+    if (rows.length === 0) return null;
+    rows.sort((a, b) => a.sortAt - b.sortAt);
+    return (
+      <BandCard>
+        <div className="space-y-3 divide-y divide-primary/10 [&>*+*]:pt-3">
+          {rows.map((row) => (
+            <div key={row.key}>{row.node}</div>
+          ))}
+        </div>
+      </BandCard>
+    );
+  }
 
   // Sleep Coach owns the wake line when that section is on screen. When it
   // isn't, this band is the only prediction surface — say when she'll likely
@@ -96,16 +175,6 @@ export function NextEventBand({
   });
   if (!pick) return null;
 
-  const minutesAway = Math.round((pick.at.getTime() - now.getTime()) / 60000);
-  const whenText =
-    minutesAway < 0
-      ? "anytime now"
-      : calmMode
-      ? `around ${formatApproxClock(pick.at)}`
-      : minutesAway < 60
-      ? `in ~${minutesAway} min`
-      : `around ${format(pick.at, "h:mm a")}`;
-
   const verb = pick.type === "nap" ? "sleepy" : "hungry";
   const sample = pick.type === "nap" ? nap!.reason : hunger!.reason;
 
@@ -117,12 +186,20 @@ export function NextEventBand({
         </p>
       ) : (
         <p className="text-sm text-foreground leading-snug">
-          Likely <strong>{verb}</strong> {whenText}.
+          Likely <strong>{verb}</strong> {whenText(pick.at, now, calmMode)}.
         </p>
       )}
       {sample && <Reason>{sample}</Reason>}
     </BandCard>
   );
+}
+
+function whenText(at: Date, now: Date, calmMode: boolean): string {
+  const minutesAway = Math.round((at.getTime() - now.getTime()) / 60000);
+  if (minutesAway < 0) return "anytime now";
+  if (calmMode) return `around ${formatApproxClock(at)}`;
+  if (minutesAway < 60) return `in ~${minutesAway} min`;
+  return `around ${format(at, "h:mm a")}`;
 }
 
 function BandCard({ children }: { children: ReactNode }) {
@@ -144,5 +221,5 @@ function BandCard({ children }: { children: ReactNode }) {
 }
 
 function Reason({ children }: { children: ReactNode }) {
-  return <p className="text-[11px] text-muted-foreground mt-1">{children}</p>;
+  return <p className="text-xs text-muted-foreground mt-1">{children}</p>;
 }

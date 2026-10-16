@@ -28,8 +28,9 @@ export default function CaregiverHome() {
         <p className="text-xs text-muted-foreground">Caring for</p>
         <h1 className="font-display text-3xl font-bold">{activeChild.name}</h1>
       </header>
-      {/* No coach cards on this screen, so the band shows both the nap and the feed side. */}
-      {showCoach && <NextEventBand activeChild={activeChild} />}
+      {/* No coach cards here and caregivers rarely leave this screen, so the band
+          lists the sleep and the feed prediction together instead of only the sooner one. */}
+      {showCoach && <NextEventBand activeChild={activeChild} showBoth />}
       <section aria-labelledby="caregiver-log-heading" className="space-y-2">
         <h2 id="caregiver-log-heading" className="text-sm font-semibold text-muted-foreground">
           Tap to log
