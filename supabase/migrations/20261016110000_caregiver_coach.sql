@@ -1,6 +1,8 @@
 -- Caregiver seats: log only, or log + sleep & feed coach (founder-approved 2026-10-16).
 --
--- Version 20261016100000 sorts after 20261016000000_flare_plus_four_seats.sql.
+-- Version 20261016110000. Originally shipped as 20261016100000, which collided with
+-- 20261016100000_family_display_names.sql (PR #303); the deploy skipped it as "already
+-- recorded". Content unchanged.
 -- No transaction control: the CI migrate job wraps the file in BEGIN/COMMIT,
 -- so any RAISE EXCEPTION rolls the whole file back.
 --
