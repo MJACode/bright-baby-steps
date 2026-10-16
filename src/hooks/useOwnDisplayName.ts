@@ -13,7 +13,7 @@ export function useOwnDisplayName({ enabled = true }: { enabled?: boolean } = {}
   const queryClient = useQueryClient();
   const profileKey = ["profile", user?.id, "full_name"];
 
-  const { data: fullName, isSuccess: isLoaded } = useQuery({
+  const { data: fullName, isSuccess: isLoaded, isError: loadFailed } = useQuery({
     queryKey: profileKey,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -53,7 +53,7 @@ export function useOwnDisplayName({ enabled = true }: { enabled?: boolean } = {}
     },
   });
 
-  return { fullName: fullName ?? null, isLoaded, save };
+  return { fullName: fullName ?? null, isLoaded, loadFailed, save };
 }
 
 /**

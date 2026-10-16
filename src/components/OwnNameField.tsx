@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 
 export function OwnNameField() {
   const { user } = useAuth();
-  const { fullName, isLoaded, save } = useOwnDisplayName();
+  const { fullName, isLoaded, loadFailed, save } = useOwnDisplayName();
   const { data: familyRows } = useOwnFamilyAccess();
   const [name, setName] = useState("");
 
@@ -48,7 +48,9 @@ export function OwnNameField() {
         </Button>
       </div>
       <p id="own-name-help" className="text-xs text-muted-foreground">
-        Shown next to what you log, so your family knows who did it.
+        {loadFailed
+          ? "We couldn't load your name. Check your connection and reopen this page."
+          : "Shown next to what you log, so your family knows who did it."}
       </p>
       {label && (
         <p className="text-xs text-muted-foreground">
