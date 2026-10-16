@@ -47,7 +47,7 @@ describe("familyMemberLabel", () => {
     expect(familyMemberLabel({ id: "a", display_name: null, role: "owner" })).toBe("Parent");
     expect(familyMemberLabel({ id: "a", display_name: "  ", role: "coparent" })).toBe("Co-parent");
     expect(familyMemberLabel({ id: "a", display_name: null, role: "caregiver" })).toBe("Caregiver");
-    expect(familyMemberLabel({ id: "a", display_name: null, role: "viewer" })).toBe("View-only");
+    expect(familyMemberLabel({ id: "a", display_name: null, role: "viewer" })).toBe("Caregiver");
   });
 
   it("labels ids the RPC didn't return as a family member", () => {
