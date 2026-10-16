@@ -1,8 +1,7 @@
 import { useFamilyMoments, type FamilyMoment } from "@/hooks/useFamilyMoments";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { useLoggedByNames, UNKNOWN_FAMILY_MEMBER_LABEL } from "@/hooks/useLoggedByNames";
 import { formatDistanceToNowStrict } from "date-fns";
 import { UtensilsCrossed, Moon, Droplets } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -32,17 +31,7 @@ export function FamilyMomentsCard({ childId }: { childId: string | undefined }) 
   const { user } = useAuth();
   const { data: moments } = useFamilyMoments(childId, 6);
 
-  const authorIds = Array.from(new Set((moments ?? []).map((m) => m.author_id)));
-  const { data: authors } = useQuery({
-    queryKey: ["author-names", authorIds.sort().join(",")],
-    queryFn: async () => {
-      if (authorIds.length === 0) return {};
-      const { data } = await supabase
-        .from("profiles").select("id, full_name").in("id", authorIds);
-      return Object.fromEntries((data ?? []).map((p) => [p.id, p.full_name?.split(" ")[0] ?? "Family"]));
-    },
-    enabled: authorIds.length > 0,
-  });
+  const authors = useLoggedByNames((moments ?? []).map((m) => m.author_id));
 
   if (!moments || moments.length === 0) return null;
 
@@ -63,7 +52,7 @@ export function FamilyMomentsCard({ childId }: { childId: string | undefined }) 
             const meta = ICONS[m.kind];
             const Icon = meta.icon;
             const isYou = m.author_id === user?.id;
-            const author = isYou ? "You" : (authors?.[m.author_id] ?? "Family");
+            const author = isYou ? "You" : (authors[m.author_id] ?? UNKNOWN_FAMILY_MEMBER_LABEL);
             return (
               <li key={`${m.kind}-${m.id}`} className="flex items-center gap-3">
                 <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center shrink-0", meta.tone)}>

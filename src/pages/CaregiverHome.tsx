@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useChildren } from "@/hooks/useChildren";
 import { FamilyMomentsCard } from "@/components/FamilyMomentsCard";
+import { FamilyNamePrompt } from "@/components/FamilyNamePrompt";
 import { CaregiverNotePanel } from "@/components/CaregiverNotePanel";
 import { QUICK_TILES } from "@/lib/homeSections";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ export default function CaregiverHome() {
           ))}
         </div>
       </section>
+      <FamilyNamePrompt />
       <CaregiverNotePanel childId={activeChild.id} />
       <FamilyMomentsCard childId={activeChild.id} />
     </div>

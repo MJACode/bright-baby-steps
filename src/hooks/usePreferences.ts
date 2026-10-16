@@ -22,6 +22,7 @@ export interface Preferences {
   /** `${childId}:${trackingDayKey}` the Home allergen nudge was hidden for. */
   allergenNudgeDismissedFor: string | null;
   theme: ThemePreference;
+  familyNamePromptDismissed: boolean;
 }
 
 export type SetPreferences = (updates: Partial<Preferences>) => void;
@@ -42,6 +43,7 @@ const defaults: Preferences = {
   signsNudgeSnoozedUntil: null,
   allergenNudgeDismissedFor: null,
   theme: "system",
+  familyNamePromptDismissed: false,
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing
 // into hiddenHomeSections) throws instead of silently poisoning every caller.

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { familyMemberLabel, loggedByNamesQuery } from "@/hooks/useLoggedByNames";
 import { toast } from "@/hooks/use-toast";
 
 const VERB: Record<string, string> = {
@@ -11,6 +13,7 @@ const VERB: Record<string, string> = {
 
 export function usePartnerLogToast(childId: string | undefined) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const seen = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -22,9 +25,13 @@ export function usePartnerLogToast(childId: string | undefined) {
       if (seen.current.has(row.id)) return;
       seen.current.add(row.id);
 
-      const { data } = await supabase
-        .from("profiles").select("full_name").eq("id", row.parent_id).maybeSingle();
-      const name = data?.full_name?.split(" ")[0] ?? "Your partner";
+      let name = familyMemberLabel(undefined);
+      try {
+        const rows = await queryClient.fetchQuery(loggedByNamesQuery([row.parent_id]));
+        name = familyMemberLabel(rows.find((r) => r.id === row.parent_id));
+      } catch (err) {
+        console.error("Couldn't resolve who logged this", err);
+      }
 
       toast({
         title: `${name} ${VERB[kind]}`,
@@ -46,5 +53,5 @@ export function usePartnerLogToast(childId: string | undefined) {
       .subscribe();
 
     return () => { supabase.removeChannel(ch); };
-  }, [childId, user]);
+  }, [childId, user, queryClient]);
 }
