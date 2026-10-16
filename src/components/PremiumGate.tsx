@@ -40,13 +40,22 @@ export function PremiumGate({
   const { isPremium, isLoading } = usePremium();
   const [open, setOpen] = useState(false);
   const { activeChild } = useChildren();
-  const { role, isResolved } = useCurrentRoleQuery(activeChild?.id);
+  const { role, isResolved, caregiverCoach } = useCurrentRoleQuery(activeChild?.id);
   // Only predictions inherit the family's plan: they're local math. Every other
   // feature calls an AI edge function billed against the caller's own sub.
   const inheritsFamilyPlan = feature === "predictions";
+  // For a caregiver, predictions are the "sleep & feed coach": the owner turns
+  // it on per seat and it runs on the owner's Flare+. The caregiver's own sub
+  // doesn't count, so a parent who chose "Log only" gets log only.
+  const caregiverCoachGate = inheritsFamilyPlan && isResolved && role === "caregiver";
   const { isChildOwnerPremium, isLoading: familyLoading } = useChildOwnerPremium(activeChild?.id, {
-    enabled: inheritsFamilyPlan && !isLoading && !isPremium,
+    enabled: inheritsFamilyPlan && (caregiverCoachGate ? caregiverCoach : !isLoading && !isPremium),
   });
+
+  if (caregiverCoachGate) {
+    // Never pitched to a caregiver: no upsell, and nothing while the owner's plan loads.
+    return caregiverCoach && isChildOwnerPremium ? <>{children}</> : null;
+  }
 
   // Rendering children while loading keeps the layout fixed: a premium family
   // sees no flash, and a free one sees the same card simply blur in place.

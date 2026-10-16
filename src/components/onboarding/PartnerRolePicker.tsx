@@ -3,9 +3,10 @@
 // Shown right after baby's name. Decides: who's tracking with you, and as what.
 
 import { cn } from "@/lib/utils";
-import { Check, Users, HeartHandshake, Eye } from "lucide-react";
+import { Check, Users, HeartHandshake } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { PartnerRole } from "@/lib/partnerInvite";
-import { ROLE_COPY } from "@/lib/partnerInvite";
+import { CAREGIVER_COACH_COPY, PARTNER_ROLES, ROLE_COPY } from "@/lib/partnerInvite";
 
 export type SyncChoice =
   | { kind: "skip" }
@@ -20,7 +21,6 @@ interface Props {
 const ROLE_ICON: Record<PartnerRole, React.ComponentType<{ className?: string }>> = {
   coparent: Users,
   caregiver: HeartHandshake,
-  viewer: Eye,
 };
 
 export function PartnerRolePicker({ value, onChange, babyName }: Props) {
@@ -30,7 +30,7 @@ export function PartnerRolePicker({ value, onChange, babyName }: Props) {
 
   return (
     <div className="space-y-3">
-      {(["coparent", "caregiver", "viewer"] as PartnerRole[]).map((r) => {
+      {PARTNER_ROLES.map((r) => {
         const copy = ROLE_COPY[r];
         const Icon = ROLE_ICON[r];
         const selected = selectedRole === r;
@@ -100,5 +100,59 @@ export function PartnerRolePicker({ value, onChange, babyName }: Props) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * What a caregiver can use, chosen by a Flare+ owner. Callers render it only
+ * for a caregiver on Flare+; on the free plan the choice is hidden entirely.
+ */
+export function CaregiverCoachChoice({
+  value,
+  onChange,
+  disabled = false,
+  idPrefix = "caregiver-coach",
+}: {
+  value: boolean;
+  onChange: (coach: boolean) => void;
+  disabled?: boolean;
+  idPrefix?: string;
+}) {
+  const options = [
+    { coach: false, ...CAREGIVER_COACH_COPY.off },
+    { coach: true, ...CAREGIVER_COACH_COPY.on },
+  ];
+  return (
+    <RadioGroup
+      value={value ? "on" : "off"}
+      onValueChange={(v) => onChange(v === "on")}
+      disabled={disabled}
+      aria-label="What your caregiver can use"
+      className="gap-2"
+    >
+      {options.map((o) => {
+        const id = `${idPrefix}-${o.coach ? "on" : "off"}`;
+        const selected = o.coach === value;
+        return (
+          <label
+            key={id}
+            htmlFor={id}
+            className={cn(
+              "touch-target flex items-start gap-3 rounded-xl border-2 px-3 py-3 transition-colors",
+              disabled ? "opacity-60" : "cursor-pointer",
+              selected ? "border-primary bg-primary/10" : "border-border bg-card",
+            )}
+          >
+            <RadioGroupItem id={id} value={o.coach ? "on" : "off"} className="mt-0.5 shrink-0" />
+            <span className="flex-1 min-w-0">
+              <span className={cn("block text-sm font-semibold", selected ? "text-primary" : "text-foreground")}>
+                {o.title}
+              </span>
+              <span className="block text-xs text-muted-foreground leading-snug mt-0.5">{o.desc}</span>
+            </span>
+          </label>
+        );
+      })}
+    </RadioGroup>
   );
 }

@@ -98,7 +98,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
     key: "partnerInvitations",
     table: "partner_invitations",
     label: "partner invitations",
-    select: "id, owner_id, invitee_label, role, status, accepted_by, expires_at, created_at, updated_at",
+    select: "id, owner_id, invitee_label, role, caregiver_coach, status, accepted_by, expires_at, created_at, updated_at",
   },
   { key: "notifications", table: "notifications", label: "notifications", userColumn: "user_id" },
   { key: "feedback", table: "feedback", label: "feedback", userColumn: "user_id" },

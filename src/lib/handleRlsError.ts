@@ -18,8 +18,8 @@ export function getErrorMessage(err: unknown, fallback = ""): string {
 export function rlsErrorToast(err: unknown): { title: string; description: string } | null {
   if (isRlsViewerDenied(err)) {
     return {
-      title: "View-only access",
-      description: "Ask the parent to upgrade your role to log entries.",
+      title: "You don't have access to change this.",
+      description: "Ask the parent who shared it with you.",
     };
   }
   return null;

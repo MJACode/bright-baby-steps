@@ -10,8 +10,13 @@ Founder decisions (2026-10-16):
 - Name: "Log + sleep & feed coach" (the coach is local math, not an LLM).
 
 ## Plan
-- [ ] Backend: `caregiver_coach` on partner_access + partner_invitations, backfill existing caregivers, carry through accept_partner_invitation, block new `viewer` rows
-- [ ] Frontend: role picker + PartnerManagement toggle (Flare+ only), invite writes, useCurrentRole exposes coach flag, PremiumGate("predictions") honours it, CaregiverHome shows the coach, drop View-only from pickers/copy
-- [ ] Copy: FAQ / Privacy / Upgrade mentions of View-only; legal-review-log entry
-- [ ] QA pass
+- [x] Backend: `caregiver_coach` on partner_access + partner_invitations, backfill existing caregivers, carry through accept_partner_invitation, block new `viewer` rows
+- [x] Frontend: role picker + PartnerManagement toggle (Flare+ only), invite writes, useCurrentRole exposes coach flag, PremiumGate("predictions") honours it, CaregiverHome shows the coach, drop View-only from pickers/copy
+- [x] Copy: FAQ / Privacy / Upgrade mentions of View-only; legal-review-log entry
+- [x] QA pass
 - [ ] PR (adds a migration: founder OK required before merge)
+
+## Review (2026-10-16)
+- QA round 1: Fix-required. Coach header and the "Why this time?" button sat outside PremiumGate and still showed to log-only caregivers. Fixed with `useCaregiverCoachHidden`; the RLS toast no longer says "View-only".
+- tsc clean, lint at baseline (107/14), vitest 1780/1780.
+- Follow-ups (not in this PR): AcceptInvite can't show the invitee whether they get the coach (`lookup_partner_invitation` doesn't return it); UpgradeSheet / PartnerManagement teaser copy still describes 2 seats instead of 4.

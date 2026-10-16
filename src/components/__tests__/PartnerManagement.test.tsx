@@ -3,8 +3,10 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PartnerManagement from "@/components/PartnerManagement";
 
-const { rpc, tables, copyInviteUrl, shareInvite, toast } = vi.hoisted(() => ({
+const { rpc, tables, copyInviteUrl, shareInvite, toast, update, premium } = vi.hoisted(() => ({
   rpc: vi.fn(async () => ({ data: null, error: null })),
+  update: vi.fn(),
+  premium: { isPremium: true },
   tables: {
     owned: [] as unknown[],
     partnerOf: [] as unknown[],
@@ -16,7 +18,7 @@ const { rpc, tables, copyInviteUrl, shareInvite, toast } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "owner-1" } }) }));
-vi.mock("@/hooks/usePremium", () => ({ usePremium: () => ({ isPremium: true, isLoading: false }) }));
+vi.mock("@/hooks/usePremium", () => ({ usePremium: () => ({ isPremium: premium.isPremium, isLoading: false }) }));
 vi.mock("@/hooks/use-toast", () => ({ toast }));
 vi.mock("@/hooks/useChildren", () => ({
   useChildren: () => ({
@@ -45,9 +47,13 @@ vi.mock("@/integrations/supabase/client", () => {
         resolve({ data, error: null });
       },
     };
-    for (const m of ["select", "in", "gt", "update", "insert", "single"]) {
+    for (const m of ["select", "in", "gt", "insert", "single"]) {
       self[m] = () => self;
     }
+    self.update = (payload: unknown) => {
+      update(table, payload);
+      return self;
+    };
     self.eq = (col: string) => {
       filters.push(col);
       return self;
@@ -92,6 +98,7 @@ const ownedRow = {
   owner_id: "owner-1",
   partner_id: "partner-1",
   role: "caregiver",
+  caregiver_coach: false,
   status: "active",
   created_at: "2026-08-01T12:00:00Z",
   partner: { email: "sam@example.com" },
@@ -101,7 +108,7 @@ const partnerOfRow = {
   id: "pa-9",
   owner_id: "other-owner",
   partner_id: "owner-1",
-  role: "viewer",
+  role: "caregiver",
   status: "active",
   created_at: "2026-08-01T12:00:00Z",
   owner: { email: "alex@example.com" },
@@ -119,6 +126,7 @@ function renderIt() {
 describe("PartnerManagement role switch", () => {
   beforeEach(() => {
     rpc.mockClear();
+    premium.isPremium = true;
     tables.owned = [ownedRow];
     tables.partnerOf = [];
     tables.invites = [];
@@ -130,22 +138,30 @@ describe("PartnerManagement role switch", () => {
     fireEvent.click(screen.getByRole("button", { name: "Caregiver" }));
     // The RPC fires asynchronously, so follow with a real change and assert
     // it is the only call that ever reached the server.
-    fireEvent.click(screen.getByRole("button", { name: "View-only" }));
+    fireEvent.click(screen.getByRole("button", { name: "Co-parent" }));
     await waitFor(() => expect(rpc).toHaveBeenCalled());
     expect(rpc).toHaveBeenCalledTimes(1);
-    expect(rpc).toHaveBeenCalledWith("set_partner_role", { _partner_id: "partner-1", _role: "viewer" });
+    expect(rpc).toHaveBeenCalledWith("set_partner_role", { _partner_id: "partner-1", _role: "coparent" });
   });
 
   it("calls set_partner_role with the partner id and the new role", async () => {
     renderIt();
     await screen.findByLabelText("Role for sam@example.com");
-    fireEvent.click(screen.getByRole("button", { name: "View-only" }));
+    fireEvent.click(screen.getByRole("button", { name: "Co-parent" }));
     await waitFor(() =>
       expect(rpc).toHaveBeenCalledWith("set_partner_role", {
         _partner_id: "partner-1",
-        _role: "viewer",
+        _role: "coparent",
       }),
     );
+  });
+
+  it("offers only Co-parent and Caregiver", async () => {
+    renderIt();
+    await screen.findByLabelText("Role for sam@example.com");
+    expect(screen.getByRole("button", { name: "Co-parent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Caregiver" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "View-only" })).toBeNull();
   });
 
   it("shows no role control on accounts you're a partner on", async () => {
@@ -154,7 +170,43 @@ describe("PartnerManagement role switch", () => {
     renderIt();
     await screen.findByText("alex@example.com's account");
     expect(screen.queryByTestId("role-trigger")).toBeNull();
-    expect(screen.queryByRole("button", { name: "View-only" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Co-parent" })).toBeNull();
+  });
+});
+
+describe("PartnerManagement caregiver coach", () => {
+  beforeEach(() => {
+    update.mockClear();
+    toast.mockClear();
+    premium.isPremium = true;
+    tables.owned = [ownedRow];
+    tables.partnerOf = [];
+    tables.invites = [];
+  });
+
+  it("lets a Flare+ owner turn the coach on for a caregiver", async () => {
+    renderIt();
+    const logOnly = await screen.findByRole("radio", { name: /^Log only/ });
+    expect(logOnly.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: /Log \+ sleep & feed coach/ }));
+    await waitFor(() => expect(update).toHaveBeenCalledWith("partner_access", { caregiver_coach: true }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Log + sleep & feed coach" })),
+    );
+  });
+
+  it("hides the choice on the free plan", async () => {
+    premium.isPremium = false;
+    renderIt();
+    await screen.findByLabelText("Role for sam@example.com");
+    expect(screen.queryByRole("radio")).toBeNull();
+  });
+
+  it("hides the choice for a co-parent", async () => {
+    tables.owned = [{ ...ownedRow, role: "coparent", caregiver_coach: true }];
+    renderIt();
+    await screen.findByLabelText("Role for sam@example.com");
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 });
 

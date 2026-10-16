@@ -7,13 +7,14 @@ import type { PremiumFeature } from "@/hooks/usePremium";
 const state = vi.hoisted(() => ({
   isPremium: false,
   role: "caregiver" as string,
+  caregiverCoach: true,
   rpc: vi.fn(),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "caregiver-1" } }) }));
 vi.mock("@/hooks/useChildren", () => ({ useChildren: () => ({ activeChild: { id: "child-1" } }) }));
 vi.mock("@/hooks/useCurrentRole", () => ({
-  useCurrentRoleQuery: () => ({ role: state.role, isResolved: true }),
+  useCurrentRoleQuery: () => ({ role: state.role, isResolved: true, caregiverCoach: state.caregiverCoach }),
 }));
 vi.mock("@/components/UpgradeSheet", () => ({ UpgradeSheet: () => null }));
 vi.mock("@/integrations/supabase/client", () => ({
@@ -47,6 +48,7 @@ function renderGate(feature: PremiumFeature) {
 beforeEach(() => {
   state.isPremium = false;
   state.role = "caregiver";
+  state.caregiverCoach = true;
   state.rpc.mockReset();
 });
 
@@ -94,6 +96,58 @@ describe("PremiumGate family plan inheritance", () => {
     renderGate("predictions");
     await waitFor(() => expect(screen.getByText("Gated content")).toBeInTheDocument());
     await new Promise((r) => setTimeout(r, 0));
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("PremiumGate caregiver sleep & feed coach", () => {
+  it("hides predictions from a Log-only caregiver without checking the owner's plan", async () => {
+    state.caregiverCoach = false;
+    state.rpc.mockResolvedValue({ data: true, error: null });
+    renderGate("predictions");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Gated content")).not.toBeInTheDocument();
+    expect(screen.queryByText("Try free for 7 days")).not.toBeInTheDocument();
+    expect(state.rpc).not.toHaveBeenCalled();
+  });
+
+  it("follows the owner's choice even when the caregiver has their own Flare+", async () => {
+    state.isPremium = true;
+    state.caregiverCoach = false;
+    renderGate("predictions");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Gated content")).not.toBeInTheDocument();
+  });
+
+  it("hides the coach from a subscribed caregiver when the owner's Flare+ has lapsed", async () => {
+    state.isPremium = true;
+    state.rpc.mockResolvedValue({ data: false, error: null });
+    renderGate("predictions");
+    await waitFor(() => expect(state.rpc).toHaveBeenCalledWith("child_owner_is_premium", { _child_id: "child-1" }));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByText("Gated content")).not.toBeInTheDocument();
+  });
+
+  it("shows the coach to a subscribed caregiver when it's on and the owner has Flare+", async () => {
+    state.isPremium = true;
+    state.rpc.mockResolvedValue({ data: true, error: null });
+    renderGate("predictions");
+    await waitFor(() => expect(screen.getByText("Gated content")).toBeInTheDocument());
+  });
+
+  it("leaves a co-parent's family-plan inheritance alone", async () => {
+    state.role = "coparent";
+    state.caregiverCoach = false;
+    state.rpc.mockResolvedValue({ data: true, error: null });
+    renderGate("predictions");
+    await waitFor(() => expect(screen.getByText("Gated content")).toBeInTheDocument());
+  });
+
+  it("does not let the coach flag unlock other features for a caregiver", async () => {
+    state.rpc.mockResolvedValue({ data: true, error: null });
+    renderGate("exports");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Gated content")).not.toBeInTheDocument();
     expect(state.rpc).not.toHaveBeenCalled();
   });
 });

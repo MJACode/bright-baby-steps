@@ -8,9 +8,9 @@ import { Clipboard } from "@capacitor/clipboard";
 import { supabase } from "@/integrations/supabase/client";
 import { APP_URL } from "@/lib/appUrl";
 
-export type PartnerRole = "coparent" | "caregiver" | "viewer";
+export type PartnerRole = "coparent" | "caregiver";
 
-export const PARTNER_ROLES: PartnerRole[] = ["coparent", "caregiver", "viewer"];
+export const PARTNER_ROLES: PartnerRole[] = ["coparent", "caregiver"];
 
 export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: string }> = {
   coparent: {
@@ -23,22 +23,39 @@ export const ROLE_COPY: Record<PartnerRole, { title: string; desc: string; sub: 
     desc: "Logs feeds, sleep, diapers — but not finance or settings.",
     sub: "Nanny · Sitter · Grandparent",
   },
-  viewer: {
-    title: "View-only",
-    desc: "Sees the rhythm. Cannot log or change anything.",
-    sub: "Grandparent · Family friend",
-  },
 };
 
-/** Defensive: the column is NOT NULL DEFAULT 'coparent', but anything unrecognised falls back to co-parent. */
+/** The two options a Flare+ owner picks between for a caregiver. */
+export const CAREGIVER_COACH_COPY = {
+  off: { title: "Log only", desc: "Logs feeds, sleep and diapers." },
+  on: { title: "Log + sleep & feed coach", desc: "Also sees when the next nap and feed are likely." },
+} as const;
+
+/**
+ * Defensive: the column is NOT NULL DEFAULT 'coparent' and new viewer rows are
+ * blocked by a CHECK. A legacy 'viewer' maps to caregiver, the remaining role
+ * with the least access, so the UI never overstates what someone can do.
+ */
 export function toPartnerRole(raw: string | null | undefined): PartnerRole {
-  return raw === "caregiver" || raw === "viewer" ? raw : "coparent";
+  return raw === "caregiver" || raw === "viewer" ? "caregiver" : "coparent";
 }
 
-/** "a@b.com is now a Caregiver." / "a@b.com is now View-only." */
+/** "a@b.com is now a Caregiver." */
 export function roleChangedMessage(who: string, role: PartnerRole): string {
-  const title = ROLE_COPY[role].title;
-  return role === "viewer" ? `${who} is now ${title}.` : `${who} is now a ${title}.`;
+  return `${who} is now a ${ROLE_COPY[role].title}.`;
+}
+
+/**
+ * Whether a caregiver should see the sleep & feed coach. The stored flag is
+ * kept when Flare+ lapses and applies again on renewal, so the owner's plan is
+ * checked separately at read time.
+ */
+export function caregiverSeesCoach(opts: {
+  role: string | null | undefined;
+  caregiverCoach: boolean;
+  isChildOwnerPremium: boolean;
+}): boolean {
+  return opts.role === "caregiver" && opts.caregiverCoach && opts.isChildOwnerPremium;
 }
 
 /**
@@ -189,6 +206,8 @@ export function parseInviteCode(input: string): string | null {
 export interface CreateInviteArgs {
   ownerId: string;
   role: PartnerRole;
+  /** Only stored for a caregiver; callers pass true only when the owner has Flare+. */
+  caregiverCoach?: boolean;
   /** A friendly label like "Mom" or "Lucia (nanny)" — surfaces in the family list. */
   label?: string;
 }
@@ -201,6 +220,7 @@ export interface InviteResult {
 export async function createPartnerInvite({
   ownerId,
   role,
+  caregiverCoach = false,
   label,
 }: CreateInviteArgs): Promise<InviteResult> {
   const { data, error } = await supabase
@@ -208,6 +228,7 @@ export async function createPartnerInvite({
     .insert({
       owner_id: ownerId,
       role,
+      caregiver_coach: role === "caregiver" && caregiverCoach,
       invitee_label: label ?? null,
     })
     .select()
@@ -226,12 +247,7 @@ export function buildInviteMessage(opts: {
   role: PartnerRole;
   url: string;
 }) {
-  const r =
-    opts.role === "coparent"
-      ? "co-parent"
-      : opts.role === "caregiver"
-      ? "caregiver"
-      : "view-only access";
+  const r = opts.role === "coparent" ? "co-parent" : "caregiver";
   const inviter = opts.inviterName ?? "I";
   return `${inviter} just set up a profile for ${opts.babyName} on Grace Flare and added you as ${r}. Tap to join — takes about a minute. ${opts.url}`;
 }

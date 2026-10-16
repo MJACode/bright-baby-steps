@@ -15,6 +15,7 @@ import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
 import { deriveCoachState, deriveWakeState } from "@/lib/sleepCoachState";
 import { PremiumGate } from "@/components/PremiumGate";
+import { useCaregiverCoachHidden } from "@/hooks/useCaregiverCoachHidden";
 import {
   WakeWindowSuggestionCard,
   WakeWindowWhyButton,
@@ -44,7 +45,13 @@ interface SleepCoachCardProps {
   variant?: "card" | "strip";
 }
 
-export function SleepCoachCard({ activeChild, variant = "card" }: SleepCoachCardProps) {
+export function SleepCoachCard(props: SleepCoachCardProps) {
+  // Split so a log-only caregiver runs none of the coach queries below.
+  const hidden = useCaregiverCoachHidden(props.activeChild?.id);
+  return hidden ? null : <SleepCoachCardInner {...props} />;
+}
+
+function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardProps) {
   const { data } = useSleepCoach(activeChild);
   const { data: plan } = useSleepPlan(activeChild?.id ?? null);
   const pred = data?.prediction ?? null;

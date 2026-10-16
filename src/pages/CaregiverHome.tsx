@@ -2,6 +2,9 @@ import { Link } from "react-router-dom";
 import { useChildren } from "@/hooks/useChildren";
 import { FamilyMomentsCard } from "@/components/FamilyMomentsCard";
 import { CaregiverNotePanel } from "@/components/CaregiverNotePanel";
+import { NextEventBand } from "@/components/NextEventBand";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import { useCaregiverCoachHidden } from "@/hooks/useCaregiverCoachHidden";
 import { QUICK_TILES } from "@/lib/homeSections";
 import { cn } from "@/lib/utils";
 
@@ -12,6 +15,11 @@ const LOG_TILES = (["sleep", "food", "diaper"] as const).map((id) => {
 
 export default function CaregiverHome() {
   const { activeChild } = useChildren();
+  const { role, isResolved } = useCurrentRoleQuery(activeChild?.id);
+  const coachHidden = useCaregiverCoachHidden(activeChild?.id);
+  // Checked here as well as inside the band's PremiumGate so a log-only
+  // caregiver doesn't run the prediction queries at all.
+  const showCoach = isResolved && role === "caregiver" && !coachHidden;
   if (!activeChild) return null;
   return (
     <div className="px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-8 space-y-4 max-w-md mx-auto">
@@ -19,6 +27,8 @@ export default function CaregiverHome() {
         <p className="text-xs text-muted-foreground">Caring for</p>
         <h1 className="font-display text-3xl font-bold">{activeChild.name}</h1>
       </header>
+      {/* No coach cards on this screen, so the band shows both the nap and the feed side. */}
+      {showCoach && <NextEventBand activeChild={activeChild} />}
       <section aria-labelledby="caregiver-log-heading" className="space-y-2">
         <h2 id="caregiver-log-heading" className="text-sm font-semibold text-muted-foreground">
           Tap to log

@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, UtensilsCrossed } from "lucide-react";
 import { PremiumGate } from "@/components/PremiumGate";
+import { useCaregiverCoachHidden } from "@/hooks/useCaregiverCoachHidden";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useWakePrediction } from "@/hooks/useWakePrediction";
@@ -43,7 +44,13 @@ interface FeedCoachCardProps {
   variant?: "card" | "strip";
 }
 
-export function FeedCoachCard({
+export function FeedCoachCard(props: FeedCoachCardProps) {
+  // Split so a log-only caregiver runs none of the coach queries below.
+  const hidden = useCaregiverCoachHidden(props.activeChild?.id);
+  return hidden ? null : <FeedCoachCardInner {...props} />;
+}
+
+function FeedCoachCardInner({
   activeChild,
   lastFeedAt,
   feedInProgress = false,
