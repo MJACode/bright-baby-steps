@@ -20,29 +20,54 @@ export function assertCanWrite(isResolved: boolean, role: Role): void {
   if (role === "viewer") throw new Error(VIEW_ONLY_MESSAGE);
 }
 
+export interface CurrentRole {
+  role: Role;
+  /** The owner's choice for a caregiver seat. Only meaningful when role is "caregiver". */
+  caregiverCoach: boolean;
+}
+
+type RoleClient = Pick<typeof supabase, "from">;
+
+export async function fetchCurrentRole(
+  client: RoleClient,
+  userId: string,
+  childId: string,
+): Promise<CurrentRole> {
+  const { data: child } = await client.from("children")
+    .select("parent_id").eq("id", childId).maybeSingle();
+  if (child?.parent_id === userId) return { role: "owner", caregiverCoach: false };
+  // status matters: a paused or revoked row still exists, and reading its
+  // role would hand a shut-off partner co-parent controls in the UI.
+  const { data: access } = await client.from("partner_access")
+    .select("role, caregiver_coach").eq("partner_id", userId).eq("owner_id", child?.parent_id ?? "")
+    .eq("status", "active")
+    .maybeSingle();
+  return {
+    role: (access?.role as Role) ?? "viewer",
+    caregiverCoach: access?.caregiver_coach === true,
+  };
+}
+
 // `role` optimistically defaults to "owner" while the query is in flight, which
 // is fine for layout decisions but unsafe for gating writes. Consumers that hide
 // controls from lower-privilege roles must wait for `isResolved`.
-export function useCurrentRoleQuery(childId?: string): { role: Role; isResolved: boolean } {
+export function useCurrentRoleQuery(
+  childId?: string,
+): { role: Role; isResolved: boolean; caregiverCoach: boolean } {
   const { user } = useAuth();
   const query = useQuery({
     queryKey: ["my-role", user?.id, childId],
-    queryFn: async (): Promise<Role> => {
-      if (!user || !childId) return "owner";
-      const { data: child } = await supabase.from("children")
-        .select("parent_id").eq("id", childId).maybeSingle();
-      if (child?.parent_id === user.id) return "owner";
-      // status matters: a paused or revoked row still exists, and reading its
-      // role would hand a shut-off partner co-parent controls in the UI.
-      const { data: access } = await supabase.from("partner_access")
-        .select("role").eq("partner_id", user.id).eq("owner_id", child?.parent_id ?? "")
-        .eq("status", "active")
-        .maybeSingle();
-      return (access?.role as Role) ?? "viewer";
+    queryFn: async (): Promise<CurrentRole> => {
+      if (!user || !childId) return { role: "owner", caregiverCoach: false };
+      return fetchCurrentRole(supabase, user.id, childId);
     },
     enabled: !!user && !!childId,
   });
-  return { role: query.data ?? "owner", isResolved: query.isSuccess };
+  return {
+    role: query.data?.role ?? "owner",
+    isResolved: query.isSuccess,
+    caregiverCoach: query.data?.caregiverCoach ?? false,
+  };
 }
 
 export function useCurrentRole(childId?: string): Role {

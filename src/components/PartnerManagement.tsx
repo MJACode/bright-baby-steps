@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { CaregiverCoachChoice } from "@/components/onboarding/PartnerRolePicker";
 import { toast } from "@/hooks/use-toast";
 import { Users, Copy, UserMinus, UserPlus, RefreshCw, X, Sparkles, PauseCircle, Share } from "lucide-react";
 import {
   ROLE_COPY,
+  CAREGIVER_COACH_COPY,
   PARTNER_ROLES,
   toPartnerRole,
   roleChangedMessage,
@@ -107,7 +109,7 @@ export default function PartnerManagement() {
     mutationFn: async () => {
       const { data, error } = await supabase
         .from("partner_invitations")
-        .insert({ owner_id: user!.id })
+        .insert({ owner_id: user!.id, caregiver_coach: false })
         .select()
         .single();
       if (error) throw error;
@@ -169,6 +171,35 @@ export default function PartnerManagement() {
       }),
     // Returned so the mutation stays pending until the row refetches; a failed
     // change (e.g. the person was removed elsewhere) refreshes the row too.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["partner_access"] }),
+  });
+
+  const setCoach = useMutation({
+    mutationFn: async ({ partnerId, coach }: { partnerId: string; coach: boolean }) => {
+      const { data, error } = await supabase
+        .from("partner_access")
+        .update({ caregiver_coach: coach })
+        .eq("owner_id", user!.id)
+        .eq("partner_id", partnerId)
+        .select("id");
+      if (error) throw error;
+      // An RLS-blocked or already-removed row updates nothing and returns no error.
+      if (!data?.length) throw new Error("This person is no longer on your account.");
+      return coach;
+    },
+    onSuccess: (coach) =>
+      toast({
+        title: coach ? CAREGIVER_COACH_COPY.on.title : CAREGIVER_COACH_COPY.off.title,
+        description: coach
+          ? "They'll see when the next nap and feed are likely."
+          : "They can still log feeds, sleep and diapers.",
+      }),
+    onError: (err) =>
+      toast({
+        title: "Couldn't update their access",
+        description: `${err instanceof Error ? err.message : "Something went wrong."} Nothing changed. Try again in a moment.`,
+        variant: "destructive",
+      }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["partner_access"] }),
   });
 
@@ -347,6 +378,16 @@ export default function PartnerManagement() {
                     </Select>
                     <p className="text-xs text-muted-foreground leading-snug">{ROLE_COPY[role].desc}</p>
                   </div>
+                  {/* Free plan: caregivers are log-only and the choice is hidden.
+                      The stored value is kept and applies again on renewal. */}
+                  {role === "caregiver" && isPremium && (
+                    <CaregiverCoachChoice
+                      value={p.caregiver_coach === true}
+                      onChange={(coach) => setCoach.mutate({ partnerId: p.partner_id, coach })}
+                      disabled={setCoach.isPending}
+                      idPrefix={`coach-${p.id}`}
+                    />
+                  )}
                   <label className="flex items-center justify-between gap-3 border-t border-border pt-2 cursor-pointer">
                     <span className="text-xs text-muted-foreground leading-snug">
                       {paused
@@ -398,6 +439,11 @@ export default function PartnerManagement() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold">{ROLE_COPY[role].title}</p>
+                      {role === "caregiver" && isPremium && (
+                        <p className="text-xs text-muted-foreground">
+                          {inv.caregiver_coach ? CAREGIVER_COACH_COPY.on.title : CAREGIVER_COACH_COPY.off.title}
+                        </p>
+                      )}
                       <p className="text-xs text-muted-foreground">
                         Expires {format(new Date(inv.expires_at), "MMM d")}
                       </p>

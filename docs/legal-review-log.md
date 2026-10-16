@@ -3283,3 +3283,11 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 **Changed:** migration `20261016000000_flare_plus_four_seats.sql` (`partner_seat_limit()` + trigger messages), `MAX_ADDITIONAL_USERS` in `src/lib/partnerInvite.ts`, Terms § Shared access ("four on Flare+", Last reviewed bumped to October 16, 2026), FAQ shared-access answer, UpgradeSheet bullet, `docs/billing-launch-kit.md`.
 
 **Risk:** Low. More generous to the user, no change to consent, roles, lapse rule (oldest partner keeps access; others on hold, nothing deleted) or data handling. Every invitee still goes through the AcceptInvite consent box. App Store / Stripe product descriptions that mention "2" need a manual update outside the repo if they exist.
+
+## 2026-10-16 — Caregiver seats: log only, or log + sleep & feed coach; View-only role retired
+
+**Decision (founder, 2026-10-16):** the roles offered are Co-parent and Caregiver. View-only is no longer offered (0 live viewer rows; new ones are blocked by a CHECK). Co-parents keep the same access as the owner. On Flare+ the owner picks "Log only" (default) or "Log + sleep & feed coach" for each caregiver. On the free plan caregivers are log only and the choice is hidden. If Flare+ lapses the stored choice is kept with no effect and applies again on renewal. Existing caregivers were backfilled to coach on.
+
+**Changed:** migration `20261016100000_caregiver_coach.sql` (`caregiver_coach` on `partner_access` and `partner_invitations`), FAQ shared-access answer (the "view or log activity" line now says what each role gets), role pickers and copy in `src/lib/partnerInvite.ts`, `PartnerRolePicker.tsx`, `InviteShareSheet.tsx`, `PartnerManagement.tsx`, coach gating in `PremiumGate.tsx` and `CaregiverHome.tsx`, `caregiver_coach` added to the invitations columns in Export My Data (`src/lib/exportUserData.ts`; `partner_access` already exports every column).
+
+**Risk:** Low. The coach is on-device math over logs a caregiver can already read through RLS, so no data reaches anyone new and no new child-data category is collected. No change to Privacy, Terms, consent, seat limits, or the AcceptInvite consent box. The flag is a UI setting only the owner can change (existing owner-only UPDATE policy).

@@ -2194,6 +2194,7 @@ export type Database = {
       }
       partner_access: {
         Row: {
+          caregiver_coach: boolean
           consent_acknowledged_at: string | null
           created_at: string
           id: string
@@ -2206,6 +2207,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          caregiver_coach?: boolean
           consent_acknowledged_at?: string | null
           created_at?: string
           id?: string
@@ -2218,6 +2220,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          caregiver_coach?: boolean
           consent_acknowledged_at?: string | null
           created_at?: string
           id?: string
@@ -2234,6 +2237,7 @@ export type Database = {
       partner_invitations: {
         Row: {
           accepted_by: string | null
+          caregiver_coach: boolean
           created_at: string
           expires_at: string
           id: string
@@ -2246,6 +2250,7 @@ export type Database = {
         }
         Insert: {
           accepted_by?: string | null
+          caregiver_coach?: boolean
           created_at?: string
           expires_at?: string
           id?: string
@@ -2258,6 +2263,7 @@ export type Database = {
         }
         Update: {
           accepted_by?: string | null
+          caregiver_coach?: boolean
           created_at?: string
           expires_at?: string
           id?: string

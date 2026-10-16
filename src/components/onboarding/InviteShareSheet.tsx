@@ -22,6 +22,8 @@ import {
 } from "@/lib/partnerInvite";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { usePremium } from "@/hooks/usePremium";
+import { CaregiverCoachChoice } from "@/components/onboarding/PartnerRolePicker";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -45,6 +47,11 @@ export function InviteShareSheet({
   const [url, setUrl] = useState<string | null>(null);
   const [code, setCode] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
+  const [caregiverCoach, setCaregiverCoach] = useState(false);
+  const { isPremium } = usePremium();
+  // The choice rides on the invite row, so it's made here, before the row
+  // exists, and locks once it does.
+  const showCoachChoice = role === "caregiver" && isPremium;
 
   // Track whether an in-flight create call is happening so concurrent button
   // taps don't double-insert.
@@ -61,6 +68,7 @@ export function InviteShareSheet({
     setUrl(null);
     setCode(null);
     setShowQr(false);
+    setCaregiverCoach(false);
     if (priorCode && !priorWasShared) {
       void supabase
         .from("partner_invitations")
@@ -76,7 +84,11 @@ export function InviteShareSheet({
     creatingRef.current = true;
     setStatus("creating");
     try {
-      const r = await createPartnerInvite({ ownerId, role });
+      const r = await createPartnerInvite({
+        ownerId,
+        role,
+        caregiverCoach: showCoachChoice && caregiverCoach,
+      });
       setUrl(r.url);
       setCode(r.inviteCode);
       setStatus("ready");
@@ -146,6 +158,20 @@ export function InviteShareSheet({
             <QrPanel url={url} onBack={() => setShowQr(false)} />
           ) : (
             <>
+              {showCoachChoice && (
+                <div className="space-y-2 pb-1">
+                  <p className="text-sm font-semibold">What can they use?</p>
+                  <CaregiverCoachChoice
+                    value={caregiverCoach}
+                    onChange={setCaregiverCoach}
+                    disabled={code !== null || busy}
+                    idPrefix="invite-caregiver-coach"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    You can change this anytime in Profile → Partner Access.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <ShareTile
                   icon={<MessageSquare className="w-5 h-5" />}
