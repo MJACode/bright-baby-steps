@@ -9,21 +9,19 @@ import { toast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  ownNameReachesFamily,
+  shouldShowFamilyNamePrompt,
+  type FamilyAccessRow,
+} from "@/lib/familyNamePrompt";
 
-export const FAMILY_NAME_MAX_LENGTH = 40;
-
-export function shouldShowFamilyNamePrompt(opts: {
-  fullName: string | null | undefined;
-  sharesFamily: boolean | undefined;
-  dismissed: boolean;
-}): boolean {
-  return !opts.dismissed && opts.sharesFamily === true && !opts.fullName?.trim();
-}
+const FAMILY_NAME_MAX_LENGTH = 40;
 
 /**
  * One-time ask for the name family members see on "logged by" chips. Only
- * shows once the profile has loaded with no name AND someone else shares the
- * family — a solo parent never sees attribution, so never needs this.
+ * shows once the profile has loaded with no name AND the name would actually
+ * appear to someone: a solo parent never sees attribution, and a partner the
+ * owner has already labelled is shown by that label instead.
  */
 export function FamilyNamePrompt() {
   const { user } = useAuth();
@@ -48,17 +46,16 @@ export function FamilyNamePrompt() {
 
   // Nested under the partner_access root so PartnerManagement's invalidations
   // (invite accepted, partner removed) refresh it too.
-  const { data: sharesFamily } = useQuery({
-    queryKey: ["partner_access", "shares-family", user?.id],
+  const { data: nameReachesFamily } = useQuery({
+    queryKey: ["partner_access", "name-reaches-family", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("partner_access")
-        .select("id")
+        .select("owner_id, partner_id, label")
         .or(`owner_id.eq.${user!.id},partner_id.eq.${user!.id}`)
-        .eq("status", "active")
-        .limit(1);
+        .eq("status", "active");
       if (error) throw error;
-      return (data ?? []).length > 0;
+      return ownNameReachesFamily((data ?? []) as FamilyAccessRow[], user!.id);
     },
     enabled: !!user && !prefs.familyNamePromptDismissed,
   });
@@ -81,9 +78,10 @@ export function FamilyNamePrompt() {
       toast({ title: `Thanks, ${value}`, description: "Your family will see your name next to what you log." });
     },
     onError: (err: Error) => {
+      console.error("Saving family display name failed", err);
       toast({
-        title: "Your name didn't save",
-        description: `${err.message} Check your connection and tap Save again.`,
+        title: "We couldn't save your name",
+        description: "Check your connection and try again.",
         variant: "destructive",
       });
     },
@@ -92,7 +90,7 @@ export function FamilyNamePrompt() {
   if (
     !user ||
     !profileLoaded ||
-    !shouldShowFamilyNamePrompt({ fullName, sharesFamily, dismissed: prefs.familyNamePromptDismissed })
+    !shouldShowFamilyNamePrompt({ fullName, nameReachesFamily, dismissed: prefs.familyNamePromptDismissed })
   ) {
     return null;
   }
@@ -105,7 +103,7 @@ export function FamilyNamePrompt() {
         <div className="flex items-start gap-3">
           <UserRound className="w-5 h-5 text-primary shrink-0 mt-0.5" aria-hidden />
           <div>
-            <p id="family-name-title" className="font-display font-bold text-base leading-snug">
+            <p id="family-name-title" className="font-sans font-bold text-base leading-snug">
               What should your family call you?
             </p>
             <p className="text-sm text-muted-foreground mt-0.5">

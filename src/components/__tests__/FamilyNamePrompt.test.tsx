@@ -1,10 +1,11 @@
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { FamilyNamePrompt, shouldShowFamilyNamePrompt } from "@/components/FamilyNamePrompt";
+import { FamilyNamePrompt } from "@/components/FamilyNamePrompt";
+import { ownNameReachesFamily, shouldShowFamilyNamePrompt } from "@/lib/familyNamePrompt";
 
 const h = vi.hoisted(() => ({
   fullName: null as string | null,
-  partnerRows: [{ id: "pa-1" }] as unknown[],
+  partnerRows: [{ owner_id: "me", partner_id: "p-1", label: null }] as unknown[],
   dismissed: false,
   setPrefs: vi.fn(),
   update: vi.fn(),
@@ -45,19 +46,31 @@ const renderPrompt = () =>
 
 beforeEach(() => {
   h.fullName = null;
-  h.partnerRows = [{ id: "pa-1" }];
+  h.partnerRows = [{ owner_id: "me", partner_id: "p-1", label: null }];
   h.dismissed = false;
   vi.clearAllMocks();
 });
 
 describe("shouldShowFamilyNamePrompt", () => {
   it("shows only for an unnamed member of a shared family who hasn't dismissed it", () => {
-    expect(shouldShowFamilyNamePrompt({ fullName: null, sharesFamily: true, dismissed: false })).toBe(true);
-    expect(shouldShowFamilyNamePrompt({ fullName: "  ", sharesFamily: true, dismissed: false })).toBe(true);
-    expect(shouldShowFamilyNamePrompt({ fullName: "Sam", sharesFamily: true, dismissed: false })).toBe(false);
-    expect(shouldShowFamilyNamePrompt({ fullName: null, sharesFamily: false, dismissed: false })).toBe(false);
-    expect(shouldShowFamilyNamePrompt({ fullName: null, sharesFamily: undefined, dismissed: false })).toBe(false);
-    expect(shouldShowFamilyNamePrompt({ fullName: null, sharesFamily: true, dismissed: true })).toBe(false);
+    expect(shouldShowFamilyNamePrompt({ fullName: null, nameReachesFamily: true, dismissed: false })).toBe(true);
+    expect(shouldShowFamilyNamePrompt({ fullName: "  ", nameReachesFamily: true, dismissed: false })).toBe(true);
+    expect(shouldShowFamilyNamePrompt({ fullName: "Sam", nameReachesFamily: true, dismissed: false })).toBe(false);
+    expect(shouldShowFamilyNamePrompt({ fullName: null, nameReachesFamily: false, dismissed: false })).toBe(false);
+    expect(shouldShowFamilyNamePrompt({ fullName: null, nameReachesFamily: undefined, dismissed: false })).toBe(false);
+    expect(shouldShowFamilyNamePrompt({ fullName: null, nameReachesFamily: true, dismissed: true })).toBe(false);
+  });
+});
+
+describe("ownNameReachesFamily", () => {
+  it("counts any family the caller owns", () => {
+    expect(ownNameReachesFamily([{ owner_id: "me", partner_id: "p", label: "Sam" }], "me")).toBe(true);
+  });
+
+  it("skips a partner the owner has already labelled", () => {
+    expect(ownNameReachesFamily([{ owner_id: "o", partner_id: "me", label: "Barbara" }], "me")).toBe(false);
+    expect(ownNameReachesFamily([{ owner_id: "o", partner_id: "me", label: " " }], "me")).toBe(true);
+    expect(ownNameReachesFamily([], "me")).toBe(false);
   });
 });
 
@@ -80,6 +93,21 @@ describe("FamilyNamePrompt", () => {
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(screen.queryByText("What should your family call you?")).toBeNull();
+  });
+
+  it("stays hidden for a partner the owner already labelled", async () => {
+    h.partnerRows = [{ owner_id: "owner-1", partner_id: "me", label: "Barbara" }];
+    renderPrompt();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.queryByText("What should your family call you?")).toBeNull();
+  });
+
+  it("shows for an unlabelled partner", async () => {
+    h.partnerRows = [{ owner_id: "owner-1", partner_id: "me", label: null }];
+    renderPrompt();
+    expect(await screen.findByText("What should your family call you?")).toBeTruthy();
   });
 
   it("persists Not now", async () => {

@@ -35,14 +35,14 @@ export function resolveFamilyLabels(
   return Object.fromEntries(ids.map((id) => [id, familyMemberLabel(byId.get(id))]));
 }
 
-/** "Barbara" → "B", "Mary Ann" → "MA", "Co-parent" → "C". */
+/** "Barbara" → "B", "Mary Ann" → "MA", "Co-parent" → "C", "Lucia (nanny)" → "LN". */
 export function nameInitials(name: string): string {
   return name
-    .trim()
     .split(/\s+/)
-    .filter(Boolean)
+    .map((word) => word.match(/[\p{L}\p{N}]/u)?.[0])
+    .filter((ch): ch is string => !!ch)
     .slice(0, 2)
-    .map((word) => word.charAt(0).toUpperCase())
+    .map((ch) => ch.toUpperCase())
     .join("");
 }
 
@@ -77,16 +77,18 @@ export function useLoggedByNames(parentIds: Array<string | null | undefined>): R
     .join("|");
   const ids = useMemo(() => (idsKey ? idsKey.split("|") : []), [idsKey]);
 
-  const { data, isError } = useQuery({
+  const { data, isError, isPlaceholderData } = useQuery({
     ...loggedByNamesQuery(ids),
     enabled: ids.length > 0,
     placeholderData: (prev) => prev,
   });
 
-  // Hold the chip back while the lookup is in flight so it doesn't flash
+  // Hold a chip back while its lookup is in flight so it doesn't flash
   // "Family member" before the real name lands; on error, fall back to labels.
-  return useMemo(
-    () => (data || isError ? resolveFamilyLabels(ids, data) : {}),
-    [ids, data, isError],
-  );
+  // Placeholder rows from the previous id set only cover the ids they contain.
+  return useMemo(() => {
+    if (!data && !isError) return {};
+    const known = isPlaceholderData ? ids.filter((id) => data?.some((r) => r.id === id)) : ids;
+    return resolveFamilyLabels(known, data);
+  }, [ids, data, isError, isPlaceholderData]);
 }

@@ -30,6 +30,12 @@ describe("nameInitials", () => {
     expect(nameInitials("Co-parent")).toBe("C");
     expect(nameInitials(UNKNOWN_FAMILY_MEMBER_LABEL)).toBe("FM");
   });
+
+  it("uses only letters and digits, skipping words that have none", () => {
+    expect(nameInitials("Lucia (nanny)")).toBe("LN");
+    expect(nameInitials("— Ana")).toBe("A");
+    expect(nameInitials("Émile 2nd")).toBe("É2");
+  });
 });
 
 describe("familyMemberLabel", () => {
