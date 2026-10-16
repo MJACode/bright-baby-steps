@@ -21,3 +21,12 @@ export function shouldShowFamilyNamePrompt(opts: {
 }): boolean {
   return !opts.dismissed && opts.nameReachesFamily === true && !opts.fullName?.trim();
 }
+
+/** The label an owner gave the caller as their partner, if any — what the family sees instead of full_name. */
+export function ownPartnerLabel(rows: FamilyAccessRow[], userId: string): string | null {
+  for (const r of rows) {
+    const label = r.partner_id === userId ? r.label?.trim() : "";
+    if (label) return label;
+  }
+  return null;
+}

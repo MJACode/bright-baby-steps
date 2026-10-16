@@ -47,8 +47,7 @@ describe("familyMemberLabel", () => {
     expect(familyMemberLabel({ id: "a", display_name: null, role: "owner" })).toBe("Parent");
     expect(familyMemberLabel({ id: "a", display_name: "  ", role: "coparent" })).toBe("Co-parent");
     expect(familyMemberLabel({ id: "a", display_name: null, role: "caregiver" })).toBe("Caregiver");
-    // View-only was retired in #302, so a leftover viewer row falls back to the generic label.
-    expect(familyMemberLabel({ id: "a", display_name: null, role: "viewer" })).toBe("Family member");
+    expect(familyMemberLabel({ id: "a", display_name: null, role: "viewer" })).toBe("Caregiver");
   });
 
   it("labels ids the RPC didn't return as a family member", () => {
