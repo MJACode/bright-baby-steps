@@ -60,7 +60,8 @@ jobs:
             exit 0
           fi
 
-          files=$(git diff --name-only --diff-filter=A "${BEFORE}" "${AFTER}" -- 'supabase/migrations/*.sql' | sort)
+          # --no-renames: a renamed migration (e.g. to fix a version clash) counts as added.
+          files=$(git diff --no-renames --name-only --diff-filter=A "${BEFORE}" "${AFTER}" -- 'supabase/migrations/*.sql' | sort)
           if [ -z "$files" ]; then
             echo "No new migration files in this push."
             exit 0
@@ -70,8 +71,15 @@ jobs:
             base=$(basename "$f" .sql)
             version="${base%%_*}"
             name="${base#*_}"
-            exists=$(run_sql "SELECT count(*) AS n FROM supabase_migrations.schema_migrations WHERE version = '${version}'" | jq -r '.[0].n')
-            if [ "$exists" != "0" ]; then
+            recorded=$(run_sql "SELECT coalesce(max(name), '') AS name, count(*) AS n FROM supabase_migrations.schema_migrations WHERE version = '${version}'")
+            if [ "$(jq -r '.[0].n' <<<"$recorded")" != "0" ]; then
+              recorded_name=$(jq -r '.[0].name' <<<"$recorded")
+              if [ "$recorded_name" != "$name" ]; then
+                # Two files shared one version (2026-10-16: caregiver_coach vs
+                # family_display_names). Skipping would silently drop this one.
+                echo "::error::${f}: version ${version} is already recorded as '${recorded_name}'. Rename this file to a new timestamp."
+                exit 1
+              fi
               echo "skip ${f}: version ${version} already recorded"
               continue
             fi
