@@ -11,6 +11,7 @@ import { QuickNavGrid } from "@/components/QuickNavGrid";
 import { NextEventBand } from "@/components/NextEventBand";
 import { TodayCard } from "@/components/TodayCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
+import { FamilyNamePrompt } from "@/components/FamilyNamePrompt";
 import { usePartnerLogToast } from "@/hooks/usePartnerLogToast";
 
 
@@ -57,6 +58,8 @@ export default function Dashboard() {
         feedCoachVisible={isVisible("feedCoach")}
         sleepCoachVisible={isVisible("sleepCoach")}
       />
+
+      <FamilyNamePrompt />
 
       {/* "Today" card: this-week development line, then the Sign Language
           promo/nudge (both ride on the What to Expect toggle), then the

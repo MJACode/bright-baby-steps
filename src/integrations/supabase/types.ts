@@ -3420,6 +3420,10 @@ export type Database = {
       delete_user_account: { Args: never; Returns: undefined }
       get_allergens: { Args: { _child_id: string }; Returns: Json }
       get_child_profile: { Args: { _child_id: string }; Returns: Json }
+      get_family_display_names: {
+        Args: { _ids: string[] }
+        Returns: { display_name: string | null; id: string; role: string }[]
+      }
       get_growth: {
         Args: { _child_id: string }
         Returns: {
