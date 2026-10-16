@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { ROLE_COPY } from "@/lib/partnerInvite";
+import { ROLE_COPY, toPartnerRole } from "@/lib/partnerInvite";
 
 export type FamilyRole = "owner" | "coparent" | "caregiver" | "viewer";
 
@@ -24,7 +24,7 @@ export function familyMemberLabel(row: FamilyDisplayName | undefined): string {
   const name = row.display_name?.trim();
   if (name) return name;
   if (row.role === "owner") return "Parent";
-  return ROLE_COPY[row.role]?.title ?? UNKNOWN_FAMILY_MEMBER_LABEL;
+  return ROLE_COPY[toPartnerRole(row.role)].title;
 }
 
 export function resolveFamilyLabels(

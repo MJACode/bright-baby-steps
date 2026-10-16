@@ -28,6 +28,7 @@ import ConnectClaudeSettings from "@/components/ConnectClaudeSettings";
 import { TrackingScheduleSettings } from "@/components/TrackingScheduleSettings";
 import { PushNotificationSetting } from "@/components/PushNotificationSetting";
 import { FeedbackDialog } from "@/components/FeedbackDialog";
+import { OwnNameField } from "@/components/OwnNameField";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { exportUserData, ExportReadError } from "@/lib/exportUserData";
@@ -161,7 +162,8 @@ export default function ProfilePage() {
       {/* Account info */}
       <Card className="border-0 bg-muted/50">
         <CardContent className="p-4 space-y-2">
-          <p className="text-sm font-semibold">{user?.email}</p>
+          <OwnNameField />
+          <p className="text-sm font-semibold pt-2">{user?.email}</p>
           {children.length > 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Baby className="w-4 h-4" />
