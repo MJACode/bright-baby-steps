@@ -108,7 +108,7 @@ Cancellation takes effect at the end of your current billing period. You keep Fl
 
 **14.9 When Flare+ ends.** When your trial or subscription ends for any reason, your account moves to the free plan.
 - **Your data stays put.** We don't delete anything you've logged or saved because your plan ended. Flare+ features stop until you subscribe again. *[Only if the history limit is display-only:]* The free plan shows your last 30 days of entries; older entries stay saved and reappear if you subscribe again. Your data is deleted only as described in § 8 of our Privacy Policy.
-- **Shared access.** The free plan includes 1 additional person, and Flare+ includes 2. When Flare+ ends, **the person who has had access to your account the longest keeps it, and anyone else is paused until you subscribe again.** Nothing is deleted. Paused people get their access, role, and settings back as they were when you resubscribe. You can remove anyone at any time from Your team.
+- **Shared access.** The free plan includes 1 additional person, and Flare+ includes 4. When Flare+ ends, **the person who has had access to your account the longest keeps it, and anyone else is paused until you subscribe again.** Nothing is deleted. Paused people get their access, role, and settings back as they were when you resubscribe. You can remove anyone at any time from Your team.
 
 **14.10 Changes to these subscription terms.** Changes to this § 14 follow § 10: at least 30 days' notice by email of any material change, and material changes apply to you only after you affirmatively accept them.
 

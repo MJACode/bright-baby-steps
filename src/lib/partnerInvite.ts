@@ -43,12 +43,12 @@ export function roleChangedMessage(who: string, role: PartnerRole): string {
 
 /**
  * Additional users beyond the account owner. Free: 1 (typically the co-parent).
- * Flare+: 2. When Flare+ lapses, the longest-standing partner keeps access and
+ * Flare+: 4 (a co-parent plus up to three caregivers). When Flare+ lapses, the longest-standing partner keeps access and
  * anyone beyond the free seat is on hold until renewal. Mirrors
- * `partner_seat_limit()` in migration 20260930100000 — change both together.
+ * `partner_seat_limit()` in migration 20261016000000 — change both together.
  */
 export const FREE_ADDITIONAL_USERS = 1;
-export const MAX_ADDITIONAL_USERS = 2;
+export const MAX_ADDITIONAL_USERS = 4;
 
 export type PartnerAccessStatus = "active" | "paused" | "revoked";
 
