@@ -63,7 +63,7 @@ const PERKS = [
   { i: Stethoscope, t: "AI visit prep for every checkup" },
   { i: Activity, t: "Cry clues" },
   { i: BarChart3, t: "Growth analytics + PDF exports" },
-  { i: Users, t: "Add 2 more caregivers, synced live" },
+  { i: Users, t: "Add 3 more caregivers, synced live" },
 ];
 
 export function UpgradeSheet({ open, onOpenChange, feature = "predictions" }: UpgradeSheetProps) {

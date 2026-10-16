@@ -430,7 +430,7 @@ export default function PartnerManagement() {
           </div>
         )}
 
-        {/* Invite CTA — a real button while a seat is free (free plan: 1, Flare+: 2).
+        {/* Invite CTA — a real button while a seat is free (free plan: 1, Flare+: 4).
             A full free account sees the Flare+ teaser for the second seat. */}
         {premiumLoading ? null : !isPremium && !seats.canInvite ? (
           <button

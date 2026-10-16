@@ -3275,3 +3275,11 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 4. Counsel questions still open: (a) is the ADPLA a sufficient CCPA service-provider contract for Apple; (b) can subprocessor notice for an opt-in feature run at the same time as launch.
 
 **Note:** Privacy page numbering has moved (retention is § 9, geo-block § 12). CLAUDE.md still cites § 8 / § 11.
+
+## 2026-10-16 — Flare+ shared-access seats raised from 2 to 4
+
+**Decision (founder, 2026-10-16):** Flare+ includes 4 additional people (was 2). Free stays at 1. Reason: a co-parent takes a seat, so 2 left a two-parent family room for only one caregiver; 4 covers a co-parent plus two grandparents and a nanny.
+
+**Changed:** migration `20261016000000_flare_plus_four_seats.sql` (`partner_seat_limit()` + trigger messages), `MAX_ADDITIONAL_USERS` in `src/lib/partnerInvite.ts`, Terms § Shared access ("four on Flare+", Last reviewed bumped to October 16, 2026), FAQ shared-access answer, UpgradeSheet bullet, `docs/billing-launch-kit.md`.
+
+**Risk:** Low. More generous to the user, no change to consent, roles, lapse rule (oldest partner keeps access; others on hold, nothing deleted) or data handling. Every invitee still goes through the AcceptInvite consent box. App Store / Stripe product descriptions that mention "2" need a manual update outside the repo if they exist.
