@@ -80,6 +80,7 @@ export function NotificationBell() {
     finance_529_newborn: "🏦",
     finance_529_birthday: "🎂",
     allergen_maintenance: "🍽️",
+    caregiver_note: "📝",
   };
 
   return (

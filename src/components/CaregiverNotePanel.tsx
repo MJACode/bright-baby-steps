@@ -25,16 +25,25 @@ export function CaregiverNotePanel({ childId }: { childId: string }) {
   const send = useMutation({
     mutationFn: async () => {
       if (!user || !body.trim()) return;
-      await supabase.from("caregiver_notes").insert({
+      const { error } = await supabase.from("caregiver_notes").insert({
         child_id: childId,
         author_id: user.id,
         body: body.trim(),
       });
+      if (error) throw error;
     },
     onSuccess: () => {
       setBody("");
       qc.invalidateQueries({ queryKey: ["caregiver-notes", childId] });
       toast({ title: "Note sent to parent" });
+    },
+    onError: () => {
+      // Keep the typed note so they can retry.
+      toast({
+        title: "Couldn't send your note",
+        description: "Check your connection and try again.",
+        variant: "destructive",
+      });
     },
   });
 

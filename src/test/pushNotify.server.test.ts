@@ -260,6 +260,14 @@ describe("push copy (lock-screen rule)", () => {
     }
   });
 
+  it("caregiver_note push is generic: no author, no role, no note text", () => {
+    expect(pushCopyFor("caregiver_note")).toEqual({
+      title: "New note",
+      body: "There's a new note about your baby.",
+      route: "/dashboard",
+    });
+  });
+
   it("never interpolates anything: copy is fixed text with no placeholders", () => {
     for (const copy of Object.values(PUSH_COPY)) {
       expect(`${copy.title} ${copy.body}`).not.toMatch(/\$\{|\{|\}/);
