@@ -83,7 +83,9 @@ export const PUSH_COPY: Record<string, PushCopy> = {
   // In-app: "{author} left a note: “{note}”". Written by the
   // notify_caregiver_note trigger, not check-notifications, so nothing pushes
   // it yet. Author name and note text are free text from the family: dropped.
-  caregiver_note: { title: "New note", body: "A caregiver left you a note.", route: "/dashboard" },
+  // Neutral on purpose: owners and co-parents write notes too, not only
+  // caregivers.
+  caregiver_note: { title: "New note", body: "There's a new note about your baby.", route: "/dashboard" },
 };
 
 export const GENERIC_PUSH_COPY: PushCopy = {

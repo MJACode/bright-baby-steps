@@ -260,10 +260,10 @@ describe("push copy (lock-screen rule)", () => {
     }
   });
 
-  it("caregiver_note push is generic: no author, no note text", () => {
+  it("caregiver_note push is generic: no author, no role, no note text", () => {
     expect(pushCopyFor("caregiver_note")).toEqual({
       title: "New note",
-      body: "A caregiver left you a note.",
+      body: "There's a new note about your baby.",
       route: "/dashboard",
     });
   });

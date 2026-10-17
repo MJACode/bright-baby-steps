@@ -19,10 +19,11 @@
 --   check-notifications cron for rows it inserts; PUSH_COPY.caregiver_note is
 --   generic lock-screen copy, ready for when a push path is wired up.
 --
--- Author name: partner_access.label the owner set for the author (the name the
--- family actually uses, same as get_family_display_names), else trimmed
--- profiles.full_name, else 'Your caregiver' / 'Your co-parent' by role.
--- Capped at 40 chars. Body: whitespace collapsed, capped at 280 chars with an
+-- Author name, same precedence as live get_family_display_names: the
+-- partner_access.label the owner set for the author (the name the family
+-- actually uses), else the FIRST word of trimmed profiles.full_name (never
+-- the surname), else 'Your caregiver' / 'Your co-parent' by role. Capped at
+-- 40 chars. Body: whitespace collapsed, capped at 280 chars with an
 -- ellipsis.
 --
 -- Retention: notifications.caregiver_note_id references the note ON DELETE
@@ -97,7 +98,10 @@ BEGIN
     (SELECT nullif(btrim(pa.label), '') FROM public.partner_access pa
       WHERE pa.owner_id = _owner AND pa.partner_id = NEW.author_id
       ORDER BY pa.created_at DESC LIMIT 1),
-    (SELECT nullif(btrim(p.full_name), '') FROM public.profiles p WHERE p.id = NEW.author_id),
+    -- First name only, mirroring get_family_display_names: no surname leaks
+    -- into another user's notification.
+    (SELECT nullif((regexp_split_to_array(btrim(p.full_name), '\s+'))[1], '')
+      FROM public.profiles p WHERE p.id = NEW.author_id),
     CASE
       WHEN NEW.author_id = _owner OR EXISTS (
         SELECT 1 FROM public.partner_access pa

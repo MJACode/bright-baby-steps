@@ -13,6 +13,7 @@ import {
   type MaintenanceSend,
 } from "../_shared/allergenMaintenance.ts";
 import { bearerMatchesSecret } from "../_shared/serviceRoleAuth.ts";
+import { countExistingToday } from "../_shared/notificationCap.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -181,6 +182,10 @@ type NotificationPrefs = {
  *   reactivation — reactivation (created by reactivate-nudge/index.ts, not
  *                  here; listed so the category contract is complete and its
  *                  rows count toward the daily cap via the existing-today count)
+ *   caregiver_note — mapped to "reminders" for completeness only: written by
+ *                  the notify_caregiver_note DB trigger, never queued here, so
+ *                  mutes don't apply to it, and it is exempt from the daily
+ *                  cap count (_shared/notificationCap.ts)
  *
  * Unknown/future types default to "reminders" (see categoryOf) so a new type
  * added without a map entry is still mutable/cappable rather than unfiltered.
@@ -201,6 +206,11 @@ const TYPE_CATEGORY: Record<string, string> = {
   finance_529_newborn: "finance",
   finance_529_birthday: "finance",
   reactivation: "reactivation",
+  // Never produced by this function: the notify_caregiver_note DB trigger
+  // writes it when a family member leaves a note. Listed so the contract is
+  // complete. Unlike reactivation it does NOT count toward the daily cap
+  // (CAP_EXEMPT_TYPES in _shared/notificationCap.ts).
+  caregiver_note: "reminders",
 };
 
 function categoryOf(type: string): string {
@@ -1169,7 +1179,9 @@ Deno.serve(async (req) => {
   // the last 24h of UTC `now`); +2h slack for clock skew. Used for the
   // daily cap ("existing today", recipient-local day). Note this counts rows from every producer —
   // including reactivate-nudge's `reactivation` type — so the cap reflects
-  // total daily volume, not just this function's output.
+  // total daily volume, not just this function's output. Cap-exempt types
+  // (caregiver_note, written by a DB trigger) are skipped by
+  // countExistingToday; see _shared/notificationCap.ts.
   const twentySixHoursAgo = new Date(now.getTime() - 26 * 60 * 60 * 1000).toISOString();
   const recentByUser = new Map<string, Array<{ type: string; created_at: string }>>();
   if (recipientIds.size > 0) {
@@ -1326,9 +1338,10 @@ Deno.serve(async (req) => {
     }
     suppressed += queued.length - kept.length;
 
-    const existingToday = (recentByUser.get(uid) || []).filter(
-      (r) => localParts(new Date(r.created_at), prefs.tz).dateKey === local.dateKey,
-    ).length;
+    const existingToday = countExistingToday(
+      recentByUser.get(uid) || [],
+      (createdAt) => localParts(new Date(createdAt), prefs.tz).dateKey === local.dateKey,
+    );
 
     // Stable priority order: tier first, then original queue position.
     const ordered = kept
