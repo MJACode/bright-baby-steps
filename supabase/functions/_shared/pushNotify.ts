@@ -80,6 +80,10 @@ export const PUSH_COPY: Record<string, PushCopy> = {
     body: "If family asks what to give, a 529 gift is one option. See how in Finance.",
     route: "/dashboard/financial",
   },
+  // In-app: "{author} left a note: “{note}”". Written by the
+  // notify_caregiver_note trigger, not check-notifications, so nothing pushes
+  // it yet. Author name and note text are free text from the family: dropped.
+  caregiver_note: { title: "New note", body: "A caregiver left you a note.", route: "/dashboard" },
 };
 
 export const GENERIC_PUSH_COPY: PushCopy = {

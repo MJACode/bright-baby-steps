@@ -2098,6 +2098,7 @@ export type Database = {
       }
       notifications: {
         Row: {
+          caregiver_note_id: string | null
           child_id: string | null
           created_at: string
           id: string
@@ -2107,6 +2108,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          caregiver_note_id?: string | null
           child_id?: string | null
           created_at?: string
           id?: string
@@ -2116,6 +2118,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          caregiver_note_id?: string | null
           child_id?: string | null
           created_at?: string
           id?: string
@@ -2125,6 +2128,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_caregiver_note_id_fkey"
+            columns: ["caregiver_note_id"]
+            isOneToOne: false
+            referencedRelation: "caregiver_notes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_child_id_fkey"
             columns: ["child_id"]
