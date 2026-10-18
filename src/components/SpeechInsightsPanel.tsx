@@ -1,3 +1,5 @@
+import { useIsOnline } from "@/hooks/useOfflineSync";
+import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,7 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId }:
   const { user } = useAuth();
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [loadingInsight, setLoadingInsight] = useState(false);
+  const online = useIsOnline();
 
   const stats = useMemo(() => {
     if (!entries || entries.length === 0) return null;
@@ -161,6 +164,8 @@ export function SpeechInsightsPanel({ entries, totalCount, ageMonths, childId }:
             <p className="text-xs leading-relaxed">{aiInsight}</p>
             <p className="text-[10px] text-muted-foreground">AI-generated — for informational purposes only. Consult a speech-language pathologist for professional assessment.</p>
           </div>
+        ) : !online && !loadingInsight ? (
+          <OfflineAiNotice />
         ) : (
           <Button
             size="sm"

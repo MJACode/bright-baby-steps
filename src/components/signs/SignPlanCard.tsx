@@ -1,3 +1,5 @@
+import { useIsOnline } from "@/hooks/useOfflineSync";
+import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { useRef, useState } from "react";
 import { Check, Lightbulb, Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +56,7 @@ export function SignPlanCard({
   onApply: (slugs: string[]) => void;
 }) {
   const { data, isLoading } = useSignPlan(childId, weekStart);
+  const online = useIsOnline();
   const generate = useGenerateSignPlan();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   // `disabled={generate.isPending}` only lands on the next render, so a fast
@@ -93,6 +96,15 @@ export function SignPlanCard({
     </h2>
   );
 
+  if (isLoading && !online) {
+    return (
+      <section className="space-y-3" aria-label="This week's sign plan">
+        {title}
+        <OfflineAiNotice />
+      </section>
+    );
+  }
+
   if (isLoading) {
     return (
       <section className="space-y-3" aria-label="This week's sign plan">
@@ -117,6 +129,9 @@ export function SignPlanCard({
               Get a short plan for {firstName}'s week: which signs to focus on, why they fit right now,
               and everyday moments to use them. It's built from the signs you're working on.
             </p>
+            {!online ? (
+              <OfflineAiNotice />
+            ) : (
             <Button
               type="button"
               className={ctaClass}
@@ -133,6 +148,7 @@ export function SignPlanCard({
                 </>
               )}
             </Button>
+            )}
             {generate.isPending && (
               <p className="text-xs text-muted-foreground" role="status">
                 This takes a few seconds.

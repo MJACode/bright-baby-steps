@@ -32,6 +32,8 @@ import { OwnNameField } from "@/components/OwnNameField";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { exportUserData, ExportReadError } from "@/lib/exportUserData";
+import { useQueryClient } from "@tanstack/react-query";
+import { countUnsyncedWrites } from "@/lib/offlineLogs";
 
 const MUTABLE_CATEGORIES = [
   {
@@ -74,6 +76,16 @@ export default function ProfilePage() {
   } = useNotificationPrefs();
   const [exportingData, setExportingData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const queryClient = useQueryClient();
+  const [unsyncedOnSignOut, setUnsyncedOnSignOut] = useState(0);
+
+  // Signing out clears this phone's copy of everything, queued logs included,
+  // so say so before it happens.
+  const handleSignOut = () => {
+    const unsynced = countUnsyncedWrites(queryClient);
+    if (unsynced > 0) setUnsyncedOnSignOut(unsynced);
+    else void signOut();
+  };
 
   const handleExportData = async () => {
     if (!user) return;
@@ -432,9 +444,32 @@ export default function ProfilePage() {
       <FeedbackDialog />
 
       {/* Sign out */}
-      <Button variant="outline" onClick={signOut} className="w-full gap-2">
+      <Button variant="outline" onClick={handleSignOut} className="w-full gap-2 touch-target">
         <LogOut className="w-4 h-4" /> Sign Out
       </Button>
+      <AlertDialog open={unsyncedOnSignOut > 0} onOpenChange={(open) => !open && setUnsyncedOnSignOut(0)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">
+              {unsyncedOnSignOut} {unsyncedOnSignOut === 1 ? "log hasn't" : "logs haven't"} synced yet
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Signing out removes {unsyncedOnSignOut === 1 ? "it" : "them"} from this phone. To keep{" "}
+              {unsyncedOnSignOut === 1 ? "it" : "them"}, stay signed in until you're back online and the
+              banner says "All caught up".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target">Stay signed in</AlertDialogCancel>
+            <AlertDialogAction
+              className="touch-target bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => void signOut()}
+            >
+              Sign out anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Danger Zone */}
       <Card className="border border-destructive/30 bg-destructive/5">

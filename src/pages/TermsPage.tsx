@@ -11,7 +11,7 @@ export default function TermsPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Terms of Service</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: October 16, 2026
+          Effective: June 20, 2026 · Last reviewed: October 18, 2026
         </p>
       </div>
 
@@ -59,6 +59,7 @@ export default function TermsPage() {
         <section>
           <h2 className="font-semibold text-foreground mb-2">8. Disclaimer of warranties</h2>
           <p className="font-semibold uppercase">To the fullest extent permitted by law, the service is provided "as is" and "as available," without warranties of any kind, express or implied, including without limitation implied warranties of merchantability, fitness for a particular purpose, and non-infringement. Grace Flare is not a medical device, does not provide medical advice, and is not a substitute for professional care. We do not warrant that the service will be uninterrupted or error-free, or that AI-generated content will be accurate or complete.</p>
+          <p className="mt-2">Logs you make offline are saved only on your device until they upload. If you sign out, delete the app, or your device clears its storage before they upload, those logs may be lost.</p>
         </section>
 
         <section>

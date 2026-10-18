@@ -55,6 +55,8 @@ vi.mock("@/integrations/supabase/client", () => {
           ? { data: null, error: { code: "42501", message: "new row violates row-level security policy" } }
           : { data: { id: `log-${writes.length}` }, error: null };
       }
+      // An UPDATE returns the row it changed; zero rows reads as RLS-blocked.
+      if (s.op === "update") return { data: [{ id: "row" }], error: null };
       if (s.op) return { data: [], error: null };
       if (table === "allergen_exposure_logs") {
         return { data: INTROS.find((i) => i.id === s.introId)?.allergen_exposure_logs ?? [], error: null };
@@ -96,7 +98,7 @@ vi.mock("@/integrations/supabase/client", () => {
     };
     return chain;
   };
-  return { supabase: { from: (table: string) => makeChain(table) } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t" } }, error: null }) }, from: (table: string) => makeChain(table) } };
 });
 
 vi.mock("@/services/allergenExposureWrite", async (importOriginal) => {

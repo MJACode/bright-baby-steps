@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { useSubmitOfflineLog } from "@/hooks/useOfflineSync";
+import { newLogId, optimisticRow } from "@/lib/offlineLogs";
 import { ongoingSleepElapsedSeconds } from "@/lib/sleepPatterns";
 import {
   scheduleSessionNotification,
@@ -41,7 +42,6 @@ export function computeElapsedSeconds(row: ActiveSleepRow): number {
 
 export function useActiveSleep(childId: string | undefined) {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
   const activeKey = ["sleep-logs", "active", childId];
 
@@ -70,16 +70,16 @@ export function useActiveSleep(childId: string | undefined) {
     },
   });
 
-  const invalidate = () => invalidateAfterLogWrite(queryClient);
-  // Pausing changes how long the session has been asleep, and the rhythm band
-  // sizes its in-progress block from the same row — invalidating only
-  // `activeKey` is MORE specific than the window query, so prefix-matching
-  // never reaches it and the band keeps growing past the frozen timer face.
-  // The `sleep-logs` root covers every sleep query without the full
-  // cross-module log-write fan-out.
-  const invalidateSleep = () => queryClient.invalidateQueries({ queryKey: ["sleep-logs"] });
+  const submit = useSubmitOfflineLog();
 
+  // Every write goes through the offline queue: it resolves once saved, or as
+  // soon as it's queued with no signal. Timestamps are taken here, at the tap,
+  // and lock-screen / notification side effects run here too — never in the
+  // replayed write, so they work offline and can't fire twice on replay.
+  // networkMode "always": this wrapper only computes and submits; pausing it
+  // offline would stop the tap from registering at all.
   const start = useMutation({
+    networkMode: "always",
     mutationFn: async (input: {
       sleep_type: SleepType;
       startedMinutesAgo?: number;
@@ -89,75 +89,60 @@ export function useActiveSleep(childId: string | undefined) {
     }) => {
       const offsetMs = (input.startedMinutesAgo ?? 0) * 60_000;
       const startedAt = (input.startedAt ?? new Date(Date.now() - offsetMs)).toISOString();
-      const { data, error } = await supabase
-        .from("sleep_logs")
-        .insert({
-          child_id: childId!,
-          parent_id: user!.id,
-          started_at: startedAt,
-          sleep_type: input.sleep_type,
-          source: "timer",
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      const row = data as ActiveSleepRow;
+      const row = {
+        id: newLogId(),
+        child_id: childId!,
+        parent_id: user!.id,
+        started_at: startedAt,
+        sleep_type: input.sleep_type,
+        source: "timer",
+      };
+      await submit({ action: "insert", table: "sleep_logs", rowId: row.id, childId: row.child_id, row });
       void scheduleSessionNotification({
         kind: "sleep",
         startedAt: row.started_at,
         sessionId: row.id,
         label: input.sleep_type === "nap" ? "Nap" : "Night sleep",
       });
-      return row;
+      return optimisticRow("sleep_logs", row) as unknown as ActiveSleepRow;
     },
-    onSuccess: invalidate,
   });
 
+  const update = (row: ActiveSleepRow, patch: Record<string, unknown>) =>
+    submit({ action: "update", table: "sleep_logs", rowId: row.id, childId: row.child_id, patch });
+
   const pause = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (!active || active.paused_at) return;
-      const { error } = await supabase
-        .from("sleep_logs")
-        .update({ paused_at: new Date().toISOString() })
-        .eq("id", active.id);
-      if (error) throw error;
+      const elapsedSeconds = computeElapsedSeconds(active);
+      await update(active, { paused_at: new Date().toISOString() });
       // Freeze the lock-screen timer at the pause-adjusted elapsed.
-      void updateTimerLiveActivity({
-        sessionId: active.id,
-        running: false,
-        elapsedSeconds: computeElapsedSeconds(active),
-      });
+      void updateTimerLiveActivity({ sessionId: active.id, running: false, elapsedSeconds });
     },
-    onSuccess: invalidateSleep,
   });
 
   const resume = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (!active || !active.paused_at) return;
       const pausedSeconds = Math.max(
         0,
         Math.floor((Date.now() - new Date(active.paused_at).getTime()) / 1000),
       );
-      const { error } = await supabase
-        .from("sleep_logs")
-        .update({
-          paused_at: null,
-          paused_accumulated_seconds: active.paused_accumulated_seconds + pausedSeconds,
-        })
-        .eq("id", active.id);
-      if (error) throw error;
       // While paused, computeElapsedSeconds already excludes the current pause
       // segment — it equals the frozen elapsed the timer resumes from.
-      void updateTimerLiveActivity({
-        sessionId: active.id,
-        running: true,
-        elapsedSeconds: computeElapsedSeconds(active),
+      const elapsedSeconds = computeElapsedSeconds(active);
+      await update(active, {
+        paused_at: null,
+        paused_accumulated_seconds: active.paused_accumulated_seconds + pausedSeconds,
       });
+      void updateTimerLiveActivity({ sessionId: active.id, running: true, elapsedSeconds });
     },
-    onSuccess: invalidateSleep,
   });
 
   const stop = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (!active) return;
       const elapsed = computeElapsedSeconds(active);
@@ -169,45 +154,32 @@ export function useActiveSleep(childId: string | undefined) {
       const endedAt = new Date(
         new Date(active.started_at).getTime() + elapsed * 1000,
       ).toISOString();
-      const { error } = await supabase
-        .from("sleep_logs")
-        .update({
-          ended_at: endedAt,
-          paused_at: null,
-        })
-        .eq("id", active.id);
-      if (error) throw error;
+      await update(active, { ended_at: endedAt, paused_at: null });
       void cancelSessionNotification(active.id);
       return durationMinutes;
     },
-    onSuccess: invalidate,
   });
 
   const cancel = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (!active) return;
-      const { error } = await supabase.from("sleep_logs").delete().eq("id", active.id);
-      if (error) throw error;
+      await submit({ action: "delete", table: "sleep_logs", rowId: active.id, childId: active.child_id });
       void cancelSessionNotification(active.id);
     },
-    onSuccess: invalidate,
   });
 
   const editStart = useMutation({
+    networkMode: "always",
     mutationFn: async (when: Date) => {
       if (!active) return;
-      const { error } = await supabase
-        .from("sleep_logs")
-        .update({ started_at: when.toISOString() })
-        .eq("id", active.id);
-      if (error) throw error;
+      await update(active, { started_at: when.toISOString() });
       void updateTimerLiveActivity({
         sessionId: active.id,
         running: !active.paused_at,
         elapsedSeconds: computeElapsedSeconds({ ...active, started_at: when.toISOString() }),
       });
     },
-    onSuccess: invalidate,
   });
 
   const isStale = !!active && Date.now() - new Date(active.started_at).getTime() > STALE_AFTER_MS;

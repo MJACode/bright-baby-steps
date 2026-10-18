@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/NotificationBell";
 import CaregiverHome from "@/pages/CaregiverHome";
 import { ActiveSessionBanner } from "@/components/ActiveSessionBanner";
+import { OfflineSyncBanner } from "@/components/OfflineSyncBanner";
 import { VisitPrepCard } from "@/components/VisitPrepCard";
 import { openVisitPrep } from "@/lib/visitPrepOpener";
 import { caregiverBackTarget } from "@/lib/caregiverRoutes";
@@ -74,7 +75,14 @@ export default function DashboardLayout() {
   // minimal shell whose single exit is back to CaregiverHome.
   if (!isOnboarding && role === "caregiver") {
     const back = caregiverBackTarget(location.pathname);
-    if (!back) return <CaregiverHome />;
+    if (!back) {
+      return (
+        <>
+          <OfflineSyncBanner className="safe-area-top" />
+          <CaregiverHome />
+        </>
+      );
+    }
     const backLabel = back.label ?? activeChild?.name ?? "Home";
     return (
       <div className="fixed inset-0 flex flex-col bg-background">
@@ -90,6 +98,7 @@ export default function DashboardLayout() {
             </Link>
           </div>
         </header>
+        <OfflineSyncBanner />
         <ActiveSessionBanner />
         <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-w-lg mx-auto w-full">
           <Outlet />
@@ -142,6 +151,7 @@ export default function DashboardLayout() {
         </div>
       </header>
 
+      <OfflineSyncBanner />
       {!isOnboarding && <ActiveSessionBanner />}
 
       {/* Main content — the single scroll container. min-h-0 lets it shrink

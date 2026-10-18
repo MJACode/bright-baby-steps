@@ -1,3 +1,5 @@
+import { useIsOnline } from "@/hooks/useOfflineSync";
+import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { differenceInDays, parseISO } from "date-fns";
 import {
   Check,
@@ -60,6 +62,7 @@ export function ActivityPlan({
 }: ActivityPlanProps) {
   const { user } = useAuth();
   const { data: row, isLoading } = useActivityPlan(childId);
+  const online = useIsOnline();
   const generate = useGenerateActivityPlan();
   const toggleDay = useToggleActivityPlanDay();
   const { data: triedSlugs } = useActivityCompletions(childId);
@@ -140,7 +143,13 @@ export function ActivityPlan({
         {header}
         <Card className="border-0 bg-milestones-bg">
           <CardContent className="p-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading {childName}'s plan…
+            {online ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading {childName}'s plan…
+              </>
+            ) : (
+              <OfflineAiNotice />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -157,21 +166,25 @@ export function ActivityPlan({
               Seven days of tiny play moments picked for {childName} — one idea a day,
               matched to their age, interests, and what you've already tried together.
             </p>
-            <Button
-              className="touch-target bg-milestones hover:bg-milestones/90 text-white"
-              onClick={handleGenerate}
-              disabled={generate.isPending}
-            >
-              {generate.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Building…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-1.5" /> Build this week's play plan
-                </>
-              )}
-            </Button>
+            {!online ? (
+              <OfflineAiNotice />
+            ) : (
+              <Button
+                className="touch-target bg-milestones hover:bg-milestones/90 text-white"
+                onClick={handleGenerate}
+                disabled={generate.isPending}
+              >
+                {generate.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Building…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-1.5" /> Build this week's play plan
+                  </>
+                )}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -182,20 +195,22 @@ export function ActivityPlan({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         {header}
-        <Button
-          size="sm"
-          variant="ghost"
-          className="touch-target text-muted-foreground"
-          onClick={handleGenerate}
-          disabled={generate.isPending}
-          aria-label="Regenerate plan"
-        >
-          {generate.isPending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4" />
-          )}
-        </Button>
+        {online && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="touch-target text-muted-foreground"
+            onClick={handleGenerate}
+            disabled={generate.isPending}
+            aria-label="Regenerate plan"
+          >
+            {generate.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+          </Button>
+        )}
       </div>
 
       {weekIsStale && (
@@ -204,14 +219,18 @@ export function ActivityPlan({
             <p className="text-xs text-muted-foreground">
               This plan is over a week old. Ready for a fresh one?
             </p>
-            <Button
-              size="sm"
-              className="touch-target bg-milestones hover:bg-milestones/90 text-white shrink-0"
-              onClick={handleGenerate}
-              disabled={generate.isPending}
-            >
-              Start next week
-            </Button>
+            {online ? (
+              <Button
+                size="sm"
+                className="touch-target bg-milestones hover:bg-milestones/90 text-white shrink-0"
+                onClick={handleGenerate}
+                disabled={generate.isPending}
+              >
+                Start next week
+              </Button>
+            ) : (
+              <OfflineAiNotice className="shrink-0" />
+            )}
           </CardContent>
         </Card>
       )}

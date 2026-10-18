@@ -1,5 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
+import { createAppQueryClient } from "@/lib/queryClient";
 import type { ReactNode } from "react";
 
 import { useActiveSleep } from "@/hooks/useActiveSleep";
@@ -42,7 +43,7 @@ vi.mock("@/integrations/supabase/client", () => {
     }
     return self;
   };
-  return { supabase: { from: () => builder() } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t" } }, error: null }) }, from: () => builder() } };
 });
 
 function wrapper(client: QueryClient) {
@@ -60,7 +61,9 @@ describe("useActiveSleep pause/resume invalidation", () => {
   it.each([["pause"], ["resume"]] as const)("reaches the window query on %s", async (action) => {
     serverRow.paused_at = action === "resume" ? "2026-09-05T13:20:00.000Z" : null;
 
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // The app's client: writes refresh the screens when the offline queue drains.
+    const client = createAppQueryClient();
+    client.setDefaultOptions({ queries: { retry: false } });
     const windowKey = sleepWindowQueryKey(CHILD_ID, 14, "2026-09-05", 0);
     client.setQueryData(windowKey, []);
 

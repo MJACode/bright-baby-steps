@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { ChevronRight, CloudMoon, Moon } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -28,7 +27,8 @@ import { SleepPlanReminderBanner } from "@/components/SleepPlanReminderBanner";
 
 import { detectTriageReasons, getAgeBucket } from "@/lib/sleepTriage";
 import { SHORTFALL_ESCALATION_COPY, SHORTFALL_ESCALATION_HOURS } from "@/lib/sleepPlan";
-import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
+import { useSubmitOfflineLog } from "@/hooks/useOfflineSync";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
 import {
@@ -104,7 +104,7 @@ function SleepNotes({
 export default function SleepPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
-  const queryClient = useQueryClient();
+  const submitLog = useSubmitOfflineLog();
   const { data: coach } = useSleepCoach(activeChild ?? null);
   const { data: savedPlan } = useSleepPlan(activeChild?.id ?? null);
   const { data: leaps } = useLeaps(activeChild ?? null);
@@ -139,18 +139,18 @@ export default function SleepPage() {
   );
 
   const addLog = useMutation({
+    // The sleep itself queues offline; this wrapper must not pause with it.
+    networkMode: "always",
     mutationFn: async (log: {
       started_at: string;
       ended_at: string;
       sleep_type: string;
       notes: string | null;
-    }) => {
-      const { error } = await supabase.from("sleep_logs").insert({
-        ...log,
-        child_id: activeChild!.id,
-        parent_id: user!.id,
-      });
-      if (error) {
+    }): Promise<SubmitResult> => {
+      const row = { ...log, id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
+      try {
+        return await submitLog({ action: "insert", table: "sleep_logs", rowId: row.id, childId: row.child_id, row });
+      } catch (error) {
         if ((error as { code?: string }).code === "23P01") {
           const hit = findSleepOverlap(new Date(log.started_at), new Date(log.ended_at));
           throw new Error(
@@ -164,16 +164,13 @@ export default function SleepPage() {
     },
     // No onError toast: the only caller is PastSessionSheet, which renders the
     // failure inline next to the Save button the parent will press again.
-    onSuccess: () => {
-      invalidateAfterLogWrite(queryClient);
-    },
   });
 
   const handleTimerComplete = useCallback(
     async (startedAt: Date, endedAt: Date, sleepType: "nap" | "night", notes: string) => {
       setSavingTimer(true);
       try {
-        await addLog.mutateAsync({
+        const result = await addLog.mutateAsync({
           started_at: startedAt.toISOString(),
           ended_at: endedAt.toISOString(),
           sleep_type: sleepType,
@@ -182,7 +179,10 @@ export default function SleepPage() {
         const minutes = Math.round((endedAt.getTime() - startedAt.getTime()) / 60000);
         toast({
           title: `${sleepType === "nap" ? "Nap" : "Sleep"} logged · ${formatDurationShort(minutes)}`,
-          description: `${format(startedAt, "h:mm a")} – ${format(endedAt, "h:mm a")}`,
+          description: [
+            `${format(startedAt, "h:mm a")} – ${format(endedAt, "h:mm a")}`,
+            result === "queued" ? QUEUED_TOAST_DESCRIPTION : "",
+          ].filter(Boolean).join(". "),
         });
       } finally {
         setSavingTimer(false);

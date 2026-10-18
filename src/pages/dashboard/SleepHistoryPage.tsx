@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { ChevronRight, CloudMoon, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { useLogHistory } from "@/hooks/useLogHistory";
@@ -26,7 +25,9 @@ import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { LoggedByChip } from "@/components/LoggedByChip";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
-import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
+import { usePendingLogIds, useSubmitOfflineLog } from "@/hooks/useOfflineSync";
+import { PendingSyncBadge } from "@/components/PendingSyncBadge";
 import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
 import { summarizeSleepDay, summarizeSleepDayStats } from "@/lib/logDaySummary";
 import { segmentSleepForDay, sleepDayStats } from "@/lib/sleepPatterns";
@@ -40,7 +41,8 @@ type SleepLogRow = Tables<"sleep_logs">;
 export default function SleepHistoryPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
-  const queryClient = useQueryClient();
+  const submitLog = useSubmitOfflineLog();
+  const pendingIds = usePendingLogIds();
   const [searchParams] = useSearchParams();
   // Set when the parent tapped one day on the Sleep tab — show just that day.
   const rawDay = searchParams.get("day");
@@ -89,7 +91,9 @@ export default function SleepHistoryPage() {
   };
 
   const updateLog = useMutation({
-    mutationFn: async () => {
+    // The sleep itself queues offline; this wrapper must not pause with it.
+    networkMode: "always",
+    mutationFn: async (): Promise<SubmitResult> => {
       const startDate = editStartedAt;
       const endDate = editEndedAt;
 
@@ -108,21 +112,23 @@ export default function SleepHistoryPage() {
       };
 
       if (editingId) {
-        const { error } = await supabase.from("sleep_logs").update(payload).eq("id", editingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("sleep_logs").insert({
-          ...payload,
-          child_id: activeChild!.id,
-          parent_id: user!.id,
+        return submitLog({
+          action: "update",
+          table: "sleep_logs",
+          rowId: editingId,
+          childId: editingRow?.child_id ?? activeChild!.id,
+          patch: payload,
         });
-        if (error) throw error;
       }
+      const row = { ...payload, id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
+      return submitLog({ action: "insert", table: "sleep_logs", rowId: row.id, childId: row.child_id, row });
     },
-    onSuccess: () => {
-      invalidateAfterLogWrite(queryClient);
+    onSuccess: (result) => {
       closeDialog();
-      toast({ title: editingId ? "Sleep log updated! ✏️" : "Sleep logged! 😴" });
+      toast({
+        title: editingId ? "Sleep log updated! ✏️" : "Sleep logged! 😴",
+        ...(result === "queued" ? { description: QUEUED_TOAST_DESCRIPTION } : {}),
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -252,6 +258,7 @@ export default function SleepHistoryPage() {
                       {time}
                     </span>
                     <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                    <PendingSyncBadge pending={pendingIds.has(log.id)} className="mt-0.5" />
                   </span>
                 </span>
                 <Pencil aria-hidden className="w-4 h-4 shrink-0 text-muted-foreground" />

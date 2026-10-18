@@ -46,6 +46,8 @@ describe("signOut", () => {
         done = true;
       });
     });
+    // The device store is cleared first (an async step), then push unregisters.
+    await act(() => vi.advanceTimersByTimeAsync(0));
     expect(h.rpc).toHaveBeenCalledWith("unregister_push_device", { p_token: "apns-token" });
     expect(h.signOut).not.toHaveBeenCalled();
 

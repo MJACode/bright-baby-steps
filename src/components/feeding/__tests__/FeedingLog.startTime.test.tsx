@@ -42,12 +42,14 @@ vi.mock("@/integrations/supabase/client", () => {
       },
       then: (resolve: (v: unknown) => unknown) => {
         if (state.op) writes.push({ op: state.op, payload: state.payload ?? {}, id: state.id });
-        return Promise.resolve({ data: [], error: null }).then(resolve);
+        // An UPDATE returns the row it changed; zero rows reads as RLS-blocked.
+        const data = state.op === "update" ? [{ id: state.id }] : [];
+        return Promise.resolve({ data, error: null }).then(resolve);
       },
     };
     return chain;
   };
-  return { supabase: { from: () => makeChain() } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t" } }, error: null }) }, from: () => makeChain() } };
 });
 
 vi.mock("@/hooks/use-toast", () => ({
