@@ -17,7 +17,9 @@ export const OFFLINE_LOG_TABLES: readonly OfflineLogTable[] = ["feeding_logs", "
 
 export type LogRow = Record<string, unknown> & { id: string; child_id: string };
 
-type Base = { table: OfflineLogTable; rowId: string; childId: string };
+// ownerId: the account that made the write. A write only ever runs under that
+// account's session, so a queue can't replay under whoever signs in next.
+type Base = { table: OfflineLogTable; rowId: string; childId: string; ownerId: string };
 export type OfflineLogVariables =
   | (Base & {
       action: "insert";
@@ -36,6 +38,10 @@ export type OfflineLogVariables =
   | (Base & { action: "delete" });
 
 export type OfflineLogAction = OfflineLogVariables["action"];
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+/** A write as a screen describes it; the owner is stamped on submit. */
+export type OfflineLogInput = DistributiveOmit<OfflineLogVariables, "ownerId">;
 
 export type SyncFailureKind = "overlap" | "conflict" | "permission" | "gone" | "invalid" | "unknown";
 
@@ -71,6 +77,8 @@ export const DATE_COLUMN: Record<OfflineLogTable, "started_at" | "logged_at"> = 
 
 // ── Errors ──────────────────────────────────────────────────────────────────
 
+const NETWORK_MESSAGE = /failed to fetch|load failed|network|fetcherror|timed? ?out|aborted/i;
+
 /** A failure worth retrying: no network, a 5xx, or a session mid-refresh. */
 export class TransientSyncError extends Error {
   readonly transient = true;
@@ -92,15 +100,34 @@ export class OfflineLogError extends Error {
   }
 }
 
+/**
+ * A write that must never run: its account signed out, a different account is
+ * signed in, or the device store dropped it (sign-out, removed child). It fails
+ * silently — no retry, no sync-failure entry.
+ */
+export class DiscardedWriteError extends Error {
+  constructor(message = "This log was cleared from this device.") {
+    super(message);
+    this.name = "DiscardedWriteError";
+  }
+}
+
+// Removing a mutation from the cache doesn't stop a retry already scheduled,
+// so a removed write is remembered by its variables and refused when it runs.
+const discardedWrites = new WeakSet<object>();
+export function markWriteDiscarded(variables: unknown) {
+  if (variables && typeof variables === "object") discardedWrites.add(variables);
+}
+
 export function isTransientError(err: unknown): boolean {
   if (err instanceof TransientSyncError) return true;
-  // fetch() itself rejecting ("Failed to fetch" / WebKit's "Load failed").
-  return err instanceof TypeError;
+  // fetch() itself rejecting ("Failed to fetch" / WebKit's "Load failed") —
+  // matched by message so a programming TypeError isn't retried.
+  return err instanceof TypeError && NETWORK_MESSAGE.test(err.message);
 }
 
 type PgError = { code?: string; message?: string };
 
-const NETWORK_MESSAGE = /failed to fetch|load failed|network|fetcherror|timed? ?out|aborted/i;
 
 export function classifyPostgrestError(error: PgError, status: number): Error {
   const code = error.code ?? "";
@@ -132,12 +159,13 @@ export function failureKindOf(err: unknown): SyncFailureKind {
 
 // ── mutationFns (variables only) ───────────────────────────────────────────
 
-async function ensureSession() {
+async function ensureSession(ownerId: string) {
   // getSession refreshes an expired token. If the refresh couldn't reach the
   // server, writing with no session would fail RLS and read as a permanent
   // "permission" failure, so retry instead.
   const { data, error } = await supabase.auth.getSession();
   if (!data.session) throw new TransientSyncError(error?.message ?? "Waiting for your session to refresh.");
+  if (!ownerId || data.session.user?.id !== ownerId) throw new DiscardedWriteError("This log belongs to another account.");
 }
 
 async function rowVisible(table: OfflineLogTable, id: string): Promise<boolean> {
@@ -147,7 +175,7 @@ async function rowVisible(table: OfflineLogTable, id: string): Promise<boolean> 
 }
 
 export async function runOfflineInsert(v: Extract<OfflineLogVariables, { action: "insert" }>) {
-  await ensureSession();
+  await ensureSession(v.ownerId);
   if (v.reclaimStaleTimersBefore && v.table === "feeding_logs") {
     const { error, status } = await supabase
       .from("feeding_logs")
@@ -171,7 +199,7 @@ export async function runOfflineInsert(v: Extract<OfflineLogVariables, { action:
 }
 
 export async function runOfflineUpdate(v: Extract<OfflineLogVariables, { action: "update" }>) {
-  await ensureSession();
+  await ensureSession(v.ownerId);
   const { data, error, status } = await supabase
     .from(v.table)
     .update(v.patch as never)
@@ -187,7 +215,7 @@ export async function runOfflineUpdate(v: Extract<OfflineLogVariables, { action:
 }
 
 export async function runOfflineDelete(v: Extract<OfflineLogVariables, { action: "delete" }>) {
-  await ensureSession();
+  await ensureSession(v.ownerId);
   const { data, error, status } = await supabase
     .from(v.table)
     .delete()
@@ -207,6 +235,11 @@ const RUNNERS: { [A in OfflineLogAction]: (v: Extract<OfflineLogVariables, { act
   delete: runOfflineDelete,
 };
 
+// ~10 minutes of trying at the 30s ceiling. A write that still can't get
+// through fails as "unknown" so it reaches Sync failures instead of holding up
+// every write queued behind it.
+export const MAX_TRANSIENT_RETRIES = 20;
+
 export function offlineLogRetryDelay(failureCount: number) {
   return Math.min(1000 * 2 ** failureCount, 30_000);
 }
@@ -214,8 +247,10 @@ export function offlineLogRetryDelay(failureCount: number) {
 export function offlineLogMutationOptions(action: OfflineLogAction) {
   return {
     mutationKey: [OFFLINE_LOG_KEY, action],
-    mutationFn: (variables: unknown) =>
-      (RUNNERS[action] as (v: OfflineLogVariables) => Promise<void>)(variables as OfflineLogVariables),
+    mutationFn: (variables: unknown) => {
+      if (discardedWrites.has(variables as object)) return Promise.reject(new DiscardedWriteError());
+      return (RUNNERS[action] as (v: OfflineLogVariables) => Promise<void>)(variables as OfflineLogVariables);
+    },
     // "online", not "offlineFirst": with no retries left offlineFirst would
     // fail outright offline. "online" pauses before the first attempt, so the
     // write is queued (and persisted) the moment it's tapped.
@@ -223,7 +258,7 @@ export function offlineLogMutationOptions(action: OfflineLogAction) {
     // One scope = one serial queue, so writes replay in the order they were
     // tapped (timer start → pause → stop on the same row).
     scope: { id: OFFLINE_LOG_SCOPE },
-    retry: (_count: number, err: unknown) => isTransientError(err),
+    retry: (failureCount: number, err: unknown) => failureCount < MAX_TRANSIENT_RETRIES && isTransientError(err),
     retryDelay: offlineLogRetryDelay,
   };
 }
@@ -329,7 +364,7 @@ function mapRows(data: unknown, fn: (rows: Rowish[]) => Rowish[]): unknown {
   return data;
 }
 
-export function applyOptimisticWrite(queryClient: QueryClient, v: OfflineLogVariables) {
+export function applyOptimisticWrite(queryClient: QueryClient, v: OfflineLogInput) {
   for (const query of logQueries(queryClient, v.table)) {
     const key = query.queryKey;
     const isDayEvents = key[0] === "day-events";

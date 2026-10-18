@@ -49,7 +49,7 @@ vi.mock("@/integrations/supabase/client", () => {
     };
     return chain;
   };
-  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t" } }, error: null }) }, from: () => makeChain() } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t", user: { id: "parent-1" } } }, error: null }) }, from: () => makeChain() } };
 });
 
 vi.mock("@/hooks/use-toast", () => ({

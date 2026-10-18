@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
-import { OFFLINE_LOG_TABLES, submitOfflineLog, type LogRow, type OfflineLogTable } from "@/lib/offlineLogs";
+import { OFFLINE_LOG_TABLES, type LogRow, type OfflineLogTable } from "@/lib/offlineLogs";
+import { useSubmitOfflineLog } from "@/hooks/useOfflineSync";
 
 type UndoableTable = "sleep_logs" | "feeding_logs" | "diaper_logs" | "custom_milestones";
 
@@ -36,6 +37,7 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
   entityLabel = "Entry",
 }: UseDeleteWithUndoOptions) {
   const queryClient = useQueryClient();
+  const submitLog = useSubmitOfflineLog();
 
   const invalidateAll = () => {
     // Every table this hook supports is a log table, so the canonical list is
@@ -52,7 +54,7 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
         // Same id as the deleted row: the queue replays delete → insert in
         // order, and a pending "Waiting to sync" marker stays on the right row.
         const restored = { ...payload, id: row.id } as LogRow;
-        await submitOfflineLog(queryClient, {
+        await submitLog({
           action: "insert",
           table,
           rowId: row.id,
@@ -81,7 +83,7 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
     networkMode: "always",
     mutationFn: async (row: TRow) => {
       if (isOfflineTable(table)) {
-        await submitOfflineLog(queryClient, {
+        await submitLog({
           action: "delete",
           table,
           rowId: row.id,

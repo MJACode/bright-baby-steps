@@ -98,7 +98,7 @@ vi.mock("@/integrations/supabase/client", () => {
     };
     return chain;
   };
-  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t" } }, error: null }) }, from: (table: string) => makeChain(table) } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t", user: { id: "parent-1" } } }, error: null }) }, from: (table: string) => makeChain(table) } };
 });
 
 vi.mock("@/services/allergenExposureWrite", async (importOriginal) => {

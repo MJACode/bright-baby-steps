@@ -20,7 +20,7 @@ vi.mock("@/lib/networkStatus", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: () => ({}),
-    auth: { getUser: h.getUser, signOut: h.signOut, getSession: async () => ({ data: { session: {} } }) },
+    auth: { getUser: h.getUser, signOut: h.signOut, getSession: async () => ({ data: { session: { user: { id: "user-a" } } } }) },
   },
 }));
 vi.mock("@/lib/offlineCache", async (importOriginal) => {
@@ -44,6 +44,7 @@ const insert = (childId: string, id: string) =>
     table: "diaper_logs",
     rowId: id,
     childId,
+    ownerId: "user-a",
     row: { id, child_id: childId, parent_id: "user-a", logged_at: "2026-10-18T10:00:00.000Z", diaper_type: "wet" },
   }) as const;
 

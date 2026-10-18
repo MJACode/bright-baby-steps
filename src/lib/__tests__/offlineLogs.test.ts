@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   respond: null as null | ((op: Op) => Result | undefined),
   // Rows the server can see, for the zero-rows / duplicate-id checks.
   visible: new Set<string>(),
+  session: { access_token: "t", user: { id: "p1" } } as null | { access_token: string; user: { id: string } },
 }));
 
 vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => true } }));
@@ -57,7 +58,7 @@ vi.mock("@/integrations/supabase/client", () => {
     supabase: {
       from,
       auth: {
-        getSession: async () => ({ data: { session: { access_token: "t" } }, error: null }),
+        getSession: async () => ({ data: { session: h.session }, error: null }),
         signOut: vi.fn(async () => ({ error: null })),
       },
     },
@@ -70,7 +71,9 @@ import {
   countUnsyncedWrites,
   describeSyncFailure,
   discardSyncFailure,
+  MAX_TRANSIENT_RETRIES,
   getSyncFailures,
+  isTransientError,
   pruneChildren,
   submitOfflineLog,
   type OfflineLogVariables,
@@ -104,6 +107,7 @@ const startSleep = (id = ROW): OfflineLogVariables => ({
   table: "sleep_logs",
   rowId: id,
   childId: CHILD,
+  ownerId: "p1",
   row: { id, child_id: CHILD, parent_id: "p1", started_at: "2026-10-18T13:00:00.000Z", sleep_type: "nap", source: "timer" },
 });
 const update = (patch: Record<string, unknown>, id = ROW): OfflineLogVariables => ({
@@ -111,6 +115,7 @@ const update = (patch: Record<string, unknown>, id = ROW): OfflineLogVariables =
   table: "sleep_logs",
   rowId: id,
   childId: CHILD,
+  ownerId: "p1",
   patch,
 });
 
@@ -127,6 +132,7 @@ beforeEach(() => {
   h.ops = [];
   h.respond = null;
   h.visible = new Set();
+  h.session = { access_token: "t", user: { id: "p1" } };
   onlineManager.setOnline(true);
   client = createAppQueryClient();
   client.mount();
@@ -225,6 +231,67 @@ describe("offline queue", () => {
     await submitOfflineLog(client, update({ ended_at: "2026-10-18T14:00:00.000Z", paused_at: null }));
     expect(client.getQueryData(activeKey)).toBeNull();
     expect(client.getQueryData<{ duration_minutes: number }[]>(listKey)?.[0].duration_minutes).toBe(60);
+  });
+});
+
+describe("writes that must not run", () => {
+  afterEach(() => vi.useRealTimers());
+  const serverDown = () => ({ data: null, error: { code: "", message: "Service Unavailable" }, status: 503 });
+
+  it("never replays a queued write under the next account's session", async () => {
+    onlineManager.setOnline(false);
+    await submitOfflineLog(client, startSleep());
+    h.session = { access_token: "t", user: { id: "someone-else" } };
+
+    onlineManager.setOnline(true);
+    await drain(client);
+
+    expect(h.ops).toEqual([]);
+    expect(getSyncFailures(client)).toEqual([]);
+  });
+
+  it("stops a write cleared from the device mid-retry, and records nothing", async () => {
+    vi.useFakeTimers();
+    h.respond = serverDown;
+    expect(await submitOfflineLog(client, startSleep())).toBe("queued");
+    expect(h.ops).toHaveLength(1);
+
+    await clearDeviceStore(client, memoryStorage());
+    h.respond = null;
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(h.ops).toHaveLength(1);
+    expect(getSyncFailures(client)).toEqual([]);
+  });
+
+  it("doesn't bring back a failure for a pruned child's write that was mid-retry", async () => {
+    vi.useFakeTimers();
+    h.respond = () => ({ data: null, error: { code: "", message: "Service Unavailable" }, status: 503 });
+    await submitOfflineLog(client, startSleep());
+
+    pruneChildren(client, [CHILD]);
+    h.respond = () => ({ data: null, error: { code: "42501", message: "row-level security" }, status: 403 });
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+    expect(h.ops).toHaveLength(1);
+    expect(getSyncFailures(client)).toEqual([]);
+  });
+
+  it("gives up after the retry cap and lists the write under Sync failures", async () => {
+    vi.useFakeTimers();
+    h.respond = serverDown;
+    await submitOfflineLog(client, startSleep());
+
+    await vi.advanceTimersByTimeAsync(MAX_TRANSIENT_RETRIES * 31_000);
+
+    expect(h.ops).toHaveLength(MAX_TRANSIENT_RETRIES + 1);
+    expect(getSyncFailures(client)).toMatchObject([{ rowId: ROW, kind: "unknown" }]);
+  });
+
+  it("retries a failed fetch but not a programming TypeError", () => {
+    expect(isTransientError(new TypeError("Load failed"))).toBe(true);
+    expect(isTransientError(new TypeError("Failed to fetch"))).toBe(true);
+    expect(isTransientError(new TypeError("Cannot read properties of undefined (reading 'id')"))).toBe(false);
   });
 });
 

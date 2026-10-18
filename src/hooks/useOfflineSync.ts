@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { onlineManager, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import {
   OFFLINE_LOG_KEY,
   SYNC_FAILURES_KEY,
   submitOfflineLog,
+  type OfflineLogInput,
   type OfflineLogVariables,
   type SyncFailure,
 } from "@/lib/offlineLogs";
@@ -47,5 +49,12 @@ export function useSyncFailures(): SyncFailure[] {
 /** Submits a log write; resolves once saved, or as soon as it's queued offline. */
 export function useSubmitOfflineLog() {
   const queryClient = useQueryClient();
-  return useCallback((variables: OfflineLogVariables) => submitOfflineLog(queryClient, variables), [queryClient]);
+  const ownerId = useAuth().user?.id;
+  return useCallback(
+    (input: OfflineLogInput) => {
+      if (!ownerId) return Promise.reject(new Error("Sign in to save this log."));
+      return submitOfflineLog(queryClient, { ...input, ownerId } as OfflineLogVariables);
+    },
+    [queryClient, ownerId],
+  );
 }

@@ -1,9 +1,11 @@
-import { MutationCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryClient, type Mutation } from "@tanstack/react-query";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
 import { PERSISTED_QUERY_ROOTS, QUERY_TTL_MS, isOfflinePersistenceEnabled } from "@/lib/offlineCache";
 import {
+  DiscardedWriteError,
   SYNC_FAILURES_KEY,
   TABLE_ROOT,
+  markWriteDiscarded,
   getSyncFailures,
   isAttachedWrite,
   isOfflineLogMutation,
@@ -15,16 +17,20 @@ import {
 
 export function createAppQueryClient(): QueryClient {
   let fullRefreshDue = false;
+  // A write cleared from the device (sign-out, removed child) can still be
+  // mid-retry; it must not record a failure or refresh anything when it ends.
+  const isGone = (mutation: Mutation<unknown, unknown, unknown, unknown>, error: unknown) =>
+    error instanceof DiscardedWriteError || !client.getMutationCache().getAll().includes(mutation as Mutation);
   const client: QueryClient = new QueryClient({
     // Cache-level callbacks run for restored mutations too, which carry no
     // per-call onError/onSettled.
     mutationCache: new MutationCache({
       onError: (error, variables, _context, mutation) => {
-        if (!isOfflineLogMutation(mutation) || isAttachedWrite(mutation)) return;
+        if (!isOfflineLogMutation(mutation) || isAttachedWrite(mutation) || isGone(mutation, error)) return;
         recordSyncFailure(client, variables as OfflineLogVariables, error);
       },
       onSettled: (_data, error, variables, _context, mutation) => {
-        if (!isOfflineLogMutation(mutation)) return;
+        if (!isOfflineLogMutation(mutation) || isGone(mutation, error)) return;
         const v = variables as OfflineLogVariables;
         if (error || v.action !== "update" || v.refresh !== "active") fullRefreshDue = true;
         // Refetch once the queue drains: refetching between queued writes
@@ -46,6 +52,11 @@ export function createAppQueryClient(): QueryClient {
   });
 
   registerOfflineLogDefaults(client);
+  client.getMutationCache().subscribe((event) => {
+    if (event.type === "removed" && isOfflineLogMutation(event.mutation) && event.mutation.state.status === "pending") {
+      markWriteDiscarded(event.mutation.state.variables);
+    }
+  });
   if (isOfflinePersistenceEnabled()) {
     // The persisted snapshot is written from memory, so a screen not visited
     // for the default 5 minutes would otherwise drop out of the offline cache.
