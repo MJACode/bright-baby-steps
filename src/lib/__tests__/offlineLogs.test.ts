@@ -85,6 +85,7 @@ import {
   dehydrateOptions,
   offlineCacheKey,
   removeOtherUsersCaches,
+  shouldPersistQuery,
   type OfflineStorage,
 } from "@/lib/offlineCache";
 
@@ -374,6 +375,50 @@ describe("persisting the queue", () => {
     await flush();
     const restored = await createOfflinePersister("user-a", storage).restoreClient();
     expect(restored?.clientState.mutations[0].state.isPaused).toBe(true);
+  });
+});
+
+describe("what is stored on the device", () => {
+  const q = (queryKey: unknown[]) => ({
+    queryKey,
+    state: { status: "success", dataUpdatedAt: Date.now() } as never,
+  });
+
+  it("stores only what Privacy § 10 discloses", () => {
+    for (const key of [
+      ["feeding-logs", CHILD],
+      ["sleep-logs", "window", CHILD],
+      ["diaper-logs", CHILD],
+      ["day-events", "sleep", CHILD, "d"],
+      ["last-logged", "feeding", CHILD],
+      ["children"],
+      ["logged-by-names", ["p1"]],
+    ]) {
+      expect(shouldPersistQuery(q(key)), JSON.stringify(key)).toBe(true);
+    }
+    for (const key of [
+      ["temperature-logs", CHILD],
+      ["illness-logs", CHILD],
+      ["medication-logs", CHILD],
+      ["custom-milestones", CHILD],
+      ["analytics-month", CHILD],
+      ["activity-feed", CHILD],
+      ["child-context", CHILD],
+      ["sleep-coach", CHILD],
+      ["last-logged", "milestone", CHILD],
+      ["weekly-insights", CHILD],
+    ]) {
+      expect(shouldPersistQuery(q(key)), JSON.stringify(key)).toBe(false);
+    }
+  });
+
+  it("drops anything not refreshed for 7 days", () => {
+    expect(
+      shouldPersistQuery({
+        queryKey: ["feeding-logs", CHILD],
+        state: { status: "success", dataUpdatedAt: Date.now() - QUERY_TTL_MS - 1 } as never,
+      }),
+    ).toBe(false);
   });
 });
 

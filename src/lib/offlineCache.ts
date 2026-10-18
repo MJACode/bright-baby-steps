@@ -5,7 +5,6 @@ import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persi
 import { del, get, keys, set } from "idb-keyval";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { LOG_WRITE_QUERY_KEYS } from "@/lib/logInvalidation";
 import { OFFLINE_LOG_KEY, SYNC_FAILURES_KEY } from "@/lib/offlineLogs";
 
 // Persisting the query cache + queued writes to the phone (IndexedDB). Native
@@ -23,26 +22,41 @@ export const offlineCacheKey = (uid: string) => `${OFFLINE_CACHE_KEY_PREFIX}${ui
 
 const SYNC_FAILURES_ROOT = SYNC_FAILURES_KEY[0];
 
-// What a parent needs to open the app with no signal: the log tables and what
-// derives from them, plus the child / role / plan rows the screens gate on.
-// AI responses and everything else stay network-only.
+// Exactly what Privacy § 10 discloses: the feeding / sleep / diaper logs and
+// what's derived only from them, the child's profile, who logged each row, and
+// the role / plan flags those screens gate on. Health records, milestones,
+// sleep plans, AI responses and everything else stay network-only — widening
+// this list means updating the policy first.
 export const PERSISTED_QUERY_ROOTS: ReadonlySet<string> = new Set<string>([
-  ...LOG_WRITE_QUERY_KEYS.filter((k) => k !== "child-context"),
+  "feeding-logs",
+  "sleep-logs",
+  "diaper-logs",
+  "day-events",
+  "week-events",
+  "last-logged",
+  "last-nursing-side",
+  "feeding-trends-7d",
+  "feed-coach",
+  "sleep-recent-logs",
   "children",
   "my-role",
-  "logged-by-names",
   "subscription",
   "child-premium",
-  "feeding-trends-7d",
-  "sleep-recent-logs",
+  "logged-by-names",
   SYNC_FAILURES_ROOT,
 ]);
+
+// Sub-keys under a persisted root that read other tables.
+const EXCLUDED_SUBKEYS: Record<string, ReadonlySet<string>> = {
+  "last-logged": new Set(["milestone"]),
+};
 
 const rootOf = (key: readonly unknown[]) => (typeof key[0] === "string" ? key[0] : "");
 
 export function shouldPersistQuery(query: Pick<Query, "queryKey" | "state">, now = Date.now()): boolean {
   const root = rootOf(query.queryKey);
   if (!PERSISTED_QUERY_ROOTS.has(root) || query.state.status !== "success") return false;
+  if (EXCLUDED_SUBKEYS[root]?.has(String(query.queryKey[1]))) return false;
   // Unsynced work never expires; cached reads do.
   return root === SYNC_FAILURES_ROOT || now - query.state.dataUpdatedAt <= QUERY_TTL_MS;
 }
