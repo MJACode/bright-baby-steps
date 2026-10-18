@@ -3,7 +3,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { unregisterPush } from "@/lib/pushNotifications";
 import { queryClient } from "@/lib/queryClient";
-import { clearDeviceStore, isOfflinePersistenceEnabled, readStoredSession } from "@/lib/offlineCache";
+import { clearDeviceStore, isOfflinePersistenceEnabled, readStoredSession, removeStoredAuth } from "@/lib/offlineCache";
 
 interface AuthContextType {
   session: Session | null;
@@ -49,9 +49,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await clearDeviceStore(queryClient);
     await unregisterPush();
     const { error } = await supabase.auth.signOut();
-    // Offline, the global sign-out can't reach the server and supabase-js
-    // keeps the session; end it on this device regardless.
-    if (error) await supabase.auth.signOut({ scope: "local" });
+    if (error) {
+      // Offline, the global sign-out can't reach the server; end it on this
+      // device instead, and if supabase-js still refuses (an expired token it
+      // can't refresh), remove its stored session ourselves.
+      const { error: localError } = await supabase.auth.signOut({ scope: "local" });
+      if (localError) removeStoredAuth();
+    }
+    // No SIGNED_OUT event fires when supabase-js bailed, so don't wait for one.
+    setSession(null);
   };
 
   return (

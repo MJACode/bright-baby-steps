@@ -170,17 +170,32 @@ export async function checkAccount(): Promise<AccountCheck> {
 // a real auth failure), so on the native app fall back to that stored session:
 // the parent sees their cached logs and can keep logging, and the token
 // refreshes once the device is back online.
-export function readStoredSession(storage: Pick<Storage, "length" | "key" | "getItem"> = localStorage): Session | null {
+// supabase-js's storage key for this project (sb-<project ref>-auth-token).
+export const AUTH_STORAGE_KEY = "sb-ieuznbvvwdvhtirzwkly-auth-token";
+
+export function readStoredSession(storage: Pick<Storage, "getItem"> = localStorage): Session | null {
   try {
-    for (let i = 0; i < storage.length; i++) {
-      const key = storage.key(i);
-      if (!key || !/^sb-.+-auth-token$/.test(key)) continue;
-      const parsed = JSON.parse(storage.getItem(key) ?? "null") as Session | null;
-      if (parsed?.user?.id && parsed.refresh_token) return parsed;
-    }
+    const parsed = JSON.parse(storage.getItem(AUTH_STORAGE_KEY) ?? "null") as Session | null;
+    if (parsed?.user?.id && parsed.refresh_token) return parsed;
   } catch {
     // Unreadable storage is the same as no stored session.
   }
   return null;
+}
+
+/**
+ * Ends the session on this device by removing supabase-js's own storage keys.
+ * Needed offline: with an expired token, supabase-js tries to refresh before
+ * signing out, and when that refresh can't reach the server it returns the
+ * error without removing the session — even for scope "local".
+ */
+export function removeStoredAuth(storage: Pick<Storage, "removeItem"> = localStorage) {
+  for (const suffix of ["", "-code-verifier", "-user"]) {
+    try {
+      storage.removeItem(`${AUTH_STORAGE_KEY}${suffix}`);
+    } catch (err) {
+      console.error("couldn't remove stored session", err);
+    }
+  }
 }
 
