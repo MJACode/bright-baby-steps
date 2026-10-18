@@ -4,7 +4,8 @@ import { persistQueryClientRestore, persistQueryClientSubscribe } from "@tanstac
 import { App } from "@capacitor/app";
 import { useAuth } from "@/hooks/useAuth";
 import { setBeforeOnline } from "@/lib/networkStatus";
-import { pruneChildren } from "@/lib/offlineLogs";
+import { supabase } from "@/integrations/supabase/client";
+import { holdWritesForRestore, pruneChildren } from "@/lib/offlineLogs";
 import {
   OFFLINE_CACHE_BUSTER,
   checkAccount,
@@ -15,6 +16,22 @@ import {
   isOfflinePersistenceEnabled,
   removeOtherUsersCaches,
 } from "@/lib/offlineCache";
+
+/**
+ * The children query hides archived children, but archiving on another
+ * device isn't a reason to drop this phone's queued logs for that child —
+ * only deletion or lost access is. If the check can't run, prune nothing.
+ */
+async function pruneUnlessArchived(queryClient: QueryClient, childIds: string[]) {
+  const { data, error } = await supabase
+    .from("children")
+    .select("id")
+    .in("id", childIds)
+    .not("archived_at", "is", null);
+  if (error) return;
+  const archived = new Set((data ?? []).map((c) => c.id));
+  pruneChildren(queryClient, childIds.filter((id) => !archived.has(id)));
+}
 
 async function resumeQueue(queryClient: QueryClient) {
   if (!onlineManager.isOnline()) return;
@@ -62,6 +79,7 @@ export function OfflineQueryProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
     const persister = createOfflinePersister(uid);
+    const releaseWrites = holdWritesForRestore();
     void (async () => {
       try {
         await removeOtherUsersCaches(uid);
@@ -75,6 +93,8 @@ export function OfflineQueryProvider({ children }: { children: ReactNode }) {
         });
       } catch (err) {
         console.error("offline cache restore failed", err);
+      } finally {
+        releaseWrites();
       }
       if (cancelled) return;
       const unsubscribePersist = persistQueryClientSubscribe({
@@ -97,6 +117,7 @@ export function OfflineQueryProvider({ children }: { children: ReactNode }) {
     })();
     return () => {
       cancelled = true;
+      releaseWrites();
       unsubscribe?.();
     };
   }, [persist, loading, uid, queryClient]);
@@ -127,7 +148,7 @@ export function OfflineQueryProvider({ children }: { children: ReactNode }) {
         const current = new Set(data.map((c: { id: string }) => c.id));
         const removed = [...known].filter((id) => !current.has(id));
         known = current;
-        pruneChildren(queryClient, removed);
+        if (removed.length > 0) void pruneUnlessArchived(queryClient, removed);
       } else {
         collect(data);
       }

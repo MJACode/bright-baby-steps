@@ -1,4 +1,4 @@
-import { onlineManager, QueryClient } from "@tanstack/react-query";
+import { dehydrate, hydrate, onlineManager, QueryClient } from "@tanstack/react-query";
 import { persistQueryClientRestore, persistQueryClientSave } from "@tanstack/react-query-persist-client";
 
 type Op = { table: string; op: "insert" | "update" | "delete" | "select"; payload?: unknown; id?: string };
@@ -73,6 +73,7 @@ import {
   discardSyncFailure,
   MAX_TRANSIENT_RETRIES,
   getSyncFailures,
+  holdWritesForRestore,
   isTransientError,
   pruneChildren,
   submitOfflineLog,
@@ -330,6 +331,30 @@ describe("re-applying queued writes", () => {
     await client.fetchQuery({ queryKey: ["sleep-logs", "active", CHILD], queryFn: async () => null, networkMode: "always" });
 
     expect(client.getQueryState(otherChildKey)?.isInvalidated).toBe(true);
+  });
+});
+
+describe("taps during the restore", () => {
+  it("queue behind the restored writes, so they replay in order", async () => {
+    // Before the restart: a Start was queued offline.
+    onlineManager.setOnline(false);
+    const before = createAppQueryClient();
+    await submitOfflineLog(before, startSleep());
+    // Through JSON, as the store saves it.
+    const persisted = JSON.parse(JSON.stringify(dehydrate(before, { shouldDehydrateMutation: () => true })));
+    before.getMutationCache().clear();
+
+    // After the restart, the parent taps Stop while the restore is still running.
+    const release = holdWritesForRestore();
+    const stopTapped = submitOfflineLog(client, update({ ended_at: "2026-10-18T14:00:00.000Z" }));
+    hydrate(client, persisted);
+    release();
+    await stopTapped;
+
+    onlineManager.setOnline(true);
+    await client.resumePausedMutations();
+    await drain(client);
+    expect(h.ops.map((o) => o.op)).toEqual(["insert", "update"]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { dehydrate, hydrate, onlineManager, QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 
 const h = vi.hoisted(() => ({
@@ -8,6 +8,8 @@ const h = vi.hoisted(() => ({
   signOut: vi.fn(async () => ({ error: null })),
   beforeOnline: null as null | (() => Promise<void>),
   createPersister: vi.fn(),
+  archived: [] as string[],
+  archivedCheckFails: false,
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -22,7 +24,20 @@ vi.mock("@/lib/networkStatus", () => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: () => ({}),
+    from: () => {
+      const chain: Record<string, unknown> = {
+        select: () => chain,
+        in: () => chain,
+        not: () => chain,
+        then: (resolve: (v: unknown) => unknown) =>
+          Promise.resolve(
+            h.archivedCheckFails
+              ? { data: null, error: { message: "Failed to fetch" } }
+              : { data: h.archived.map((id) => ({ id })), error: null },
+          ).then(resolve),
+      };
+      return chain;
+    },
     auth: { getUser: h.getUser, signOut: h.signOut, getSession: async () => ({ data: { session: { user: { id: "user-a" } } } }) },
   },
 }));
@@ -70,6 +85,8 @@ beforeEach(() => {
   h.getUser.mockReset();
   h.signOut.mockClear();
   h.createPersister.mockClear();
+  h.archived = [];
+  h.archivedCheckFails = false;
   client = createAppQueryClient();
   onlineManager.setOnline(false);
 });
@@ -138,6 +155,25 @@ describe("OfflineQueryProvider", () => {
       await client.fetchQuery({ queryKey: ["children"], queryFn: async () => [{ id: "child-2" }], networkMode: "always" });
     });
 
+    await waitFor(() => expect(countUnsyncedWrites(client)).toBe(1));
+  });
+
+  it.each([
+    ["was archived on another device", () => (h.archived = ["child-1"])],
+    ["can't be checked", () => (h.archivedCheckFails = true)],
+  ])("keeps a child's queued writes when the child %s", async (_label, setup) => {
+    setup();
+    mount(client);
+    client.setQueryData(["children"], [{ id: "child-1" }, { id: "child-2" }]);
+    await submitOfflineLog(client, insert("child-1", "row-1"));
+
+    await act(async () => {
+      await client.fetchQuery({ queryKey: ["children"], queryFn: async () => [{ id: "child-2" }], networkMode: "always" });
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
     expect(countUnsyncedWrites(client)).toBe(1);
   });
 
@@ -153,7 +189,7 @@ describe("OfflineQueryProvider", () => {
       await client.fetchQuery({ queryKey: ["children"], queryFn: async () => [], networkMode: "always", staleTime: 0 });
     });
 
-    expect(countUnsyncedWrites(client)).toBe(0);
+    await waitFor(() => expect(countUnsyncedWrites(client)).toBe(0));
   });
 
   it("does not persist anything on the web", () => {

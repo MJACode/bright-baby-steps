@@ -461,8 +461,26 @@ export const isAttachedWrite = (mutation: object) => attached.has(mutation);
 
 export type SubmitResult = "saved" | "queued";
 
+// Writes restored from the device have to queue ahead of anything tapped
+// while the restore is still running, or a Stop could replay before its Start.
+let restoreGate: Promise<void> = Promise.resolve();
+
+/** Holds new writes behind the restore; call the returned function once it's done. */
+export function holdWritesForRestore(): () => void {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  restoreGate = restoreGate.then(() => held);
+  return release;
+}
+
 export function submitOfflineLog(queryClient: QueryClient, variables: OfflineLogVariables): Promise<SubmitResult> {
   applyOptimisticWrite(queryClient, variables);
+  return restoreGate.then(() => runSubmittedWrite(queryClient, variables));
+}
+
+function runSubmittedWrite(queryClient: QueryClient, variables: OfflineLogVariables): Promise<SubmitResult> {
   const cache = queryClient.getMutationCache();
   const mutation = cache.build(queryClient, offlineLogMutationOptions(variables.action));
   attached.add(mutation);
