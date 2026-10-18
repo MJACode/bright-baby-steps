@@ -9,6 +9,7 @@ import { useChildren } from "@/hooks/useChildren";
 import { useIsOnline, usePendingLogWrites, useSyncFailures } from "@/hooks/useOfflineSync";
 import {
   FIX_ROUTE,
+  canRetrySyncFailure,
   describeSyncFailure,
   discardSyncFailure,
   retrySyncFailure,
@@ -142,7 +143,7 @@ export function SyncFailuresSheet({
                 <p className="text-sm font-bold">{copy.title}</p>
                 <p className="text-sm text-foreground/80 leading-relaxed">{copy.body}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
-                  {failure.kind !== "gone" && (
+                  {canRetrySyncFailure(failure.kind) && (
                     <Button
                       size="sm"
                       className="touch-target"

@@ -646,6 +646,9 @@ export function newLogId(): string {
 
 const NOUN: Record<OfflineLogTable, string> = { feeding_logs: "feed", sleep_logs: "sleep", diaper_logs: "diaper" };
 
+/** Retrying can't help: the row is gone, or the details themselves were rejected. */
+export const canRetrySyncFailure = (kind: SyncFailureKind) => kind !== "gone" && kind !== "invalid";
+
 export const FIX_ROUTE: Record<OfflineLogTable, { href: string; label: string }> = {
   sleep_logs: { href: "/dashboard/sleep/history", label: "Open sleep history" },
   feeding_logs: { href: "/dashboard/feeding", label: "Open feeding" },
@@ -668,8 +671,10 @@ export function describeSyncFailure(failure: Pick<SyncFailure, "table" | "kind">
       };
     case "permission":
       return {
-        title: `Your access to ${childName}'s logs changed`,
-        body: `This ${noun} couldn't be saved with your current access. Ask the parent who invited you to check it, then try again, or discard this one.`,
+        // Reaches owners too (a profile removed on another device), so no
+        // assumption about who invited whom.
+        title: `This ${noun} couldn't be saved for ${childName}`,
+        body: `This account can't add logs to ${childName}'s profile right now. It may have been removed, or sharing may have changed. Check Profile, then try again, or discard this one.`,
       };
     case "gone":
       return {
