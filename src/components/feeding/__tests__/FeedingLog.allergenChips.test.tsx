@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import FeedingLog, { type SolidFeedDraft } from "@/components/feeding/FeedingLog";
 import { toast } from "@/hooks/use-toast";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
@@ -248,6 +248,29 @@ describe("FeedingLog allergen chips", () => {
       }),
     );
     expect(feedInserts()).toHaveLength(1);
+  });
+
+  it("offline, swaps the chips for a note and queues the feed without a serving", async () => {
+    render(tree());
+    await openSolid();
+    await screen.findByRole("button", { name: /Peanut/ });
+
+    act(() => onlineManager.setOnline(false));
+    try {
+      expect(screen.queryByRole("button", { name: /Peanut/ })).not.toBeInTheDocument();
+      expect(screen.getByText("Add the serving when you're back online.")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+      await waitFor(() =>
+        expect(toast).toHaveBeenCalledWith({
+          title: "Feed logged! 🍼",
+          description: "Saved on this phone. It'll sync when you're back online.",
+        }),
+      );
+      expect(insertAllergenExposure).not.toHaveBeenCalled();
+    } finally {
+      act(() => onlineManager.setOnline(true));
+    }
   });
 
   it("hides the chips from a viewer", async () => {

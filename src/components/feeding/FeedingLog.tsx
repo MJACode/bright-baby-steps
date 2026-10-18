@@ -37,7 +37,7 @@ import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
 import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
-import { usePendingLogIds, useSubmitOfflineLog } from "@/hooks/useOfflineSync";
+import { useIsOnline, usePendingLogIds, useSubmitOfflineLog } from "@/hooks/useOfflineSync";
 import { PendingSyncBadge } from "@/components/PendingSyncBadge";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { useLogHistory } from "@/hooks/useLogHistory";
@@ -48,7 +48,7 @@ import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData"
 import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import {
   allergenEmoji, getAllergenStatus, nextExposureSlot,
-  FEED_ALLERGEN_CHIPS_LABEL, FEED_ALLERGEN_CHIPS_HELPER, FEED_ALLERGEN_CHIPS_REACTION_NOTE,
+  FEED_ALLERGEN_CHIPS_LABEL, FEED_ALLERGEN_CHIPS_HELPER, FEED_ALLERGEN_CHIPS_REACTION_NOTE, FEED_ALLERGEN_CHIPS_OFFLINE_NOTE,
   feedServingsLoggedText, feedServingsFailedText,
 } from "@/services/allergenService";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
@@ -122,6 +122,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const queryClient = useQueryClient();
   const submitLog = useSubmitOfflineLog();
   const pendingIds = usePendingLogIds();
+  const online = useIsOnline();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   // History reaches further back than the page query's 50 rows, so the delete
@@ -366,7 +367,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const showAllergenChips = feedType === "solid" && !editingId && canLogServings && introducedAllergens.length > 0;
   // A reaction belongs on the allergen itself (reaction row, status, triage),
   // so a feed with "Reaction noted" logs no clean servings.
-  const servingAllergenIds = showAllergenChips && !reactionNoted
+  const servingAllergenIds = showAllergenChips && online && !reactionNoted
     ? allergenIds.filter((id) => introducedAllergens.some((a) => a.id === id))
     : [];
 
@@ -600,7 +601,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   {showAllergenChips && (
                     <div className="space-y-2">
                       <Label>{FEED_ALLERGEN_CHIPS_LABEL}</Label>
-                      {reactionNoted ? (
+                      {!online ? (
+                        <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_OFFLINE_NOTE}</p>
+                      ) : reactionNoted ? (
                         <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_REACTION_NOTE}</p>
                       ) : (
                         <>

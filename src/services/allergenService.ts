@@ -464,6 +464,10 @@ export function startIntroToast(
 
 export const FEED_ALLERGEN_CHIPS_LABEL = "Allergens in this meal (optional)";
 export const FEED_ALLERGEN_CHIPS_HELPER = "Each one counts as a serving toward keeping it on the menu.";
+// Servings write through online-only allergen tables, so offline the chips
+// step aside rather than queue a feed whose serving then fails.
+export const FEED_ALLERGEN_CHIPS_OFFLINE_NOTE = "Add the serving when you're back online.";
+
 export const FEED_ALLERGEN_CHIPS_REACTION_NOTE =
   "Log a reaction on the allergen itself in the Allergen Tracker, so it reaches your pediatrician report.";
 
