@@ -5,7 +5,9 @@ import {
   DiscardedWriteError,
   SYNC_FAILURES_KEY,
   TABLE_ROOT,
+  logTableForQueryKey,
   markWriteDiscarded,
+  reapplyPendingWrites,
   getSyncFailures,
   isAttachedWrite,
   isOfflineLogMutation,
@@ -52,6 +54,11 @@ export function createAppQueryClient(): QueryClient {
   });
 
   registerOfflineLogDefaults(client);
+  client.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.action.type !== "success" || event.action.manual) return;
+    const table = logTableForQueryKey(event.query.queryKey);
+    if (table) reapplyPendingWrites(client, table);
+  });
   client.getMutationCache().subscribe((event) => {
     if (event.type === "removed" && isOfflineLogMutation(event.mutation) && event.mutation.state.status === "pending") {
       markWriteDiscarded(event.mutation.state.variables);

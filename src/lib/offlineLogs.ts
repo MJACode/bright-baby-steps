@@ -359,9 +359,44 @@ function mapRows(data: unknown, fn: (rows: Rowish[]) => Rowish[]): unknown {
   if (isRowArray(data)) return fn(data);
   if (data && typeof data === "object" && isRowArray((data as { logs?: unknown }).logs)) {
     const d = data as { logs: Rowish[] };
-    return { ...d, logs: fn(d.logs) };
+    const logs = fn(d.logs);
+    return logs === d.logs ? data : { ...d, logs };
   }
   return data;
+}
+
+// setQueryData marks a query fresh even when nothing changed, which would
+// cancel a pending invalidation — so only write when the rows really moved.
+function patchRows(queryClient: QueryClient, key: readonly unknown[], fn: (rows: Rowish[]) => Rowish[]) {
+  const old = queryClient.getQueryData(key);
+  const next = mapRows(old, fn);
+  if (next !== old) queryClient.setQueryData(key, next);
+}
+
+const ROOT_TABLE = Object.fromEntries(
+  Object.entries(TABLE_ROOT).map(([table, root]) => [root, table as OfflineLogTable]),
+) as Record<string, OfflineLogTable>;
+const KIND_TABLE = Object.fromEntries(
+  Object.entries(DAY_EVENTS_KIND).map(([table, kind]) => [kind, table as OfflineLogTable]),
+) as Record<string, OfflineLogTable>;
+
+/** Which log table a cached query reads, if it's one the optimistic layer patches. */
+export function logTableForQueryKey(key: readonly unknown[]): OfflineLogTable | null {
+  if (key[0] === "day-events") return KIND_TABLE[String(key[1])] ?? null;
+  return ROOT_TABLE[String(key[0])] ?? null;
+}
+
+/**
+ * A fetch that lands while writes are still queued returns the server's view
+ * without them — a timer stopped offline would show as running again, and a
+ * second Stop would queue the wrong end time. Lay the queued writes back on
+ * top, in tap order.
+ */
+export function reapplyPendingWrites(queryClient: QueryClient, table: OfflineLogTable) {
+  for (const m of pendingOfflineWrites(queryClient)) {
+    const v = m.state.variables as OfflineLogVariables | undefined;
+    if (v?.table === table) applyOptimisticWrite(queryClient, v);
+  }
 }
 
 export function applyOptimisticWrite(queryClient: QueryClient, v: OfflineLogInput) {
@@ -374,16 +409,18 @@ export function applyOptimisticWrite(queryClient: QueryClient, v: OfflineLogInpu
     if (v.action === "insert") {
       const row = optimisticRow(v.table, v.row);
       if (isActive) {
-        if (key[2] === v.childId && isActiveTimerRow(v.table, row)) queryClient.setQueryData(key, row);
+        // The server's copy of the same row is newer than the optimistic one.
+        const current = data as Rowish | null | undefined;
+        if (key[2] === v.childId && isActiveTimerRow(v.table, row) && current?.id !== row.id) {
+          queryClient.setQueryData(key, row);
+        }
         continue;
       }
       if (data === undefined) continue;
       if (isDayEvents ? key[2] !== v.childId || !dayEventsContains(v.table, key[3], row) : !key.includes(v.childId)) {
         continue;
       }
-      queryClient.setQueryData(key, (old: unknown) =>
-        mapRows(old, (rows) => (rows.some((r) => r.id === row.id) ? rows : sortRows(v.table, [row, ...rows]))),
-      );
+      patchRows(queryClient, key, (rows) => (rows.some((r) => r.id === row.id) ? rows : sortRows(v.table, [row, ...rows])));
       continue;
     }
 
@@ -398,10 +435,8 @@ export function applyOptimisticWrite(queryClient: QueryClient, v: OfflineLogInpu
         continue;
       }
       if (data === undefined) continue;
-      queryClient.setQueryData(key, (old: unknown) =>
-        mapRows(old, (rows) =>
-          rows.some((r) => r.id === v.rowId) ? sortRows(v.table, rows.map((r) => (r.id === v.rowId ? merge(r) : r))) : rows,
-        ),
+      patchRows(queryClient, key, (rows) =>
+        rows.some((r) => r.id === v.rowId) ? sortRows(v.table, rows.map((r) => (r.id === v.rowId ? merge(r) : r))) : rows,
       );
       continue;
     }
@@ -412,9 +447,7 @@ export function applyOptimisticWrite(queryClient: QueryClient, v: OfflineLogInpu
       continue;
     }
     if (data === undefined) continue;
-    queryClient.setQueryData(key, (old: unknown) =>
-      mapRows(old, (rows) => (rows.some((r) => r.id === v.rowId) ? rows.filter((r) => r.id !== v.rowId) : rows)),
-    );
+    patchRows(queryClient, key, (rows) => (rows.some((r) => r.id === v.rowId) ? rows.filter((r) => r.id !== v.rowId) : rows));
   }
 }
 

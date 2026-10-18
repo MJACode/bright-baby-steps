@@ -297,6 +297,42 @@ describe("writes that must not run", () => {
   });
 });
 
+describe("a refetch while writes are queued", () => {
+  it("keeps a timer stopped offline stopped, and its row in the list", async () => {
+    const listKey = ["sleep-logs", "window", CHILD, 14];
+    const activeKey = ["sleep-logs", "active", CHILD];
+    client.setQueryData(listKey, []);
+    client.setQueryData(activeKey, null);
+    onlineManager.setOnline(false);
+    await submitOfflineLog(client, startSleep());
+    await submitOfflineLog(client, update({ ended_at: "2026-10-18T14:00:00.000Z", paused_at: null }));
+
+    // The server has the start but not yet the stop.
+    const running = { ...(startSleep() as { row: Record<string, unknown> }).row, ended_at: null, paused_at: null, paused_accumulated_seconds: 0 };
+    await client.fetchQuery({ queryKey: activeKey, queryFn: async () => running, networkMode: "always", staleTime: 0 });
+    await client.fetchQuery({ queryKey: listKey, queryFn: async () => [], networkMode: "always", staleTime: 0 });
+
+    expect(client.getQueryData(activeKey)).toBeNull();
+    expect(client.getQueryData<{ id: string; ended_at: string }[]>(listKey)).toMatchObject([
+      { id: ROW, ended_at: "2026-10-18T14:00:00.000Z" },
+    ]);
+  });
+});
+
+describe("re-applying queued writes", () => {
+  it("leaves a query it doesn't change marked stale", async () => {
+    const otherChildKey = ["sleep-logs", "window", "child-2", 14];
+    client.setQueryData(otherChildKey, []);
+    await client.invalidateQueries({ queryKey: otherChildKey });
+    onlineManager.setOnline(false);
+    await submitOfflineLog(client, startSleep());
+
+    await client.fetchQuery({ queryKey: ["sleep-logs", "active", CHILD], queryFn: async () => null, networkMode: "always" });
+
+    expect(client.getQueryState(otherChildKey)?.isInvalidated).toBe(true);
+  });
+});
+
 describe("persisting the queue", () => {
   it("survives a persist / restore round-trip and resumes after a restart", async () => {
     const storage = memoryStorage();
