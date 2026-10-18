@@ -3,7 +3,7 @@ import type { Mutation, Query, QueryClient } from "@tanstack/react-query";
 import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { del, get, keys, set } from "idb-keyval";
-import type { Session } from "@supabase/supabase-js";
+import { isAuthSessionMissingError, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { OFFLINE_LOG_KEY, SYNC_FAILURES_KEY } from "@/lib/offlineLogs";
 
@@ -171,9 +171,13 @@ export type AccountCheck = "ok" | "gone" | "unknown";
 export async function checkAccount(): Promise<AccountCheck> {
   const { data, error } = await supabase.auth.getUser();
   if (error) {
-    const status = (error as { status?: number }).status;
-    // Network trouble or a session mid-refresh proves nothing either way.
-    return status === 401 || status === 403 || status === 404 ? "gone" : "unknown";
+    // Decide on what GoTrue said, not the HTTP status: a deleted user or
+    // revoked session comes back as a missing session (or user_not_found),
+    // while a 401/403 can just be a rotated signing key or a phone clock
+    // that's off — wiping a live user's queue for that would lose logs.
+    return isAuthSessionMissingError(error) || (error as { code?: string }).code === "user_not_found"
+      ? "gone"
+      : "unknown";
   }
   return data.user ? "ok" : "gone";
 }

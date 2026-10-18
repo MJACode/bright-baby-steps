@@ -34,6 +34,7 @@ vi.mock("@/lib/offlineCache", async (importOriginal) => {
   };
 });
 
+import { AuthApiError, AuthRetryableFetchError, AuthSessionMissingError } from "@supabase/supabase-js";
 import { OfflineQueryProvider } from "@/components/OfflineQueryProvider";
 import { createAppQueryClient } from "@/lib/queryClient";
 import { countUnsyncedWrites, submitOfflineLog } from "@/lib/offlineLogs";
@@ -91,10 +92,13 @@ describe("OfflineQueryProvider", () => {
     expect(client.getQueryData(["children"])).toBeUndefined();
   });
 
-  it("wipes everything when the account is gone on reconnect", async () => {
+  it.each([
+    ["session_not_found (missing session)", () => new AuthSessionMissingError()],
+    ["user_not_found", () => new AuthApiError("User not found", 404, "user_not_found")],
+  ])("wipes everything when the account is gone on reconnect: %s", async (_label, makeError) => {
     mount(client);
     await submitOfflineLog(client, insert("child-1", "row-1"));
-    h.getUser.mockResolvedValue({ data: { user: null }, error: { status: 403, message: "user_not_found" } });
+    h.getUser.mockResolvedValue({ data: { user: null }, error: makeError() });
 
     await act(async () => {
       await h.beforeOnline?.();
@@ -104,10 +108,13 @@ describe("OfflineQueryProvider", () => {
     expect(h.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
-  it("keeps the queue when the account check can't reach the server", async () => {
+  it.each([
+    ["the server can't be reached", () => new AuthRetryableFetchError("Failed to fetch", 0)],
+    ["bad_jwt (skewed clock / rotated key)", () => new AuthApiError("invalid JWT", 403, "bad_jwt")],
+  ])("keeps the queue when %s", async (_label, makeError) => {
     mount(client);
     await submitOfflineLog(client, insert("child-1", "row-1"));
-    h.getUser.mockResolvedValue({ data: { user: null }, error: { status: 0, message: "Failed to fetch" } });
+    h.getUser.mockResolvedValue({ data: { user: null }, error: makeError() });
 
     await act(async () => {
       await h.beforeOnline?.();
