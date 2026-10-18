@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { IsRestoringProvider, onlineManager, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { persistQueryClientRestore, persistQueryClientSubscribe } from "@tanstack/react-query-persist-client";
+import { App } from "@capacitor/app";
 import { useAuth } from "@/hooks/useAuth";
 import { setBeforeOnline } from "@/lib/networkStatus";
 import { pruneChildren } from "@/lib/offlineLogs";
@@ -76,12 +77,21 @@ export function OfflineQueryProvider({ children }: { children: ReactNode }) {
         console.error("offline cache restore failed", err);
       }
       if (cancelled) return;
-      unsubscribe = persistQueryClientSubscribe({
+      const unsubscribePersist = persistQueryClientSubscribe({
         queryClient,
         persister,
         buster: OFFLINE_CACHE_BUSTER,
         dehydrateOptions,
       });
+      // Saves are throttled to once a second; a log tapped just before the
+      // app is swiped away must already be on disk.
+      const appState = App.addListener("appStateChange", ({ isActive }) => {
+        if (!isActive) void persister.flush(queryClient);
+      });
+      unsubscribe = () => {
+        unsubscribePersist();
+        void appState.then((handle) => handle.remove());
+      };
       setRestoredUid(uid);
       void resumeQueue(queryClient);
     })();

@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import type { Mutation, Query, QueryClient } from "@tanstack/react-query";
+import { dehydrate, type Mutation, type Query, type QueryClient } from "@tanstack/react-query";
 import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { del, get, keys, set } from "idb-keyval";
@@ -107,18 +107,49 @@ export const idbStorage: OfflineStorage = {
 // put child data back after the wipe.
 let writesEnabled = true;
 
-export function createOfflinePersister(uid: string, storage: OfflineStorage = idbStorage): Persister {
+export type OfflinePersister = Persister & {
+  /** Writes the store now, skipping the throttle — for when the app is backgrounded. */
+  flush: (queryClient: QueryClient) => Promise<void>;
+};
+
+const READ_ATTEMPTS = 3;
+
+export function createOfflinePersister(
+  uid: string,
+  storage: OfflineStorage = idbStorage,
+  { readRetryDelayMs = 250 }: { readRetryDelayMs?: number } = {},
+): OfflinePersister {
   writesEnabled = true;
+  const key = offlineCacheKey(uid);
+  // iOS can drop the IndexedDB connection after backgrounding. If the store
+  // can't be read, nothing in it may be deleted or overwritten this session —
+  // the restore's error path removes the store, and the first save would
+  // replace it with an empty cache, losing the queued writes inside.
+  let readFailed = false;
+  const canWrite = () => writesEnabled && !readFailed;
+
   const base = createAsyncStoragePersister({
-    key: offlineCacheKey(uid),
+    key,
     throttleTime: 1000,
     storage: {
-      getItem: async (key) => (await storage.getItem(key)) ?? null,
-      setItem: async (key, value) => {
-        if (writesEnabled) await storage.setItem(key, value);
+      getItem: async (k) => {
+        for (let attempt = 1; ; attempt++) {
+          try {
+            return (await storage.getItem(k)) ?? null;
+          } catch (err) {
+            if (attempt >= READ_ATTEMPTS) {
+              readFailed = true;
+              throw err;
+            }
+            await new Promise((resolve) => setTimeout(resolve, readRetryDelayMs));
+          }
+        }
       },
-      removeItem: async (key) => {
-        await storage.removeItem(key);
+      setItem: async (k, value) => {
+        if (canWrite()) await storage.setItem(k, value);
+      },
+      removeItem: async (k) => {
+        if (!readFailed) await storage.removeItem(k);
       },
     },
   });
@@ -127,6 +158,15 @@ export function createOfflinePersister(uid: string, storage: OfflineStorage = id
     restoreClient: async () => {
       const restored = await base.restoreClient();
       return restored ? prepareRestoredClient(restored) : undefined;
+    },
+    flush: async (queryClient) => {
+      if (!canWrite()) return;
+      const client: PersistedClient = {
+        timestamp: Date.now(),
+        buster: OFFLINE_CACHE_BUSTER,
+        clientState: dehydrate(queryClient, dehydrateOptions),
+      };
+      await storage.setItem(key, JSON.stringify(client));
     },
   };
 }

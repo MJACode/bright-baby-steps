@@ -10,7 +10,10 @@ const h = vi.hoisted(() => ({
   createPersister: vi.fn(),
 }));
 
-vi.mock("@capacitor/core", () => ({ Capacitor: { isNativePlatform: () => h.native } }));
+vi.mock("@capacitor/core", () => ({
+  Capacitor: { isNativePlatform: () => h.native },
+  registerPlugin: () => ({ addListener: async () => ({ remove: async () => {} }) }),
+}));
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: h.user, loading: false }) }));
 vi.mock("@/lib/networkStatus", () => ({
   setBeforeOnline: (fn: null | (() => Promise<void>)) => {

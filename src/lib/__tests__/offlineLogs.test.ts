@@ -79,6 +79,7 @@ import {
   type OfflineLogVariables,
 } from "@/lib/offlineLogs";
 import {
+  OFFLINE_CACHE_BUSTER,
   QUERY_TTL_MS,
   clearDeviceStore,
   createOfflinePersister,
@@ -375,6 +376,53 @@ describe("persisting the queue", () => {
     await flush();
     const restored = await createOfflinePersister("user-a", storage).restoreClient();
     expect(restored?.clientState.mutations[0].state.isPaused).toBe(true);
+  });
+});
+
+describe("a store that can't be read", () => {
+  it("is never deleted or overwritten when every read fails", async () => {
+    const storage = memoryStorage();
+    storage.map.set(offlineCacheKey("user-a"), "queued-writes-we-must-keep");
+    storage.getItem = async () => {
+      throw new Error("Connection to Indexed Database server lost");
+    };
+    const persister = createOfflinePersister("user-a", storage, { readRetryDelayMs: 0 });
+
+    await expect(
+      persistQueryClientRestore({ queryClient: client, persister, maxAge: Infinity, buster: "b" }),
+    ).rejects.toThrow("Indexed Database");
+    await persister.persistClient({ timestamp: 1, buster: "b", clientState: { queries: [], mutations: [] } });
+    await persister.flush(client);
+    await new Promise((r) => setTimeout(r, 1100));
+
+    expect(storage.map.get(offlineCacheKey("user-a"))).toBe("queued-writes-we-must-keep");
+  });
+
+  it("retries a read that fails once", async () => {
+    const storage = memoryStorage();
+    onlineManager.setOnline(false);
+    await submitOfflineLog(client, startSleep());
+    await createOfflinePersister("user-a", storage).flush(client);
+    const realGet = storage.getItem;
+    let calls = 0;
+    storage.getItem = async (k) => (++calls === 1 ? Promise.reject(new Error("lost")) : realGet(k));
+
+    const restarted = createAppQueryClient();
+    await persistQueryClientRestore({
+      queryClient: restarted,
+      persister: createOfflinePersister("user-a", storage, { readRetryDelayMs: 0 }),
+      maxAge: Infinity,
+      buster: OFFLINE_CACHE_BUSTER,
+    });
+    expect(countUnsyncedWrites(restarted)).toBe(1);
+  });
+
+  it("flushes a just-tapped write to disk immediately when asked", async () => {
+    const storage = memoryStorage();
+    onlineManager.setOnline(false);
+    await submitOfflineLog(client, startSleep());
+    await createOfflinePersister("user-a", storage).flush(client);
+    expect(storage.map.get(offlineCacheKey("user-a"))).toContain(ROW);
   });
 });
 
