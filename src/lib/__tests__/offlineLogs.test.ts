@@ -66,6 +66,8 @@ vi.mock("@/integrations/supabase/client", () => {
 });
 
 import { createAppQueryClient } from "@/lib/queryClient";
+import { LOG_HISTORY_PAGE_DAYS } from "@/lib/logHistoryPaging";
+import { logHistoryQueryKey } from "@/hooks/useLogHistory";
 import {
   SYNC_FAILURES_KEY,
   countUnsyncedWrites,
@@ -575,6 +577,12 @@ describe("what is stored on the device", () => {
     ]) {
       expect(shouldPersistQuery(q(key)), JSON.stringify(key)).toBe(false);
     }
+  });
+
+  it("stores only the first page of a history list", () => {
+    expect(shouldPersistQuery(q(logHistoryQueryKey("sleep_logs", CHILD, LOG_HISTORY_PAGE_DAYS, 0)))).toBe(true);
+    expect(shouldPersistQuery(q(logHistoryQueryKey("sleep_logs", CHILD, LOG_HISTORY_PAGE_DAYS * 2, 0)))).toBe(false);
+    expect(shouldPersistQuery(q(logHistoryQueryKey("feeding_logs", CHILD, 90, 420)))).toBe(false);
   });
 
   it("drops anything not refreshed for 7 days", () => {

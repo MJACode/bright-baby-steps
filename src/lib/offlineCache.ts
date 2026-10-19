@@ -6,6 +6,7 @@ import { del, get, keys, set } from "idb-keyval";
 import { isAuthSessionMissingError, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { OFFLINE_LOG_KEY, SYNC_FAILURES_KEY } from "@/lib/offlineLogs";
+import { LOG_HISTORY_PAGE_DAYS } from "@/lib/logHistoryPaging";
 
 // Persisting the query cache + queued writes to the phone (IndexedDB). Native
 // build only: on the web, child data must not be left on shared computers.
@@ -57,6 +58,9 @@ export function shouldPersistQuery(query: Pick<Query, "queryKey" | "state">, now
   const root = rootOf(query.queryKey);
   if (!PERSISTED_QUERY_ROOTS.has(root) || query.state.status !== "success") return false;
   if (EXCLUDED_SUBKEYS[root]?.has(String(query.queryKey[1]))) return false;
+  // "Show earlier days" widens history toward 1000 rows; only the first page
+  // is "recent" logs.
+  if (query.queryKey[1] === "history" && Number(query.queryKey[3]) > LOG_HISTORY_PAGE_DAYS) return false;
   // Unsynced work never expires; cached reads do.
   return root === SYNC_FAILURES_ROOT || now - query.state.dataUpdatedAt <= QUERY_TTL_MS;
 }
