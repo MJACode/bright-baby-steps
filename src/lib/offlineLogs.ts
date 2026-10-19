@@ -642,12 +642,23 @@ export function countUnsyncedWrites(queryClient: QueryClient): number {
  * returns (deleted, access revoked or paused): cached queries, queued writes,
  * and failures — silently, since there's nothing left for the parent to fix.
  */
+// Same as LOGGED_BY_NAMES_ROOT in useLoggedByNames (imported there would be a
+// cycle through useAuth); a test keeps them equal.
+export const LOGGED_BY_NAMES_QUERY_ROOT = "logged-by-names";
+
 export function pruneChildren(queryClient: QueryClient, childIds: string[]) {
   if (childIds.length === 0) return;
   const gone = new Set(childIds);
   queryClient
     .getQueryCache()
-    .findAll({ predicate: (q) => q.queryKey.some((part) => typeof part === "string" && gone.has(part)) })
+    .findAll({
+      predicate: (q) =>
+        q.queryKey.some((part) => typeof part === "string" && gone.has(part)) ||
+        // Keyed by user ids, not child, so it can't be matched to the child —
+        // drop all of it rather than keep family names after access ends.
+        // It refetches for whoever is still visible.
+        q.queryKey[0] === LOGGED_BY_NAMES_QUERY_ROOT,
+    })
     .forEach((q) => queryClient.getQueryCache().remove(q));
   pendingOfflineWrites(queryClient)
     .filter((m) => gone.has((m.state.variables as OfflineLogVariables).childId))

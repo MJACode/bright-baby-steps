@@ -68,11 +68,13 @@ vi.mock("@/integrations/supabase/client", () => {
 import { createAppQueryClient } from "@/lib/queryClient";
 import { LOG_HISTORY_PAGE_DAYS } from "@/lib/logHistoryPaging";
 import { logHistoryQueryKey } from "@/hooks/useLogHistory";
+import { LOGGED_BY_NAMES_ROOT } from "@/hooks/useLoggedByNames";
 import {
   SYNC_FAILURES_KEY,
   countUnsyncedWrites,
   describeSyncFailure,
   discardSyncFailure,
+  LOGGED_BY_NAMES_QUERY_ROOT,
   MAX_TRANSIENT_RETRIES,
   getSyncFailures,
   RESTORE_HOLD_TIMEOUT_MS,
@@ -627,6 +629,13 @@ describe("clearing the device", () => {
     storage.map.set(offlineCacheKey("user-b"), "{}");
     await removeOtherUsersCaches("user-b", storage);
     expect([...storage.map.keys()]).toEqual([offlineCacheKey("user-b")]);
+  });
+
+  it("drops cached family names whenever a child is pruned", () => {
+    expect(LOGGED_BY_NAMES_QUERY_ROOT).toBe(LOGGED_BY_NAMES_ROOT);
+    client.setQueryData([LOGGED_BY_NAMES_ROOT, "p1|p2"], { p2: "Sam" });
+    pruneChildren(client, [CHILD]);
+    expect(client.getQueryData([LOGGED_BY_NAMES_ROOT, "p1|p2"])).toBeUndefined();
   });
 
   it("silently drops cache, queued writes and failures for a child the server stopped returning", async () => {
