@@ -258,7 +258,7 @@ describe("FeedingLog allergen chips", () => {
     act(() => onlineManager.setOnline(false));
     try {
       expect(screen.queryByRole("button", { name: /Peanut/ })).not.toBeInTheDocument();
-      expect(screen.getByText("Add the serving when you're back online.")).toBeInTheDocument();
+      expect(screen.getByText("You're offline. Log allergen servings in the Allergen Tracker once you're back online.")).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
       await waitFor(() =>
