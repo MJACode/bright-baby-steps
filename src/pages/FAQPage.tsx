@@ -18,7 +18,7 @@ const FAQS = [
   },
   {
     q: "What data does Grace Flare store?",
-    a: "We store the information you enter: your child's name, date of birth, feeding, sleep, diaper, allergen, milestone, and health logs, play activities you've tried, and your Sign Language progress (which signs you're working on and the days you modeled them). With Flare+, we also keep your child's current weekly plans. We also store your account email and any notes you add. See our Privacy Policy for full details.",
+    a: "We store the information you enter: your child's name, date of birth, feeding, sleep, diaper, allergen, milestone, and health logs, play activities you've tried, and your Sign Language progress (which signs you're working on and the days you modeled them). With Flare+, we also keep your child's current weekly plans. We also store your account email and any notes you add. Recent logs are also saved on your phone so the app works offline. See our Privacy Policy for full details.",
   },
   {
     q: "Is my child's data sent to third parties?",
@@ -26,11 +26,11 @@ const FAQS = [
   },
   {
     q: "Can I share access with my partner or caregiver?",
-    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. The free plan includes one additional person; Flare+ includes four. A co-parent gets the same access you have. A caregiver logs feeds, sleep, and diapers; on Flare+ you can also give a caregiver the sleep & feed coach (nap and feed predictions). Finance is shared with co-parents only. If your Flare+ subscription ends, the person who joined first keeps access and anyone else is put on hold until you restart Flare+. Going on hold doesn't delete anything. You can pause or remove anyone at any time from the same section. Deleting a child or your account deletes that data for everyone.",
+    a: "Yes. You can invite a co-parent or caregiver via the Partner Management section in your Profile. The free plan includes one additional person; Flare+ includes four. A co-parent gets the same access you have. A caregiver logs feeds, sleep, and diapers; on Flare+ you can also give a caregiver the sleep & feed coach (nap and feed predictions). Finance is shared with co-parents only. If your Flare+ subscription ends, the person who joined first keeps access and anyone else is put on hold until you restart Flare+. Going on hold doesn't delete anything. You can pause or remove anyone at any time from the same section. Deleting a child or your account deletes that data for everyone. Any offline copy on someone else's phone is cleared the next time it connects.",
   },
   {
     q: "How do I delete my account and data?",
-    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our backup-rotation cycle (no longer than 30 days). Anthropic retains its copy of your AI inputs and outputs only for a limited period of safety and abuse review per its Usage Policy, then deletes them. This action cannot be undone. See § 9 of our Privacy Policy for full detail.",
+    a: "Go to Profile → Delete Account. Your primary records are removed within 7 days, uploaded files within 30 days, and any copies in encrypted backups are purged on our backup-rotation cycle (no longer than 30 days). Anthropic retains its copy of your AI inputs and outputs only for a limited period of safety and abuse review per its Usage Policy, then deletes them. If you're signed in on other phones, their offline copy is cleared the next time they connect. This action cannot be undone. See § 9 of our Privacy Policy for full detail.",
   },
   {
     q: "Does Grace Flare give financial advice?",

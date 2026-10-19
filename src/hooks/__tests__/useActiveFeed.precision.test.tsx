@@ -52,7 +52,7 @@ vi.mock("@/integrations/supabase/client", () => {
     }
     return self;
   };
-  return { supabase: { from: () => builder() } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t", user: { id: "parent-1" } } }, error: null }) }, from: () => builder() } };
 });
 
 const CHILD_ID = "child-1";

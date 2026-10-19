@@ -1,3 +1,5 @@
+import { useIsOnline } from "@/hooks/useOfflineSync";
+import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -111,6 +113,7 @@ export default function WeeklyInsightsPage() {
   const hasSavedPlan = coach.data?.hasSavedPlan ?? false;
   const wakeWindowBlock = weeklyWakeWindowBlock(engine, { offerChange: hasSavedPlan });
 
+  const online = useIsOnline();
   const { data: digest, isLoading, refetch, isFetching } = useQuery<WeeklyDigest | null>({
     queryKey: ["weekly-insights", activeChild?.id],
     queryFn: async () => {
@@ -164,15 +167,17 @@ export default function WeeklyInsightsPage() {
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-8 w-8"
-            onClick={() => refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-          </Button>
+          {online && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            </Button>
+          )}
           {digest && (
             <Button
               size="sm"
@@ -205,8 +210,16 @@ export default function WeeklyInsightsPage() {
         </div>
       )}
 
+      {!online && !digest && (
+        <Card className="border-0 bg-secondary">
+          <CardContent className="p-4">
+            <OfflineAiNotice />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Loading skeleton */}
-      {isLoading && (
+      {online && isLoading && (
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="border-0 bg-secondary">
@@ -260,7 +273,7 @@ export default function WeeklyInsightsPage() {
       )}
 
       {/* Empty state when not loading and no digest */}
-      {!isLoading && !digest && (
+      {online && !isLoading && !digest && (
         <Card className="border-0 bg-secondary">
           <CardContent className="p-6 text-center space-y-2">
             <TrendingUp className="w-8 h-8 text-muted-foreground mx-auto" />

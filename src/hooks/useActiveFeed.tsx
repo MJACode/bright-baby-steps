@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { useSubmitOfflineLog } from "@/hooks/useOfflineSync";
+import { OfflineLogError, newLogId, optimisticRow } from "@/lib/offlineLogs";
 import {
   scheduleSessionNotification,
   cancelSessionNotification,
@@ -63,7 +64,6 @@ export const STALE_AFTER_MS = 12 * 60 * 60 * 1000;
 // has the same predicate.
 export function useActiveFeed(childId: string | undefined) {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
 
   const activeKey = ["feeding-logs", "active", childId];
 
@@ -90,14 +90,15 @@ export function useActiveFeed(childId: string | undefined) {
     },
   });
 
-  const invalidate = () => invalidateAfterLogWrite(queryClient);
-  // Switching sides writes active_side, side_started_at and the per-side
-  // accumulators — the row stays in progress and duration_minutes / amount_oz /
-  // side (what every derived query reads) are untouched. It's the most-tapped
-  // control in a feed, so it refetches only the session it changed.
-  const invalidateActive = () => queryClient.invalidateQueries({ queryKey: activeKey });
+  const submit = useSubmitOfflineLog();
+  const update = (rowId: string, rowChildId: string, patch: Record<string, unknown>, refresh?: "active") =>
+    submit({ action: "update", table: "feeding_logs", rowId, childId: rowChildId, patch, refresh });
 
+  // Writes go through the offline queue (see useActiveSleep): values are taken
+  // at the tap, side effects run here rather than in the replayed write, and
+  // these wrappers use networkMode "always" so a tap registers offline.
   const start = useMutation({
+    networkMode: "always",
     mutationFn: async (input: { feeding_type: FeedingType; side?: FeedingSide | null }) => {
       const now = new Date().toISOString();
       // Reclaim abandoned timer rows before inserting. The active-feed *query*
@@ -110,30 +111,25 @@ export function useActiveFeed(childId: string | undefined) {
       // active recent session (inside the window) is left untouched, so a real
       // cross-device collision still surfaces as "Already feeding".
       const cutoff = new Date(Date.now() - STALE_AFTER_MS).toISOString();
-      await supabase
-        .from("feeding_logs")
-        .delete()
-        .eq("child_id", childId!)
-        .eq("source", "timer")
-        .is("duration_minutes", null)
-        .lt("logged_at", cutoff);
-
-      const { data, error } = await supabase
-        .from("feeding_logs")
-        .insert({
-          child_id: childId!,
-          parent_id: user!.id,
-          feeding_type: input.feeding_type,
-          logged_at: now,
-          duration_minutes: null,
-          active_side: input.side ?? null,
-          side_started_at: input.side ? now : null,
-          source: "timer",
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      const row = data as ActiveFeedRow;
+      const row = {
+        id: newLogId(),
+        child_id: childId!,
+        parent_id: user!.id,
+        feeding_type: input.feeding_type,
+        logged_at: now,
+        duration_minutes: null,
+        active_side: input.side ?? null,
+        side_started_at: input.side ? now : null,
+        source: "timer",
+      };
+      await submit({
+        action: "insert",
+        table: "feeding_logs",
+        rowId: row.id,
+        childId: row.child_id,
+        row,
+        reclaimStaleTimersBefore: cutoff,
+      });
       void scheduleSessionNotification({
         kind: notificationKindFor(row.feeding_type),
         startedAt: row.logged_at,
@@ -143,15 +139,15 @@ export function useActiveFeed(childId: string | undefined) {
         // with side:null must show a frozen lock-screen timer, not count up.
         running: !!input.side,
       });
-      return row;
+      return optimisticRow("feeding_logs", row) as unknown as ActiveFeedRow;
     },
-    onSuccess: invalidate,
   });
 
   // Switch which side is currently running for nursing/pump. Flushes the
   // server-tracked elapsed of the CURRENT side (now - side_started_at) to
   // duration_seconds_left / duration_seconds_right before moving on.
   const setSide = useMutation({
+    networkMode: "always",
     mutationFn: async (input: { nextSide: FeedingSide | null }) => {
       if (!active) return;
       const currentSide = active.active_side as FeedingSide | null;
@@ -183,8 +179,11 @@ export function useActiveFeed(childId: string | undefined) {
           updates.duration_minutes_right = Math.round(total / 60);
         }
       }
-      const { error } = await supabase.from("feeding_logs").update(updates).eq("id", active.id);
-      if (error) throw error;
+      // Switching sides writes active_side, side_started_at and the per-side
+      // accumulators — the row stays in progress and duration_minutes /
+      // amount_oz / side (what every derived query reads) are untouched. It's
+      // the most-tapped control in a feed, so it refetches only the session.
+      await update(active.id, active.child_id, updates, "active");
       // Sync the lock-screen timer to the post-switch accumulators — the exact
       // seconds the in-app display restarts from. While "both" runs, the in-app
       // total (left + right − both) also ticks 1s/s, matching the lock screen;
@@ -203,7 +202,6 @@ export function useActiveFeed(childId: string | undefined) {
         label: sideLabel(active.feeding_type, input.nextSide),
       });
     },
-    onSuccess: invalidateActive,
   });
 
   // Correct the times of a session that's still in progress — an overnight
@@ -211,6 +209,7 @@ export function useActiveFeed(childId: string | undefined) {
   // the active one and Save still finalizes it; only the start and the per-side
   // accumulators the display reads back from move.
   const adjust = useMutation({
+    networkMode: "always",
     mutationFn: async (input: {
       // The row the sheet was opened against, not whichever row is active by
       // the time Save lands — the session underneath can be finalized on
@@ -222,9 +221,8 @@ export function useActiveFeed(childId: string | undefined) {
     }) => {
       const left = Math.max(0, Math.round(input.leftSeconds));
       const right = Math.max(0, Math.round(input.rightSeconds));
-      const { data, error } = await supabase
-        .from("feeding_logs")
-        .update({
+      try {
+        await update(input.rowId, childId!, {
           logged_at: input.startAt.toISOString(),
           active_side: null,
           side_started_at: null,
@@ -232,17 +230,17 @@ export function useActiveFeed(childId: string | undefined) {
           duration_seconds_right: right,
           duration_minutes_left: Math.round(left / 60),
           duration_minutes_right: Math.round(right / 60),
-        })
-        .eq("id", input.rowId)
-        .select("id");
-      if (error) throw error;
-      // Zero rows and no error covers both an UPDATE the write policy rejected
-      // and a row that's already gone — without this the caller is told the
-      // times changed while the face still reads the runaway total.
-      if (!data?.length) {
-        throw new Error(
-          "Couldn't update this feed — it may have been finished or removed on another device.",
-        );
+        });
+      } catch (err) {
+        // Zero rows covers both an UPDATE the write policy rejected and a row
+        // that's already gone — without this the caller is told the times
+        // changed while the face still reads the runaway total.
+        if (err instanceof OfflineLogError && (err.kind === "gone" || err.kind === "permission")) {
+          throw new Error(
+            "Couldn't update this feed — it may have been finished or removed on another device.",
+          );
+        }
+        throw err;
       }
       void updateTimerLiveActivity({
         sessionId: input.rowId,
@@ -251,13 +249,10 @@ export function useActiveFeed(childId: string | undefined) {
         label: "",
       });
     },
-    // logged_at moved, so the page's feeding-logs list and the activity feed —
-    // both of which select in-progress rows — are stale too, not just the
-    // active-session query.
-    onSuccess: invalidate,
   });
 
   const stop = useMutation({
+    networkMode: "always",
     mutationFn: async (input: {
       // Pass the totals from the client display so we record the user-visible
       // value verbatim. For nursing, totalDurationMinutes = leftMinutes + rightMinutes
@@ -290,21 +285,18 @@ export function useActiveFeed(childId: string | undefined) {
         side: input.side ?? active.side,
         notes: input.notes ?? null,
       };
-      const { error } = await supabase.from("feeding_logs").update(updates).eq("id", active.id);
-      if (error) throw error;
+      await update(active.id, active.child_id, updates);
       void cancelSessionNotification(active.id);
     },
-    onSuccess: invalidate,
   });
 
   const cancel = useMutation({
+    networkMode: "always",
     mutationFn: async () => {
       if (!active) return;
-      const { error } = await supabase.from("feeding_logs").delete().eq("id", active.id);
-      if (error) throw error;
+      await submit({ action: "delete", table: "feeding_logs", rowId: active.id, childId: active.child_id });
       void cancelSessionNotification(active.id);
     },
-    onSuccess: invalidate,
   });
 
   return { active, isLoading, start, setSide, adjust, stop, cancel };

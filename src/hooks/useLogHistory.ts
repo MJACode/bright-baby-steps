@@ -1,3 +1,4 @@
+import { LOG_HISTORY_PAGE_DAYS } from "@/lib/logHistoryPaging";
 import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInCalendarDays, startOfDay } from "date-fns";
@@ -12,7 +13,7 @@ import {
 
 export type LogHistoryTable = "sleep_logs" | "feeding_logs" | "diaper_logs";
 
-const DAYS_PER_PAGE = 14;
+const DAYS_PER_PAGE = LOG_HISTORY_PAGE_DAYS;
 const MAX_ROWS = 1000;
 const NO_LOGS: never[] = [];
 

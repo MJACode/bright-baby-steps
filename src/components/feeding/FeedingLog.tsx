@@ -36,7 +36,9 @@ import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
-import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
+import { useIsOnline, usePendingLogIds, useSubmitOfflineLog } from "@/hooks/useOfflineSync";
+import { PendingSyncBadge } from "@/components/PendingSyncBadge";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { useLogHistory } from "@/hooks/useLogHistory";
 import { summarizeFeedingDay } from "@/lib/logDaySummary";
@@ -46,7 +48,7 @@ import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData"
 import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import {
   allergenEmoji, getAllergenStatus, nextExposureSlot,
-  FEED_ALLERGEN_CHIPS_LABEL, FEED_ALLERGEN_CHIPS_HELPER, FEED_ALLERGEN_CHIPS_REACTION_NOTE,
+  FEED_ALLERGEN_CHIPS_LABEL, FEED_ALLERGEN_CHIPS_HELPER, FEED_ALLERGEN_CHIPS_REACTION_NOTE, FEED_ALLERGEN_CHIPS_OFFLINE_NOTE,
   feedServingsLoggedText, feedServingsFailedText,
 } from "@/services/allergenService";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
@@ -118,6 +120,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
+  const submitLog = useSubmitOfflineLog();
+  const pendingIds = usePendingLogIds();
+  const online = useIsOnline();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   // History reaches further back than the page query's 50 rows, so the delete
@@ -362,7 +367,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const showAllergenChips = feedType === "solid" && !editingId && canLogServings && introducedAllergens.length > 0;
   // A reaction belongs on the allergen itself (reaction row, status, triage),
   // so a feed with "Reaction noted" logs no clean servings.
-  const servingAllergenIds = showAllergenChips && !reactionNoted
+  const servingAllergenIds = showAllergenChips && online && !reactionNoted
     ? allergenIds.filter((id) => introducedAllergens.some((a) => a.id === id))
     : [];
 
@@ -402,12 +407,16 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     return { logged, failed };
   };
 
-  const saveFeedRow = async () => {
+  const saveFeedRow = async (): Promise<SubmitResult> => {
     if (editingId) {
       // Editing an existing completed log.
-      const { error } = await supabase.from("feeding_logs").update(getPayload()).eq("id", editingId);
-      if (error) throw error;
-      return;
+      return submitLog({
+        action: "update",
+        table: "feeding_logs",
+        rowId: editingId,
+        childId: editingRow?.child_id ?? activeChild!.id,
+        patch: getPayload(),
+      });
     }
     if (activeRow && activeRow.feeding_type === feedType) {
       // Finalize the active (timer-started) row. We must clear the in-progress
@@ -417,9 +426,12 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       // bound to activeRow while the user has switched the form to Solid; in
       // that case we fall through to a fresh INSERT and leave the row intact.
       const payload = getPayload();
-      const { error } = await supabase
-        .from("feeding_logs")
-        .update({
+      return submitLog({
+        action: "update",
+        table: "feeding_logs",
+        rowId: activeRow.id,
+        childId: activeRow.child_id,
+        patch: {
           ...payload,
           // Use max(1, x) to guarantee the row leaves the active set even
           // if the timer hadn't ticked a full minute yet.
@@ -430,33 +442,28 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
           // recorded minutes are the record once the row is finished.
           duration_seconds_left: null,
           duration_seconds_right: null,
-        })
-        .eq("id", activeRow.id);
-      if (error) throw error;
-      return;
+        },
+      });
     }
     // Pure manual entry — no active session was running.
-    const { error } = await supabase.from("feeding_logs").insert({
-      ...getPayload(),
-      child_id: activeChild!.id,
-      parent_id: user!.id,
-    });
-    if (error) throw error;
+    const row = { ...getPayload(), id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
+    return submitLog({ action: "insert", table: "feeding_logs", rowId: row.id, childId: row.child_id, row });
   };
 
   const saveMutation = useMutation({
+    // The feed itself queues offline; this wrapper must not pause with it.
+    networkMode: "always",
     mutationFn: async () => {
-      await saveFeedRow();
-      return logFeedServings();
+      const result = await saveFeedRow();
+      return { result, ...(await logFeedServings()) };
     },
-    onSuccess: ({ logged, failed }) => {
-      invalidateAfterLogWrite(queryClient);
-      queryClient.invalidateQueries({ queryKey: ["feeding-logs", "active", activeChild?.id] });
+    onSuccess: ({ result, logged, failed }) => {
       if (logged.length > 0 || failed.length > 0) {
         queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
       }
       closeDialog();
       const description = [
+        result === "queued" ? QUEUED_TOAST_DESCRIPTION : "",
         logged.length > 0 ? feedServingsLoggedText(logged) : "",
         failed.length > 0 ? feedServingsFailedText(failed) : "",
       ].filter(Boolean).join(" ");
@@ -594,7 +601,9 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                   {showAllergenChips && (
                     <div className="space-y-2">
                       <Label>{FEED_ALLERGEN_CHIPS_LABEL}</Label>
-                      {reactionNoted ? (
+                      {!online ? (
+                        <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_OFFLINE_NOTE}</p>
+                      ) : reactionNoted ? (
                         <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_REACTION_NOTE}</p>
                       ) : (
                         <>
@@ -791,6 +800,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
                         </span>
                       )}
                       <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                      <PendingSyncBadge pending={pendingIds.has(log.id)} className="mt-0.5" />
                     </span>
                   </span>
                   <span className="flex items-center gap-2 shrink-0">

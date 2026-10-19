@@ -1,3 +1,5 @@
+import { useIsOnline } from "@/hooks/useOfflineSync";
+import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -75,6 +77,7 @@ export function VisitPrepCard({ activeChild, hideTrigger = false }: VisitPrepCar
   useEffect(() => onVisitPrepOpen(() => setSheetOpen(true)), []);
 
   const generateQuestions = useVisitPrepQuestions();
+  const online = useIsOnline();
   const { reset: resetQuestions } = generateQuestions;
 
   useEffect(() => {
@@ -415,7 +418,9 @@ export function VisitPrepCard({ activeChild, hideTrigger = false }: VisitPrepCar
               </Badge>
             </div>
 
-            {!generateQuestions.data ? (
+            {!generateQuestions.data && !online ? (
+              <OfflineAiNotice />
+            ) : !generateQuestions.data ? (
               <>
                 <Button
                   variant="outline"
@@ -484,7 +489,7 @@ export function VisitPrepCard({ activeChild, hideTrigger = false }: VisitPrepCar
                   {generateQuestions.data.disclaimer}
                 </p>
 
-                {isPremium && (
+                {isPremium && online && (
                   <Button
                     size="sm"
                     variant="ghost"

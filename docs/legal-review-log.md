@@ -3307,3 +3307,23 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 **Risk:** Low. No new subprocessor, no new child-data category, no change to Privacy, Terms, consent or VPC. Authorship pinning closes a small gap: before this, a family writer could insert a note under another person's id. That only mattered in the panel until the author's name started appearing in other people's notifications.
 
 **Daily cap:** `check-notifications` no longer counts `caregiver_note` rows toward a parent's daily nudge cap, so a day with several notes can't suppress sleep, diaper or allergen reminders. This changes only which existing rows the cron counts; it is not a data change (nothing new is stored, shared, kept or deleted).
+
+## 2026-10-18 — Offline logging: on-device cache and offline write queue
+
+**Decision (founder, 2026-10-18):** the iOS app lets parents log feeds, sleeps and diapers with no connection, and the logs sync when the phone is back online (plan: `tasks/todo-offline-logging.md`).
+
+**Reviewer:** in-house (`legal` agent pre-review). **Risk:** High until Privacy § 2 was corrected (its "strictly to keep you signed in" local-storage line would have become false; FTC Act § 5). Low once the redlines below land. No new subprocessor, no new child-data category, no change to VPC, the direct notice or partner consent.
+
+**Data flow:** on the parent's own phone only (Capacitor native build; nothing is persisted on web), IndexedDB holds (a) the cached child profile, recent `feeding_logs`, `sleep_logs`, `diaper_logs` (and screens derived only from them), the display names of family members who logged those rows, and the role / plan flags those screens gate on, with anything not refreshed for 7 days removed (`PERSISTED_QUERY_ROOTS` in `src/lib/offlineCache.ts`; health records, milestones, sleep plans and AI responses are not stored), and (b) a queue of feed/sleep/diaper writes made offline, kept until they upload to the same Supabase backend. The store is keyed to the signed-in user id (`gf-offline-cache:{uid}`); any other account's store is deleted on restore. No AI calls happen offline.
+
+**Clearing:** sign-out (and Delete Account, which signs out after the server delete) clears the device store *before* the session ends, after warning if writes haven't synced. On reconnect, if `auth.getUser()` reports a missing session or `user_not_found` (account deleted or session revoked), the device store is wiped; other auth errors (e.g. `bad_jwt` from a skewed clock) leave it alone. When a child is no longer returned by RLS (deleted, access revoked or paused), its cached data and queued or failed writes are discarded. Cached reads older than 7 days are dropped; queued writes never expire.
+
+**Disclosures changed:** Privacy § 2 (device storage also supports offline use), § 9 (new "Copies on devices" paragraph), § 10 (server encryption scoped to servers; new "Data on your device" paragraph, which says we add no separate on-device encryption), § 11 wording aligned to "Last reviewed". FAQ: shared-access, delete-account and "what data" answers. Terms § 8 (Disclaimer of warranties): unsynced offline logs may be lost. Privacy and Terms "Last reviewed" set to October 18, 2026. Effective dates unchanged.
+
+**Materiality / notice:** non-material under Privacy § 11 (no new collection, use, recipient or category), so no 30-day advance notice and no renewed VPC. The Privacy § 5 subprocessor notice doesn't apply.
+
+**COPPA:** not new collection or disclosure. Add the on-device cache to the § 312.8 written security program. Its retention is disclosed under § 312.10 on the conservative reading.
+
+**Outstanding / for outside counsel (when commissioned):** (1) Does amended § 312.10 require the on-device cache's retention to appear in the online notice? (Disclosed anyway.) (2) Is a WKWebView IndexedDB copy in the parent's iCloud backup outside our COPPA/HBNR scope? Separately, decide whether to exclude it from backup. (3) Is "cleared the next time it connects", with no time limit, enough for the deletion promise, or do we need a maximum device-retention period?
+
+**Code refs:** feature PR on branch `claude/offline-logging` (hash to fill in on merge).

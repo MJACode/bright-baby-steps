@@ -58,20 +58,24 @@ React Query already has offline support built in, so no new sync engine:
 
 ## Tasks
 ### Frontend (`frontend` agent)
-- [ ] Mobbin: 3–5 references for offline banner, pending-sync row marker,
+- [x] Mobbin: 3–5 references for offline banner, pending-sync row marker,
       and sync-failure recovery (iOS). Required by the standing rule.
-- [ ] Persisted `QueryClient` + `onlineManager` wiring in `App.tsx`
-- [ ] Move inline writes into keyed mutation hooks, with defaults registered
+- [x] Persisted `QueryClient` + `onlineManager` wiring in `App.tsx`
+- [x] Move inline writes into keyed mutation hooks, with defaults registered
       so paused writes can resume after a restart. Writes to move:
       `FeedingLog.tsx`, `SleepPage.tsx`, `SleepHistoryPage.tsx`,
       `DiapersPage.tsx`, `useActiveSleep.tsx`, `useActiveFeed.tsx`,
       `useDeleteWithUndo.tsx`
-- [ ] Optimistic insert into today's lists, plus a "Waiting to sync" marker
-- [ ] Offline / syncing / caught-up banner, and the sync-failure sheet
-- [ ] Offline state for AI cards
-- [ ] Sign-out warning, and clear the cache on sign-out
-- [ ] Tests: queue, replay order, no duplicates on retry, survives restart,
+- [x] Optimistic insert into today's lists, plus a "Waiting to sync" marker
+- [x] Offline / syncing / caught-up banner, and the sync-failure sheet
+- [x] Offline state for AI cards
+- [x] Sign-out warning, and clear the cache on sign-out
+- [x] Tests: queue, replay order, no duplicates on retry, survives restart,
       overlap failure surfaces
+- [x] Legal pre-review must-haves: store keyed to user id, wipe on account
+      change / remote deletion / revoked child, Delete Account uses the
+      sign-out clear, clear before `auth.signOut()`, queued writes never
+      expire (reads trimmed to 7 days), persistence native-only
 
 ### Backend (`backend` agent)
 - [ ] Confirm the three tables accept a client-supplied UUID `id` and that RLS

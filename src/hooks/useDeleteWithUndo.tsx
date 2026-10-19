@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { OFFLINE_LOG_TABLES, type LogRow, type OfflineLogTable } from "@/lib/offlineLogs";
+import { useSubmitOfflineLog } from "@/hooks/useOfflineSync";
 
 type UndoableTable = "sleep_logs" | "feeding_logs" | "diaper_logs" | "custom_milestones";
 
@@ -18,6 +20,11 @@ const STRIP_COLUMNS: Record<UndoableTable, string[]> = {
 
 const UNDO_WINDOW_MS = 5000;
 
+// The three log tables go through the offline queue; custom_milestones stays
+// online-only.
+const isOfflineTable = (table: UndoableTable): table is OfflineLogTable =>
+  (OFFLINE_LOG_TABLES as readonly string[]).includes(table);
+
 interface UseDeleteWithUndoOptions {
   table: UndoableTable;
   invalidateKeys: QueryKey[];
@@ -30,6 +37,7 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
   entityLabel = "Entry",
 }: UseDeleteWithUndoOptions) {
   const queryClient = useQueryClient();
+  const submitLog = useSubmitOfflineLog();
 
   const invalidateAll = () => {
     // Every table this hook supports is a log table, so the canonical list is
@@ -42,6 +50,20 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
     const payload = { ...row } as Record<string, unknown>;
     STRIP_COLUMNS[table].forEach((col) => delete payload[col]);
     try {
+      if (isOfflineTable(table)) {
+        // Same id as the deleted row: the queue replays delete → insert in
+        // order, and a pending "Waiting to sync" marker stays on the right row.
+        const restored = { ...payload, id: row.id } as LogRow;
+        await submitLog({
+          action: "insert",
+          table,
+          rowId: row.id,
+          childId: restored.child_id,
+          row: restored,
+        });
+        toast({ title: `${entityLabel} restored` });
+        return;
+      }
       const { error } = await supabase.from(table).insert(payload as never);
       if (error) throw error;
       invalidateAll();
@@ -56,13 +78,27 @@ export function useDeleteWithUndo<TRow extends { id: string }>({
   };
 
   return useMutation({
+    // Log-table deletes queue offline inside submitOfflineLog; this wrapper
+    // must not pause with them.
+    networkMode: "always",
     mutationFn: async (row: TRow) => {
+      if (isOfflineTable(table)) {
+        await submitLog({
+          action: "delete",
+          table,
+          rowId: row.id,
+          childId: (row as unknown as { child_id: string }).child_id,
+        });
+        return row;
+      }
       const { error } = await supabase.from(table).delete().eq("id", row.id);
       if (error) throw error;
       return row;
     },
     onSuccess: (row) => {
-      invalidateAll();
+      // Offline-queue writes refresh the lists when the queue drains.
+      if (!isOfflineTable(table)) invalidateAll();
+      else invalidateKeys.forEach((queryKey) => queryClient.invalidateQueries({ queryKey }));
       toast({
         title: `${entityLabel} deleted`,
         duration: UNDO_WINDOW_MS,

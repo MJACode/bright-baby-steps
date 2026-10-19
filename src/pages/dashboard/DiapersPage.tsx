@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,7 +23,9 @@ import { LoggedByChip } from "@/components/LoggedByChip";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { useLogHistory } from "@/hooks/useLogHistory";
 import { summarizeDiaperDay } from "@/lib/logDaySummary";
-import { invalidateAfterLogWrite } from "@/lib/logInvalidation";
+import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
+import { usePendingLogIds, useSubmitOfflineLog } from "@/hooks/useOfflineSync";
+import { PendingSyncBadge } from "@/components/PendingSyncBadge";
 import type { Tables } from "@/integrations/supabase/types";
 
 type DiaperLogRow = Tables<"diaper_logs">;
@@ -34,7 +36,8 @@ const consistencies = ["watery", "loose", "soft", "formed", "hard/pellets"];
 export default function DiapersPage() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
-  const queryClient = useQueryClient();
+  const submitLog = useSubmitOfflineLog();
+  const pendingIds = usePendingLogIds();
   const location = useLocation();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -125,7 +128,9 @@ export default function DiapersPage() {
   };
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    // The diaper itself queues offline; this wrapper must not pause with it.
+    networkMode: "always",
+    mutationFn: async (): Promise<SubmitResult> => {
       const payload = {
         diaper_type: diaperType,
         color: selectedColor || null,
@@ -135,22 +140,24 @@ export default function DiapersPage() {
         logged_at: logTime.toISOString(),
       };
       if (editingId) {
-        const { error } = await supabase.from("diaper_logs").update(payload).eq("id", editingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("diaper_logs").insert({
-          ...payload,
-          child_id: activeChild!.id,
-          parent_id: user!.id,
+        return submitLog({
+          action: "update",
+          table: "diaper_logs",
+          rowId: editingId,
+          childId: editingRow?.child_id ?? activeChild!.id,
+          patch: payload,
         });
-        if (error) throw error;
       }
+      const row = { ...payload, id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
+      return submitLog({ action: "insert", table: "diaper_logs", rowId: row.id, childId: row.child_id, row });
     },
-    onSuccess: () => {
-      invalidateAfterLogWrite(queryClient);
+    onSuccess: (result) => {
       resetForm();
       setModalOpen(false);
-      toast({ title: editingId ? "Diaper updated! ✏️" : "Diaper logged! 🧷" });
+      toast({
+        title: editingId ? "Diaper updated! ✏️" : "Diaper logged! 🧷",
+        ...(result === "queued" ? { description: QUEUED_TOAST_DESCRIPTION } : {}),
+      });
     },
     onError: (err) => {
       toast({
@@ -162,10 +169,12 @@ export default function DiapersPage() {
   });
 
   const quickLogMutation = useMutation({
+    networkMode: "always",
     mutationFn: async (type: "wet" | "dirty" | "both") => {
       // Wet-only logs skip color/consistency entirely; dirty and both default to a normal brown/soft entry.
       const isWetOnly = type === "wet";
-      const { error } = await supabase.from("diaper_logs").insert({
+      const row = {
+        id: newLogId(),
         color: isWetOnly ? null : "brown",
         consistency: isWetOnly ? null : "soft",
         notes: null,
@@ -174,17 +183,19 @@ export default function DiapersPage() {
         child_id: activeChild!.id,
         parent_id: user!.id,
         diaper_type: type,
-      });
-      if (error) throw error;
+      };
+      return submitLog({ action: "insert", table: "diaper_logs", rowId: row.id, childId: row.child_id, row });
     },
-    onSuccess: (_data, type) => {
-      invalidateAfterLogWrite(queryClient);
+    onSuccess: (result, type) => {
       const labels: Record<typeof type, string> = {
         wet: "Wet diaper logged! 💧",
         dirty: "Dirty diaper logged! 💩",
         both: "Wet + dirty logged! 💧💩",
       };
-      toast({ title: labels[type] });
+      toast({
+        title: labels[type],
+        ...(result === "queued" ? { description: QUEUED_TOAST_DESCRIPTION } : {}),
+      });
     },
     onError: (err) => {
       toast({
@@ -529,6 +540,7 @@ export default function DiapersPage() {
                         {format(new Date(log.logged_at), "h:mm a")}
                       </span>
                       <LoggedByChip name={loggedByNames[log.parent_id]} className="mt-0.5" />
+                      <PendingSyncBadge pending={pendingIds.has(log.id)} className="mt-0.5" />
                     </span>
                   </span>
                   <span className="flex items-center gap-2 shrink-0">

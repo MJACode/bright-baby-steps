@@ -1,5 +1,5 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import FeedingLog, { type SolidFeedDraft } from "@/components/feeding/FeedingLog";
 import { toast } from "@/hooks/use-toast";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
@@ -55,6 +55,8 @@ vi.mock("@/integrations/supabase/client", () => {
           ? { data: null, error: { code: "42501", message: "new row violates row-level security policy" } }
           : { data: { id: `log-${writes.length}` }, error: null };
       }
+      // An UPDATE returns the row it changed; zero rows reads as RLS-blocked.
+      if (s.op === "update") return { data: [{ id: "row" }], error: null };
       if (s.op) return { data: [], error: null };
       if (table === "allergen_exposure_logs") {
         return { data: INTROS.find((i) => i.id === s.introId)?.allergen_exposure_logs ?? [], error: null };
@@ -96,7 +98,7 @@ vi.mock("@/integrations/supabase/client", () => {
     };
     return chain;
   };
-  return { supabase: { from: (table: string) => makeChain(table) } };
+  return { supabase: { auth: { getSession: async () => ({ data: { session: { access_token: "t", user: { id: "parent-1" } } }, error: null }) }, from: (table: string) => makeChain(table) } };
 });
 
 vi.mock("@/services/allergenExposureWrite", async (importOriginal) => {
@@ -246,6 +248,29 @@ describe("FeedingLog allergen chips", () => {
       }),
     );
     expect(feedInserts()).toHaveLength(1);
+  });
+
+  it("offline, swaps the chips for a note and queues the feed without a serving", async () => {
+    render(tree());
+    await openSolid();
+    await screen.findByRole("button", { name: /Peanut/ });
+
+    act(() => onlineManager.setOnline(false));
+    try {
+      expect(screen.queryByRole("button", { name: /Peanut/ })).not.toBeInTheDocument();
+      expect(screen.getByText("You're offline. Log allergen servings in the Allergen Tracker once you're back online.")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+      await waitFor(() =>
+        expect(toast).toHaveBeenCalledWith({
+          title: "Feed logged! 🍼",
+          description: "Saved on this phone. It'll sync when you're back online.",
+        }),
+      );
+      expect(insertAllergenExposure).not.toHaveBeenCalled();
+    } finally {
+      act(() => onlineManager.setOnline(true));
+    }
   });
 
   it("hides the chips from a viewer", async () => {

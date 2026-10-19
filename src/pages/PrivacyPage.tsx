@@ -11,7 +11,7 @@ export default function PrivacyPage() {
       <div className="space-y-1 mb-6">
         <h1 className="font-display text-2xl font-bold">Privacy Policy</h1>
         <p className="text-xs text-muted-foreground">
-          Effective: June 20, 2026 · Last reviewed: October 7, 2026 ·{" "}
+          Effective: June 20, 2026 · Last reviewed: October 18, 2026 ·{" "}
           <Link to="/subprocessors" className="underline">Subprocessors</Link>
         </p>
       </div>
@@ -33,7 +33,7 @@ export default function PrivacyPage() {
             <li><strong>Tracking data:</strong> sleep, feeding, diaper, allergen introduction, milestone, illness, medication, supplement, and body-temperature (fever) records that you choose to log; play activities you mark as tried; and, in Sign Language, the signs you choose to focus on or mark as introduced or used, and the days you mark a sign as modeled. For Sign Language, you log only which sign from our built-in list and which day, never notes, photos, audio, or video.</li>
             <li><strong>Finance planning data:</strong> for each child, your answers to the Finance account finder (what the savings are for, and whether family will contribute) and which account types you mark as opened. We never ask for or store Social Security numbers, account numbers, balances, or income.</li>
             <li><strong>Chat history (historical):</strong> Grace Flare previously offered an AI chat. That feature was removed on August 28, 2026 and no new chat data is created. Conversations saved before then are still stored in your account — you can export them at any time from Profile, and deleting your account deletes them.</li>
-            <li><strong>Technical data:</strong> IP address, device type and operating system, browser type and version, app version, session identifiers, crash logs, and approximate location derived from your IP address (city-level only). We use first-party cookies and equivalent local-storage tokens strictly to keep you signed in and to remember your preferences. We do not use third-party advertising cookies or cross-site tracking pixels.</li>
+            <li><strong>Technical data:</strong> IP address, device type and operating system, browser type and version, app version, session identifiers, crash logs, and approximate location derived from your IP address (city-level only). We use first-party cookies and storage on your device to keep you signed in, remember your preferences, and let the app work without a connection (see "Data on your device" in § 10). We do not use third-party advertising cookies or cross-site tracking pixels.</li>
             <li><strong>Feedback attachments:</strong> any screenshot you choose to upload with a feedback report.</li>
           </ul>
         </section>
@@ -108,17 +108,19 @@ export default function PrivacyPage() {
           <h2 className="font-semibold text-foreground mb-2">9. Data retention</h2>
           <p>We retain your data while your account is active. When you delete your account or a child's record, primary database records are removed within <strong>7 days</strong>. Files in object storage are deleted within <strong>30 days</strong>. Encrypted database backups containing the data are overwritten on our standard backup-rotation cycle (no longer than 30 days) and are accessed during that window only for disaster-recovery purposes. AI-provider logs at Anthropic are deleted on the schedule described in § 4 (a limited period for safety and abuse review under Anthropic's then-current Usage Policy). Aggregated, de-identified statistics that contain no personal information may be retained indefinitely.</p>
           <p className="mt-2"><strong>Inactive accounts:</strong> if you do not sign in for 24 consecutive months, we will email you a 30-day deletion warning. If you do not sign in within that window, your account and all child records will be deleted on the same schedule above.</p>
+          <p className="mt-2"><strong>Copies on devices.</strong> Deleting your account or a child's record removes the data from our servers on the schedule above. A phone that is still signed in (yours, a co-parent's, or a caregiver's) may keep its offline copy until it next connects to the internet. The app then clears it. The same happens when you remove or pause someone's access. Signing out, or deleting the app, clears that phone's copy right away. Logs made offline for a child or account that has since been deleted are discarded, not uploaded.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">10. Security</h2>
-          <p>We use Postgres row-level security policies that ensure each user can only access their own data. Data is encrypted in transit (TLS 1.2+) and at rest (AES-256).</p>
+          <p>We use Postgres row-level security policies that ensure each user can only access their own data. Data on our servers is encrypted in transit (TLS 1.2+) and at rest (AES-256).</p>
+          <p className="mt-2"><strong>Data on your device.</strong> So you can see recent activity and keep logging without a connection, the Grace Flare app keeps a copy of your child's profile, recent feeding, sleep, and diaper logs, and the names of family members who logged them on your phone (anything not refreshed for 7 days is removed), plus any logs you make while offline until they upload. This copy stays in the app's private storage on your device and is sent only to our servers when you're back online. Grace Flare does not add separate encryption to it; it is protected by your device's own security, such as your passcode. Signing out removes it. If any logs haven't uploaded yet, we warn you first, because signing out will delete them.</p>
           <p className="mt-2"><strong>Breach notification.</strong> If we discover a security breach affecting your or your child's personal information, we will: (a) notify the relevant supervisory authority within 72 hours where required (GDPR Art. 33); (b) notify affected users without undue delay and in any event within 60 days, as required by the FTC Health Breach Notification Rule (16 CFR Part 318); and (c) comply with any shorter notification window required by applicable U.S. state law. Notice will describe the nature of the breach, the categories of data affected, the likely consequences, and the steps we are taking in response.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-foreground mb-2">11. Changes to this policy</h2>
-          <p>We will give at least <strong>30 days' advance notice</strong> of material changes by email and via in-app notice before they take effect. For non-material changes (typo fixes, formatting, contact-info updates), we update the "Last updated" date and the change takes effect immediately. Material changes that affect children's data require renewed verifiable parental consent.</p>
+          <p>We will give at least <strong>30 days' advance notice</strong> of material changes by email and via in-app notice before they take effect. For non-material changes (typo fixes, formatting, contact-info updates), we update the "Last reviewed" date and the change takes effect immediately. Material changes that affect children's data require renewed verifiable parental consent.</p>
         </section>
 
         <section>

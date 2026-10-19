@@ -1,3 +1,5 @@
+import { useIsOnline } from "@/hooks/useOfflineSync";
+import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInDays, parseISO } from "date-fns";
 import {
@@ -46,6 +48,7 @@ const DAYS = [1, 2, 3, 4, 5, 6, 7];
 export function SpeechClass({ childId, childName, ageMonths, isPremature, ageCorrected }: SpeechClassProps) {
   const { user } = useAuth();
   const { data: row, isLoading } = useSpeechClass(childId);
+  const online = useIsOnline();
   const generate = useGenerateSpeechClass();
   const toggleDay = useToggleSpeechClassDay();
 
@@ -114,7 +117,13 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature, ageCor
         {header}
         <Card className="border-0 bg-milestones-bg">
           <CardContent className="p-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading {childName}'s plan…
+            {online ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading {childName}'s plan…
+              </>
+            ) : (
+              <OfflineAiNotice />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -132,21 +141,25 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature, ageCor
               A guided week of tiny, play-based activities to encourage {childName}'s talking —
               one small thing a day, tuned to her age and the words you've logged.
             </p>
-            <Button
-              className="touch-target bg-milestones hover:bg-milestones/90 text-white"
-              onClick={handleGenerate}
-              disabled={generate.isPending}
-            >
-              {generate.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Building…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-1.5" /> Build this week's plan
-                </>
-              )}
-            </Button>
+            {!online ? (
+              <OfflineAiNotice />
+            ) : (
+              <Button
+                className="touch-target bg-milestones hover:bg-milestones/90 text-white"
+                onClick={handleGenerate}
+                disabled={generate.isPending}
+              >
+                {generate.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Building…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-1.5" /> Build this week's plan
+                  </>
+                )}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -157,20 +170,22 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature, ageCor
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         {header}
-        <Button
-          size="sm"
-          variant="ghost"
-          className="touch-target text-muted-foreground"
-          onClick={handleGenerate}
-          disabled={generate.isPending}
-          aria-label="Regenerate plan"
-        >
-          {generate.isPending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4" />
-          )}
-        </Button>
+        {online && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="touch-target text-muted-foreground"
+            onClick={handleGenerate}
+            disabled={generate.isPending}
+            aria-label="Regenerate plan"
+          >
+            {generate.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4" />
+            )}
+          </Button>
+        )}
       </div>
 
       {weekIsStale && (
@@ -179,14 +194,18 @@ export function SpeechClass({ childId, childName, ageMonths, isPremature, ageCor
             <p className="text-xs text-muted-foreground">
               This plan is over a week old. Ready for a fresh one?
             </p>
-            <Button
-              size="sm"
-              className="touch-target bg-milestones hover:bg-milestones/90 text-white shrink-0"
-              onClick={handleGenerate}
-              disabled={generate.isPending}
-            >
-              Start next week
-            </Button>
+            {online ? (
+              <Button
+                size="sm"
+                className="touch-target bg-milestones hover:bg-milestones/90 text-white shrink-0"
+                onClick={handleGenerate}
+                disabled={generate.isPending}
+              >
+                Start next week
+              </Button>
+            ) : (
+              <OfflineAiNotice className="shrink-0" />
+            )}
           </CardContent>
         </Card>
       )}
