@@ -10,6 +10,11 @@ const h = vi.hoisted(() => ({
   createPersister: vi.fn(),
   archived: [] as string[],
   archivedCheckFails: false,
+  // Native-path storage controls.
+  store: new Map<string, string>(),
+  keysFail: false,
+  readsFail: false,
+  appListeners: [] as Array<(s: { isActive: boolean }) => void>,
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -41,13 +46,35 @@ vi.mock("@/integrations/supabase/client", () => ({
     auth: { getUser: h.getUser, signOut: h.signOut, getSession: async () => ({ data: { session: { user: { id: "user-a" } } } }) },
   },
 }));
+vi.mock("@capacitor/app", () => ({
+  App: {
+    addListener: async (_event: string, cb: (s: { isActive: boolean }) => void) => {
+      h.appListeners.push(cb);
+      return { remove: async () => {} };
+    },
+  },
+}));
+
+const memoryStore = () => ({
+  getItem: async (k: string) => {
+    if (h.readsFail) throw new Error("Connection to Indexed Database server lost");
+    return h.store.get(k) ?? null;
+  },
+  setItem: async (k: string, v: string) => void h.store.set(k, v),
+  removeItem: async (k: string) => void h.store.delete(k),
+  keys: async () => [...h.store.keys()],
+});
+
 vi.mock("@/lib/offlineCache", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/offlineCache")>();
   return {
     ...actual,
-    createOfflinePersister: (...args: Parameters<typeof actual.createOfflinePersister>) => {
-      h.createPersister(...args);
-      return actual.createOfflinePersister(...args);
+    createOfflinePersister: (uid: string) => {
+      h.createPersister(uid);
+      return actual.createOfflinePersister(uid, memoryStore(), { readRetryDelayMs: 0 });
+    },
+    removeOtherUsersCaches: async () => {
+      if (h.keysFail) throw new Error("Connection to Indexed Database server lost");
     },
   };
 });
@@ -56,6 +83,12 @@ import { AuthApiError, AuthRetryableFetchError, AuthSessionMissingError } from "
 import { OfflineQueryProvider } from "@/components/OfflineQueryProvider";
 import { createAppQueryClient } from "@/lib/queryClient";
 import { countUnsyncedWrites, submitOfflineLog } from "@/lib/offlineLogs";
+import { offlineCacheKey } from "@/lib/offlineCache";
+
+async function realCreatePersister(uid: string) {
+  const actual = await vi.importActual<typeof import("@/lib/offlineCache")>("@/lib/offlineCache");
+  return actual.createOfflinePersister(uid, memoryStore());
+}
 
 const insert = (childId: string, id: string) =>
   ({
@@ -87,6 +120,10 @@ beforeEach(() => {
   h.createPersister.mockClear();
   h.archived = [];
   h.archivedCheckFails = false;
+  h.store = new Map();
+  h.keysFail = false;
+  h.readsFail = false;
+  h.appListeners = [];
   client = createAppQueryClient();
   onlineManager.setOnline(false);
 });
@@ -190,6 +227,49 @@ describe("OfflineQueryProvider", () => {
     });
 
     await waitFor(() => expect(countUnsyncedWrites(client)).toBe(0));
+  });
+
+  describe("on the native app", () => {
+    beforeEach(() => {
+      h.native = true;
+    });
+
+    async function seedStoreWithQueuedWrite() {
+      const before = createAppQueryClient();
+      await submitOfflineLog(before, insert("child-1", "row-1"));
+      await (await realCreatePersister("user-a")).flush(before);
+      before.getMutationCache().clear();
+    }
+
+    it("still restores when listing the stores fails, and never overwrites them with an empty cache", async () => {
+      await seedStoreWithQueuedWrite();
+      h.keysFail = true;
+      mount(client);
+
+      await waitFor(() => expect(countUnsyncedWrites(client)).toBe(1));
+      await act(() => new Promise((r) => setTimeout(r, 1100)));
+      expect(h.store.get(offlineCacheKey("user-a"))).toContain("row-1");
+    });
+
+    it("releases held taps when the restore fails", async () => {
+      h.readsFail = true;
+      mount(client);
+      const result = await submitOfflineLog(client, insert("child-1", "row-2"));
+      expect(result).toBe("queued");
+    });
+
+    it("writes the store to disk when the app goes to the background", async () => {
+      mount(client);
+      await waitFor(() => expect(h.appListeners).toHaveLength(1));
+      await submitOfflineLog(client, insert("child-1", "row-3"));
+      h.store.clear();
+
+      await act(async () => {
+        h.appListeners[0]({ isActive: false });
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(h.store.get(offlineCacheKey("user-a"))).toContain("row-3");
+    });
   });
 
   it("does not persist anything on the web", () => {

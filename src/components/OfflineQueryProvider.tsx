@@ -83,6 +83,14 @@ export function OfflineQueryProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         await removeOtherUsersCaches(uid);
+      } catch (err) {
+        // Listing keys can fail when iOS drops the IndexedDB connection. Other
+        // accounts' stores are never read under this uid, so carry on and
+        // restore this one — skipping it would let the first save overwrite
+        // this account's queued writes with an empty cache.
+        console.error("couldn't list offline stores", err);
+      }
+      try {
         await persistQueryClientRestore({
           queryClient,
           persister,
