@@ -358,6 +358,44 @@ describe("taps during the restore", () => {
   });
 });
 
+describe("stores saved before writes carried an owner", () => {
+  it("restores their writes and failures as the store's own account", async () => {
+    const storage = memoryStorage();
+    onlineManager.setOnline(false);
+    await submitOfflineLog(client, startSleep());
+    client.setQueryData(SYNC_FAILURES_KEY, [
+      { rowId: "old", table: "sleep_logs", childId: CHILD, kind: "overlap", at: null, failedAt: "", writes: [startSleep("old")] },
+    ]);
+    await createOfflinePersister("p1", storage).flush(client);
+    client.getMutationCache().clear();
+
+    // Strip ownerId, as a pre-d2b85fc build saved it.
+    const key = offlineCacheKey("p1");
+    const saved = JSON.parse(storage.map.get(key)!);
+    for (const m of saved.clientState.mutations) delete m.state.variables.ownerId;
+    for (const q of saved.clientState.queries) {
+      if (q.queryKey[0] === SYNC_FAILURES_KEY[0]) for (const f of q.state.data) for (const w of f.writes) delete w.ownerId;
+    }
+    storage.map.set(key, JSON.stringify(saved));
+
+    const restarted = createAppQueryClient();
+    restarted.mount();
+    await persistQueryClientRestore({
+      queryClient: restarted,
+      persister: createOfflinePersister("p1", storage),
+      maxAge: Infinity,
+      buster: OFFLINE_CACHE_BUSTER,
+    });
+    expect(getSyncFailures(restarted)[0].writes[0].ownerId).toBe("p1");
+
+    onlineManager.setOnline(true);
+    await restarted.resumePausedMutations();
+    await drain(restarted);
+    expect(h.ops.map((o) => o.op)).toEqual(["insert"]);
+    restarted.unmount();
+  });
+});
+
 describe("persisting the queue", () => {
   it("survives a persist / restore round-trip and resumes after a restart", async () => {
     const storage = memoryStorage();

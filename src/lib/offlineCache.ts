@@ -68,18 +68,34 @@ export function shouldPersistMutation(mutation: Pick<Mutation, "options" | "stat
   return mutation.options.mutationKey?.[0] === OFFLINE_LOG_KEY && mutation.state.status === "pending";
 }
 
-export function prepareRestoredClient(client: PersistedClient, now = Date.now()): PersistedClient {
+// Writes saved before each write carried its owner have none; the store is
+// keyed to one account, so they belong to `uid`.
+const withOwner = (variables: unknown, uid: string) =>
+  variables && typeof variables === "object" && !(variables as { ownerId?: unknown }).ownerId
+    ? { ...(variables as object), ownerId: uid }
+    : variables;
+
+export function prepareRestoredClient(client: PersistedClient, uid: string, now = Date.now()): PersistedClient {
   const state = client.clientState;
   return {
     ...client,
     clientState: {
       ...state,
-      queries: state.queries.filter((q) => shouldPersistQuery(q, now)),
+      queries: state.queries
+        .filter((q) => shouldPersistQuery(q, now))
+        .map((q) => {
+          if (q.queryKey[0] !== SYNC_FAILURES_ROOT || !Array.isArray(q.state.data)) return q;
+          const failures = (q.state.data as { writes?: unknown[] }[]).map((f) => ({
+            ...f,
+            writes: (f.writes ?? []).map((w) => withOwner(w, uid)),
+          }));
+          return { ...q, state: { ...q.state, data: failures } };
+        }),
       mutations: state.mutations
         .filter((m) => m.mutationKey?.[0] === OFFLINE_LOG_KEY && m.state.status === "pending")
         // resumePausedMutations only picks up paused ones; a write that was
         // mid-request when the app died has to be marked paused to resume.
-        .map((m) => ({ ...m, state: { ...m.state, isPaused: true } })),
+        .map((m) => ({ ...m, state: { ...m.state, isPaused: true, variables: withOwner(m.state.variables, uid) } })),
     },
   };
 }
@@ -157,7 +173,7 @@ export function createOfflinePersister(
     ...base,
     restoreClient: async () => {
       const restored = await base.restoreClient();
-      return restored ? prepareRestoredClient(restored) : undefined;
+      return restored ? prepareRestoredClient(restored, uid) : undefined;
     },
     flush: async (queryClient) => {
       if (!canWrite()) return;
