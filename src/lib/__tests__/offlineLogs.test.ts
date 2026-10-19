@@ -73,6 +73,7 @@ import {
   discardSyncFailure,
   MAX_TRANSIENT_RETRIES,
   getSyncFailures,
+  RESTORE_HOLD_TIMEOUT_MS,
   holdWritesForRestore,
   isTransientError,
   pruneChildren,
@@ -335,6 +336,23 @@ describe("re-applying queued writes", () => {
 });
 
 describe("taps during the restore", () => {
+  it("are let through after RESTORE_HOLD_TIMEOUT_MS if the restore never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      holdWritesForRestore(); // never released
+      onlineManager.setOnline(false);
+      let result: string | undefined;
+      void submitOfflineLog(client, startSleep()).then((r) => (result = r));
+
+      await vi.advanceTimersByTimeAsync(RESTORE_HOLD_TIMEOUT_MS - 100);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(200);
+      expect(result).toBe("queued");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("queue behind the restored writes, so they replay in order", async () => {
     // Before the restart: a Start was queued offline.
     onlineManager.setOnline(false);

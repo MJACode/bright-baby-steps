@@ -128,7 +128,6 @@ export function isTransientError(err: unknown): boolean {
 
 type PgError = { code?: string; message?: string };
 
-
 export function classifyPostgrestError(error: PgError, status: number): Error {
   const code = error.code ?? "";
   const message = error.message ?? "Something went wrong.";
@@ -465,14 +464,26 @@ export type SubmitResult = "saved" | "queued";
 // while the restore is still running, or a Stop could replay before its Start.
 let restoreGate: Promise<void> = Promise.resolve();
 
-/** Holds new writes behind the restore; call the returned function once it's done. */
-export function holdWritesForRestore(): () => void {
+// Long enough for a slow IndexedDB read; short enough that a stuck restore
+// can't swallow a parent's taps.
+export const RESTORE_HOLD_TIMEOUT_MS = 10_000;
+
+/**
+ * Holds new writes behind the restore; call the returned function once it's
+ * done (also on failure). Releases itself after RESTORE_HOLD_TIMEOUT_MS so a
+ * restore that never settles can't block logging.
+ */
+export function holdWritesForRestore(timeoutMs = RESTORE_HOLD_TIMEOUT_MS): () => void {
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
+  const timer = setTimeout(release, timeoutMs);
   restoreGate = restoreGate.then(() => held);
-  return release;
+  return () => {
+    clearTimeout(timer);
+    release();
+  };
 }
 
 export function submitOfflineLog(queryClient: QueryClient, variables: OfflineLogVariables): Promise<SubmitResult> {
