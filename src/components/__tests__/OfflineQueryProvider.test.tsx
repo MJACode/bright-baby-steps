@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   createPersister: vi.fn(),
   archived: [] as string[],
   archivedCheckFails: false,
+  lookups: [] as Array<{ table: string; inIds?: unknown; not?: unknown[] }>,
   // Native-path storage controls.
   store: new Map<string, string>(),
   keysFail: false,
@@ -29,11 +30,13 @@ vi.mock("@/lib/networkStatus", () => ({
 }));
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: () => {
+    from: (table: string) => {
+      const lookup: { table: string; inIds?: unknown; not?: unknown[] } = { table };
+      h.lookups.push(lookup);
       const chain: Record<string, unknown> = {
         select: () => chain,
-        in: () => chain,
-        not: () => chain,
+        in: (_col: string, ids: unknown) => ((lookup.inIds = ids), chain),
+        not: (...args: unknown[]) => ((lookup.not = args), chain),
         then: (resolve: (v: unknown) => unknown) =>
           Promise.resolve(
             h.archivedCheckFails
@@ -120,6 +123,7 @@ beforeEach(() => {
   h.createPersister.mockClear();
   h.archived = [];
   h.archivedCheckFails = false;
+  h.lookups = [];
   h.store = new Map();
   h.keysFail = false;
   h.readsFail = false;
@@ -193,6 +197,8 @@ describe("OfflineQueryProvider", () => {
     });
 
     await waitFor(() => expect(countUnsyncedWrites(client)).toBe(1));
+    // Asked through the app's own (RLS-bound) client, about exactly the missing child.
+    expect(h.lookups).toContainEqual({ table: "children", inIds: ["child-1"], not: ["archived_at", "is", null] });
   });
 
   it.each([
