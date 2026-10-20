@@ -30,6 +30,35 @@ import ActivityKit
 @objc(LiveActivityTimerPlugin)
 public class LiveActivityTimerPlugin: CAPPlugin {
 
+    /// Diagnostics probe for "why isn't the Live Activity showing?" — the one
+    /// call that resolves even when nothing can start, so the JS side can tell
+    /// the failure modes apart instead of a single swallowed `false`:
+    ///   - the call resolving AT ALL proves the plugin is registered and the
+    ///     ActivityKit glue compiled into the app (a missing plugin rejects).
+    ///   - `available` false  → iOS < 16.1.
+    ///   - `available` true + `enabled` false → Live Activities are turned off
+    ///     for the app in Settings (or system-wide). This is the usual culprit.
+    ///   - `enabled` true but activities never appear → look at the widget
+    ///     extension embed / signing, not the app side.
+    @objc func getDiagnostics(_ call: CAPPluginCall) {
+        #if canImport(ActivityKit)
+        if #available(iOS 16.1, *) {
+            let info = ActivityAuthorizationInfo()
+            call.resolve([
+                "available": true,
+                "enabled": info.areActivitiesEnabled,
+                "activityCount": Activity<TimerActivityAttributes>.activities.count,
+            ])
+            return
+        }
+        #endif
+        call.resolve([
+            "available": false,
+            "enabled": false,
+            "activityCount": 0,
+        ])
+    }
+
     /// Resolves {started: true} only when an activity was actually requested,
     /// so the JS side can fall back to a local notification otherwise
     /// (iOS < 16.1, or Live Activities disabled in Settings).

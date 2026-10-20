@@ -12,6 +12,7 @@
 #import <Capacitor/Capacitor.h>
 
 CAP_PLUGIN(LiveActivityTimerPlugin, "LiveActivityTimer",
+    CAP_PLUGIN_METHOD(getDiagnostics, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(startTimerActivity, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(updateTimerActivity, CAPPluginReturnPromise);
     CAP_PLUGIN_METHOD(endTimerActivity, CAPPluginReturnPromise);
