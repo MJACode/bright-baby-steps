@@ -1,5 +1,8 @@
+import fs from "node:fs";
+import nodePath from "node:path";
+
 import { SIGN_LIBRARY } from "@/data/signLibrary";
-import { SIGN_MEDIA } from "@/data/signMedia";
+import { SIGN_MEDIA, SIGN_VIDEO_DIR, resolveSignClip } from "@/data/signMedia";
 
 const SVGS = import.meta.glob<string>("/src/assets/signs/*.svg", {
   query: "?raw",
@@ -195,6 +198,95 @@ describe("SIGN_MEDIA", () => {
     const fileSlugs = svgEntries.map(([file]) => file.replace(/\.svg$/, "")).sort();
     expect(fileSlugs).toEqual(SIGN_LIBRARY.map((s) => s.slug).sort());
     for (const sign of SIGN_LIBRARY) expect(SIGN_MEDIA[sign.slug].illustration).not.toBeNull();
+  });
+});
+
+describe("resolveSignClip", () => {
+  const clip = (file: string, url: string) => [`${SIGN_VIDEO_DIR}/${file}`, url] as const;
+
+  it("returns nothing when the slug has no clip or poster", () => {
+    expect(resolveSignClip("milk", {})).toEqual({});
+    expect(resolveSignClip("milk", Object.fromEntries([clip("more.mp4", "/assets/more.mp4")]))).toEqual({});
+  });
+
+  it("prefers an mp4 clip over webm", () => {
+    expect(
+      resolveSignClip(
+        "milk",
+        Object.fromEntries([clip("milk.webm", "/assets/milk.webm"), clip("milk.mp4", "/assets/milk.mp4")]),
+      ),
+    ).toEqual({ video: "/assets/milk.mp4" });
+  });
+
+  it("uses webm when that is the only clip", () => {
+    expect(resolveSignClip("all-done", Object.fromEntries([clip("all-done.webm", "/assets/all-done.webm")]))).toEqual({
+      video: "/assets/all-done.webm",
+    });
+  });
+
+  it("prefers a webp poster over jpg, jpeg, and png", () => {
+    expect(
+      resolveSignClip(
+        "eat",
+        Object.fromEntries([
+          clip("eat.mp4", "/v.mp4"),
+          clip("eat-poster.png", "/p.png"),
+          clip("eat-poster.jpeg", "/p.jpeg"),
+          clip("eat-poster.jpg", "/p.jpg"),
+          clip("eat-poster.webp", "/p.webp"),
+        ]),
+      ),
+    ).toEqual({ video: "/v.mp4", videoPoster: "/p.webp" });
+  });
+
+  it("uses jpeg ahead of png when webp and jpg are absent", () => {
+    expect(
+      resolveSignClip(
+        "eat",
+        Object.fromEntries([clip("eat-poster.jpeg", "/p.jpeg"), clip("eat-poster.png", "/p.png")]),
+      ),
+    ).toEqual({ videoPoster: "/p.jpeg" });
+  });
+
+  it("does not treat a poster file as the clip", () => {
+    expect(resolveSignClip("more", Object.fromEntries([clip("more-poster.webp", "/p.webp")]))).toEqual({
+      videoPoster: "/p.webp",
+    });
+  });
+});
+
+describe("bundled sign clips", () => {
+  // npm test and CI both run from the repo root. import.meta.url is not a file URL under Vitest.
+  const videoDir = nodePath.resolve(process.cwd(), "src/assets/signs/video");
+
+  it("sets video and videoPoster only when the matching file is in the drop-in folder", () => {
+    const names = new Set(fs.readdirSync(videoDir));
+    for (const sign of SIGN_LIBRARY) {
+      const media = SIGN_MEDIA[sign.slug];
+      if (names.has(`${sign.slug}.mp4`) || names.has(`${sign.slug}.webm`)) {
+        expect(media.video).toEqual(expect.any(String));
+        expect(media.video!.length).toBeGreaterThan(0);
+      } else {
+        expect(media.video).toBeUndefined();
+      }
+      const hasPoster = ["webp", "jpg", "jpeg", "png"].some((ext) => names.has(`${sign.slug}-poster.${ext}`));
+      if (hasPoster) expect(media.videoPoster).toEqual(expect.any(String));
+      else expect(media.videoPoster).toBeUndefined();
+    }
+  });
+
+  it("allows only a library slug's clip or poster, and keeps each clip within 600 KB", () => {
+    const slugs = new Set(SIGN_LIBRARY.map((s) => s.slug));
+    for (const name of fs.readdirSync(videoDir)) {
+      if (name === "README.md") continue;
+      const clip = /^(.+)\.(mp4|webm)$/.exec(name);
+      const poster = /^(.+)-poster\.(webp|jpg|jpeg|png)$/.exec(name);
+      const slug = clip?.[1] ?? poster?.[1];
+      expect(slug != null && slugs.has(slug), name).toBe(true);
+      if (clip) {
+        expect(fs.statSync(nodePath.join(videoDir, name)).size).toBeLessThanOrEqual(600 * 1024);
+      }
+    }
   });
 });
 
