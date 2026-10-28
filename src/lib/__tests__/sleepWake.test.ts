@@ -208,7 +208,7 @@ describe("deriveWakeState", () => {
   });
 
   it("uses an approximate clock in calm mode", () => {
-    expect(deriveWakeState(at(15, 15), pred, true, base).title).toBe("Likely to wake around 4:15");
+    expect(deriveWakeState(at(15, 15), pred, true, base).title).toBe("Likely to wake around 4:15 PM");
   });
 
   it("says any minute inside the window", () => {

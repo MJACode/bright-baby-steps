@@ -1759,7 +1759,7 @@ describe("feedPredictionHeadline", () => {
         now: new Date("2024-07-15T14:00:00Z"),
         calmMode: true,
       }),
-    ).toBe("Likely hungry around 3:45");
+    ).toBe("Likely hungry around 3:45 PM");
   });
 
   it("switches to any-time-now once the window is open", () => {
