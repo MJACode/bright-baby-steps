@@ -58,3 +58,25 @@ describe("MobileDateTimePicker wheels wrap around", () => {
     expect(onChange).toHaveBeenCalledWith("0");
   });
 });
+
+describe("WheelColumn loop recentering waits for the finger to lift", () => {
+  it("does not move scrollTop mid-touch, recenters after touchend", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const opts = ["1", "2", "3"].map((v) => ({ value: v, label: v }));
+    render(<WheelColumn loop ariaLabel="N" value="1" options={opts} onChange={onChange} />);
+    const el = screen.getByRole("spinbutton", { name: "N" });
+    const start = el.scrollTop;
+
+    fireEvent.touchStart(el);
+    el.scrollTop = start - 48;
+    fireEvent.scroll(el);
+    act(() => vi.advanceTimersByTime(150));
+    expect(el.scrollTop).toBe(start - 48); // untouched while finger is down
+
+    fireEvent.touchEnd(el);
+    act(() => vi.advanceTimersByTime(150));
+    expect(el.scrollTop).toBe(start + 2 * 48);
+    expect(onChange).toHaveBeenCalledWith("3");
+  });
+});

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -50,6 +50,7 @@ export function WheelColumn({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const touching = useRef(false);
   const len = options.length;
   const idx = Math.max(
     0,
@@ -65,16 +66,15 @@ export function WheelColumn({
   // Keep the DOM scroll position aligned with the selected value. Runs on mount
   // and whenever the value changes from outside (e.g. parent clamps end >= start).
   // The guard makes it a no-op after a user scroll settles, so there's no loop.
-  useEffect(() => {
+  // Layout effect so the wheel is positioned before first paint (no flash of row 0).
+  useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const target = rowFor(idx) * ITEM_HEIGHT;
+    const target = (loop ? middleStart + idx : idx) * ITEM_HEIGHT;
     if (Math.abs(el.scrollTop - target) > 1) {
       el.scrollTop = target;
     }
-    // rowFor only depends on loop/len, which are covered by middleStart.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idx, middleStart]);
+  }, [idx, loop, middleStart]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
@@ -87,7 +87,12 @@ export function WheelColumn({
       );
       const nearest = row % len;
       // Recenter onto the middle copy so the next scroll has room both ways.
-      if (loop) el.scrollTop = rowFor(nearest) * ITEM_HEIGHT;
+      // Never while a finger is down: writing scrollTop mid-drag on iOS can
+      // drop the gesture. The settle after touchend recenters instead.
+      const centered = rowFor(nearest) * ITEM_HEIGHT;
+      if (loop && !touching.current && Math.abs(el.scrollTop - centered) > 1) {
+        el.scrollTop = centered;
+      }
       if (options[nearest] && options[nearest].value !== value) {
         onChange(options[nearest].value);
       }
@@ -126,6 +131,12 @@ export function WheelColumn({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        onTouchStart={() => (touching.current = true)}
+        onTouchEnd={() => {
+          touching.current = false;
+          if (loop) handleScroll();
+        }}
+        onTouchCancel={() => (touching.current = false)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="spinbutton"
