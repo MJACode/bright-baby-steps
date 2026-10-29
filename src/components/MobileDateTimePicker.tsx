@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useLayoutEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -29,46 +29,70 @@ const PAD = (COLUMN_HEIGHT - ITEM_HEIGHT) / 2; // spacer so first/last item can 
  * Exported because every bounded number a parent picks in a bottom sheet has to
  * come from a wheel rather than a keyboard — see PastSessionSheet's custom
  * duration for why a focused <input> is unusable inside a drawer on iOS.
+ *
+ * `loop` makes the column wrap (…11, 12, 1, 2…) so a parent at either end can
+ * scroll the other way, like the iOS clock. The options are rendered as many
+ * stacked copies and the scroll position is quietly moved back to the middle
+ * copy after every settle; the copies are identical, so the jump is invisible.
  */
 export function WheelColumn({
   value,
   options,
   onChange,
   ariaLabel,
+  loop = false,
 }: {
   value: string;
   options: { value: string; label: string }[];
   onChange: (val: string) => void;
   ariaLabel: string;
+  loop?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const settleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const touching = useRef(false);
+  const len = options.length;
   const idx = Math.max(
     0,
     options.findIndex((o) => o.value === value)
   );
 
+  // Enough copies that a hard flick can't run off either end before it settles
+  // (~120 rows each way), always odd so there is a true middle copy.
+  const copies = loop ? Math.max(3, Math.ceil(240 / len) | 1) : 1;
+  const middleStart = Math.floor(copies / 2) * len;
+  const rowFor = (i: number) => (loop ? middleStart + i : i);
+
   // Keep the DOM scroll position aligned with the selected value. Runs on mount
   // and whenever the value changes from outside (e.g. parent clamps end >= start).
   // The guard makes it a no-op after a user scroll settles, so there's no loop.
-  useEffect(() => {
+  // Layout effect so the wheel is positioned before first paint (no flash of row 0).
+  useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const target = idx * ITEM_HEIGHT;
+    const target = (loop ? middleStart + idx : idx) * ITEM_HEIGHT;
     if (Math.abs(el.scrollTop - target) > 1) {
       el.scrollTop = target;
     }
-  }, [idx]);
+  }, [idx, loop, middleStart]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     clearTimeout(settleTimer.current);
     settleTimer.current = setTimeout(() => {
-      const nearest = Math.min(
-        options.length - 1,
+      const row = Math.min(
+        len * copies - 1,
         Math.max(0, Math.round(el.scrollTop / ITEM_HEIGHT))
       );
+      const nearest = row % len;
+      // Recenter onto the middle copy so the next scroll has room both ways.
+      // Never while a finger is down: writing scrollTop mid-drag on iOS can
+      // drop the gesture. The settle after touchend recenters instead.
+      const centered = rowFor(nearest) * ITEM_HEIGHT;
+      if (loop && !touching.current && Math.abs(el.scrollTop - centered) > 1) {
+        el.scrollTop = centered;
+      }
       if (options[nearest] && options[nearest].value !== value) {
         onChange(options[nearest].value);
       }
@@ -76,9 +100,15 @@ export function WheelColumn({
   };
 
   const step = (dir: 1 | -1) => {
-    const next = Math.min(options.length - 1, Math.max(0, idx + dir));
+    const next = loop
+      ? (idx + dir + len) % len
+      : Math.min(len - 1, Math.max(0, idx + dir));
     onChange(options[next].value);
   };
+
+  const rows = loop
+    ? Array.from({ length: len * copies }, (_, r) => ({ r, i: r % len }))
+    : options.map((_, i) => ({ r: i, i }));
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowUp") {
@@ -101,23 +131,35 @@ export function WheelColumn({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
+        onTouchStart={() => (touching.current = true)}
+        onTouchEnd={() => {
+          touching.current = false;
+          if (loop) handleScroll();
+        }}
+        onTouchCancel={() => (touching.current = false)}
         onKeyDown={handleKeyDown}
         tabIndex={0}
         role="spinbutton"
         aria-label={ariaLabel}
         aria-valuemin={0}
-        aria-valuemax={options.length - 1}
+        aria-valuemax={len - 1}
         aria-valuenow={idx}
         aria-valuetext={options[idx]?.label ?? value}
         className="relative h-full snap-y snap-mandatory overflow-y-scroll overscroll-contain scrollbar-hide rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <div style={{ height: PAD }} aria-hidden />
-        {options.map((o, i) => (
+        {rows.map(({ r, i }) => {
+          const o = options[i];
+          // Only the middle copy is exposed to assistive tech and queries;
+          // the other copies exist purely so touch scrolling can wrap.
+          const offCopy = loop && (r < middleStart || r >= middleStart + len);
+          return (
           <button
             type="button"
-            key={o.value}
+            key={r}
             tabIndex={-1}
+            aria-hidden={offCopy || undefined}
             onClick={() => onChange(o.value)}
             className={cn(
               "flex w-full snap-center items-center justify-center tabular-nums select-none transition-colors",
@@ -129,7 +171,8 @@ export function WheelColumn({
           >
             {o.label}
           </button>
-        ))}
+          );
+        })}
         <div style={{ height: PAD }} aria-hidden />
       </div>
     </div>
@@ -227,6 +270,7 @@ export function MobileDateTimePicker({
           ariaLabel="Hour"
           value={String(hour12)}
           options={hours12}
+          loop
           onChange={(v) => updateTime(Number(v), minute, ampm)}
         />
         <span className="text-xl font-bold text-center select-none">:</span>
@@ -234,6 +278,7 @@ export function MobileDateTimePicker({
           ariaLabel="Minute"
           value={String(minute).padStart(2, "0")}
           options={minutes}
+          loop
           onChange={(v) => updateTime(hour12, Number(v), ampm)}
         />
         <WheelColumn
