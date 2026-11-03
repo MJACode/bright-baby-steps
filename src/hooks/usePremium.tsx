@@ -13,6 +13,17 @@ interface Subscription {
 }
 
 /**
+ * v1 ships Flare+ free to every account (subscriptions.provider = 'early_access')
+ * with no purchase flow. While true, no surface shows a price, a trial, or a
+ * purchase button; /upgrade renders the early-access state. Flip to false when
+ * in-app purchase lands and the paid paywall comes back as it was.
+ */
+export const FLARE_PLUS_EARLY_ACCESS = true;
+
+/** Label for the small "see what Flare+ adds" CTAs on gated cards. */
+export const FLARE_PLUS_CTA = FLARE_PLUS_EARLY_ACCESS ? "See Flare+" : "Try free for 7 days";
+
+/**
  * Single source of truth for premium gating.
  *
  * `isPremium` is true when the user has an active or trialing Flare+ sub.
@@ -43,6 +54,9 @@ export function usePremium() {
   return {
     isPremium,
     isTrialing,
+    // Not keyed on provider: comp accounts are Flare+ with provider NULL, and
+    // no premium account should see paid-plan wording while the flag is on.
+    isEarlyAccess: FLARE_PLUS_EARLY_ACCESS && isPremium,
     tier: sub.tier,
     status: sub.status,
     trialEndsAt: sub.trial_ends_at ? new Date(sub.trial_ends_at) : null,
@@ -84,7 +98,7 @@ export const PREMIUM_FEATURES = {
   "predictions": "Nap & feed predictions",
   "cry-analysis": "Cry clues",
   "growth-analytics": "Detailed growth analytics",
-  "multi-caregiver": "A second partner seat",
+  "multi-caregiver": "Up to four partner seats",
   "expert-library": "Guides library",
   "unlimited-history": "Unlimited log history",
   "exports": "PDF reports & exports",

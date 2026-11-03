@@ -3,20 +3,96 @@ import { Sparkles, Activity, Users, BarChart3, Check, X, Crown, Stethoscope } fr
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { FLARE_PLUS_EARLY_ACCESS, usePremium } from "@/hooks/usePremium";
+import { useAuth } from "@/hooks/useAuth";
 
 const PERKS = [
   { i: Sparkles, t: "Nap & feed predictions", s: "Next nap and feed, learned from your own logs." },
   { i: Stethoscope, t: "Checkup question prep", s: "Questions for your pediatrician, drafted from your baby's real sleep, feeding, and growth logs." },
   { i: Activity, t: "Cry clues", s: "On-device hints: could be hunger, tiredness, or discomfort." },
-  { i: Users, t: "Multi-caregiver sync", s: "Real-time for parents, sitters, grandparents" },
+  { i: Users, t: "Multi-caregiver sync", s: "Real-time for parents, nannies, grandparents" },
   { i: BarChart3, t: "Growth analytics + PDF reports", s: "WHO growth percentiles (birth–2 yrs), growth trends, PDFs to share at checkups." },
 ];
 
 /**
- * Editorial paywall — full route at /upgrade. Dark theme, annual emphasis,
- * 7-day trial CTA.
+ * Full route at /upgrade. While FLARE_PLUS_EARLY_ACCESS is on, shows the
+ * early-access state; the paid paywall below returns when it's turned off.
  */
 export default function Upgrade() {
+  return FLARE_PLUS_EARLY_ACCESS ? <EarlyAccess /> : <Paywall />;
+}
+
+function EarlyAccess() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const { isPremium, isLoading } = usePremium();
+  // A deep link to /upgrade has no history entry to go back to.
+  const goBack = () => (location.key === "default" ? navigate("/dashboard") : navigate(-1));
+
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-12">
+      <div className="max-w-lg mx-auto px-5 pt-safe">
+        <div className="flex justify-end pt-4">
+          <button
+            onClick={goBack}
+            aria-label="Close"
+            className="touch-target inline-flex items-center justify-center rounded-xl text-muted-foreground"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="pt-6">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">
+            <Crown className="w-3 h-3" strokeWidth={2.5} />
+            Flare+
+          </span>
+          <h1 className="font-display text-3xl font-bold leading-tight mt-5">
+            Flare+ is free during early access
+          </h1>
+          <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
+            {user
+              ? "You already have everything below. There's nothing to buy and nothing to cancel. If Flare+ ever costs money, we'll tell you at least 30 days ahead in the app and by email, and you'll decide then whether to keep it."
+              : "Flare+ is free during early access. Sign in to use it."}
+          </p>
+          {user && !isLoading && !isPremium && (
+            <p className="text-sm text-muted-foreground mt-3 leading-relaxed">
+              If a feature still shows a lock, close and reopen Grace Flare to refresh your plan.
+            </p>
+          )}
+        </div>
+
+        <ul className="mt-6 divide-y divide-border">
+          {PERKS.map(({ i: Icon, t, s }) => (
+            <li key={t} className="flex items-start gap-3 py-3.5">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{t}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{s}</div>
+              </div>
+              <Check className="w-4 h-4 text-primary mt-2.5 shrink-0" />
+            </li>
+          ))}
+        </ul>
+
+        {user ? (
+          <Button size="lg" className="w-full mt-7 h-14 rounded-2xl font-bold text-base" onClick={goBack}>
+            Back to Grace Flare
+          </Button>
+        ) : (
+          <Button size="lg" className="w-full mt-7 h-14 rounded-2xl font-bold text-base" onClick={() => navigate("/auth")}>
+            Sign in
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Paywall() {
   const navigate = useNavigate();
   const [plan, setPlan] = useState<"yearly" | "monthly">("yearly");
 

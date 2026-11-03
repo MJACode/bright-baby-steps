@@ -2,7 +2,7 @@ import { useState } from "react";
 import { GraduationCap, Hand, Sparkles, ToyBrick } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { usePremium } from "@/hooks/usePremium";
+import { usePremium, FLARE_PLUS_EARLY_ACCESS } from "@/hooks/usePremium";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 
 const PERKS = [
@@ -63,7 +63,7 @@ export function MilestonesPremiumCard() {
           className="w-full touch-target rounded-2xl font-bold"
           onClick={() => setOpen(true)}
         >
-          Try Flare+ free for 7 days
+          {FLARE_PLUS_EARLY_ACCESS ? "See Flare+" : "Try Flare+ free for 7 days"}
         </Button>
       </CardContent>
       <UpgradeSheet open={open} onOpenChange={setOpen} feature="speech-class" />

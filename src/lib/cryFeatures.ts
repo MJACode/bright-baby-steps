@@ -334,19 +334,23 @@ function computeRhythmScore(rmsFrames: number[], threshold: number): number {
 /* Suggestion copy                                                             */
 /* -------------------------------------------------------------------------- */
 
+/** Shown on every cry result. The classifier is a sound-pattern heuristic, not a diagnosis. */
+export const CRY_RESULT_DISCLAIMER =
+  "Not medical advice. If your baby seems unwell or the crying worries you, call your pediatrician.";
+
 export const BUCKET_LABELS: Record<CryBucket, { title: string; emoji: string; tips: string[]; color: string }> = {
   hunger: {
-    title: "Sounds like hunger",
+    title: "Could be hunger",
     emoji: "🍼",
     color: "feeding",
     tips: [
       "Try offering breast or bottle.",
       "Hunger cries are usually rhythmic and repeat — like a 'neh-neh'.",
-      "If it's been over 2 hours since the last feed, this is most likely.",
+      "If it's been over 2 hours since the last feed, hunger is a good first guess.",
     ],
   },
   tired: {
-    title: "Sounds like tired",
+    title: "Could be tiredness",
     emoji: "😴",
     color: "sleep",
     tips: [
@@ -356,13 +360,13 @@ export const BUCKET_LABELS: Record<CryBucket, { title: string; emoji: string; ti
     ],
   },
   discomfort: {
-    title: "Sounds like discomfort",
+    title: "Could be discomfort",
     emoji: "🤔",
     color: "diapers",
     tips: [
       "Check diaper, temperature, clothing tags, position.",
       "Discomfort cries are irregular and fussy — not a clear pattern.",
-      "If nothing fixes it within ~10 min, try the next likely cause.",
+      "If nothing helps within ~10 min, try the next possible reason.",
     ],
   },
   pain: {
@@ -370,13 +374,13 @@ export const BUCKET_LABELS: Record<CryBucket, { title: string; emoji: string; ti
     emoji: "💢",
     color: "destructive",
     tips: [
-      "Sudden, high-pitched, sustained cries can indicate pain.",
+      "Sudden, high-pitched cries that keep going can be a sign of pain.",
       "Check for hair tourniquets, swallowed objects, fever.",
       "If you can't soothe within 15–20 min or baby seems unwell, call your pediatrician.",
     ],
   },
   gas: {
-    title: "Sounds like gas",
+    title: "Could be gas",
     emoji: "🫧",
     color: "feeding",
     tips: [

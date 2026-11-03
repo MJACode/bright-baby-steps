@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { FLARE_PLUS_EARLY_ACCESS } from "@/hooks/usePremium";
 import { useChildren } from "@/hooks/useChildren";
 import { MCP_READ_CATEGORIES } from "@/lib/mcpReadCategories";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,9 +162,9 @@ export default function McpConsentPage() {
             </div>
             <CardTitle className="font-display text-2xl">Flare+ unlocks this</CardTitle>
             <CardDescription>
-              Connecting your own Claude to {childLabel} is part of Flare+. Upgrade
-              once and your Claude can read your tracked logs over a secure,
-              read-only connection — revoke any time.
+              {FLARE_PLUS_EARLY_ACCESS
+                ? `Connecting your own Claude to ${childLabel} is part of Flare+, free during early access. Your Claude can then read your tracked logs over a secure, read-only connection — revoke any time.`
+                : `Connecting your own Claude to ${childLabel} is part of Flare+. Upgrade once and your Claude can read your tracked logs over a secure, read-only connection — revoke any time.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

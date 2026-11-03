@@ -3327,3 +3327,58 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 **Outstanding / for outside counsel (when commissioned):** (1) Does amended § 312.10 require the on-device cache's retention to appear in the online notice? (Disclosed anyway.) (2) Is a WKWebView IndexedDB copy in the parent's iCloud backup outside our COPPA/HBNR scope? Separately, decide whether to exclude it from backup. (3) Is "cleared the next time it connects", with no time limit, enough for the deletion promise, or do we need a maximum device-retention period?
 
 **Code refs:** feature PR on branch `claude/offline-logging` (hash to fill in on merge).
+
+## 2026-11-03 — App Store v1: Flare+ free during early access; iOS purpose strings trimmed
+
+**Decision (founder, 2026-11-03):** v1 ships with Flare+ free for every account during early access (`subscriptions` row `tier='plus'`, `status='active'`, `provider='early_access'`, backfilled and set on signup by the companion backend migration; see the next entry for the migration and the App Review demo account). Early-access copy shows to every premium account while the flag is on, including comp accounts whose provider is NULL. There is no purchase flow on iOS or web; in-app purchase comes in v1.1.
+
+**Reviewer:** in-house (`frontend` agent, for the `legal` agent / founder to confirm). **Risk:** Low. More generous to the user; no new collection, use, recipient or category of data; no change to Privacy, VPC, the direct notice or partner consent.
+
+**Terms § 5 (Your account):** new "Flare+ during early access" paragraph: Flare+ is free during early access; nothing in the app starts a paid plan; before we start charging we will tell users in advance in the app and by email and they will choose whether to subscribe; nothing converts to paid automatically. The existing subscription / free-trial / auto-renewal / cancellation / refund paragraph stays for later, retitled "(once paid plans launch)" and scoped by the paragraph above. The fixed $9.99 / $59.99 prices were replaced with "at the prices shown in the app when you subscribe", because no price is offered anywhere in v1. Before paid plans launch, put the real prices and the ROSCA / Cal. B&P § 17602 disclosure back next to the purchase button (the paid `/upgrade` paywall still carries it, behind `FLARE_PLUS_EARLY_ACCESS` in `src/hooks/usePremium.tsx`). Last reviewed bumped to November 3, 2026; Effective date unchanged.
+
+**FAQ:** new "What does Flare+ cost?" answer with the same early-access statement; "(for Flare+ subscribers)" became "(on Flare+)" in the third-parties answer.
+
+**In-app copy:** with `FLARE_PLUS_EARLY_ACCESS` on, no reachable surface shows a price, a trial or a purchase button. `/upgrade` shows "Flare+ is free during early access" with a Back button; the UpgradeSheet, PremiumGate, PartnerManagement and Milestones teasers say "See Flare+" and "Free during early access"; Partner Access shows "Flare+, free during early access". AcceptInvite's consent copy said "Flare+ includes two" people, stale since the 2026-10-16 seat change; it now says four, matching Terms and FAQ.
+
+**Cry insights (App Review 1.4.1):** the result says "Could be …" / "Possible reason" with "a N% match to this sound pattern" instead of "Sounds like …" / "N% confident", the Home hint is "Get a hint about a cry" (was "Decode a cry in seconds"), and every result shows "Not medical advice. If your baby seems unwell or the crying worries you, call your pediatrician." (`CRY_RESULT_DISCLAIMER` in `src/lib/cryFeatures.ts`). Audio is still analyzed on the device. Only the result (category, match score, acoustic features) is saved, and only when the parent taps "Log this".
+
+**iOS Info.plist purpose strings (App Review 5.1.1), `codemagic.yaml`:** removed `NSFaceIDUsageDescription`, `NSSpeechRecognitionUsageDescription` and `NSPhotoLibraryAddUsageDescription` (they described Face ID sign-in, hands-free logging and saving milestone photos, none of which the app has). Uninstalled the unused `@capacitor/camera`, `capacitor-native-biometric` and `@capacitor-community/speech-recognition` plugins and deleted the two dead hooks that imported them. Kept and rewrote:
+- Microphone: "Grace Flare uses the microphone when you record a cry in Cry insights. The recording is analyzed on your device and never uploaded."
+- Camera: "Grace Flare uses the camera only when you choose to take a photo to attach to feedback or record a video clip for Cry insights."
+- Photo library: "Grace Flare opens your photo library only when you choose a photo or video to attach, such as a screenshot for feedback or a clip for Cry insights."
+
+**Materiality / notice:** non-material. No Privacy change, so no 30-day notice and no renewed VPC.
+
+**Before charging (v1.1):** send the advance in-app and email notice promised in Terms § 5 and the FAQ; get an affirmative opt-in from each user (no auto-conversion from the early-access row); restore prices and the auto-renewal disclosure in Terms § 5 and on the paywall; log that pass here.
+
+**Code refs:** branch `claude/app-store-v1` (hash to fill in on merge).
+
+## 2026-11-03 — Flare+ early-access migration; App Review demo account
+
+**Files:** `supabase/migrations/20261103000000_flare_plus_early_access.sql`, `supabase/seed/app-review-demo.sql`. **Reviewer:** in-house (`backend` agent; `qa` agent verified both against the live schema read-only, 2026-11-03). **Risk:** Low.
+
+**Migration (applies to production on merge; founder approves the merge):** adds `'early_access'` to the `subscriptions.provider` check; gives every account without a real billing provider and without an existing comp `tier='plus'`, `status='active'`, `provider='early_access'`, with no end date; new signups get the same row through `handle_new_user_subscription()`. The partner-notification trigger is off for the bulk statement only, so partners get no "access is back on" messages for a grant that isn't news. No new data is collected, used or shared. **v1.1 reversal:** restore the free default for signups, then downgrade only `WHERE provider = 'early_access'`, after the advance notice and opt-in promised in Terms § 5 (see the entry above). The two hand-granted comps (provider NULL) are untouched.
+
+**App Review demo account:** `appreview@graceflare.com` is a company-owned test login for Apple's reviewers. Its child ("Sunny") is fictional, so no child's personal information is collected and the § 312.5 consent requirement isn't triggered. The seed stamps the direct-notice, attestation and VPC columns so the reviewer can use the app without receiving the second consent email. It records this honestly: `vpc_method = 'app_review_demo'`, attestation name "App Review demo account (Grace Flare LLC)", IP NULL. **Rules:** (1) exclude `vpc_method = 'app_review_demo'` from any consent reporting or audit counts; (2) never reuse this method for a real family; (3) the password lives only in App Store Connect, never in git; (4) keep the account while the app is in review and for later updates, and delete it if the app is withdrawn.
+
+**Code refs:** branch `claude/app-store-v1` (hash to fill in on merge).
+
+## 2026-11-03 — Legal pass on App Store v1 copy; Privacy § 2 reconciled with the App Store label
+
+**Reviewer:** in-house `legal` agent (pre-review, not legal advice), applied by the parent session. **Risk:** Medium before these fixes (the policy didn't list data the app already collects, and the App Store label has to match the policy); Low after.
+
+**Terms § 5 / FAQ / /upgrade:** the early-access paragraph now promises **at least 30 days'** notice in the app and by email, matching the fee-change rule in § 13. It also says what happens if a user doesn't subscribe: the account moves to free, logs stay, Flare+-only features stop, and seats beyond the free allowance go on hold. "Shared access" now covers early access ending as well as a paid plan ending. UpgradeSheet's false "Free tier keeps 30 days" claim was removed (there is no history gate).
+
+**Privacy § 4:** "(for Flare+ subscribers)" became "(on Flare+, which every account has during early access)". Flare+-only processing (Anthropic weekly plans, `cry_analyses`, 4 partner seats) now reaches every account, not just comps. The direct notice and § 4 already cover it, so there's no new recipient or category.
+
+**Privacy § 2:** added disclosures for collection that already happens: growth, vaccinations, pediatrician/dental visits and Visit Prep, sleep plans and check-ins, Cry insights results (the audio never leaves the device), birth-certificate details, early-intervention tracking and provider contacts, the names given to invitees, caregiver notes, the consent record (typed name, date, IP), push tokens, and feedback reports and screenshots. Technical data was corrected: no location is stored (the signup country check runs on the device), and "crash logs" was removed (no crash reporter ships). **Materiality:** the in-house view is a non-material clarification. Nothing new is collected and the policy now describes what was already happening, so there's no 30-day notice and no renewed VPC. Outside-counsel question #1 below. Checked against the code: pumping schedules, cry-result notes/corrections and invitee emails were left out of § 2 because nothing in the app writes them today. § 2 and § 7 still mention an optional child photo (`children.photo_url` exists, but there's no upload path), which over-discloses and is left as is.
+
+**Verified on live (read-only, 2026-11-03):** `college_savings`, `health_insurance` and `life_insurance` have 0 rows, so "we never store account numbers" holds.
+
+**App Store submission:** the privacy label in `docs/app-store-launch.md` § 4 matches Privacy § 2. Use Apple's Standard EULA, not a custom one. The review notes describe the microphone/camera use and the Anthropic direct notice.
+
+**Demo account controls:** see the entry above, plus: the password lives only in App Store Connect and 1Password; after each review, delete partner invites the reviewer sent and re-seed if they tested Delete account; the `appreview@` inbox is monitored.
+
+**Outstanding / for outside counsel:** (1) Are the § 2 additions a clarification or a material change? (2) Is 30 days' notice plus opt-in enough to end early access, including putting partner seats on hold? (3) Is a company-owned demo account that skipped VPC defensible, and does Apple Guideline 5.1.2(i) on third-party AI need an in-app permission beyond the direct notice?
+
+**Code refs:** branch `claude/app-store-v1` (hash to fill in on merge).

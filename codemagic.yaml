@@ -109,13 +109,19 @@ workflows:
           ls -la ios/App/
 
       - name: Inject Info.plist permission strings
-        # Apple rejects any app that uses a protected API without a usage description.
-        # These six keys cover camera, Face ID, speech recognition, microphone,
-        # and read/write access to the system photo library. The two photo-library
-        # keys are required even though the app never directly reads from the
-        # library — Capacitor's Camera plugin statically references PHPhotoLibrary
-        # and Apple's automated review (ITMS-90683) rejects any binary that links
-        # those symbols without the matching usage description.
+        # Apple rejects any app that uses a protected API without a usage
+        # description, and App Review (5.1.1) rejects strings that describe a
+        # feature the app doesn't have. Keep exactly the keys the app needs:
+        #   - Microphone: Cry insights records up to 8 seconds through
+        #     getUserMedia/MediaRecorder and analyzes it on the device.
+        #   - Camera + photo library (read): WKWebView's <input type="file">
+        #     offers "Take Photo/Video" and "Photo Library" for the feedback
+        #     screenshot (FeedbackDialog) and Cry insights' clip picker.
+        # Nothing saves to the photo library (exports go through the share
+        # sheet as PDFs), so NSPhotoLibraryAddUsageDescription is not set.
+        # Face ID and speech recognition were dropped with their unused
+        # plugins. Strings are wrapped in single quotes for PlistBuddy, so
+        # keep apostrophes out of them.
         script: |
           PLIST="ios/App/App/Info.plist"
 
@@ -124,23 +130,14 @@ workflows:
             /usr/libexec/PlistBuddy -c "Set :$1 '$2'" "$PLIST"
           }
 
-          add_or_set "NSCameraUsageDescription" \
-            "Grace Flare uses the camera to capture milestone photos."
-
-          add_or_set "NSFaceIDUsageDescription" \
-            "Grace Flare uses Face ID for quick, secure sign-in."
-
-          add_or_set "NSSpeechRecognitionUsageDescription" \
-            "Grace Flare uses speech recognition so you can log entries hands-free."
-
           add_or_set "NSMicrophoneUsageDescription" \
-            "Grace Flare uses the microphone to capture your voice for hands-free logging."
+            "Grace Flare uses the microphone when you record a cry in Cry insights. The recording is analyzed on your device and never uploaded."
+
+          add_or_set "NSCameraUsageDescription" \
+            "Grace Flare uses the camera only when you choose to take a photo to attach to feedback or record a video clip for Cry insights."
 
           add_or_set "NSPhotoLibraryUsageDescription" \
-            "Grace Flare lets you pick existing photos from your library to attach to milestones."
-
-          add_or_set "NSPhotoLibraryAddUsageDescription" \
-            "Grace Flare can save milestone photos back to your photo library so they show up in your camera roll."
+            "Grace Flare opens your photo library only when you choose a photo or video to attach, such as a screenshot for feedback or a clip for Cry insights."
 
           # ITSAppUsesNonExemptEncryption=false declares the app uses only
           # exempt encryption (HTTPS / TLS via Apple's URLSession + WKWebView,
@@ -179,8 +176,8 @@ workflows:
         # When that's true, iOS restricts JavaScript document.cookie access,
         # ServiceWorker, and WebStorage to the domains listed here. WebKit
         # caps this list at 10 fully-qualified domains (no wildcards).
-        # Without this declaration, AI chat streaming and Supabase auth flows
-        # break in the WKWebView.
+        # Without this declaration, Supabase auth flows and the streaming
+        # Word Journal insights call break in the WKWebView.
         script: |
           PLIST="ios/App/App/Info.plist"
 

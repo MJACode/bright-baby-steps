@@ -99,7 +99,7 @@ function FeedCoachCardInner({
           <PremiumGate feature="predictions" variant="blur">
             {/* The blur overlay centres a badge, a label and a CTA button over
                 whatever it wraps, so this block reserves the room for them — at
-                its natural two-line height the "Try free" button would overflow
+                its natural two-line height the CTA button would overflow
                 the panel. */}
             <div className="flex min-h-[120px] flex-col justify-center rounded-xl border border-feeding/20 bg-card p-4">
               <div className="flex items-center gap-2">
