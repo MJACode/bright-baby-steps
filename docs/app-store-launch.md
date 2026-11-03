@@ -21,6 +21,8 @@ Prepared 2026-11-03. Everything you enter in App Store Connect for the first sub
 - [ ] Create the 1.0 version with the listing in § 2, the privacy label in § 4, the age rating in § 5 and the review notes in § 3.
 - [ ] **Pricing and Availability:** Free, **United States only**. This matches the EU/UK signup geo-block and avoids the EU DSA trader-status requirement.
 - [ ] **App Privacy → Privacy Policy URL:** `https://graceflare.com/privacy`
+- [ ] **License Agreement:** keep Apple's **Standard EULA**. Don't paste our Terms as a custom EULA, because Apple then requires extra Apple-specific clauses.
+- [ ] Make sure the `appreview@graceflare.com` inbox exists and someone checks it (password resets, the 24-month inactivity warning).
 - [ ] Screenshots: 6.9" iPhone (1320×2868) is required; 6.5" is optional. Use the demo account. Suggested five: Home "Today", Sleep coach, Milestones, Weekly insights, Visit Prep.
 - [ ] Pick a TestFlight build, then **Add for Review → Submit**.
 - [ ] Choose **Manual release** so you decide when it goes live after approval.
@@ -84,9 +86,9 @@ Flare+ is free during early access. Log sleep, feeds and diapers in a tap, see w
 >
 > Account deletion: Profile → Delete account.
 >
-> Microphone: used only by Cry insights (More → Cry insights) to record a short clip, analyzed on the device. Nothing is uploaded.
+> Microphone and camera: used only by Cry insights (More → Cry insights) to record a short sound or video clip, or to pick one from the library, and to attach a screenshot to a feedback report. The clip is analyzed on the device and never uploaded. If the parent taps "Log this", only the result (suggested reason, match score, acoustic measurements) is saved to their account.
 >
-> AI: briefings, weekly insights, Visit Prep and the weekly plans use Anthropic's Claude. These are one-shot summaries; there is no chat. The app gives general information and says it isn't medical advice.
+> AI: briefings, weekly insights, Visit Prep and the weekly plans use Anthropic's Claude. These are one-shot summaries; there is no chat. Before any child data is sent to Anthropic, the parent sees a direct notice naming Anthropic as our AI provider and signs it with their typed name. There is also an optional "Connect to Claude" integration in Settings, off by default, that lets a parent's own Claude read their data. The app gives general information and says it isn't medical advice.
 >
 > Sign up is limited to the U.S. (EU/UK signups are blocked for v1).
 
@@ -100,18 +102,20 @@ Flare+ is free during early access. Log sleep, feeds and diapers in a tap, see w
 
 | Apple category | What | Purpose |
 |---|---|---|
-| Contact Info → Name, Email Address | account, partner invites | App Functionality |
-| Health & Fitness → Health | feeds, sleep, diapers, growth, temperature, illness, milestones | App Functionality, Product Personalization |
-| User Content → Photos or Videos | photos you attach (child photo, feedback screenshots); check against Privacy § 2 | App Functionality |
-| User Content → Audio Data | **not collected**: cry clips stay on the device | — |
-| User Content → Other User Content | notes, Word Journal words, AI-memory notes | App Functionality, Product Personalization |
-| Identifiers → User ID | Supabase account ID | App Functionality |
+| Contact Info → Name, Email Address | account, partner invites (invitee email) | App Functionality |
+| Health & Fitness → Health | feeds, sleep, diapers, pumping, growth, temperature, illness, medications, vaccinations, pediatrician and dental visits, Visit Prep, milestones, early intervention, Cry insights results | App Functionality, Product Personalization |
+| Sensitive Info | pregnancy / due date (expected-baby profiles) and early-intervention tracking. Declare it to be safe, and check Apple's current definition | App Functionality |
+| Financial Info → Other Financial Info | Finance planning answers and accounts marked as opened (no card or bank numbers) | App Functionality |
+| User Content → Photos or Videos | feedback screenshots | App Functionality |
+| User Content → Customer Support | feedback reports | App Functionality |
+| User Content → Other User Content | notes, caregiver notes, Word Journal words, AI-memory notes, weekly plans | App Functionality, Product Personalization |
+| Identifiers → User ID | account ID | App Functionality |
 | Identifiers → Device ID | push token (only once push is on) | App Functionality |
-| Diagnostics → Crash Data | only if a crash reporter is shipped; otherwise skip | App Performance |
+| Other Data Types | birth-certificate details, early-intervention provider contacts, consent signature (typed name + IP) | App Functionality |
 
-**Not collected:** Location (the IP-country check isn't stored), Financial Info (no payments in v1), Browsing History, Contacts, Purchases.
+**Not collected:** Location (the signup country check runs on the device and isn't stored), Audio Data (cry clips stay on the device), Diagnostics (no crash reporter ships), Browsing History, Contacts, Purchases.
 
-Check this table against Privacy § 2 before you submit. The label and the policy must match.
+This table matches Privacy § 2 as updated in this PR. If either one changes, update the other.
 
 ---
 
@@ -140,6 +144,13 @@ Expect a low rating (4+ or 9+). If Apple suggests something higher, that's fine;
 | 4.2 Minimum functionality | "Just a website" | Native Lock Screen timers, widgets, Watch app, offline logging |
 | 2.1 Reviewer access | VPC email gate | Seeded demo account |
 
-## 7. v1.1 follow-ups
+## 7. Demo account hygiene
+- Keep the password only in App Store Connect and 1Password.
+- After each review, check that the account holds only seeded data. Delete any partner invites the reviewer sent, and re-run the seed if they tested Delete account.
+- Never add a real child to it. Exclude `vpc_method = 'app_review_demo'` from any consent counts or audits.
+
+## 8. v1.1 follow-ups
 - StoreKit / RevenueCat for Flare+ (see `docs/billing-launch-kit.md`, which needs outside-counsel review before paid launch). Move early-access rows with `where provider = 'early_access'`, giving users notice first, as Terms § 5 promises.
 - Turn on server push once the Push capability profile is in place.
+- Build the 30-day advance notice (in the app and by email) and the opt-in that Terms § 5 promises before early access ends.
+- Legacy tables `college_savings`, `health_insurance` and `life_insurance` have account- and policy-number columns, but all three were empty on live on 2026-11-03 and no UI writes them. Drop them in a later cleanup.
