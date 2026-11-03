@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Activity, Users, BarChart3, Stethoscope } from "lucide-react";
-import { type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
+import { type PremiumFeature, PREMIUM_FEATURES, FLARE_PLUS_EARLY_ACCESS } from "@/hooks/usePremium";
 
 interface UpgradeSheetProps {
   open: boolean;
@@ -26,7 +26,7 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
   },
   "multi-caregiver": {
     headline: "Bring your sitter in too.",
-    sub: "Your free plan includes one person beyond you. Flare+ makes room for two — co-parent, nanny, or grandparent — synced in real time.",
+    sub: "Your free plan includes one person beyond you. Flare+ makes room for four — co-parent, nanny, or grandparents — synced in real time.",
   },
   "expert-library": {
     headline: "Guides for the questions you actually have.",
@@ -34,7 +34,7 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
   },
   "unlimited-history": {
     headline: "Every entry, forever.",
-    sub: "Free tier keeps 30 days. Flare+ keeps everything.",
+    sub: "Flare+ keeps your full log history in view.",
   },
   "exports": {
     headline: "Checkup-ready in one tap.",
@@ -105,14 +105,22 @@ export function UpgradeSheet({ open, onOpenChange, feature = "predictions" }: Up
               navigate("/upgrade", { state: { feature } });
             }}
           >
-            Try Flare+ free for 7 days
+            {FLARE_PLUS_EARLY_ACCESS ? "See Flare+" : "Try Flare+ free for 7 days"}
           </Button>
-          <p className="text-center text-xs text-muted-foreground mt-3">
-            No charge today · {PREMIUM_FEATURES[feature]} included
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            After 7 days, $9.99/month or $59.99/year, renewing automatically until you cancel. Cancel before the trial ends and you won't be charged.
-          </p>
+          {FLARE_PLUS_EARLY_ACCESS ? (
+            <p className="text-center text-xs text-muted-foreground mt-3">
+              Free during early access · {PREMIUM_FEATURES[feature]} included
+            </p>
+          ) : (
+            <>
+              <p className="text-center text-xs text-muted-foreground mt-3">
+                No charge today · {PREMIUM_FEATURES[feature]} included
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                After 7 days, $9.99/month or $59.99/year, renewing automatically until you cancel. Cancel before the trial ends and you won't be charged.
+              </p>
+            </>
+          )}
         </div>
       </DrawerContent>
     </Drawer>

@@ -120,7 +120,7 @@ export function describePartnerError(
     // The server says which plan's limit was hit; the free-plan message
     // mentions "free plan".
     return message.includes("free plan")
-      ? `The free plan includes ${FREE_ADDITIONAL_USERS} additional person. Remove someone, or upgrade to Flare+ for ${MAX_ADDITIONAL_USERS}.`
+      ? `The free plan includes ${FREE_ADDITIONAL_USERS} additional person. Remove someone to free a seat, or see Flare+, which makes room for ${MAX_ADDITIONAL_USERS}.`
       : `Flare+ includes ${MAX_ADDITIONAL_USERS} additional people. Remove someone to free up a spot.`;
   }
   if (message.includes("CONSENT_REQUIRED")) {

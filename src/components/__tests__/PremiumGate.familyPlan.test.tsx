@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { PremiumGate } from "@/components/PremiumGate";
-import type { PremiumFeature } from "@/hooks/usePremium";
+import { FLARE_PLUS_CTA, type PremiumFeature } from "@/hooks/usePremium";
 
 const state = vi.hoisted(() => ({
   isPremium: false,
@@ -107,7 +107,7 @@ describe("PremiumGate caregiver sleep & feed coach", () => {
     renderGate("predictions");
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.queryByText("Gated content")).not.toBeInTheDocument();
-    expect(screen.queryByText("Try free for 7 days")).not.toBeInTheDocument();
+    expect(screen.queryByText(FLARE_PLUS_CTA)).not.toBeInTheDocument();
     expect(state.rpc).not.toHaveBeenCalled();
   });
 

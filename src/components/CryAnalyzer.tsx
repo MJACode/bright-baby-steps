@@ -21,7 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { FILE_ACCEPT, useCryAnalyzer } from "@/hooks/useCryAnalyzer";
-import { BUCKET_LABELS, type CryBucket } from "@/lib/cryFeatures";
+import { BUCKET_LABELS, CRY_RESULT_DISCLAIMER, type CryBucket } from "@/lib/cryFeatures";
 import { supabase } from "@/integrations/supabase/client";
 import { useChildren } from "@/hooks/useChildren";
 import { toast } from "@/hooks/use-toast";
@@ -90,7 +90,7 @@ export function CryAnalyzer() {
       <div>
         <h1 className="font-display text-2xl">Listen</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Record baby live, or pick an audio or video clip you already have. We'll suggest what might be going on. Logged cries appear in the list below.
+          Record baby live, or pick an audio or video clip you already have. We'll suggest a few possible reasons. Logged cries appear in the list below.
         </p>
       </div>
 
@@ -189,7 +189,7 @@ function CryHistoryList({ childId }: { childId: string | undefined }) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">
-                    {meta.title.replace(/^Sounds like |^Could be /, "")}
+                    {meta.title.replace(/^Could be /, "")}
                     {row.user_correction && (
                       <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                         corrected
@@ -199,7 +199,7 @@ function CryHistoryList({ childId }: { childId: string | undefined }) {
                   <p className="text-xs text-muted-foreground">
                     {formatDistanceToNowStrict(new Date(row.occurred_at), { addSuffix: true })}
                     {" · "}
-                    {pct}% confident
+                    {pct}% match
                   </p>
                 </div>
                 <Button
@@ -361,21 +361,17 @@ function ResultView({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide opacity-60">
-              Suggestion
+              Possible reason
             </p>
             <h2 className="font-display text-2xl mt-0.5">{meta.title}</h2>
             <p className="text-xs text-muted-foreground mt-1">
-              About {pct}% confident
+              About a {pct}% match to this sound pattern
               {alternates.length > 0 && (
                 <>
                   {" "}· could also be{" "}
                   {alternates
                     .slice(0, 2)
-                    .map((a) =>
-                      BUCKET_LABELS[a.bucket].title
-                        .replace("Sounds like ", "")
-                        .replace("Could be ", "")
-                    )
+                    .map((a) => BUCKET_LABELS[a.bucket].title.replace("Could be ", ""))
                     .join(" or ")}
                 </>
               )}
@@ -397,6 +393,11 @@ function ResultView({
             </li>
           ))}
         </ul>
+      </div>
+
+      <div className="rounded-2xl bg-muted/60 p-3 flex gap-2 text-xs text-muted-foreground">
+        <Info className="w-4 h-4 shrink-0 mt-0.5" />
+        <p>{CRY_RESULT_DISCLAIMER}</p>
       </div>
 
       <div className="flex gap-2">

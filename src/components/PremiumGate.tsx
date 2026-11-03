@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { Lock, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { usePremium, useChildOwnerPremium, type PremiumFeature, PREMIUM_FEATURES } from "@/hooks/usePremium";
+import { usePremium, useChildOwnerPremium, type PremiumFeature, PREMIUM_FEATURES, FLARE_PLUS_CTA } from "@/hooks/usePremium";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { useChildren } from "@/hooks/useChildren";
 import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
@@ -100,7 +100,7 @@ export function PremiumGate({
             {description ?? "Unlock with Flare+ — predictive insights tailored to your baby."}
           </p>
           <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
-            Try free for 7 days <span aria-hidden>→</span>
+            {FLARE_PLUS_CTA} <span aria-hidden>→</span>
           </div>
         </button>
         <UpgradeSheet open={open} onOpenChange={setOpen} feature={feature} />
@@ -136,7 +136,7 @@ export function PremiumGate({
               onClick={() => setOpen(true)}
               className="rounded-full"
             >
-              Try free for 7 days
+              {FLARE_PLUS_CTA}
             </Button>
           </div>
         </div>

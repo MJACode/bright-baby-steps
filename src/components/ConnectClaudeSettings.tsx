@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useMcpConnections } from "@/hooks/useMcpConnections";
-import { usePremium } from "@/hooks/usePremium";
+import { usePremium, FLARE_PLUS_EARLY_ACCESS } from "@/hooks/usePremium";
 import { APP_URL } from "@/lib/appUrl";
 import { Capacitor } from "@capacitor/core";
 import { Clipboard } from "@capacitor/clipboard";
@@ -42,16 +42,18 @@ export default function ConnectClaudeSettings() {
   };
 
   // Free-tier path: URL is visible but locked. Any tap on the URL row OR the
-  // copy button surfaces this toast with an Upgrade CTA — never silently copies
+  // copy button surfaces this toast with a Flare+ CTA — never silently copies
   // a URL the user can't actually authorize against, but also doesn't hide
   // what they'd unlock.
   const showFlarePlusOnlyToast = () => {
     toast({
       title: "Connecting Claude is a Flare+ feature",
-      description: "Upgrade to let your own Claude read your tracked data over a secure, read-only connection.",
+      description: FLARE_PLUS_EARLY_ACCESS
+        ? "Flare+ lets your own Claude read your tracked data over a secure, read-only connection. It's free during early access."
+        : "Upgrade to let your own Claude read your tracked data over a secure, read-only connection.",
       action: (
-        <ToastAction altText="Upgrade to Flare+" onClick={() => navigate("/upgrade")}>
-          Upgrade
+        <ToastAction altText={FLARE_PLUS_EARLY_ACCESS ? "See Flare+" : "Upgrade to Flare+"} onClick={() => navigate("/upgrade")}>
+          {FLARE_PLUS_EARLY_ACCESS ? "See Flare+" : "Upgrade"}
         </ToastAction>
       ),
     });
@@ -78,7 +80,9 @@ export default function ConnectClaudeSettings() {
               <p className="text-sm font-semibold">Flare+ unlocks this</p>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Connecting your own Claude is part of Flare+. Upgrade once and your Claude can read your tracked logs over a secure, read-only connection.
+              {FLARE_PLUS_EARLY_ACCESS
+                ? "Connecting your own Claude is part of Flare+, free during early access. Your Claude can then read your tracked logs over a secure, read-only connection."
+                : "Connecting your own Claude is part of Flare+. Upgrade once and your Claude can read your tracked logs over a secure, read-only connection."}
             </p>
             <Button asChild size="sm" className="w-full touch-target">
               <Link to="/upgrade">See Flare+</Link>
@@ -124,7 +128,9 @@ export default function ConnectClaudeSettings() {
           </div>
           <p className="text-[10px] text-muted-foreground">
             {locked
-              ? "Available with Flare+. Upgrade to copy this URL and connect your Claude."
+              ? FLARE_PLUS_EARLY_ACCESS
+                ? "Available with Flare+, free during early access."
+                : "Available with Flare+. Upgrade to copy this URL and connect your Claude."
               : "In Claude, add a custom connector and paste this URL. Claude will ask you to sign in and approve access."}
           </p>
         </div>

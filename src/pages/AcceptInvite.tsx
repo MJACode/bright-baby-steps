@@ -147,7 +147,7 @@ export default function AcceptInvite() {
                 </ul>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Your access depends on the inviting parent's plan: the free plan includes one
-                  additional person, Flare+ includes two. If their Flare+ ends, the earliest-joined
+                  additional person, Flare+ includes four. If their Flare+ ends, the earliest-joined
                   person keeps access and anyone else is put on hold until it restarts. Going on hold
                   doesn't delete anything. The inviting parent can pause or remove your access at any
                   time. If they delete the child's record or their account, that data is deleted and

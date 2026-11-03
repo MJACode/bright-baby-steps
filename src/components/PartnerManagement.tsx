@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import { usePremium } from "@/hooks/usePremium";
+import { usePremium, FLARE_PLUS_CTA } from "@/hooks/usePremium";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -31,7 +31,7 @@ import { format } from "date-fns";
 
 export default function PartnerManagement() {
   const { user } = useAuth();
-  const { isPremium, isLoading: premiumLoading } = usePremium();
+  const { isPremium, isEarlyAccess, isLoading: premiumLoading } = usePremium();
   const queryClient = useQueryClient();
   const { children, activeChild } = useChildren();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -295,7 +295,7 @@ export default function PartnerManagement() {
         {!premiumLoading && (
           <p className="text-xs font-semibold text-muted-foreground">
             {seats.used} of {seats.limit} {seats.limit === 1 ? "seat" : "seats"} used
-            {isPremium ? " · Flare+" : " · Free plan"}
+            {isEarlyAccess ? " · Flare+, free during early access" : isPremium ? " · Flare+" : " · Free plan"}
           </p>
         )}
 
@@ -490,11 +490,11 @@ export default function PartnerManagement() {
               </span>
             </div>
             <p className="text-sm text-foreground/80 leading-snug">
-              Your free seat is in use. Flare+ adds a second seat for a sitter or grandparent. Or
-              remove someone above to free your seat.
+              Your free seat is in use. Flare+ makes room for {MAX_ADDITIONAL_USERS} people, so a sitter or
+              grandparent can join too. Or remove someone above to free your seat.
             </p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-primary">
-              Try free for 7 days <span aria-hidden>→</span>
+              {FLARE_PLUS_CTA} <span aria-hidden>→</span>
             </div>
           </button>
         ) : (

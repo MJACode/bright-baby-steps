@@ -18,7 +18,10 @@ const { rpc, tables, copyInviteUrl, shareInvite, toast, update, premium } = vi.h
 }));
 
 vi.mock("@/hooks/useAuth", () => ({ useAuth: () => ({ user: { id: "owner-1" } }) }));
-vi.mock("@/hooks/usePremium", () => ({ usePremium: () => ({ isPremium: premium.isPremium, isLoading: false }) }));
+vi.mock("@/hooks/usePremium", () => ({
+  usePremium: () => ({ isPremium: premium.isPremium, isLoading: false }),
+  FLARE_PLUS_CTA: "See Flare+",
+}));
 vi.mock("@/hooks/use-toast", () => ({ toast }));
 vi.mock("@/hooks/useChildren", () => ({
   useChildren: () => ({

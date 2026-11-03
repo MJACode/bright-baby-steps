@@ -102,8 +102,8 @@ Flare+ is free during early access. Log sleep, feeds and diapers in a tap, see w
 
 | Apple category | What | Purpose |
 |---|---|---|
-| Contact Info → Name, Email Address | account, partner invites (invitee email) | App Functionality |
-| Health & Fitness → Health | feeds, sleep, diapers, pumping, growth, temperature, illness, medications, vaccinations, pediatrician and dental visits, Visit Prep, milestones, early intervention, Cry insights results | App Functionality, Product Personalization |
+| Contact Info → Name, Email Address | account sign-in and your name | App Functionality |
+| Health & Fitness → Health | feeds, sleep, diapers, growth, temperature, illness, medications, vaccinations, pediatrician and dental visits, Visit Prep, milestones, early intervention, Cry insights results | App Functionality, Product Personalization |
 | Sensitive Info | pregnancy / due date (expected-baby profiles) and early-intervention tracking. Declare it to be safe, and check Apple's current definition | App Functionality |
 | Financial Info → Other Financial Info | Finance planning answers and accounts marked as opened (no card or bank numbers) | App Functionality |
 | User Content → Photos or Videos | feedback screenshots | App Functionality |

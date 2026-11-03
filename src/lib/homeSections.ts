@@ -45,7 +45,7 @@ export const QUICK_TILES: QuickTile[] = [
   { id: "weekly", label: "Weekly insights", hint: "Your week in review", icon: TrendingUp, path: "/dashboard/weekly", tile: "bg-accent/10", chip: "bg-accent/15 text-accent", labelColor: "text-accent", dot: "bg-accent" },
   { id: "calendar", label: "Calendar", hint: "Appointments & events", icon: CalendarDays, path: "/dashboard/calendar", tile: "bg-primary/10", chip: "bg-primary/15 text-primary", labelColor: "text-primary", dot: "bg-primary" },
   { id: "analytics", label: "Analytics", hint: "Charts & trends", icon: BarChart3, path: "/dashboard/analytics", tile: "bg-primary/10", chip: "bg-primary/15 text-primary", labelColor: "text-primary", dot: "bg-primary" },
-  { id: "cryInsights", label: "Cry insights", hint: "Decode a cry in seconds", icon: Ear, path: "/dashboard/cry-analyzer", tile: "bg-muted", chip: "bg-foreground/10 text-foreground", labelColor: "text-foreground", dot: "bg-foreground" },
+  { id: "cryInsights", label: "Cry insights", hint: "Get a hint about a cry", icon: Ear, path: "/dashboard/cry-analyzer", tile: "bg-muted", chip: "bg-foreground/10 text-foreground", labelColor: "text-foreground", dot: "bg-foreground" },
 ];
 
 export const HOME_SECTIONS: { id: string; label: string; description: string; icon: LucideIcon }[] = [
