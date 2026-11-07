@@ -3382,3 +3382,9 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 **Outstanding / for outside counsel:** (1) Are the § 2 additions a clarification or a material change? (2) Is 30 days' notice plus opt-in enough to end early access, including putting partner seats on hold? (3) Is a company-owned demo account that skipped VPC defensible, and does Apple Guideline 5.1.2(i) on third-party AI need an in-app permission beyond the direct notice?
 
 **Code refs:** branch `claude/app-store-v1` (hash to fill in on merge).
+
+## 2026-11-07 — Finance disclaimer names who to ask; "advisor" spelling
+
+**Files:** `src/components/financial/AccountCard.tsx` (`NOT_ADVICE`), `src/pages/FAQPage.tsx`. **Reviewer:** in-house (parent session, founder-approved copy). **Risk:** Low.
+
+The finance disclaimer shown on the Financial page (under the intro, below the cards, and in each expanded card) now reads "Educational, not financial or tax advice. For your situation, check with a tax professional or financial advisor." Before, it said it wasn't advice but didn't say who to ask. FAQ spelling changed from "adviser" to "advisor" to match Terms § 4. No change to what the feature collects, uses or recommends.
