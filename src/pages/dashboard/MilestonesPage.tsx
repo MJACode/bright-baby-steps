@@ -469,23 +469,6 @@ export default function MilestonesPage() {
 
               <WordJournal childId={activeChild.id} ageMonths={ageMonths} />
 
-              <Link to="/dashboard/signs" className="block touch-target">
-                <Card className="border-0 bg-milestones-bg active:scale-[0.99] transition-transform">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
-                      <Hand className="w-5 h-5 text-milestones" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">Sign Language</p>
-                      <p className="text-xs text-muted-foreground">
-                        Teach your baby to tell you what they need — before words.
-                      </p>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
-                  </CardContent>
-                </Card>
-              </Link>
-
               {ageMonths >= 9 && (
                 <PremiumGate feature="speech-class" variant="replace">
                   <SpeechClass
@@ -501,7 +484,26 @@ export default function MilestonesPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="activities" className="mt-4">
+        <TabsContent value="activities" className="mt-4 space-y-5">
+          {activeChild && (
+            <Link to="/dashboard/signs" className="block touch-target">
+              <Card className="border-0 bg-milestones-bg active:scale-[0.99] transition-transform">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-milestones/15 flex items-center justify-center shrink-0">
+                    <Hand className="w-5 h-5 text-milestones" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">Sign Language</p>
+                    <p className="text-xs text-muted-foreground">
+                      Teach your baby to tell you what they need — before words.
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+
           <ActivitiesSection
             child={activeChild}
             ageMonths={ageMonths}
