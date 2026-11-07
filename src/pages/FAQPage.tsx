@@ -38,7 +38,7 @@ const FAQS = [
   },
   {
     q: "Does Grace Flare give financial advice?",
-    a: "No. The Finance section explains common types of children's savings accounts and suggests which types to look into, using only your child's birth date and your two answers. It doesn't know your income, taxes, or state, and it doesn't recommend any specific plan, investment, or company. For advice about your situation, talk to a tax professional or a licensed financial adviser.",
+    a: "No. The Finance section explains common types of children's savings accounts and suggests which types to look into, using only your child's birth date and your two answers. It doesn't know your income, taxes, or state, and it doesn't recommend any specific plan, investment, or company. For advice about your situation, talk to a tax professional or a licensed financial advisor.",
   },
   {
     q: "Why are there ads in Finance?",

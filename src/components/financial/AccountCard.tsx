@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 import type { AccountOption } from "@/lib/accountOptions";
 import type { FinanceSponsor } from "@/hooks/useFinanceAccounts";
 
-export const NOT_ADVICE = "Educational, not financial or tax advice.";
+export const NOT_ADVICE =
+  "Educational, not financial or tax advice. For your situation, check with a tax professional or financial advisor.";
 
 interface AccountCardProps {
   option: AccountOption;
