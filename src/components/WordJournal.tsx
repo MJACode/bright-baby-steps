@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { BookHeart, Plus, Sparkles, Pencil } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { BookHeart, Plus, Sparkles, Pencil, Trash2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { SpeechInsightsPanel } from "@/components/SpeechInsightsPanel";
@@ -26,6 +30,7 @@ export function WordJournal({ childId, ageMonths = 0 }: WordJournalProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editWord, setEditWord] = useState("");
   const [editContext, setEditContext] = useState("");
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const { data: entries } = useQuery({
     queryKey: ["speech-journal", childId],
@@ -96,6 +101,25 @@ export function WordJournal({ childId, ageMonths = 0 }: WordJournalProps) {
     },
     onError: () => {
       toast({ title: "Couldn't update entry", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const deleteEntry = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("speech_journal").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["speech-journal", childId] });
+      queryClient.invalidateQueries({ queryKey: ["speech-journal-count", childId] });
+      setConfirmDeleteOpen(false);
+      setEditingId(null);
+      setEditWord("");
+      setEditContext("");
+      toast({ title: "Word deleted" });
+    },
+    onError: () => {
+      toast({ title: "Couldn't delete word", description: "Check your connection and try again.", variant: "destructive" });
     },
   });
 
@@ -207,6 +231,15 @@ export function WordJournal({ childId, ageMonths = 0 }: WordJournalProps) {
                       >
                         Cancel
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto gap-1 text-muted-foreground hover:text-destructive"
+                        onClick={() => setConfirmDeleteOpen(true)}
+                        disabled={deleteEntry.isPending}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </Button>
                     </div>
                   </div>
                 ) : (
@@ -246,6 +279,30 @@ export function WordJournal({ childId, ageMonths = 0 }: WordJournalProps) {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Delete this word?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the word and its notes from your Word Journal. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="touch-target">Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              className="touch-target bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteEntry.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (editingId) deleteEntry.mutate(editingId);
+              }}
+            >
+              {deleteEntry.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
