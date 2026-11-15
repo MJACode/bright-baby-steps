@@ -36,8 +36,9 @@ provided by the platform.
 | Secret | Used by | Notes |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | briefing, weekly-insights, chat, extract-memory, generate-activity-plan, generate-sign-plan, generate-speech-class, visit-prep-questions | |
-| `RESEND_API_KEY` | send-vpc-email, send-visit-reminder-email, inactive-account-purge | |
-| `VPC_FROM_EMAIL` | send-vpc-email, send-visit-reminder-email, inactive-account-purge | Resend-verified sender |
+| `RESEND_API_KEY` | send-vpc-email, send-visit-reminder-email, inactive-account-purge, request-feature | |
+| `VPC_FROM_EMAIL` | send-vpc-email, send-visit-reminder-email, inactive-account-purge, request-feature | Resend-verified sender |
+| `FEATURE_REQUEST_TO_EMAIL` | request-feature | Optional. Inbox for early-access requests; defaults to `Matt@graceflare.com` |
 | `APP_URL` | the three email senders, mcp | deployed frontend origin |
 | `JWT_SECRET` | mcp (via `_shared/mintUserJwt.ts`) | |
 | `APNS_KEY` | check-notifications (`_shared/apns.ts`) | Full contents of the APNs `AuthKey_XXXXXXXXXX.p8` (PKCS#8 PEM). Real newlines or `\n` escapes both work. |
@@ -57,3 +58,23 @@ hours and the daily cap), and of those not viewer-partner copies
 that survived quiet hours; those stay in-app only. The payload is the fixed
 alert plus `route`, nothing else. Rows in `push_devices` unseen for 90 days
 are deleted daily by the pg_cron job `push-devices-stale-purge-daily`.
+
+## request-feature
+
+"Request early access" for hidden Flare+ features (first: Baby Signs).
+`verify_jwt = true`; the client calls
+`supabase.functions.invoke("request-feature", { body: { feature: "baby-signs" } })`.
+Logic and contract live in `_shared/requestFeature.ts` (tested by
+`src/test/requestFeature.server.test.ts`).
+
+- Allowlist: `FEATURES` in `_shared/requestFeature.ts` (`baby-signs` →
+  "Sign Language"). Anything else → 400 `{ error: "unknown_feature" }`.
+- Missing / invalid user JWT → 401 `{ error: "unauthorized" }`.
+- Saves a `public.feedback` row (`[Feature request] <feature>`) with the
+  caller's JWT, so the "Users can insert own feedback" RLS policy is the
+  gate; no service-role key. Insert failure → 500 `{ error: "save_failed" }`.
+- Emails `FEATURE_REQUEST_TO_EMAIL` via Resend: feature label, requester's
+  account email (also set as Reply-To), user id, UTC timestamp. No child data.
+- Returns `{ ok: true, emailed }`. `emailed` is false when `RESEND_API_KEY`
+  is unset, Resend fails, or the same user already requested the same
+  feature in the last 24 hours (no second row, no second email).

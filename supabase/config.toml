@@ -42,6 +42,12 @@ verify_jwt = false
 [functions.reactivate-nudge]
 verify_jwt = false
 
+# "Request early access" for hidden Flare+ features (first: Baby Signs).
+# Called from the app via supabase.functions.invoke with the parent's JWT;
+# the handler also checks it with auth.getUser and inserts as the user.
+[functions.request-feature]
+verify_jwt = true
+
 # Not yet deployed as of 2026-09-30. Called by check-notifications with the
 # service-role key and checks the role claim itself (index.ts ~L177-200).
 [functions.send-visit-reminder-email]

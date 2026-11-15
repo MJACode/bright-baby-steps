@@ -23,6 +23,8 @@ export interface Preferences {
   allergenNudgeDismissedFor: string | null;
   theme: ThemePreference;
   familyNamePromptDismissed: boolean;
+  /** Feature keys this user has asked for early access to (useRequestFeature). */
+  requestedFeatures: string[];
 }
 
 export type SetPreferences = (updates: Partial<Preferences>) => void;
@@ -44,12 +46,14 @@ const defaults: Preferences = {
   allergenNudgeDismissedFor: null,
   theme: "system",
   familyNamePromptDismissed: false,
+  requestedFeatures: [],
 };
 // Frozen so an accidental in-place mutation of a default value (e.g. pushing
 // into hiddenHomeSections) throws instead of silently poisoning every caller.
 Object.freeze(defaults);
 Object.freeze(defaults.hiddenHomeSections);
 Object.freeze(defaults.homeQuickTiles);
+Object.freeze(defaults.requestedFeatures);
 
 function loadPrefs(key: string): Preferences {
   try {

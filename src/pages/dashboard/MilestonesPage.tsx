@@ -27,6 +27,7 @@ import { WhatToExpectCard } from "@/components/WhatToExpectCard";
 import { format } from "date-fns";
 import { useDeleteWithUndo } from "@/hooks/useDeleteWithUndo";
 import { computeProgress } from "@/lib/milestoneProgress";
+import { SIGNS_PROGRAM_ENABLED } from "@/lib/signsPromo";
 
 function CustomMilestoneCard({ milestone, onDelete }: {
   milestone: any;
@@ -495,7 +496,9 @@ export default function MilestonesPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold">Sign Language</p>
                     <p className="text-xs text-muted-foreground">
-                      Teach your baby to tell you what they need — before words.
+                      {SIGNS_PROGRAM_ENABLED
+                        ? "Teach your baby to tell you what they need — before words."
+                        : "Coming soon — tap to request early access."}
                     </p>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />

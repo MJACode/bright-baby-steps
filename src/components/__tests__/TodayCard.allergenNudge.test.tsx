@@ -6,12 +6,23 @@ import type { Preferences } from "@/hooks/usePreferences";
 const DAY = 24 * 60 * 60 * 1000;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
-const { allergenData } = vi.hoisted(() => ({
+const { allergenData, signs } = vi.hoisted(() => ({
   allergenData: { intros: [] as unknown[], enabledFor: [] as (string | undefined)[] },
+  signs: { programEnabled: false, enabledFor: [] as (string | undefined)[] },
+}));
+
+vi.mock("@/lib/signsPromo", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/signsPromo")>()),
+  get SIGNS_PROGRAM_ENABLED() {
+    return signs.programEnabled;
+  },
 }));
 
 vi.mock("@/hooks/useSignProgress", () => ({
-  useSignProgress: () => ({ data: {}, isPending: false, isError: false }),
+  useSignProgress: (childId: string | undefined) => {
+    signs.enabledFor.push(childId);
+    return { data: {}, isPending: false, isError: false };
+  },
 }));
 vi.mock("@/hooks/useSignPractice", () => ({
   useSignPractice: () => ({ data: [], isPending: false, isError: false }),
@@ -45,15 +56,17 @@ const basePrefs = {
 
 const child = (dob: string) => ({ id: "child-1", name: "Rae", date_of_birth: dob });
 
-const renderCard = (dob: string, prefs: Preferences = basePrefs, setPrefs = vi.fn()) =>
+const renderCard = (dob: string, prefs: Preferences = basePrefs, setPrefs = vi.fn(), showWhatToExpect = false) =>
   render(
     <MemoryRouter>
-      <TodayCard activeChild={child(dob)} showWhatToExpect={false} prefs={prefs} setPrefs={setPrefs} />
+      <TodayCard activeChild={child(dob)} showWhatToExpect={showWhatToExpect} prefs={prefs} setPrefs={setPrefs} />
     </MemoryRouter>,
   );
 
 beforeEach(() => {
   allergenData.enabledFor.length = 0;
+  signs.enabledFor.length = 0;
+  signs.programEnabled = false;
   // Peanut: signed off, 2 protocol exposures only → 0 of 3 servings, due.
   // Egg: signed off with 2 servings this week → on target.
   allergenData.intros = [
@@ -99,5 +112,23 @@ describe("TodayCard allergen nudge", () => {
     const { container } = renderCard("2022-01-01");
     expect(container).toBeEmptyDOMElement();
     expect(allergenData.enabledFor.every((id) => id === undefined)).toBe(true);
+  });
+});
+
+describe("TodayCard sign slot", () => {
+  const promoPrefs = { ...basePrefs, signsPromoDismissed: false } as Preferences;
+
+  it("shows the first-time promo while the Sign Language program is on", () => {
+    signs.programEnabled = true;
+    renderCard("2026-01-01", promoPrefs, vi.fn(), true);
+    expect(screen.getByText(/A great age to start signing with Rae/)).toBeInTheDocument();
+    expect(signs.enabledFor).toContain("child-1");
+  });
+
+  it("hides the promo and skips the sign queries while the program is off", () => {
+    renderCard("2026-01-01", promoPrefs, vi.fn(), true);
+    expect(screen.queryByText(/start signing/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add to Home Screen" })).not.toBeInTheDocument();
+    expect(signs.enabledFor.every((id) => id === undefined)).toBe(true);
   });
 });

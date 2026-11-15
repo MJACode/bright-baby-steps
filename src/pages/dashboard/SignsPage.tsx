@@ -9,12 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AddChildDialog } from "@/components/AddChildDialog";
 import { PremiumGate } from "@/components/PremiumGate";
+import { FeatureRequestCard } from "@/components/FeatureRequestCard";
 import { SignDetailSheet } from "@/components/signs/SignDetailSheet";
 import { SignRow } from "@/components/signs/SignRow";
 import { ThisWeekFocus } from "@/components/signs/ThisWeekFocus";
 import { SignPlanCard } from "@/components/signs/SignPlanCard";
 import { planWeekStart } from "@/lib/planWeek";
 import { planFocusSteps } from "@/lib/signPlan";
+import { SIGNS_PROGRAM_ENABLED } from "@/lib/signsPromo";
 import { resolveTrackingSchedule, trackingDayDate, trackingDayKey } from "@/lib/trackingDay";
 import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { toast } from "@/hooks/use-toast";
@@ -41,27 +43,10 @@ import {
   type Sign,
 } from "@/data/signLibrary";
 
+type ActiveChild = NonNullable<ReturnType<typeof useChildren>["activeChild"]>;
+
 export default function SignsPage() {
   const { activeChild } = useChildren();
-  const { data: progress, isLoading: progressLoading } = useSignProgress(activeChild?.id);
-  const setStatus = useSetSignStatus();
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const setFocus = useSetSignFocus();
-  const [focusBusy, setFocusBusy] = useState(false);
-  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild?.id);
-  const schedule = resolveTrackingSchedule(activeChild);
-  const now = useTrackingNow(schedule);
-  // One key for what renders as ticked AND what a tap writes, so the two can't
-  // disagree across the day boundary.
-  const todayKey = trackingDayKey(now, schedule) ?? format(now, "yyyy-MM-dd");
-  const weekStart = planWeekStart(trackingDayDate(now, schedule) ?? now);
-  const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild?.id, todayKey);
-  const togglePractice = useToggleSignPractice();
-  const pendingPracticeSlugs = useMutationState({
-    filters: { mutationKey: TOGGLE_SIGN_PRACTICE_KEY, status: "pending" },
-    select: (m) => (m.state.variables as TogglePracticeVars).signSlug,
-  });
 
   if (!activeChild) {
     return (
@@ -82,6 +67,104 @@ export default function SignsPage() {
     activeChild.is_premature ?? false,
     activeChild.due_date,
   );
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+          <Hand className="w-7 h-7 text-milestones" /> Sign Language
+          {SIGNS_PROGRAM_ENABLED ? (
+            <Badge variant="secondary" className="text-[10px] uppercase tracking-wider font-mono">
+              <Sparkles className="w-3 h-3 mr-1" />
+              Flare+
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="text-xs font-semibold">
+              Coming soon
+            </Badge>
+          )}
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          {activeChild.name} • {ageMonths}mo {isAgeCorrected(activeChild.date_of_birth, activeChild.is_premature, activeChild.due_date) ? "(adjusted)" : ""}
+        </p>
+      </div>
+
+      <Card className="border-0 bg-milestones-bg">
+        <CardContent className="p-4 space-y-2">
+          <p className="text-sm leading-relaxed">{SIGNS_WHY}</p>
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1.5 touch-target group text-sm font-semibold text-milestones">
+              How to teach signs
+              <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-2 pt-1">
+              <p className="text-sm leading-relaxed">{SIGNS_HOW_TO_TEACH}</p>
+              <p className="text-sm leading-relaxed">{SIGNS_BILINGUAL_NOTE}</p>
+              <p className="text-sm leading-relaxed">{SIGNS_EXPECTATIONS}</p>
+            </CollapsibleContent>
+          </Collapsible>
+        </CardContent>
+      </Card>
+
+      {ageMonths < 6 && (
+        <p className="text-xs text-muted-foreground italic">
+          You can start modeling signs anytime — most families begin around 6 months.
+        </p>
+      )}
+
+      {SIGNS_PROGRAM_ENABLED ? (
+        <PremiumGate
+          feature="baby-signs"
+          variant="replace"
+          description="The full ASL-based program — 20 signs in 5 stages, with per-sign progress tracking for your baby."
+        >
+          <SignsProgram activeChild={activeChild} ageMonths={ageMonths} />
+        </PremiumGate>
+      ) : (
+        <FeatureRequestCard
+          feature="baby-signs"
+          title="Sign Language is coming soon"
+          description="20 ASL-based signs in 5 stages, a weekly focus, and progress tracking for every sign your baby learns."
+        />
+      )}
+
+      <div className="space-y-2 pt-1">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {SIGNS_RED_FLAG}{" "}
+          <Link to="/dashboard/early-intervention" className="underline font-semibold text-milestones">
+            Early Intervention resources
+          </Link>
+        </p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{SIGNS_SPEECH_VS_LANGUAGE}</p>
+        <p className="text-xs text-muted-foreground italic">
+          Every child develops at their own pace. Consult your pediatrician with concerns.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SignsProgram({ activeChild, ageMonths }: { activeChild: ActiveChild; ageMonths: number }) {
+  const { data: progress, isLoading: progressLoading } = useSignProgress(activeChild.id);
+  const setStatus = useSetSignStatus();
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const setFocus = useSetSignFocus();
+  const [focusBusy, setFocusBusy] = useState(false);
+  const { role, isResolved: roleResolved } = useCurrentRoleQuery(activeChild.id);
+  const schedule = resolveTrackingSchedule(activeChild);
+  const now = useTrackingNow(schedule);
+  // One key for what renders as ticked AND what a tap writes, so the two can't
+  // disagree across the day boundary.
+  const todayKey = trackingDayKey(now, schedule) ?? format(now, "yyyy-MM-dd");
+  const weekStart = planWeekStart(trackingDayDate(now, schedule) ?? now);
+  const { data: practiceRows, isLoading: practiceLoading } = useSignPractice(activeChild.id, todayKey);
+  const togglePractice = useToggleSignPractice();
+  const pendingPracticeSlugs = useMutationState({
+    filters: { mutationKey: TOGGLE_SIGN_PRACTICE_KEY, status: "pending" },
+    select: (m) => (m.state.variables as TogglePracticeVars).signSlug,
+  });
+
   const firstName = activeChild.name.split(" ")[0];
 
   const rows = Object.values(progress ?? {});
@@ -232,150 +315,95 @@ export default function SignsPage() {
   const selectedSign = SIGN_LIBRARY.find((s) => s.slug === selectedSlug) ?? null;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
-          <Hand className="w-7 h-7 text-milestones" /> Sign Language
-          <Badge variant="secondary" className="text-[10px] uppercase tracking-wider font-mono">
-            <Sparkles className="w-3 h-3 mr-1" />
-            Flare+
-          </Badge>
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          {activeChild.name} • {ageMonths}mo {isAgeCorrected(activeChild.date_of_birth, activeChild.is_premature, activeChild.due_date) ? "(adjusted)" : ""}
-        </p>
-      </div>
-
-      <Card className="border-0 bg-milestones-bg">
-        <CardContent className="p-4 space-y-2">
-          <p className="text-sm leading-relaxed">{SIGNS_WHY}</p>
-          <Collapsible>
-            <CollapsibleTrigger className="flex items-center gap-1.5 touch-target group text-sm font-semibold text-milestones">
-              How to teach signs
-              <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-2 pt-1">
-              <p className="text-sm leading-relaxed">{SIGNS_HOW_TO_TEACH}</p>
-              <p className="text-sm leading-relaxed">{SIGNS_BILINGUAL_NOTE}</p>
-              <p className="text-sm leading-relaxed">{SIGNS_EXPECTATIONS}</p>
-            </CollapsibleContent>
-          </Collapsible>
-        </CardContent>
-      </Card>
-
-      {ageMonths < 6 && (
-        <p className="text-xs text-muted-foreground italic">
-          You can start modeling signs anytime — most families begin around 6 months.
-        </p>
-      )}
-
-      <PremiumGate
-        feature="baby-signs"
-        variant="replace"
-        description="The full ASL-based program — 20 signs in 5 stages, with per-sign progress tracking for your baby."
-      >
-        <div className="space-y-6">
-          <ThisWeekFocus
-            progress={progress}
-            focusSlugs={focusSlugs}
-            loading={progressLoading}
-            ageMonths={ageMonths}
-            firstName={firstName}
-            schedule={schedule}
-            canEdit={canEditFocus}
-            showViewerHelp={showViewerHelp}
-            busy={focusBusy}
-            practiceRows={practiceRows}
-            practiceLoading={practiceLoading}
-            now={now}
-            todayKey={todayKey}
-            pendingPracticeSlugs={pendingPracticeSlugs}
-            onOpen={openSign}
-            onStart={startFocus}
-            onAdvance={advanceFocus}
-            onTogglePractice={toggleModeled}
-          />
-
-          <SignPlanCard
-            childId={activeChild.id}
-            weekStart={weekStart}
-            ageMonths={ageMonths}
-            firstName={firstName}
-            progress={progress}
-            progressLoading={progressLoading}
-            practiceRows={practiceRows}
-            practiceLoading={practiceLoading}
-            now={now}
-            schedule={schedule}
-            focusSlugs={focusSlugs}
-            canEdit={canEditFocus}
-            busy={focusBusy}
-            onOpen={openSign}
-            onApply={applyPlan}
-          />
-
-          <h2 className="font-display font-bold text-xl pt-2">All signs</h2>
-
-          {progressLoading ? (
-            <Skeleton className="h-5 w-64" />
-          ) : (
-            <p className="text-sm font-semibold">
-              {introducedCount} of {SIGN_LIBRARY.length} signs introduced · {signingCount} signed back
-            </p>
-          )}
-
-          {SIGN_STAGES.map((stage) => (
-            <div key={stage.id} className="space-y-2">
-              <div className="flex items-center gap-2">
-                <h3 className="font-display font-bold text-lg">{stage.title}</h3>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-milestones/15 text-milestones">
-                  from ~{stage.fromMonths}mo
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">{stage.subtitle}</p>
-              <div className="space-y-2">
-                {getSignsForStage(stage.id).map((sign) => (
-                  <SignRow
-                    key={sign.slug}
-                    sign={sign}
-                    row={progress?.[sign.slug]}
-                    onOpen={openSign}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <SignDetailSheet
-          sign={selectedSign}
-          row={selectedSlug ? progress?.[selectedSlug] : undefined}
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          disabled={progressLoading || setStatus.isPending}
-          onSetStatus={handleSetStatus}
-          focusSigns={focusSigns}
+    <>
+      <div className="space-y-6">
+        <ThisWeekFocus
+          progress={progress}
+          focusSlugs={focusSlugs}
+          loading={progressLoading}
+          ageMonths={ageMonths}
+          firstName={firstName}
+          schedule={schedule}
           canEdit={canEditFocus}
           showViewerHelp={showViewerHelp}
-          focusBusy={focusBusy || progressLoading}
-          onFocus={focusSign}
-          onUnfocus={unfocusSign}
-          onSwap={swapFocus}
+          busy={focusBusy}
+          practiceRows={practiceRows}
+          practiceLoading={practiceLoading}
+          now={now}
+          todayKey={todayKey}
+          pendingPracticeSlugs={pendingPracticeSlugs}
+          onOpen={openSign}
+          onStart={startFocus}
+          onAdvance={advanceFocus}
+          onTogglePractice={toggleModeled}
         />
-      </PremiumGate>
 
-      <div className="space-y-2 pt-1">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          {SIGNS_RED_FLAG}{" "}
-          <Link to="/dashboard/early-intervention" className="underline font-semibold text-milestones">
-            Early Intervention resources
-          </Link>
-        </p>
-        <p className="text-xs text-muted-foreground leading-relaxed">{SIGNS_SPEECH_VS_LANGUAGE}</p>
-        <p className="text-xs text-muted-foreground italic">
-          Every child develops at their own pace. Consult your pediatrician with concerns.
-        </p>
+        <SignPlanCard
+          childId={activeChild.id}
+          weekStart={weekStart}
+          ageMonths={ageMonths}
+          firstName={firstName}
+          progress={progress}
+          progressLoading={progressLoading}
+          practiceRows={practiceRows}
+          practiceLoading={practiceLoading}
+          now={now}
+          schedule={schedule}
+          focusSlugs={focusSlugs}
+          canEdit={canEditFocus}
+          busy={focusBusy}
+          onOpen={openSign}
+          onApply={applyPlan}
+        />
+
+        <h2 className="font-display font-bold text-xl pt-2">All signs</h2>
+
+        {progressLoading ? (
+          <Skeleton className="h-5 w-64" />
+        ) : (
+          <p className="text-sm font-semibold">
+            {introducedCount} of {SIGN_LIBRARY.length} signs introduced · {signingCount} signed back
+          </p>
+        )}
+
+        {SIGN_STAGES.map((stage) => (
+          <div key={stage.id} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h3 className="font-display font-bold text-lg">{stage.title}</h3>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-milestones/15 text-milestones">
+                from ~{stage.fromMonths}mo
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">{stage.subtitle}</p>
+            <div className="space-y-2">
+              {getSignsForStage(stage.id).map((sign) => (
+                <SignRow
+                  key={sign.slug}
+                  sign={sign}
+                  row={progress?.[sign.slug]}
+                  onOpen={openSign}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
-    </div>
+
+      <SignDetailSheet
+        sign={selectedSign}
+        row={selectedSlug ? progress?.[selectedSlug] : undefined}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        disabled={progressLoading || setStatus.isPending}
+        onSetStatus={handleSetStatus}
+        focusSigns={focusSigns}
+        canEdit={canEditFocus}
+        showViewerHelp={showViewerHelp}
+        focusBusy={focusBusy || progressLoading}
+        onFocus={focusSign}
+        onUnfocus={unfocusSign}
+        onSwap={swapFocus}
+      />
+    </>
   );
 }
