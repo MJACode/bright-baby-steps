@@ -4,8 +4,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { usePremium, FLARE_PLUS_EARLY_ACCESS } from "@/hooks/usePremium";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { SIGNS_PROGRAM_ENABLED } from "@/lib/signsPromo";
 
-const PERKS = [
+const ALL_PERKS = [
   {
     icon: GraduationCap,
     title: "Speech Class: guided weekly practice",
@@ -20,8 +21,11 @@ const PERKS = [
     icon: Hand,
     title: "Sign Language: ASL-based sign program",
     sub: "20 signs in 5 stages — communicate before words come, with per-sign progress tracking.",
+    signsProgram: true,
   },
 ];
+
+const PERKS = ALL_PERKS.filter((perk) => SIGNS_PROGRAM_ENABLED || !("signsProgram" in perk));
 
 /**
  * Free-tier-only card that shows what Flare+ adds to the Milestones surface.

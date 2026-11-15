@@ -2,6 +2,15 @@ import { ageInMonthsAt } from "@/lib/childAge";
 import { daysInFocus } from "@/lib/signProgress";
 import { trackingDayKey, type TrackingSchedule } from "@/lib/trackingDay";
 
+/**
+ * Sign Language program switch. Off: /dashboard/signs shows a "Request early
+ * access" card instead of the program, and Home, Milestones, and the Flare+
+ * card stop promoting it. Lives here rather than in signLibrary.ts so the
+ * eagerly-loaded Home and Milestones screens can read it without pulling the
+ * whole sign library into the main bundle.
+ */
+export const SIGNS_PROGRAM_ENABLED = false;
+
 export const SIGNS_PROMO_MIN_MONTHS = 6;
 /** Tracking days without any sign activity before the comeback nudge shows. */
 export const SIGNS_NUDGE_IDLE_DAYS = 7;
@@ -21,6 +30,8 @@ export interface SignsSlotInput {
   /** The Today card section hosting the slot is switched on in Customize Home. */
   hostVisible: boolean;
   now: Date;
+  /** Pass SIGNS_PROGRAM_ENABLED; a parameter so tests can cover both states. */
+  programEnabled: boolean;
 }
 
 export interface SignsPromoInput extends SignsSlotInput {
@@ -38,8 +49,8 @@ export interface SignsPromoInput extends SignsSlotInput {
 }
 
 /** The Today-card sign slot can show at all — gates the sign queries too. */
-export function signsSlotEligible({ child, hostVisible, now }: SignsSlotInput): boolean {
-  if (!child || child.is_expected || !hostVisible) return false;
+export function signsSlotEligible({ child, hostVisible, now, programEnabled }: SignsSlotInput): boolean {
+  if (!programEnabled || !child || child.is_expected || !hostVisible) return false;
   return (
     ageInMonthsAt(child.date_of_birth, child.is_premature, child.due_date, now) >=
     SIGNS_PROMO_MIN_MONTHS

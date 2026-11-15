@@ -1,6 +1,7 @@
 import {
   lastSignActivityKey,
   signsPromoMode,
+  signsSlotEligible,
   type SignsPromoInput,
 } from "@/lib/signsPromo";
 import { DEFAULT_TRACKING_SCHEDULE } from "@/lib/trackingDay";
@@ -12,6 +13,7 @@ function input(overrides: Partial<SignsPromoInput> = {}): SignsPromoInput {
     child: { date_of_birth: "2024-01-15" },
     hostVisible: true,
     now: NOW,
+    programEnabled: true,
     schedule: DEFAULT_TRACKING_SCHEDULE,
     homeQuickTiles: ["food", "sleep", "diaper", "milestone"],
     promoDismissed: false,
@@ -26,6 +28,15 @@ function input(overrides: Partial<SignsPromoInput> = {}): SignsPromoInput {
 function started(lastActivityKey: string, overrides: Partial<SignsPromoInput> = {}) {
   return input({ started: true, lastActivityKey, ...overrides });
 }
+
+describe("signsPromoMode — program switched off", () => {
+  it("shows neither the promo nor the nudge, and keeps the sign queries off", () => {
+    expect(signsPromoMode(input({ programEnabled: false }))).toBeNull();
+    expect(signsPromoMode(started("2024-07-01", { programEnabled: false }))).toBeNull();
+    expect(signsSlotEligible({ child: { date_of_birth: "2024-01-15" }, hostVisible: true, now: NOW, programEnabled: false })).toBe(false);
+    expect(signsSlotEligible({ child: { date_of_birth: "2024-01-15" }, hostVisible: true, now: NOW, programEnabled: true })).toBe(true);
+  });
+});
 
 describe("signsPromoMode — first-time promo", () => {
   it("shows at 6 months", () => {

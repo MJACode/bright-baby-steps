@@ -16,6 +16,7 @@ import {
   signsPromoMode,
   signsSlotEligible,
   SIGNS_NUDGE_SNOOZE_DAYS,
+  SIGNS_PROGRAM_ENABLED,
 } from "@/lib/signsPromo";
 import { resolveTrackingSchedule, trackingDayKey } from "@/lib/trackingDay";
 import { useSignProgress } from "@/hooks/useSignProgress";
@@ -65,7 +66,12 @@ export function TodayCard({
   const todayKey = trackingDayKey(now, schedule) ?? format(now, "yyyy-MM-dd");
   // The sign slot rides on the "What to Expect" Customize-Home toggle: hiding
   // that section hides the card's promo with it.
-  const signsChildId = signsSlotEligible({ child: activeChild, hostVisible: showWhatToExpect, now })
+  const signsChildId = signsSlotEligible({
+    child: activeChild,
+    hostVisible: showWhatToExpect,
+    now,
+    programEnabled: SIGNS_PROGRAM_ENABLED,
+  })
     ? activeChild?.id
     : undefined;
   const signProgress = useSignProgress(signsChildId);
@@ -94,6 +100,7 @@ export function TodayCard({
     child: activeChild,
     hostVisible: showWhatToExpect,
     now,
+    programEnabled: SIGNS_PROGRAM_ENABLED,
     schedule,
     homeQuickTiles: prefs.homeQuickTiles,
     promoDismissed: prefs.signsPromoDismissed,

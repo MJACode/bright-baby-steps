@@ -3388,3 +3388,21 @@ Verified on live 2026-10-12: migration `20261007000000_purge_legacy_auto_memorie
 **Files:** `src/components/financial/AccountCard.tsx` (`NOT_ADVICE`), `src/pages/FAQPage.tsx`. **Reviewer:** in-house (parent session, founder-approved copy). **Risk:** Low.
 
 The finance disclaimer shown on the Financial page (under the intro, below the cards, and in each expanded card) now reads "Educational, not financial or tax advice. For your situation, check with a tax professional or financial advisor." Before, it said it wasn't advice but didn't say who to ask. FAQ spelling changed from "adviser" to "advisor" to match Terms § 4. No change to what the feature collects, uses or recommends.
+
+## 2026-11-15 — Sign Language "Request early access": requester email to the founder via Resend
+
+**Files:** `supabase/functions/request-feature/index.ts`, `supabase/functions/_shared/requestFeature.ts`, `supabase/config.toml`, `supabase/functions/README.md`, `src/test/requestFeature.server.test.ts`. **Reviewer:** in-house (backend agent; not yet dispatched to the `legal` agent). **Risk:** Low.
+
+**Trigger:** the Sign Language (Baby Signs) Flare+ program is hidden behind a "Request early access" button. Each tap calls the new `request-feature` edge function.
+
+**Data flow:** the function verifies the caller's JWT, saves a `public.feedback` row (`user_id`, `message = "[Feature request] baby-signs"`) inserted as the user under the existing "Users can insert own feedback" RLS policy (no service-role key), then sends one email through **Resend** (an existing subprocessor) to the founder's inbox (`FEATURE_REQUEST_TO_EMAIL`, default `Matt@graceflare.com`). The email contains only the feature label, the requester's **account email** (also used as Reply-To), their **user id**, and a UTC timestamp. **No child data** is read or sent. Repeat requests for the same feature within 24 hours are neither saved again nor emailed. Logs carry the user id and Resend status code only, never the email address.
+
+**Privacy page check (read, not edited):**
+- § 2 already lists account email and "Feedback: what you write in a feedback report"; a feature-request row is a feedback row, retained and deleted with the account (`feedback` is in `_purge_user_data` / `delete_user_account()`).
+- § 4 covers Anthropic only; nothing here goes to Anthropic. No change.
+- § 5 lists "service providers ... (e.g. ... transactional-email vendor)"; `/subprocessors` lists Resend with data categories "Account email address, full name, and the body of the email being sent", which covers the account email + user id in the body. No new subprocessor, so no 30-day notice is triggered.
+- Conclusion: **no Privacy-page change needed** while the email stays limited to account email + user id + feature + timestamp.
+
+**P2 (optional):** the `/subprocessors` Resend *purpose* reads "parental-consent confirmations under COPPA, account notifications". An internal notification to Grace Flare about a user's request is arguably within "operating the service" rather than an account notification to the user. Consider widening the purpose to "... and internal notifications about requests you send us" at the next Subprocessors edit. Not blocking.
+
+**Outstanding:** if the email ever gains child data (name, age, signs progress), re-review § 4/§ 5 and the COPPA direct notice first.
