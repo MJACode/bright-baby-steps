@@ -79,6 +79,9 @@ type PastSessionSheetProps = {
   // Off when the consuming form already owns a Notes field — two of them in one
   // flow leaves the parent guessing which one gets saved.
   showNotes?: boolean;
+  // Renders under the time pickers for a completed session and takes over from
+  // the generic soft-max warning, so the parent never sees two long-session notes.
+  durationHint?: (startAt: Date, endAt: Date) => React.ReactNode;
 };
 
 export function PastSessionSheet({
@@ -98,6 +101,7 @@ export function PastSessionSheet({
   isSaving,
   seed,
   showNotes = true,
+  durationHint,
 }: PastSessionSheetProps) {
   const { startAt, durationMin, endAt, setStartAt, setDurationMin, setEndAt } = useSessionAnchor({
     open,
@@ -182,6 +186,8 @@ export function PastSessionSheet({
         hardMaxMin,
         overlap,
       });
+
+  const shownWarning = durationHint && !inProgressMode ? null : warning;
 
   const endLine = formatEndLine(startAt, endAt);
   const elapsedMin = elapsedMinutes(startAt, now);
@@ -340,6 +346,8 @@ export function PastSessionSheet({
             </div>
           )}
 
+          {durationHint && !inProgressMode && !error && durationHint(startAt, endAt)}
+
           {inProgressMode ? (
             <div className="flex min-h-[48px] items-center justify-center rounded-xl bg-muted/60 px-4 text-sm font-semibold text-foreground">
               {inProgress!.elapsedLabel} {formatDurationShort(elapsedMin)}
@@ -478,7 +486,7 @@ export function PastSessionSheet({
               {error.message}
             </p>
           )}
-          {warning && <p className="text-sm text-warning">{warning.message}</p>}
+          {shownWarning && <p className="text-sm text-warning">{shownWarning.message}</p>}
           {helper && (
             <p id={helperId} className="text-sm text-muted-foreground">
               {helper}

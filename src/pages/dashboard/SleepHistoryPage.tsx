@@ -24,11 +24,18 @@ import { AddChildDialog } from "@/components/AddChildDialog";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { GroupedLogList } from "@/components/logging/GroupedLogList";
 import { LoggedByChip } from "@/components/LoggedByChip";
+import { SleepDurationHint } from "@/components/sleep/SleepDurationHint";
 import { cancelSessionNotification } from "@/lib/sessionNotifications";
 import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
 import { usePendingLogIds, useSubmitOfflineLog } from "@/hooks/useOfflineSync";
 import { PendingSyncBadge } from "@/components/PendingSyncBadge";
-import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
+import {
+  findSleepOverlap,
+  formatDurationShort,
+  formatOverlapRange,
+  isSleepOverlapError,
+  sleepOverlapMessage,
+} from "@/lib/sessionAnchor";
 import { summarizeSleepDay, summarizeSleepDayStats } from "@/lib/logDaySummary";
 import { segmentSleepForDay, sleepDayStats } from "@/lib/sleepPatterns";
 import { dayLabel } from "@/lib/dayLabel";
@@ -111,17 +118,27 @@ export default function SleepHistoryPage() {
         ended_at: endDate.toISOString(),
       };
 
-      if (editingId) {
-        return submitLog({
-          action: "update",
-          table: "sleep_logs",
-          rowId: editingId,
-          childId: editingRow?.child_id ?? activeChild!.id,
-          patch: payload,
-        });
+      try {
+        if (editingId) {
+          return await submitLog({
+            action: "update",
+            table: "sleep_logs",
+            rowId: editingId,
+            childId: editingRow?.child_id ?? activeChild!.id,
+            patch: payload,
+          });
+        }
+        const row = { ...payload, id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
+        return await submitLog({ action: "insert", table: "sleep_logs", rowId: row.id, childId: row.child_id, row });
+      } catch (error) {
+        if (isSleepOverlapError(error)) {
+          // Only the loaded pages are searched; an older clash gets the generic copy.
+          throw new Error(
+            sleepOverlapMessage(findSleepOverlap(history.logs, startDate, endDate, editingId)),
+          );
+        }
+        throw error;
       }
-      const row = { ...payload, id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
-      return submitLog({ action: "insert", table: "sleep_logs", rowId: row.id, childId: row.child_id, row });
     },
     onSuccess: (result) => {
       closeDialog();
@@ -337,6 +354,7 @@ export default function SleepHistoryPage() {
               onChange={setEditEndedAt}
               maxDate={new Date()}
             />
+            <SleepDurationHint startAt={editStartedAt} endAt={editEndedAt} sleepType={editSleepType} />
             <div className="flex gap-2">
               <Button
                 type="button"
