@@ -5,7 +5,11 @@ import {
   deriveEnd,
   elapsedMinutes,
   floorTo5Min,
+  findSleepOverlap,
   formatEndLine,
+  isSleepOverlapError,
+  longSleepHint,
+  sleepOverlapMessage,
   validateInProgressStart,
   validateSession,
 } from "@/lib/sessionAnchor";
@@ -541,5 +545,69 @@ describe("elapsedMinutes", () => {
     const now = new Date(2026, 5, 10, 15, 0, 0);
     expect(elapsedMinutes(new Date(2026, 5, 10, 14, 30, 20), now)).toBe(30);
     expect(elapsedMinutes(new Date(2026, 5, 10, 15, 30), now)).toBe(0);
+  });
+});
+
+describe("findSleepOverlap", () => {
+  const logs = [
+    { id: "a", started_at: new Date(2026, 5, 7, 19, 0).toISOString(), ended_at: new Date(2026, 5, 8, 6, 30).toISOString() },
+    { id: "b", started_at: new Date(2026, 5, 8, 13, 0).toISOString(), ended_at: null },
+  ];
+
+  it("finds a completed log that intersects the range", () => {
+    // The reported bug: Sun 6:00 AM (meant PM) to Mon 6:10 AM.
+    const hit = findSleepOverlap(logs, new Date(2026, 5, 7, 6, 0), new Date(2026, 5, 8, 6, 10));
+    expect(hit).toEqual({ start: new Date(2026, 5, 7, 19, 0), end: new Date(2026, 5, 8, 6, 30) });
+  });
+
+  it("treats touching edges as no overlap", () => {
+    expect(findSleepOverlap(logs, new Date(2026, 5, 8, 6, 30), new Date(2026, 5, 8, 7, 0))).toBeNull();
+  });
+
+  it("skips open rows", () => {
+    expect(findSleepOverlap(logs, new Date(2026, 5, 8, 13, 30), new Date(2026, 5, 8, 14, 0))).toBeNull();
+  });
+
+  it("excludes the row being edited", () => {
+    const start = new Date(2026, 5, 7, 18, 0);
+    const end = new Date(2026, 5, 8, 6, 0);
+    expect(findSleepOverlap(logs, start, end, "a")).toBeNull();
+    expect(findSleepOverlap(logs, start, end, "other")).not.toBeNull();
+    expect(findSleepOverlap(logs, start, end, null)).not.toBeNull();
+  });
+});
+
+describe("sleepOverlapMessage / isSleepOverlapError", () => {
+  it("names the clashing range, or falls back to generic copy", () => {
+    expect(
+      sleepOverlapMessage({ start: new Date(2026, 5, 7, 19, 0), end: new Date(2026, 5, 8, 6, 30) }),
+    ).toBe("This overlaps a sleep from 7:00 PM to 6:30 AM.");
+    expect(sleepOverlapMessage(null)).toBe("This overlaps a sleep you've already logged. Check the times.");
+  });
+
+  it("matches only Postgres exclusion_violation", () => {
+    expect(isSleepOverlapError({ code: "23P01" })).toBe(true);
+    expect(isSleepOverlapError({ code: "23505" })).toBe(false);
+    expect(isSleepOverlapError(new Error("x"))).toBe(false);
+    expect(isSleepOverlapError(null)).toBe(false);
+  });
+});
+
+describe("longSleepHint", () => {
+  it("stays quiet up to and including the threshold", () => {
+    expect(longSleepHint(4 * 60, "nap")).toBeNull();
+    expect(longSleepHint(16 * 60, "night")).toBeNull();
+    expect(longSleepHint(5 * 60, "night")).toBeNull();
+  });
+
+  it("warns just past the nap and night thresholds", () => {
+    expect(longSleepHint(4 * 60 + 1, "nap")).toBe("That's longer than usual. Check AM/PM on the start time.");
+    expect(longSleepHint(16 * 60 + 1, "night")).toBe("That's longer than usual. Check AM/PM on the start time.");
+  });
+
+  it("calls out anything over 24 hours for either type", () => {
+    expect(longSleepHint(24 * 60, "night")).toBe("That's longer than usual. Check AM/PM on the start time.");
+    expect(longSleepHint(24 * 60 + 10, "night")).toBe("That's over 24 hours. Check AM/PM on the start time.");
+    expect(longSleepHint(24 * 60 + 10, "nap")).toBe("That's over 24 hours. Check AM/PM on the start time.");
   });
 });

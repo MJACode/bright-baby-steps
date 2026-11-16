@@ -6,6 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { useActiveSleep, useElapsedSeconds, type SleepType } from "@/hooks/useActiveSleep";
 import { getErrorMessage } from "@/lib/handleRlsError";
 import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+import { SleepDurationHint } from "@/components/sleep/SleepDurationHint";
 
 interface SleepTimerProps {
   childId: string | undefined;
@@ -306,6 +307,9 @@ export default function SleepTimer({ childId, onManualSubmit, isSavingManual, ch
         softMaxMin={14 * 60}
         hardMaxMin={24 * 60}
         checkOverlap={checkOverlap}
+        durationHint={(startAt, endAt) => (
+          <SleepDurationHint startAt={startAt} endAt={endAt} sleepType={pendingSleepType} />
+        )}
         onSave={handlePastSave}
         inProgress={{
           optionLabel: pendingSleepType === "nap" ? "Still napping" : "Still asleep",

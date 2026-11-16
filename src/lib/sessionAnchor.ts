@@ -66,6 +66,51 @@ export function formatOverlapRange(start: Date, end: Date): string {
   return `${format(start, sameMeridiem ? "h:mm" : "h:mm a")} to ${format(end, "h:mm a")}`;
 }
 
+export type SleepSpan = { start: Date; end: Date };
+
+// sleep_logs carries an exclusion constraint (no_overlapping_sleep), so a clash
+// is worth naming before or after the insert. Open rows are skipped: a running
+// timer's end isn't known yet. `excludeId` drops the row being edited, which
+// would otherwise always "overlap" itself.
+export function findSleepOverlap(
+  logs: readonly { id?: string; started_at: string; ended_at: string | null }[],
+  start: Date,
+  end: Date,
+  excludeId?: string | null,
+): SleepSpan | null {
+  const hit = logs.find((l) => {
+    if (!l.ended_at) return false;
+    if (excludeId && l.id === excludeId) return false;
+    return (
+      new Date(l.started_at).getTime() < end.getTime() &&
+      start.getTime() < new Date(l.ended_at).getTime()
+    );
+  });
+  return hit ? { start: new Date(hit.started_at), end: new Date(hit.ended_at!) } : null;
+}
+
+export function sleepOverlapMessage(hit: SleepSpan | null): string {
+  return hit
+    ? `This overlaps a sleep from ${formatOverlapRange(hit.start, hit.end)}.`
+    : "This overlaps a sleep you've already logged. Check the times.";
+}
+
+// Postgres exclusion_violation — what no_overlapping_sleep raises.
+export function isSleepOverlapError(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === "23P01";
+}
+
+// Past these, the likeliest story is a start picked on the wrong side of noon.
+export const LONG_SLEEP_HINT_MIN = { nap: 4 * 60, night: 16 * 60 } as const;
+
+export function longSleepHint(durationMin: number, sleepType: "nap" | "night"): string | null {
+  if (durationMin > 24 * 60) return "That's over 24 hours. Check AM/PM on the start time.";
+  if (durationMin > LONG_SLEEP_HINT_MIN[sleepType]) {
+    return "That's longer than usual. Check AM/PM on the start time.";
+  }
+  return null;
+}
+
 function ceilingLabel(min: number): string {
   return min === 1440 ? "a day" : formatDurationSpoken(min);
 }
@@ -110,7 +155,7 @@ export function validateSession({
   } else if (durationMin > hardMaxMin) {
     error = { field: "duration", message: `That's longer than ${ceilingLabel(hardMaxMin)}. Check the times.` };
   } else if (overlap) {
-    error = { field: "start", message: `This overlaps a sleep from ${formatOverlapRange(overlap.start, overlap.end)}.` };
+    error = { field: "start", message: sleepOverlapMessage(overlap) };
   }
 
   const warning =
@@ -163,10 +208,7 @@ export function validateInProgressStart({
   } else if (elapsed > hardMaxMin) {
     error = { field: "start", message: `That's more than ${ceilingLabel(hardMaxMin)} ago. Check the time.` };
   } else if (overlap) {
-    error = {
-      field: "start",
-      message: `This overlaps a sleep from ${formatOverlapRange(overlap.start, overlap.end)}.`,
-    };
+    error = { field: "start", message: sleepOverlapMessage(overlap) };
   }
 
   const warning =

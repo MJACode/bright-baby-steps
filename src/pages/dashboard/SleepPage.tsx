@@ -29,7 +29,12 @@ import { detectTriageReasons, getAgeBucket } from "@/lib/sleepTriage";
 import { SHORTFALL_ESCALATION_COPY, SHORTFALL_ESCALATION_HOURS } from "@/lib/sleepPlan";
 import { QUEUED_TOAST_DESCRIPTION, newLogId, type SubmitResult } from "@/lib/offlineLogs";
 import { useSubmitOfflineLog } from "@/hooks/useOfflineSync";
-import { formatDurationShort, formatOverlapRange } from "@/lib/sessionAnchor";
+import {
+  findSleepOverlap,
+  formatDurationShort,
+  isSleepOverlapError,
+  sleepOverlapMessage,
+} from "@/lib/sessionAnchor";
 import { dayLabel } from "@/lib/dayLabel";
 import {
   trackingDayDate,
@@ -120,21 +125,11 @@ export default function SleepPage() {
   const sleepWindow = useSleepWindow(activeChild ?? null, WINDOW_DAYS);
   const logs = sleepWindow.logs;
 
-  // sleep_logs carries an exclusion constraint (no_overlapping_sleep) — surface
-  // the clash before the insert so the parent sees which session is in the way.
-  // Only covers the fetched window, so back-filling something older falls
-  // through to the constraint and its generic copy.
-  const findSleepOverlap = useCallback(
-    (start: Date, end: Date) => {
-      const hit = logs.find((l) => {
-        if (!l.ended_at) return false;
-        return (
-          new Date(l.started_at).getTime() < end.getTime() &&
-          start.getTime() < new Date(l.ended_at).getTime()
-        );
-      });
-      return hit ? { start: new Date(hit.started_at), end: new Date(hit.ended_at!) } : null;
-    },
+  // Surface the clash before the insert so the parent sees which session is in
+  // the way. Only covers the fetched window, so back-filling something older
+  // falls through to the constraint and its generic copy.
+  const checkSleepOverlap = useCallback(
+    (start: Date, end: Date) => findSleepOverlap(logs, start, end),
     [logs],
   );
 
@@ -151,12 +146,9 @@ export default function SleepPage() {
       try {
         return await submitLog({ action: "insert", table: "sleep_logs", rowId: row.id, childId: row.child_id, row });
       } catch (error) {
-        if ((error as { code?: string }).code === "23P01") {
-          const hit = findSleepOverlap(new Date(log.started_at), new Date(log.ended_at));
+        if (isSleepOverlapError(error)) {
           throw new Error(
-            hit
-              ? `This overlaps a sleep from ${formatOverlapRange(hit.start, hit.end)}.`
-              : "This overlaps a sleep you've already logged. Check the times.",
+            sleepOverlapMessage(checkSleepOverlap(new Date(log.started_at), new Date(log.ended_at))),
           );
         }
         throw error;
@@ -255,7 +247,7 @@ export default function SleepPage() {
             childId={activeChild.id}
             onManualSubmit={handleTimerComplete}
             isSavingManual={savingTimer}
-            checkOverlap={findSleepOverlap}
+            checkOverlap={checkSleepOverlap}
           />
           {showFerberTimer && user && activeSleepLog && (
             <FerberCheckInTimer

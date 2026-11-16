@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { PastSessionSheet, type PastSessionValue } from "@/components/logging/PastSessionSheet";
+import { SleepDurationHint } from "@/components/sleep/SleepDurationHint";
 
 const setup = (
   onSave: (v: PastSessionValue) => Promise<void> = async () => {},
@@ -219,5 +220,31 @@ describe("PastSessionSheet scrolling", () => {
     expect(scroller).not.toBeNull();
     expect(scroller).toContainElement(screen.getByText("Started"));
     expect(scroller).not.toContainElement(screen.getByRole("button", { name: "Save nap" }));
+  });
+});
+
+describe("PastSessionSheet durationHint", () => {
+  const pickFifteenHours = () => {
+    fireEvent.click(screen.getByRole("radio", { name: "Other" }));
+    spinTo("Hours", "15");
+  };
+
+  it("replaces the generic long-session warning and leaves Save enabled", () => {
+    setup(undefined, {
+      durationHint: (startAt, endAt) => (
+        <SleepDurationHint startAt={startAt} endAt={endAt} sleepType="nap" />
+      ),
+    });
+    pickFifteenHours();
+    expect(screen.getByText("15h 45m")).toBeInTheDocument();
+    expect(screen.getByText("That's longer than usual. Check AM/PM on the start time.")).toBeInTheDocument();
+    expect(screen.queryByText(/That's a long one/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Save nap" })).toBeEnabled();
+  });
+
+  it("keeps the generic warning when no hint is supplied", () => {
+    setup();
+    pickFifteenHours();
+    expect(screen.getByText(/That's a long one/)).toBeInTheDocument();
   });
 });
