@@ -34,11 +34,11 @@ describe("HowToServeSheet", () => {
     expect(screen.getByText(FOOD_BY_SLUG.get("avocado")!.prep.traditional["9-11"])).toBeInTheDocument();
   });
 
-  it("follows the method: spoon-fed scrambled egg at 7 months is a mash, baby-led is a spear", () => {
+  it("follows the method: spoon-fed scrambled egg at 7 months is a mash, baby-led is a palm-chunk", () => {
     show("egg-scrambled", "mix", 7);
     expect(screen.getByRole("heading", { name: "Baby-led" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Spoon-fed" })).toBeInTheDocument();
-    expect(shapeOf("blw")).toBe("spear");
+    expect(shapeOf("blw")).toBe("palm-chunk");
     expect(shapeOf("traditional")).toBe("mash");
   });
 

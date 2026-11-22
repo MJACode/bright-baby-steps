@@ -41,6 +41,8 @@ export interface ReportData {
   allergens: any[];
   /** Solids avoid list, printed in the allergens section. */
   foodAvoidances?: ReportFoodAvoidance[];
+  /** The avoid-list read failed: the report says so instead of printing an empty list. */
+  foodAvoidancesError?: boolean;
   illnesses: any[];
   medications: any[];
   temperatures: any[];
@@ -522,8 +524,12 @@ function renderTemperature(h: PdfHelpers, data: ReportData) {
 function renderAllergens(h: PdfHelpers, data: ReportData) {
   const allergens = data.allergens ?? [];
   if (allergens.length) renderAllergenIntroductions(h, allergens);
-  renderFoodAvoidances(h, data.foodAvoidances ?? [], allergens.length === 0);
+  renderFoodAvoidances(h, data.foodAvoidances ?? [], allergens.length === 0, !!data.foodAvoidancesError);
 }
+
+// Not in the approved copy set (2026-11-22): pending review.
+export const FOOD_AVOIDANCES_LOAD_FAILED =
+  "Your Foods you're leaving out list couldn't be loaded. Try the export again.";
 
 const MAX_FOOD_AVOIDANCES = 40;
 const AVOID_REASON_LABEL: Record<ReportFoodAvoidance["reason"], string> = {
@@ -533,10 +539,15 @@ const AVOID_REASON_LABEL: Record<ReportFoodAvoidance["reason"], string> = {
 
 // fetchReportData orders reactions first, then newest, so a cap keeps every
 // reaction ahead of preferences.
-function renderFoodAvoidances(h: PdfHelpers, rows: ReportFoodAvoidance[], ownHeading: boolean) {
-  if (!rows.length) return;
+function renderFoodAvoidances(h: PdfHelpers, rows: ReportFoodAvoidance[], ownHeading: boolean, loadFailed: boolean) {
+  if (!rows.length && !loadFailed) return;
   if (ownHeading) h.heading("Foods you're leaving out");
   else h.subheading("Foods you're leaving out");
+  if (loadFailed) {
+    h.bodyText(FOOD_AVOIDANCES_LOAD_FAILED, 4);
+    h.spacer();
+    return;
+  }
   const shown = rows.slice(0, MAX_FOOD_AVOIDANCES);
   if (rows.length > shown.length) h.bodyText(`Showing ${shown.length} of ${rows.length}.`, 4);
   for (const row of shown) {

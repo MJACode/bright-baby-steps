@@ -24,7 +24,7 @@ const h = vi.hoisted(() => ({
 // child_food_avoidances: a list read, an upsert that returns its row, and a
 // delete that returns what it removed. Every other table is the meal_plans read.
 const avoidChain = () => {
-  const s: { op?: string; payload?: Record<string, unknown>; id?: string } = {};
+  const s: { op?: string; payload?: Record<string, unknown>; id?: string; slug?: string } = {};
   const result = () => {
     if (!s.op) return { data: h.avoids, error: null };
     h.avoidWrites.push({ op: s.op, payload: s.payload, id: s.id });
@@ -43,9 +43,11 @@ const avoidChain = () => {
     select: () => chain,
     eq: (col: string, val: string) => {
       if (col === "id") s.id = val;
+      if (col === "food_slug") s.slug = val;
       return chain;
     },
     order: () => chain,
+    maybeSingle: async () => ({ data: h.avoids.find((r) => r.food_slug === s.slug) ?? null, error: null }),
     upsert: (payload: Record<string, unknown>) => Object.assign(s, { op: "upsert", payload }) && chain,
     delete: () => Object.assign(s, { op: "delete" }) && chain,
     single: async () => result(),

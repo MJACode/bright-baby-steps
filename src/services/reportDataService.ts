@@ -100,7 +100,8 @@ export async function fetchReportData(
         : Promise.resolve({ data: [], error: null }),
       // Solids avoid list, with the allergens section. The current list, not
       // windowed by date: a reaction from before the window still matters.
-      // A failed read (e.g. before the migration lands) yields [].
+      // A failed read is flagged (foodAvoidancesError), never shown as an empty
+      // list: "no foods left out" would drop recorded reactions from the report.
       sections.has("allergens")
         ? supabase
             .from("child_food_avoidances")
@@ -117,6 +118,7 @@ export async function fetchReportData(
     milestones: (milestoneRes.data as any[]) ?? [],
     allergens: (allergenRes.data as any[]) ?? [],
     foodAvoidances: toReportFoodAvoidances(avoidRes.data as FoodAvoidanceRow[] | null),
+    foodAvoidancesError: sections.has("allergens") && !!(avoidRes as { error?: unknown }).error,
     categories: (categoryRes.data as any[]) ?? [],
     lastExportDate: (lastExportRes.data as any[])?.[0]?.created_at ?? null,
     supplements: (supplementRes.data as any[]) ?? [],

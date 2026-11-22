@@ -78,7 +78,7 @@ export function FoodAvoidList({ childId, role, roleResolved }: { childId: string
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="text-sm font-bold break-words">{name}</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {!canEdit && (
+                      {(!canEdit || row.custom_food) && (
                         <Badge variant="outline" className={cn("text-xs font-semibold", REASON_BADGE[row.reason])}>
                           {AVOID_REASONS[row.reason].label}
                         </Badge>
@@ -94,7 +94,8 @@ export function FoodAvoidList({ childId, role, roleResolved }: { childId: string
                   </div>
                   {canEdit && (
                     <>
-                      <Select
+                      {/* Free text never filters the plan, so its reason changes nothing: no picker. */}
+                      {!row.custom_food && <Select
                         value={row.reason}
                         disabled={busy}
                         onValueChange={(next) => {
@@ -115,7 +116,7 @@ export function FoodAvoidList({ childId, role, roleResolved }: { childId: string
                             </SelectItem>
                           ))}
                         </SelectContent>
-                      </Select>
+                      </Select>}
                       <Button
                         type="button"
                         variant="ghost"

@@ -17,6 +17,8 @@ export const SERVE_SHAPE_CAPTIONS: Record<ServeShape, string> = {
   flattened: "Round foods pressed flat with your finger or a fork so they're no longer round.",
   quartered: "Round foods cut lengthwise into quarters, so no piece stays round.",
   "bite-size": "Small, soft pieces about the size of a chickpea that squish easily between your fingers.",
+  // PENDING NUTRITION REVIEW: added with the palm-chunk shape (coordinator, 2026-11-22), not in the approved set.
+  "palm-chunk": "Soft pieces about the size of your baby's palm, big enough to hold in a fist and soft enough to squish.",
 };
 
 export const AVOID_SECTION_TITLE = "Foods you're leaving out";
@@ -70,3 +72,14 @@ export const LOG_CONTAINS_BODY_MULTI =
 export const logContainsConfirm = (allergen: string) => `Log ${allergen} exposure`;
 export const LOG_CONTAINS_CONFIRM_MULTI = "Log exposures";
 export const LOG_CONTAINS_DISMISS = "Not now";
+
+// Not in the 2026-11-22 approved set: written with the save-time fix, pending
+// nutrition / copy review.
+export const PENDING_UNDO = "Undo";
+/** The tracker reaction dialog's own severity question. */
+export const REACTION_SEVERITY_LABEL = "How strong is it?";
+export const exposurePendingText = (allergen: string) => `${allergen} exposure will be logged when you save.`;
+export const reactionPendingText = (allergenList: string, severity: string) =>
+  `A ${severity.toLowerCase()} reaction to ${allergenList} will be added to the allergen tracker when you save.`;
+export const allergenTrackerFailedText = (allergenList: string) =>
+  `The solids saved, but ${allergenList} didn't reach the allergen tracker. Add it there from the allergen's page.`;

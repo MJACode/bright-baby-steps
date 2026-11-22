@@ -1,4 +1,4 @@
-import { avoidanceFoodName, avoidedSlugs, isRetryDue, searchCatalogFoods } from "@/lib/foodAvoidances";
+import { AVOID_NOTE_MAX, appendReactionNote, avoidanceFoodName, avoidedSlugs, isRetryDue, searchCatalogFoods } from "@/lib/foodAvoidances";
 import { parseMealPlan, withoutAvoidedFoods } from "@/lib/mealPlan";
 import { FOOD_BY_SLUG } from "@/lib/foodCatalog";
 
@@ -8,12 +8,15 @@ const ago = (days: number) => new Date(NOW.getTime() - days * DAY).toISOString()
 
 describe("isRetryDue", () => {
   it("offers Try again on a preference 4 weeks old and not dismissed", () => {
-    expect(isRetryDue({ reason: "preference", retry_dismissed_at: null, updated_at: ago(28) }, NOW)).toBe(true);
-    expect(isRetryDue({ reason: "preference", retry_dismissed_at: null, updated_at: ago(27.9) }, NOW)).toBe(false);
+    expect(isRetryDue({ reason: "preference", retry_dismissed_at: null, updated_at: ago(28), custom_food: null }, NOW)).toBe(true);
+    expect(isRetryDue({ reason: "preference", retry_dismissed_at: null, updated_at: ago(27.9), custom_food: null }, NOW)).toBe(false);
+  });
+  it("never for a free-text row: it never filtered the plan", () => {
+    expect(isRetryDue({ reason: "preference", retry_dismissed_at: null, updated_at: ago(60), custom_food: "Stew" }, NOW)).toBe(false);
   });
   it("never for a dismissed preference or a reaction", () => {
-    expect(isRetryDue({ reason: "preference", retry_dismissed_at: ago(1), updated_at: ago(60) }, NOW)).toBe(false);
-    expect(isRetryDue({ reason: "reaction", retry_dismissed_at: null, updated_at: ago(400) }, NOW)).toBe(false);
+    expect(isRetryDue({ reason: "preference", retry_dismissed_at: ago(1), updated_at: ago(60), custom_food: null }, NOW)).toBe(false);
+    expect(isRetryDue({ reason: "reaction", retry_dismissed_at: null, updated_at: ago(400), custom_food: null }, NOW)).toBe(false);
   });
 });
 
@@ -67,5 +70,21 @@ describe("withoutAvoidedFoods", () => {
 
   it("is the same plan when nothing is avoided", () => {
     expect(withoutAvoidedFoods(plan, [], 8)).toBe(plan);
+  });
+});
+
+describe("appendReactionNote", () => {
+  const at = new Date(2026, 10, 22, 9);
+  it("keeps the first note and adds the new one under its date", () => {
+    expect(appendReactionNote("Hives on cheeks", "Vomited once", at)).toBe("Hives on cheeks\nNov 22, 2026: Vomited once");
+  });
+  it("keeps the existing note when nothing new was written", () => {
+    expect(appendReactionNote("Hives on cheeks", "  ", at)).toBe("Hives on cheeks");
+  });
+  it("cuts the newest text, never the original, at the column cap", () => {
+    const original = "x".repeat(480);
+    const out = appendReactionNote(original, "y".repeat(100), at)!;
+    expect(out.length).toBe(AVOID_NOTE_MAX);
+    expect(out.startsWith(original)).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast";
 import { assertCanWrite, ROLE_UNRESOLVED_MESSAGE, VIEW_ONLY_MESSAGE, type Role } from "@/hooks/useCurrentRole";
 import { mealPlanQueryKey } from "@/hooks/useMealPlan";
 import { isRlsViewerDenied } from "@/lib/handleRlsError";
-import { FOOD_AVOIDANCE_COLUMNS, type FoodAvoidance } from "@/lib/foodAvoidances";
+import { FOOD_AVOIDANCE_COLUMNS, appendReactionNote, type FoodAvoidance } from "@/lib/foodAvoidances";
 import type { AvoidReason } from "@/lib/solidsAvoidCopy";
 
 export const foodAvoidancesQueryKey = (childId: string | undefined) => ["food-avoidances", childId] as const;
@@ -32,6 +32,8 @@ export type SaveFoodAvoidanceInput = {
   note?: string | null;
   /** The solids log a reaction was noted on. */
   sourceFeedingLogId?: string | null;
+  /** When the reaction happened: dates the description added to an existing reaction row. */
+  notedAt?: Date;
 } & ({ foodSlug: string; customFood?: never } | { customFood: string; foodSlug?: never });
 
 class FoodAvoidanceGoneError extends Error {
@@ -44,14 +46,34 @@ class FoodAvoidanceGoneError extends Error {
  * One writer for an avoid row. A catalog food upserts on (child_id, food_slug),
  * so a reaction on a food already marked "Not a fan yet" becomes a reaction
  * instead of a second row; free text ("Something else") always inserts.
+ * A food that already has a reaction keeps it: a "Not a fan yet" never
+ * downgrades it, and a second reaction keeps the first note and log link and
+ * adds the new description under its date.
  * created_by is left to the column default (the policy pins it to the writer).
  */
 export async function writeFoodAvoidance(input: SaveFoodAvoidanceInput): Promise<FoodAvoidance> {
+  let note = input.note?.trim() || null;
+  let source = input.sourceFeedingLogId ?? null;
+  if (input.foodSlug) {
+    const { data: existing, error } = await supabase
+      .from("child_food_avoidances")
+      .select(FOOD_AVOIDANCE_COLUMNS)
+      .eq("child_id", input.childId)
+      .eq("food_slug", input.foodSlug)
+      .maybeSingle();
+    if (error) throw error;
+    const row = existing as FoodAvoidance | null;
+    if (row?.reason === "reaction") {
+      if (input.reason !== "reaction") return row;
+      note = appendReactionNote(row.note, note, input.notedAt ?? new Date());
+      source = row.source_feeding_log_id ?? source;
+    }
+  }
   const base = {
     child_id: input.childId,
     reason: input.reason,
-    note: input.note?.trim() || null,
-    source_feeding_log_id: input.sourceFeedingLogId ?? null,
+    note,
+    source_feeding_log_id: source,
   };
   const query = input.foodSlug
     ? supabase

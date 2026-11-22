@@ -144,7 +144,9 @@ const SHAPE_WORDS: Record<ServeShape, RegExp> = {
   "pre-loaded-spoon": /\bpre-?load|\bstay on a spoon\b/i,
   "thin-spread": /\bspread|\bgrated?\b|\bshred(?:ded)?\b|\bdrizzle/i,
   ground: /\bground\b|\bgrind|\bflour\b|\bcrumbl|\bminc|\bflake|\bshred|\bfinely chop|\bchop (?:it )?finely/i,
-  spear: /\bspears?\b|\bstrips?\b|\bsticks?\b|\bwedges?\b|\blogs?\b|\bhandle\b|\bbundle\b|\bfinger-length\b|\bhalved head\b|\blarge (?:soft )?(?:shapes|florets|clumps)\b|\bwhole (?:green beans|okra)\b/i,
+  spear: /\bspears?\b|\bstrips?\b|\bsticks?\b|\bwedges?\b|\blogs?\b|\bhandle\b|\bfinger-length\b|\blarge (?:soft )?florets\b|\bwhole (?:green beans|okra)\b/i,
+  "palm-chunk":
+    /\blarge (?:soft )?(?:pieces?|chunks?|clumps?|flakes?|shapes?)\b|\bpalm|\bclumps?\b|\bballs?\b|\blogs?\b|\bbundles?\b|\bheads?\b|\bwhole\b/i,
   mash:
     /\bmash|\bpur[ée]e|\bblend|\bporridge|\bsmooth\b|\bscoop|\bspoon\b|\bstir|\blumpy|\btexture|\bdal\b|\bcongee|\bcreamy|\bdip\b|\b(?:yogurt|cottage cheese|ricotta|silken tofu|lentils|quinoa|couscous|rice|barley|polenta)\b/i,
   "bite-size": /\bpieces?\b|\bcubes?\b|\bbite|\bsquares?\b|\bchop(?:ped)?\b|\bslices?\b|\bsliced\b|\btorn\b|\btear\b|\bcurds?\b|\bballs?\b|\bflorets?\b|\bsmall pasta\b/i,
@@ -175,10 +177,27 @@ const SHOWN_BANDS = FOOD_CATALOG.flatMap((f) =>
 );
 
 describe("food catalog: serving shapes", () => {
-  it("has exactly the 8 shapes the illustrations cover", () => {
+  it("has exactly the 9 shapes the illustrations cover", () => {
     expect([...SERVE_SHAPES]).toEqual([
-      "spear", "mash", "pre-loaded-spoon", "ground", "thin-spread", "flattened", "quartered", "bite-size",
+      "spear", "mash", "pre-loaded-spoon", "ground", "thin-spread", "flattened", "quartered", "bite-size", "palm-chunk",
     ]);
+  });
+
+  it("palm-chunk is only drawn where the prep says the piece is soft", () => {
+    // A palm-sized piece is only safe because it is soft enough to gum.
+    const notSoft: string[] = [];
+    for (const [f, m, b] of SHOWN_BANDS) {
+      if (f.shapes[m][b] !== "palm-chunk") continue;
+      if (!/\bsoft|\bsquish|\btender\b|\bspongy\b/i.test(positivePrep(f.prep[m][b]))) notSoft.push(`${f.slug} ${m} ${b}`);
+    }
+    expect(notSoft).toEqual([]);
+  });
+
+  it("baby-led 6-8 is never drawn as bite-size", () => {
+    for (const f of FOOD_CATALOG) {
+      if (f.minAgeMonths > 8) continue;
+      expect({ slug: f.slug, shape: f.shapes.blw["6-8"] }).not.toEqual({ slug: f.slug, shape: "bite-size" });
+    }
   });
 
   it.each(FOOD_CATALOG.map((f) => [f.slug, f] as const))("%s has a valid shape for all 6 method x band cells", (_slug, f) => {

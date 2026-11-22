@@ -304,3 +304,18 @@ describe("generatePediatricianReport — foods you're leaving out", () => {
     expect(texts().some((t) => t.includes("Banana"))).toBe(false);
   });
 });
+
+describe("generatePediatricianReport — avoid list that failed to load", () => {
+  const texts = () => mockDoc.text.mock.calls.map((c) => (Array.isArray(c[0]) ? c[0].join(" ") : String(c[0])));
+
+  it("says the list couldn't load rather than printing nothing", () => {
+    generatePediatricianReport({ ...baseData, foodAvoidances: [], foodAvoidancesError: true }, new Set(["allergens"]));
+    expect(texts()).toContain("FOODS YOU'RE LEAVING OUT");
+    expect(texts()).toContain("Your Foods you're leaving out list couldn't be loaded. Try the export again.");
+  });
+
+  it("prints nothing for an empty list that loaded fine", () => {
+    generatePediatricianReport({ ...baseData, foodAvoidances: [], foodAvoidancesError: false }, new Set(["allergens"]));
+    expect(texts().some((t) => /leaving out/i.test(t))).toBe(false);
+  });
+});

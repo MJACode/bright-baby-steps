@@ -115,6 +115,16 @@ describe("FoodAvoidList", () => {
     expect(screen.queryByText(/Ready to try/)).not.toBeInTheDocument();
   });
 
+  it("free-text rows get no reason picker and no Try again, even as an old preference", async () => {
+    h.rows = [row("c1", { custom_food: "Grandma's stew", reason: "preference", updated_at: ago(60) })];
+    renderList();
+    expect(await screen.findByText("Grandma's stew")).toBeInTheDocument();
+    expect(screen.getByText("Not a fan yet")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ready to try/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Grandma's stew" })).toBeInTheDocument();
+  });
+
   it("gives a viewer a read-only list: reason badge, no controls, no retry", async () => {
     h.rows = [row("p1", { food_slug: "banana", updated_at: ago(29) })];
     renderList("viewer");

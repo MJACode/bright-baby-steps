@@ -1115,3 +1115,16 @@ describe("feed serving toast copy", () => {
     );
   });
 });
+
+describe("CALL_911_AFTER_MEAL", () => {
+  it("changes only the cough sign and leaves CALL_911 as it was", async () => {
+    const { CALL_911, CALL_911_AFTER_MEAL } = await import("@/services/allergenService");
+    expect(CALL_911.items[0]).toBe("Trouble breathing, wheezing, a repeated cough, or a hoarse cry");
+    expect(CALL_911_AFTER_MEAL.items[0]).toBe(
+      "Trouble breathing, wheezing, a repeated cough that starts after eating and doesn't clear, or a hoarse cry",
+    );
+    expect(CALL_911_AFTER_MEAL.items.slice(1)).toEqual(CALL_911.items.slice(1));
+    expect(CALL_911_AFTER_MEAL.title).toBe(CALL_911.title);
+    expect(CALL_911_AFTER_MEAL.followUp).toEqual(CALL_911.followUp);
+  });
+});

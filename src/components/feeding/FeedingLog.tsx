@@ -45,15 +45,16 @@ import {
 } from "@/services/allergenService";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
 import { usePreferences } from "@/hooks/usePreferences";
-import { CALL_911 } from "@/services/allergenService";
+import { CALL_911_AFTER_MEAL, REACTION_SAVED_TOAST, exposureLoggedToast, joinNames, spokenAllergenName, startIntroToast } from "@/services/allergenService";
 import { GuidanceBlock } from "@/components/feeding/GuidanceBlock";
 import { FoodSearchField } from "@/components/feeding/FoodSearchField";
-import { FoodAllergenSuggestion, ReactionFoodStep, type ReactionFood } from "@/components/feeding/SolidsFoodAssist";
+import { FoodAllergenSuggestion, ReactionFoodStep, type ReactionFood, type ReactionPlan } from "@/components/feeding/SolidsFoodAssist";
+import { writeSolidsAllergenPlan, type SolidsAllergenResult } from "@/services/solidsAllergenWrites";
 import { allergensInFood } from "@/lib/foodAvoidances";
 import { foodAvoidancesQueryKey, useFoodAvoidances, writeFoodAvoidance } from "@/hooks/useFoodAvoidances";
 import { mealPlanQueryKey } from "@/hooks/useMealPlan";
 import { FOOD_BY_SLUG, type CatalogFood } from "@/lib/foodCatalog";
-import { AVOID_OTHER_SAVED_NOTE } from "@/lib/solidsAvoidCopy";
+import { AVOID_OTHER_SAVED_NOTE, allergenTrackerFailedText } from "@/lib/solidsAvoidCopy";
 import { isMilkFeedType, orderFeedTypes, type MilkFeedType } from "@/lib/feedTypeOrder";
 
 type FeedingLogRow = Tables<"feeding_logs">;
@@ -175,6 +176,12 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
   const [foodSlug, setFoodSlug] = useState<string | null>(null);
   const [reactionFood, setReactionFood] = useState<ReactionFood>(null);
   const [customReactionFood, setCustomReactionFood] = useState("");
+  // Allergen-tracker choices the parent confirmed in this entry. Nothing is
+  // written until Save, which logs them at the final "Started" time.
+  const [exposurePlan, setExposurePlan] = useState<string[]>([]);
+  const [reactionPlan, setReactionPlan] = useState<ReactionPlan | null>(null);
+  // Tracker writes that already landed for this entry, so a retried Save skips them.
+  const allergenWritesDone = useRef<Set<string>>(new Set());
   // Once the parent answers "Which food?" themselves, a later Food Description
   // pick no longer moves it.
   const reactionFoodTouched = useRef(false);
@@ -329,6 +336,8 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     setEditingRow(null);
     pendingAllergenSlugs.current = null;
     setFoodSlug(null); setReactionFood(null); setCustomReactionFood("");
+    setExposurePlan([]); setReactionPlan(null);
+    allergenWritesDone.current = new Set();
     reactionFoodTouched.current = false;
     autoChipIds.current = [];
     setFeedType(defaultFeedType); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setAllergenIds([]); setDerivedStart(new Date());
@@ -412,7 +421,11 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
     food_description: feedType === "solid" ? foodDesc || null : null,
     food_category: feedType === "solid" ? foodCategory || null : null,
-    food_slug: feedType === "solid" ? foodSlug : null,
+    // Sent only when there is something to say, so a client deployed ahead of
+    // the column's migration still saves. An edit that drops its pick clears it.
+    ...(feedType === "solid" && foodSlug
+      ? { food_slug: foodSlug }
+      : editingRow?.food_slug ? { food_slug: null } : {}),
     reaction_noted: feedType === "solid" ? reactionNoted : false,
     reaction_description: feedType === "solid" && reactionNoted ? reactionDescription || null : null,
     notes: notes || null,
@@ -479,7 +492,8 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       .filter((id) => !allergenIds.includes(id));
     autoChipIds.current = toTick;
     if (toTick.length) setAllergenIds((prev) => [...prev, ...toTick]);
-    if (!reactionFoodTouched.current) setReactionFood({ kind: "catalog", slug: food.slug });
+    setExposurePlan([]);
+    if (!reactionFoodTouched.current) chooseReactionFood({ kind: "catalog", slug: food.slug });
   };
 
   const changeFoodDesc = (text: string) => {
@@ -487,15 +501,25 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     if (pickedFood && text !== pickedFood.name) {
       setFoodSlug(null);
       untickAutoChips();
-      if (!reactionFoodTouched.current) setReactionFood(null);
+      setExposurePlan([]);
+      if (!reactionFoodTouched.current) chooseReactionFood(null);
     }
   };
 
+  // A kept tracker reaction is about one food: changing the food drops it.
+  function chooseReactionFood(next: ReactionFood) {
+    setReactionFood(next);
+    setReactionPlan(null);
+  }
+
   // A reaction food is offered once per log: a new entry, or an edit whose log
   // has no avoid row yet (so re-saving an edit can't stack free-text rows).
-  const { data: avoidances } = useFoodAvoidances(isSolids ? activeChild?.id : undefined);
+  // On an edit that check needs the avoid list itself, so the step waits for it.
+  const avoidQuery = useFoodAvoidances(isSolids ? activeChild?.id : undefined);
+  const avoidances = avoidQuery.data;
   const logHasAvoid = !!editingId && !!avoidances?.some((r) => r.source_feeding_log_id === editingId);
-  const showReactionFood = feedType === "solid" && reactionNoted && canLogServings && online && !logHasAvoid;
+  const showReactionFood = feedType === "solid" && reactionNoted && canLogServings && online
+    && (!editingId || avoidQuery.isSuccess) && !logHasAvoid;
   const reactionFoodToSave =
     !showReactionFood ? null
       : reactionFood?.kind === "catalog" ? { foodSlug: reactionFood.slug, name: FOOD_BY_SLUG.get(reactionFood.slug)?.name ?? reactionFood.slug }
@@ -602,6 +626,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
         reason: "reaction",
         note: reactionDescription,
         sourceFeedingLogId: logId,
+        notedAt: loggedAt,
         ...("foodSlug" in food ? { foodSlug: food.foodSlug! } : { customFood: food.customFood! }),
       });
       return "saved";
@@ -609,6 +634,34 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       console.error("food avoidance insert failed", (err as { code?: string })?.code ?? null);
       return "failed";
     }
+  };
+
+  // The allergen-tracker choices this entry kept, limited to what still applies
+  // to the food on the form: exposures for the picked food on a new entry, a
+  // reaction for the reaction food while "Reaction noted" is on.
+  const allergenPlanToSave = () => {
+    const contained = pickedFood ? allergensInFood(pickedFood, allergens ?? []).map((a) => a.id) : [];
+    const exposures = !editingId && canLogServings ? exposurePlan.filter((id) => contained.includes(id)) : [];
+    const reactionFoodItem = reactionFood?.kind === "catalog" ? FOOD_BY_SLUG.get(reactionFood.slug) : undefined;
+    const reactionContained = reactionFoodItem ? allergensInFood(reactionFoodItem, allergens ?? []).map((a) => a.id) : [];
+    const reactionIds = showReactionFood && reactionPlan ? reactionPlan.allergenIds.filter((id) => reactionContained.includes(id)) : [];
+    return {
+      exposures,
+      reaction: reactionPlan && reactionIds.length ? { allergenIds: reactionIds, severity: reactionPlan.severity } : null,
+    };
+  };
+
+  const saveAllergenPlan = async (): Promise<SolidsAllergenResult | null> => {
+    const plan = allergenPlanToSave();
+    if (plan.exposures.length === 0 && !plan.reaction) return null;
+    return writeSolidsAllergenPlan({
+      childId: activeChild!.id,
+      parentId: user!.id,
+      at: loggedAt,
+      notes: reactionDescription,
+      plan,
+      done: allergenWritesDone.current,
+    });
   };
 
   const saveMutation = useMutation({
@@ -621,28 +674,45 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       }
       const { result, logId } = await saveFeedRow();
       const servings = await logFeedServings();
+      const tracker = await saveAllergenPlan();
       const avoid = await saveReactionFood(logId, result);
-      return { result, ...servings, avoid, avoidFood: reactionFoodToSave };
+      return { result, ...servings, tracker, avoid, avoidFood: reactionFoodToSave };
     },
-    onSuccess: ({ result, logged, failed, avoid, avoidFood }) => {
-      if (logged.length > 0 || failed.length > 0) {
+    onSuccess: ({ result, logged, failed, tracker, avoid, avoidFood }) => {
+      if (logged.length > 0 || failed.length > 0 || tracker) {
         queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
+        queryClient.invalidateQueries({ queryKey: ["allergen-reactions"] });
       }
       if (avoid === "saved") {
         queryClient.invalidateQueries({ queryKey: foodAvoidancesQueryKey(activeChild?.id) });
         queryClient.invalidateQueries({ queryKey: mealPlanQueryKey(activeChild?.id) });
       }
       closeDialog();
+      const trackerFailedNames = (tracker?.failed ?? [])
+        .map((id) => allergens?.find((a) => a.id === id)?.name)
+        .filter((n): n is string => !!n);
+      // The 2-hour watch line for an exposure this entry logged.
+      const watchLine = tracker?.started.length
+        ? startIntroToast(tracker.started[0]).description
+        : tracker?.logged.length ? exposureLoggedToast(tracker.logged[tracker.logged.length - 1]).description : "";
+      const triage = tracker?.reactionLevel && tracker.reactionLevel !== "none" ? REACTION_SAVED_TOAST[tracker.reactionLevel] : null;
       const description = [
+        // Triage copy leads and is never replaced (TOAST_LIMIT is 1).
+        triage ? triage.description : "",
+        ...(tracker?.warnings ?? []),
         result === "queued" ? QUEUED_TOAST_DESCRIPTION : "",
         logged.length > 0 ? feedServingsLoggedText(logged) : "",
         failed.length > 0 ? feedServingsFailedText(failed) : "",
+        watchLine,
+        trackerFailedNames.length ? allergenTrackerFailedText(joinNames(trackerFailedNames.map(spokenAllergenName))) : "",
         avoid === "saved" && avoidFood && "customFood" in avoidFood ? AVOID_OTHER_SAVED_NOTE : "",
         avoid === "failed" && avoidFood ? reactionFoodFailedText(avoidFood.name) : "",
       ].filter(Boolean).join(" ");
-      const title = isSolids
-        ? editingId ? "Solids updated! ✏️" : "Solids logged! 🥣"
-        : editingId ? "Feed updated! ✏️" : "Feed logged! 🍼";
+      const title = triage
+        ? triage.title
+        : isSolids
+          ? editingId ? "Solids updated! ✏️" : "Solids logged! 🥣"
+          : editingId ? "Feed updated! ✏️" : "Feed logged! 🍼";
       toast({ title, ...(description ? { description } : {}) });
     },
     onError: (err) => {
@@ -822,15 +892,18 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                   </Select>
                 </div>
 
-                {pickedFood && !reactionNoted && allergens && introductions && (
+                {pickedFood && allergens && introductions && (
                   <FoodAllergenSuggestion
                     key={pickedFood.slug}
                     food={pickedFood}
                     allergens={allergens}
                     introductions={introductions}
                     at={loggedAt}
-                    writer={{ childId: activeChild.id, parentId: user!.id, role, roleResolved }}
                     canWrite={canLogServings && online && !editingId}
+                    offerNew={!reactionNoted}
+                    pending={exposurePlan}
+                    onConfirm={(ids) => setExposurePlan((prev) => [...prev, ...ids.filter((id) => !prev.includes(id))])}
+                    onUndo={(id) => setExposurePlan((prev) => prev.filter((x) => x !== id))}
                   />
                 )}
 
@@ -899,22 +972,20 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                         rows={2}
                       />
                     </div>
-                    <GuidanceBlock section={CALL_911} tone="destructive" />
+                    <GuidanceBlock section={CALL_911_AFTER_MEAL} tone="destructive" />
                     {showReactionFood && (
                       <ReactionFoodStep
                         value={reactionFood}
                         onChange={(next) => {
                           reactionFoodTouched.current = true;
-                          setReactionFood(next);
+                          chooseReactionFood(next);
                         }}
                         customFood={customReactionFood}
                         onCustomFoodChange={setCustomReactionFood}
                         allergens={allergens ?? []}
-                        introductions={introductions}
-                        at={loggedAt}
-                        notes={reactionDescription}
-                        writer={{ childId: activeChild.id, parentId: user!.id, role, roleResolved }}
-                        canWriteAllergens={!!allergens}
+                        reactionPlan={reactionPlan}
+                        onReactionPlanChange={setReactionPlan}
+                        canWriteAllergens={!!allergens && !!introductions}
                       />
                     )}
                   </div>

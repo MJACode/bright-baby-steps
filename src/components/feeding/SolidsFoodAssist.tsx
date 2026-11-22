@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Check, X } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -9,9 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FoodSearchField } from "@/components/feeding/FoodSearchField";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
-import { assertCanWrite, type Role } from "@/hooks/useCurrentRole";
 import { allergensInFood, searchCatalogFoods } from "@/lib/foodAvoidances";
 import { FOOD_BY_SLUG, type CatalogFood } from "@/lib/foodCatalog";
 import { cn } from "@/lib/utils";
@@ -20,47 +16,28 @@ import {
   LOG_CONTAINS_BODY_MULTI, LOG_CONTAINS_CONFIRM_MULTI, LOG_CONTAINS_DISMISS,
   LOG_REACTION_ALLERGEN_BODY, LOG_REACTION_ALLERGEN_CONFIRM, LOG_REACTION_ALLERGEN_SKIP,
   LOG_REACTION_FOOD_HELPER, LOG_REACTION_FOOD_LABEL, LOG_REACTION_FOOD_SEARCH_PLACEHOLDER,
-  LOG_REACTION_PEDIATRICIAN_NUDGE,
-  logContainsBody, logContainsConfirm, logContainsTitle, logReactionAllergenEffect, logReactionAllergenTitle,
+  LOG_REACTION_PEDIATRICIAN_NUDGE, PENDING_UNDO, REACTION_SEVERITY_LABEL,
+  exposurePendingText, logContainsBody, logContainsConfirm, logContainsTitle, logReactionAllergenEffect,
+  logReactionAllergenTitle, reactionPendingText,
 } from "@/lib/solidsAvoidCopy";
 import {
-  allergenEmoji, clampExposureTime, exposureLoggedToast, getAllergenStatus, isSameCalendarDay, joinNames,
-  nextExposureSlot, recentOtherFirstExposure, spacingNoteText, spokenAllergenName, startIntroToast,
-  REACTION_NOTED_DESCRIPTION, REACTION_SAVED_TOAST,
+  allergenEmoji, clampExposureTime, getAllergenStatus, isSameCalendarDay, joinNames,
+  nextExposureSlot, recentOtherFirstExposure, severityConfig, spacingNoteText, spokenAllergenName,
+  REACTION_NOTED_DESCRIPTION,
   SAME_DAY_SECOND_EXPOSURE_CANCEL, SAME_DAY_SECOND_EXPOSURE_CONFIRM, SAME_DAY_SECOND_EXPOSURE_DESCRIPTION,
   SAME_DAY_SECOND_EXPOSURE_TITLE, SPACING_NOTE_NOT_YET, SPACING_NOTE_START, SPACING_NOTE_TITLE,
+  type Severity,
 } from "@/services/allergenService";
-import type { InsertedExposure } from "@/services/allergenExposureWrite";
-import {
-  AllergenWriteError, describeAllergenWriteError, describeStartExposureError, saveAllergenExposure,
-  startAllergenIntro, StartExposureError,
-} from "@/services/allergenTrackerWrites";
+import type { SolidsAllergenPlan } from "@/services/solidsAllergenWrites";
 
 export type AllergenRow = { id: string; slug: string; name: string };
 type ExposureRow = { id: string; exposure_number: number; logged_at: string; reaction_observed: boolean | null };
 export type IntroRow = { id: string; allergen_id: string; status: string; allergen_exposure_logs?: ExposureRow[] };
-
-type Writer = { childId: string; parentId: string; role: Role; roleResolved: boolean };
+export type ReactionPlan = NonNullable<SolidsAllergenPlan["reaction"]>;
 
 type Guard = { title: string; description: string; confirm: string; cancel: string };
 
-// Read fresh: another device may have logged since the list was cached, and
-// nothing constrains the exposure number server-side.
-async function freshSlot(intro: IntroRow) {
-  const { data } = await supabase
-    .from("allergen_exposure_logs")
-    .select("exposure_number, logged_at")
-    .eq("allergen_introduction_id", intro.id);
-  return nextExposureSlot(data ?? intro.allergen_exposure_logs ?? []);
-}
-
-const invalidateAllergenQueries = (queryClient: ReturnType<typeof useQueryClient>) =>
-  Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] }),
-    queryClient.invalidateQueries({ queryKey: ["allergen-reactions"] }),
-  ]);
-
-/** The tracker's own "are you sure" questions, asked one after another before a write. */
+/** The tracker's own "are you sure" questions, asked one after another before a choice is kept. */
 function useGuards() {
   const [queue, setQueue] = useState<{ guards: Guard[]; run: () => void } | null>(null);
   const start = (guards: Guard[], run: () => void) => {
@@ -133,105 +110,70 @@ function AllergenChips({
   );
 }
 
-// Exposure #1 saved but its id couldn't be read back to hang the reaction on.
-const REACTION_SAVED_FALLBACK =
-  "The first exposure saved, but the reaction didn't attach to it. Open this allergen in the Allergen Tracker and tap Log a reaction.";
+/** A choice that's kept but not written yet, with a way to take it back. */
+function PendingLine({ text, undoLabel, onUndo }: { text: string; undoLabel: string; onUndo: () => void }) {
+  return (
+    <div role="status" className="flex items-center gap-2 rounded-xl bg-feeding-bg pl-3">
+      <Check className="w-4 h-4 shrink-0 text-feeding" aria-hidden />
+      <p className="flex-1 text-sm font-semibold leading-relaxed">{text}</p>
+      <Button type="button" variant="ghost" aria-label={undoLabel} onClick={onUndo} className="touch-target text-sm font-semibold">
+        {PENDING_UNDO}
+      </Button>
+    </div>
+  );
+}
 
 const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
 /**
  * After a catalog food is picked in Log solids: allergens with a reaction on
  * record get REACTION_NOTED_DESCRIPTION and no offer; allergens not started or
- * partway through get a "log an exposure" suggestion that writes nothing until
- * the parent confirms, through the tracker's own start / next-exposure path
- * (spacing note and same-day question included). Signed-off allergens are the
- * serving chips' job, not this one's.
+ * partway through get a "log an exposure" suggestion. Confirming asks the
+ * tracker's spacing / same-day questions, then only records the choice
+ * (`pending`): the sheet writes it on Save, at the final "Started" time.
  */
 export function FoodAllergenSuggestion({
   food,
   allergens,
   introductions,
   at,
-  writer,
   canWrite,
+  offerNew,
+  pending,
+  onConfirm,
+  onUndo,
 }: {
   food: CatalogFood;
   allergens: AllergenRow[];
   introductions: IntroRow[];
-  /** The feed's "Started" time: the exposure is logged at it. */
+  /** The feed's current "Started" time, for the same-day question. */
   at: Date;
-  writer: Writer;
   /** Online, a new entry, and a role that can write. */
   canWrite: boolean;
+  /** False once a reaction is noted: no new exposure offers, kept choices still show. */
+  offerNew: boolean;
+  /** Allergen ids already confirmed, waiting for Save. */
+  pending: string[];
+  onConfirm: (allergenIds: string[]) => void;
+  onUndo: (allergenId: string) => void;
 }) {
-  const queryClient = useQueryClient();
   const { start, dialog } = useGuards();
-  const [handled, setHandled] = useState<string[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>([]);
   const [deselected, setDeselected] = useState<string[]>([]);
-  const inFlight = useRef(false);
-  const done = useRef<string[]>([]);
 
   const introOf = (allergenId: string) => introductions.find((i) => i.allergen_id === allergenId);
   const statusOf = (a: AllergenRow) => getAllergenStatus(introOf(a.id));
   const contained = allergensInFood(food, allergens);
   const onRecord = contained.filter((a) => statusOf(a) === "reaction_noted");
-  const offer = contained.filter((a) => {
+  const kept = contained.filter((a) => pending.includes(a.id));
+  const offer = !canWrite || !offerNew ? [] : contained.filter((a) => {
     const s = statusOf(a);
-    return (s === "not_started" || s === "in_progress") && !handled.includes(a.id);
+    return (s === "not_started" || s === "in_progress") && !dismissed.includes(a.id) && !pending.includes(a.id);
   });
   const selected = offer.filter((a) => !deselected.includes(a.id)).map((a) => a.id);
 
-  const logExposures = useMutation({
-    mutationFn: async (ids: string[]) => {
-      assertCanWrite(writer.roleResolved, writer.role);
-      done.current = [];
-      const started: { logged_at: string; observation_window_ends_at: string }[] = [];
-      const logged: InsertedExposure[] = [];
-      for (const id of ids) {
-        const intro = introOf(id);
-        if (!intro) {
-          const r = await startAllergenIntro({ childId: writer.childId, parentId: writer.parentId, allergenId: id, at });
-          started.push(r.exposure);
-        } else {
-          const slot = await freshSlot(intro);
-          const r = await saveAllergenExposure(
-            { childId: writer.childId, parentId: writer.parentId },
-            {
-              target: { mode: "new_exposure", introId: intro.id, allergenId: id, exposureNum: slot.exposureNumber },
-              at,
-              notBefore: slot.notBefore,
-              severity: "none",
-              symptoms: [],
-              notes: "",
-            },
-          );
-          if (r.newExposure) logged.push(r.newExposure);
-        }
-        done.current.push(id);
-      }
-      return { started, logged };
-    },
-    onSuccess: ({ started, logged }) => {
-      toast(started.length > 0 ? startIntroToast(started[0]) : exposureLoggedToast(logged[logged.length - 1]));
-    },
-    onError: (err, ids) => {
-      const failedId = ids.find((id) => !done.current.includes(id));
-      const name = allergens.find((a) => a.id === failedId)?.name;
-      const described = err instanceof StartExposureError || (err as { code?: string })?.code === "23505"
-        ? describeStartExposureError(err, name)
-        : describeAllergenWriteError(err, "Couldn't log that exposure");
-      toast({ ...described, variant: "destructive" });
-    },
-    onSettled: () => {
-      inFlight.current = false;
-      // What did save stays handled, so a partial failure can't offer it twice.
-      setHandled((prev) => [...prev, ...done.current]);
-      return invalidateAllergenQueries(queryClient);
-    },
-  });
-
-  const onConfirm = () => {
-    if (inFlight.current || selected.length === 0) return;
+  const handleConfirm = () => {
+    if (selected.length === 0) return;
     const now = new Date();
     const guards: Guard[] = [];
     for (const id of selected) {
@@ -266,16 +208,13 @@ export function FoodAllergenSuggestion({
       }
     }
     const ids = selected;
-    start(guards, () => {
-      if (inFlight.current) return;
-      inFlight.current = true;
-      logExposures.mutate(ids);
-    });
+    start(guards, () => onConfirm(ids));
   };
 
-  if (onRecord.length === 0 && (!canWrite || offer.length === 0)) return dialog;
+  if (onRecord.length === 0 && kept.length === 0 && offer.length === 0) return dialog;
 
   const single = offer.length === 1 ? spokenAllergenName(offer[0].name) : null;
+  const title = logContainsTitle(food.name, joinNames(offer.map((a) => spokenAllergenName(a.name))));
   return (
     <div className="space-y-3">
       {onRecord.map((a) => (
@@ -283,23 +222,27 @@ export function FoodAllergenSuggestion({
           <span className="font-semibold text-foreground">{a.name}:</span> {REACTION_NOTED_DESCRIPTION}
         </p>
       ))}
-      {canWrite && offer.length > 0 && (
-        <div role="group" aria-label={logContainsTitle(food.name, joinNames(offer.map((a) => spokenAllergenName(a.name))))} className="space-y-3 rounded-xl bg-feeding-bg p-3">
-          <p className="text-sm font-bold">{logContainsTitle(food.name, joinNames(offer.map((a) => spokenAllergenName(a.name))))}</p>
+      {kept.map((a) => (
+        <PendingLine
+          key={a.id}
+          text={exposurePendingText(a.name)}
+          undoLabel={`${PENDING_UNDO}: ${a.name} exposure`}
+          onUndo={() => onUndo(a.id)}
+        />
+      ))}
+      {offer.length > 0 && (
+        <div role="group" aria-label={title} className="space-y-3 rounded-xl bg-feeding-bg p-3">
+          <p className="text-sm font-bold">{title}</p>
           <p className="text-sm leading-relaxed">{single ? logContainsBody(single) : LOG_CONTAINS_BODY_MULTI}</p>
           {!single && (
-            <AllergenChips
-              options={offer}
-              selected={selected}
-              onToggle={(id) => setDeselected((prev) => toggle(prev, id))}
-            />
+            <AllergenChips options={offer} selected={selected} onToggle={(id) => setDeselected((prev) => toggle(prev, id))} />
           )}
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               className="touch-target flex-1 bg-feeding font-bold text-white hover:bg-feeding/90"
-              disabled={logExposures.isPending || selected.length === 0}
-              onClick={onConfirm}
+              disabled={selected.length === 0}
+              onClick={handleConfirm}
             >
               {single ? logContainsConfirm(single) : LOG_CONTAINS_CONFIRM_MULTI}
             </Button>
@@ -307,8 +250,7 @@ export function FoodAllergenSuggestion({
               type="button"
               variant="ghost"
               className="touch-target font-semibold"
-              disabled={logExposures.isPending}
-              onClick={() => setHandled((prev) => [...prev, ...offer.map((a) => a.id)])}
+              onClick={() => setDismissed((prev) => [...prev, ...offer.map((a) => a.id)])}
             >
               {LOG_CONTAINS_DISMISS}
             </Button>
@@ -320,98 +262,44 @@ export function FoodAllergenSuggestion({
   );
 }
 
+const SEVERITIES = (Object.keys(severityConfig) as Severity[]).filter((s) => s !== "none");
+
 /**
- * The tracker's reaction path for allergens a reaction food contains. Nothing
- * is written until the parent confirms the chips. The form has no severity
- * scale, so a reaction is saved as Mild — the lowest real severity, the same
- * rule resolveReactionSeverity applies to an unrated reaction — with the
- * parent's own description as the notes.
+ * The tracker's reaction for allergens a reaction food contains: editable
+ * chips plus the tracker's own severity scale (required). Confirming records
+ * the choice; the sheet writes it on Save, onto the exposure still waiting for
+ * a reaction (or a new one when none is).
  */
 function ReactionAllergenSuggestion({
   food,
   contained,
-  introductions,
-  at,
-  notes,
-  writer,
+  plan,
+  onConfirm,
+  onUndo,
 }: {
   food: CatalogFood;
   contained: AllergenRow[];
-  introductions: IntroRow[];
-  at: Date;
-  notes: string;
-  writer: Writer;
+  plan: ReactionPlan | null;
+  onConfirm: (plan: ReactionPlan) => void;
+  onUndo: () => void;
 }) {
-  const queryClient = useQueryClient();
-  const [resolved, setResolved] = useState<"saved" | "skipped" | null>(null);
+  const [skipped, setSkipped] = useState(false);
   const [deselected, setDeselected] = useState<string[]>([]);
-  const inFlight = useRef(false);
+  const [severity, setSeverity] = useState<Severity | null>(null);
   const selected = contained.filter((a) => !deselected.includes(a.id));
   const spoken = (rows: AllergenRow[]) => joinNames(rows.map((a) => spokenAllergenName(a.name)));
 
-  const saveReactions = useMutation({
-    mutationFn: async (ids: string[]) => {
-      assertCanWrite(writer.roleResolved, writer.role);
-      const w = { childId: writer.childId, parentId: writer.parentId };
-      const warnings: string[] = [];
-      for (const id of ids) {
-        const intro = introductions.find((i) => i.allergen_id === id);
-        let result;
-        if (!intro) {
-          // No introduction yet: start one (exposure #1 at the feed's time), then
-          // put the reaction on that exposure, as the tracker's "Log a reaction" does.
-          const started = await startAllergenIntro({ ...w, allergenId: id, at });
-          const { data: first, error } = await supabase
-            .from("allergen_exposure_logs")
-            .select("id")
-            .eq("allergen_introduction_id", started.introId)
-            .eq("exposure_number", 1)
-            .maybeSingle();
-          if (error || !first) throw new AllergenWriteError(REACTION_SAVED_FALLBACK);
-          result = await saveAllergenExposure(w, {
-            target: { mode: "existing_exposure", introId: started.introId, exposureId: first.id, exposureNum: 1, previousReactionObserved: false },
-            severity: "mild",
-            symptoms: [],
-            notes,
-          });
-        } else {
-          const slot = await freshSlot(intro);
-          result = await saveAllergenExposure(w, {
-            target: { mode: "new_exposure", introId: intro.id, allergenId: id, exposureNum: slot.exposureNumber },
-            at,
-            notBefore: slot.notBefore,
-            severity: "mild",
-            symptoms: [],
-            notes,
-          });
-        }
-        if (result.warning && !warnings.includes(result.warning)) warnings.push(result.warning);
-      }
-      return warnings;
-    },
-    onSuccess: (warnings) => {
-      setResolved("saved");
-      // Triage copy first; a stale-status warning rides along after it.
-      const base = REACTION_SAVED_TOAST.note;
-      toast(warnings.length ? { title: base.title, description: `${base.description} ${warnings.join(" ")}` } : base);
-    },
-    onError: (err) => {
-      toast({ ...describeAllergenWriteError(err, "Couldn't save that"), variant: "destructive" });
-    },
-    onSettled: () => {
-      inFlight.current = false;
-      return invalidateAllergenQueries(queryClient);
-    },
-  });
-
-  if (resolved === "skipped") return null;
-  if (resolved === "saved") {
+  if (plan) {
+    const kept = contained.filter((a) => plan.allergenIds.includes(a.id));
     return (
-      <p role="status" className="flex items-center gap-1.5 text-sm font-semibold">
-        <Check className="w-4 h-4 text-feeding" aria-hidden /> {REACTION_SAVED_TOAST.note.title}
-      </p>
+      <PendingLine
+        text={reactionPendingText(spoken(kept), severityConfig[plan.severity].label)}
+        undoLabel={`${PENDING_UNDO}: add to allergen tracker`}
+        onUndo={onUndo}
+      />
     );
   }
+  if (skipped) return null;
 
   const title = logReactionAllergenTitle(food.name, spoken(contained));
   return (
@@ -419,27 +307,37 @@ function ReactionAllergenSuggestion({
       <p className="text-sm font-bold">{title}</p>
       <p className="text-sm leading-relaxed">{LOG_REACTION_ALLERGEN_BODY}</p>
       <AllergenChips options={contained} selected={selected.map((a) => a.id)} onToggle={(id) => setDeselected((prev) => toggle(prev, id))} />
+      <div className="space-y-2">
+        <p className="text-sm font-bold" id={`reaction-severity-${food.slug}`}>{REACTION_SEVERITY_LABEL}</p>
+        <div role="group" aria-labelledby={`reaction-severity-${food.slug}`} className="grid grid-cols-3 gap-2">
+          {SEVERITIES.map((key) => {
+            const cfg = severityConfig[key];
+            return (
+              <Button
+                key={key}
+                type="button"
+                variant="outline"
+                aria-pressed={severity === key}
+                className={cn("touch-target h-12 text-sm font-bold", severity === key ? cfg.activeColor : cfg.color)}
+                onClick={() => setSeverity(key)}
+              >
+                <span aria-hidden className="mr-1">{cfg.emoji}</span> {cfg.label}
+              </Button>
+            );
+          })}
+        </div>
+      </div>
       {selected.length > 0 && <p className="text-sm leading-relaxed">{logReactionAllergenEffect(spoken(selected))}</p>}
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
           className="touch-target flex-1 font-bold"
-          disabled={saveReactions.isPending || selected.length === 0}
-          onClick={() => {
-            if (inFlight.current) return;
-            inFlight.current = true;
-            saveReactions.mutate(selected.map((a) => a.id));
-          }}
+          disabled={selected.length === 0 || !severity}
+          onClick={() => severity && onConfirm({ allergenIds: selected.map((a) => a.id), severity })}
         >
           {LOG_REACTION_ALLERGEN_CONFIRM}
         </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="touch-target font-semibold"
-          disabled={saveReactions.isPending}
-          onClick={() => setResolved("skipped")}
-        >
+        <Button type="button" variant="ghost" className="touch-target font-semibold" onClick={() => setSkipped(true)}>
           {LOG_REACTION_ALLERGEN_SKIP}
         </Button>
       </div>
@@ -460,10 +358,8 @@ export function ReactionFoodStep({
   customFood,
   onCustomFoodChange,
   allergens,
-  introductions,
-  at,
-  notes,
-  writer,
+  reactionPlan,
+  onReactionPlanChange,
   canWriteAllergens,
 }: {
   value: ReactionFood;
@@ -471,10 +367,8 @@ export function ReactionFoodStep({
   customFood: string;
   onCustomFoodChange: (text: string) => void;
   allergens: AllergenRow[];
-  introductions: IntroRow[] | undefined;
-  at: Date;
-  notes: string;
-  writer: Writer;
+  reactionPlan: ReactionPlan | null;
+  onReactionPlanChange: (plan: ReactionPlan | null) => void;
   /** The allergen data has loaded, so a reaction can be offered against it. */
   canWriteAllergens: boolean;
 }) {
@@ -553,15 +447,14 @@ export function ReactionFoodStep({
       {catalogFood && contained.length === 0 && (
         <p className="text-sm leading-relaxed">{LOG_REACTION_PEDIATRICIAN_NUDGE}</p>
       )}
-      {catalogFood && contained.length > 0 && canWriteAllergens && introductions && (
+      {catalogFood && contained.length > 0 && canWriteAllergens && (
         <ReactionAllergenSuggestion
           key={catalogFood.slug}
           food={catalogFood}
           contained={contained}
-          introductions={introductions}
-          at={at}
-          notes={notes}
-          writer={writer}
+          plan={reactionPlan}
+          onConfirm={onReactionPlanChange}
+          onUndo={() => onReactionPlanChange(null)}
         />
       )}
     </div>

@@ -1,5 +1,6 @@
 // Pure helpers for the Solids avoid list (child_food_avoidances) and the
 // catalog food search used by Log solids. No React, no Supabase.
+import { format } from "date-fns";
 import { FOOD_BY_SLUG, FOOD_CATALOG, type CatalogFood } from "@/lib/foodCatalog";
 import type { AvoidReason } from "@/lib/solidsAvoidCopy";
 
@@ -41,13 +42,14 @@ export function avoidanceFoodName(row: Pick<FoodAvoidance, "food_slug" | "custom
 /**
  * A "Not a fan yet" row is ready for "Try again?" once it has stood for 4
  * weeks without being dismissed. updated_at is the clock: changing the reason
- * back to preference restarts it. Reactions never expire.
+ * back to preference restarts it. Reactions never expire, and free-text rows
+ * never filter the plan, so "back in your meal ideas" would be untrue for them.
  */
 export function isRetryDue(
-  row: Pick<FoodAvoidance, "reason" | "retry_dismissed_at" | "updated_at">,
+  row: Pick<FoodAvoidance, "reason" | "retry_dismissed_at" | "updated_at" | "custom_food">,
   now: Date,
 ): boolean {
-  if (row.reason !== "preference" || row.retry_dismissed_at) return false;
+  if (row.custom_food || row.reason !== "preference" || row.retry_dismissed_at) return false;
   const since = new Date(row.updated_at).getTime();
   return Number.isFinite(since) && now.getTime() - since >= AVOID_RETRY_AFTER_MS;
 }
@@ -100,4 +102,20 @@ export function searchCatalogFoods(text: string, limit = 5): CatalogFood[] {
     .sort((a, b) => a.score - b.score || a.food.name.localeCompare(b.food.name))
     .slice(0, limit)
     .map((m) => m.food);
+}
+
+/** child_food_avoidances_note_length. */
+export const AVOID_NOTE_MAX = 500;
+
+/**
+ * A second reaction on a food keeps the first description and adds the new one
+ * under its date. The column caps at AVOID_NOTE_MAX, so the newest text is cut
+ * rather than the record the pediatrician already has.
+ */
+export function appendReactionNote(existing: string | null, next: string | null | undefined, notedAt: Date): string | null {
+  const added = next?.trim();
+  if (!added) return existing;
+  const line = `${format(notedAt, "MMM d, yyyy")}: ${added}`;
+  const merged = existing?.trim() ? `${existing.trim()}\n${line}` : line;
+  return merged.slice(0, AVOID_NOTE_MAX);
 }

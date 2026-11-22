@@ -54,10 +54,16 @@
 // illustration; the prep string stays the instruction the parent reads, so
 // the two must never disagree on safety (a quartered round food is never
 // drawn as bite-size). Judgement calls the reviewer should check:
-//   * Palm-grab pieces that are not strips (large fish flakes, large egg
-//     clumps, a noodle bundle, large pasta shapes, a halved bok choy head,
-//     rice balls / logs) have no shape of their own: fish -> ground (flaked),
-//     the rest -> spear.
+//   * Palm-grab pieces that are not strips have their own shape,
+//     "palm-chunk" (founder decision 2026-11-22): large soft fish flakes
+//     (salmon / cod / tilapia), large soft egg clumps, a rice-noodle bundle,
+//     large pasta shapes, a halved bok choy head, rice balls / logs, a whole
+//     idli — all baby-led 6-8 only. Only where the prep says the piece is
+//     soft; never for a round food the prep says to quarter or flatten, and
+//     never in spoon-fed 6-8. Left as-is on purpose: couscous blw 6-8 ("small
+//     soft balls or pre-load a spoon") stays pre-loaded-spoon; shrimp blw 6-8
+//     (minced into a patty) stays ground so the drawing shows the mincing,
+//     not a piece of shrimp; finger-length meat logs stay spear.
 //   * "Cooked soft or finely grated" with no piece size (apple / carrot 12+
 //     baby-led) -> thin-spread (grated). Meat shreds -> ground.
 //   * tempeh "6-8" (never shown, minAgeMonths 9) carries a placeholder.
@@ -77,7 +83,7 @@ export function ageBand(correctedAgeMonths: number): AgeBand {
 
 /**
  * The fixed set of serving shapes the "How to serve" illustrations cover.
- *   spear            finger-width strips, sticks, wedges (also palm-grab pieces)
+ *   spear            finger-width strips, sticks, wedges
  *   mash             mashed, puréed, spoon-fed, porridge
  *   pre-loaded-spoon a spoon loaded and handed to the baby
  *   ground           crumbled, ground, minced, flaked, shredded meat
@@ -85,9 +91,12 @@ export function ageBand(correctedAgeMonths: number): AgeBand {
  *   flattened        round foods squashed flat
  *   quartered        round foods quartered lengthwise
  *   bite-size        small soft pieces, pea-size pincer pieces, 12+ bites
+ *   palm-chunk       soft palm-sized pieces that aren't strips: large flakes
+ *                    or clumps, a noodle bundle, big pasta, a halved head,
+ *                    rice balls / logs
  */
 export const SERVE_SHAPES = [
-  "spear", "mash", "pre-loaded-spoon", "ground", "thin-spread", "flattened", "quartered", "bite-size",
+  "spear", "mash", "pre-loaded-spoon", "ground", "thin-spread", "flattened", "quartered", "bite-size", "palm-chunk",
 ] as const;
 export type ServeShape = (typeof SERVE_SHAPES)[number];
 
@@ -1037,7 +1046,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
       "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     }
   },
@@ -1231,7 +1240,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
       "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Dried durum pasta is wheat only. Fresh/egg pasta contains egg; this entry is plain dried pasta. Cook without salt in the water."
@@ -1334,7 +1343,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "mash" },
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "mash" },
       "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Arsenic: rotate grains; cook in extra water and drain to reduce arsenic."
@@ -1527,7 +1536,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
       "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Rice + urad dal batter; no top-9 allergens. Skip salt in batter and spicy chutneys/sambar for infants."
@@ -1551,7 +1560,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
       "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
     },
     "notes": "Plain rice noodles only (check label for wheat). Arsenic: rotate grains."
@@ -1749,7 +1758,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
       "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Low mercury (FDA/EPA Best Choice). Avoid shark, swordfish, king mackerel, tilefish, bigeye tuna, marlin, orange roughy."
@@ -1775,7 +1784,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
       "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Low mercury. Not breaded (breading adds wheat/egg/milk)."
@@ -1801,7 +1810,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
       "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Low mercury."
@@ -2252,7 +2261,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
       "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
     },
     "notes": "If scrambled with cow's milk, milk tag would apply; default prep uses none."

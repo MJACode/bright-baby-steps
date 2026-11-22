@@ -5,38 +5,40 @@ import { cn } from "@/lib/utils";
 // Line art for the "How to serve" sheet. Strokes are currentColor and fills
 // are brand tokens, so each drawing follows light and dark themes. Decorative
 // only: the SERVE_SHAPE_* caption next to it carries the meaning.
-// Dashed outlines are references (a finger, the food before it's cut), never food.
+// Dashed outlines are references (a finger, the food before it's cut), never
+// food. They draw in full foreground so they hold up on the dark theme; the
+// dash, not a fade, is what marks them as a reference.
 
 const FOOD = "fill-feeding/30";
-const REFERENCE = "fill-none";
+const REFERENCE = "fill-none stroke-foreground";
 const UTENSIL = "fill-muted";
 
 function Arrow({ x1, x2, y }: { x1: number; x2: number; y: number }) {
   return <path d={`M${x1} ${y} H${x2} M${x2 - 7} ${y - 6} L${x2} ${y} L${x2 - 7} ${y + 6}`} className="fill-none" />;
 }
 
-/** A finger seen from above, nail at the right-hand end: the size reference. */
+/** An adult finger seen from above, nail at the right-hand end: the size reference. */
 function Finger({ x, y, length, width }: { x: number; y: number; length: number; width: number }) {
   const r = width / 2;
   return (
-    <g className="opacity-70" strokeDasharray="4 4">
+    <g strokeDasharray="4 3">
       <path
         d={`M${x} ${y} H${x + length - r} A${r} ${r} 0 0 1 ${x + length - r} ${y + width} H${x}`}
         className={REFERENCE}
       />
-      <rect x={x + length - r - 9} y={y + 3} width={9} height={width - 6} rx={3} className={REFERENCE} />
+      <rect x={x + length - r - 5} y={y + 3} width={6} height={width - 6} rx={2} className={REFERENCE} strokeDasharray="none" />
     </g>
   );
 }
 
 const SHAPES: Record<ServeShape, ReactNode> = {
-  // Two adult fingers, then a soft strip of the same size that sags as it bends.
+  // Two adult fingers held together, then one soft-cooked strip as long and
+  // as wide as them, rounded at the ends and sagging as soft food does.
   spear: (
     <>
-      <Finger x={24} y={4} length={110} width={14} />
-      <Finger x={24} y={26} length={110} width={14} />
-      <path d="M24 56 C56 48 100 50 134 62 L132 92 C100 80 58 78 26 86 Z" className={FOOD} />
-      <path d="M56 64 q4 5 0 10 M80 63 q4 5 0 10 M104 66 q4 5 0 10" className="fill-none opacity-60" />
+      <Finger x={26} y={6} length={108} width={13} />
+      <Finger x={26} y={20} length={108} width={13} />
+      <path d="M37 55 Q80 66 123 55 A11.5 11.5 0 0 1 123 78 Q80 89 37 78 A11.5 11.5 0 0 1 37 55 Z" className={FOOD} />
     </>
   ),
   // A bowl of smooth mash with a spoon resting in it.
@@ -80,22 +82,23 @@ const SHAPES: Record<ServeShape, ReactNode> = {
   // A round food (dashed, before) pressed flat with a fork.
   flattened: (
     <>
-      <circle cx="34" cy="52" r="16" className={REFERENCE} strokeDasharray="4 4" />
+      <circle cx="34" cy="52" r="16" className={REFERENCE} strokeDasharray="4 3" />
       <Arrow x1={58} x2={86} y={52} />
       <ellipse cx="124" cy="66" rx="28" ry="8" className={FOOD} />
       <path d="M112 50 V62 M120 50 V62 M128 50 V62 M136 50 V62 M112 50 H136 M124 50 V22" className="fill-none" />
     </>
   ),
-  // A round food (dashed, before) cut along its length into four long slivers.
+  // One whole grape, then that same grape cut along its length into four
+  // quarters, pulled apart so every cut shows and no piece stays round.
   quartered: (
     <>
-      <ellipse cx="30" cy="50" rx="13" ry="26" className={REFERENCE} strokeDasharray="4 4" />
-      <path d="M30 22 V78" className="fill-none opacity-60" strokeDasharray="3 3" />
-      <Arrow x1={54} x2={80} y={50} />
-      <path d="M92 24 C102 34 102 66 92 76 Z" className={FOOD} />
-      <path d="M114 24 C104 34 104 66 114 76 Z" className={FOOD} />
-      <path d="M124 24 C134 34 134 66 124 76 Z" className={FOOD} />
-      <path d="M146 24 C136 34 136 66 146 76 Z" className={FOOD} />
+      <ellipse cx="32" cy="52" rx="15" ry="25" className={FOOD} />
+      <path d="M32 27 q2 -7 6 -9" className="fill-none" />
+      <Arrow x1={56} x2={82} y={52} />
+      <path d="M104 22.3 A20 32 0 0 0 104 77.7 Z" className={FOOD} />
+      <path d="M108 22.3 A20 32 0 0 1 118 18 L118 82 A20 32 0 0 1 108 77.7 Z" className={FOOD} />
+      <path d="M122 18 A20 32 0 0 1 132 22.3 L132 77.7 A20 32 0 0 1 122 82 Z" className={FOOD} />
+      <path d="M136 22.3 A20 32 0 0 1 136 77.7 Z" className={FOOD} />
     </>
   ),
   // Small soft pieces, one squished under a fingertip to show the size and give.
@@ -107,10 +110,26 @@ const SHAPES: Record<ServeShape, ReactNode> = {
         <rect key={`${x}-${y}`} x={x} y={y} width="13" height="13" rx="4" className={FOOD} />
       ))}
       <ellipse cx="112" cy="74" rx="11" ry="5" className={FOOD} />
-      <g className="opacity-70" strokeDasharray="4 4">
+      <g strokeDasharray="4 3">
         <path d="M100 8 V56 A12 12 0 0 0 124 56 V8" className={REFERENCE} />
         <path d="M106 54 Q112 62 118 54" className={REFERENCE} />
       </g>
+    </>
+  ),
+  // A baby's open hand (dashed) beside one soft, uneven chunk about the size
+  // of that palm: big enough to hold in a fist, flaking where it was pulled apart.
+  "palm-chunk": (
+    <>
+      <g strokeDasharray="4 3">
+        <path d="M24 56 C22 76 34 88 48 88 C62 88 72 78 70 58 L70 44" className={REFERENCE} />
+        <path d="M24 56 L24 34 A4.5 4.5 0 0 1 33 34 L33 52 M33 32 L33 26 A4.5 4.5 0 0 1 42 26 L42 50 M42 26 L42 24 A4.5 4.5 0 0 1 51 24 L51 50 M51 28 A4.5 4.5 0 0 1 60 28 L60 52" className={REFERENCE} />
+        <path d="M70 44 C74 38 82 40 80 48 L72 64" className={REFERENCE} />
+      </g>
+      <path
+        d="M98 48 C96 34 112 28 122 34 C134 30 146 40 142 52 C150 62 140 80 126 76 C116 84 98 80 100 68 C90 64 92 54 98 48 Z"
+        className={FOOD}
+      />
+      <path d="M108 50 q8 5 15 -1 M110 63 q10 4 19 -3" className="fill-none" />
     </>
   ),
 };
