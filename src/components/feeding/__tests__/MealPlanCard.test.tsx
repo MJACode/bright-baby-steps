@@ -4,7 +4,7 @@ import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-li
 import { MealPlanCard } from "@/components/feeding/MealPlanCard";
 import { MEAL_PLAN_ERROR_COPY, MealPlanError, useGenerateMealPlan, type MealPlanErrorCode } from "@/hooks/useMealPlan";
 import { MEAL_PLAN_DISCLAIMER, MEAL_PLAN_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
-import { buildPrep } from "../../../../supabase/functions/_shared/mealPlan";
+import { MEAL_PLAN_INTROS, buildIdeaName } from "../../../../supabase/functions/_shared/mealPlan";
 import { FOOD_BY_SLUG } from "@/lib/foodCatalog";
 import type { Role } from "@/hooks/useCurrentRole";
 
@@ -38,6 +38,9 @@ vi.mock("@/components/UpgradeSheet", () => ({
 const WEEK = "2026-11-16";
 const LAST_WEEK = "2026-11-09";
 
+// A stored row as an older server wrote it: model-written names, a tip, an
+// intro and hand-written prep. None of that text may render; the card shows
+// what parseMealPlan rebuilds from the catalog.
 const PLAN = {
   weekStart: WEEK,
   method: "mix",
@@ -88,6 +91,10 @@ const PLAN = {
 };
 
 const STATUSES = { egg: "introduced", wheat: "introduced", peanut: "not_started" };
+
+/** The names the card shows: built from each idea's catalog foods. */
+const [NAME_A, NAME_B, NAME_C] = PLAN.ideas.map((i) => buildIdeaName(i.foods.map((slug) => FOOD_BY_SLUG.get(slug)!)));
+const INTRO = MEAL_PLAN_INTROS.mix;
 
 function wrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -198,13 +205,13 @@ describe("MealPlanCard plan", () => {
   it("renders a stored plan compactly with the footer, then the ideas by meal", async () => {
     h.row = { week_start: WEEK, plan: PLAN };
     renderCard();
-    expect(await screen.findByText(PLAN.intro)).toBeInTheDocument();
+    expect(await screen.findByText(INTRO)).toBeInTheDocument();
     expect(screen.getByText("Your free plan for this week")).toBeInTheDocument();
     expect(screen.getByText(MEAL_PLAN_DISCLAIMER)).toBeInTheDocument();
-    expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
+    expect(screen.queryByText(NAME_A)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "See 4 meal ideas" }));
-    expect(screen.getByText("Banana pancakes")).toBeInTheDocument();
+    expect(screen.getByText(NAME_A)).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 3 }).map((n) => n.textContent)).toEqual([
       "Breakfast",
       "Lunch",
@@ -213,23 +220,35 @@ describe("MealPlanCard plan", () => {
     ]);
     expect(screen.getAllByText("Baby-led:").length).toBe(4);
     expect(screen.getAllByText("Spoon-fed:").length).toBe(4);
-    expect(screen.getByText("Serve warm, not hot.")).toBeInTheDocument();
     expect(screen.getByText("Egg")).toBeInTheDocument();
+    // Stored model text never renders.
+    for (const text of [PLAN.intro, "Serve warm, not hot.", "Banana pancakes", "Sweet potato wedges", "Avocado on toast", "Lentil mash"]) {
+      expect(screen.queryByText(text)).not.toBeInTheDocument();
+    }
   });
 
   it("Log this hands the idea to the solids sheet", async () => {
     h.row = { week_start: WEEK, plan: PLAN };
     const { onLogIdea } = renderCard();
     fireEvent.click(await screen.findByRole("button", { name: "See 4 meal ideas" }));
-    fireEvent.click(screen.getByRole("button", { name: "Log Banana pancakes" }));
-    expect(onLogIdea).toHaveBeenCalledWith(expect.objectContaining(PLAN.ideas[0]));
+    fireEvent.click(screen.getByRole("button", { name: `Log ${NAME_A}` }));
+    expect(onLogIdea).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "a",
+        name: NAME_A,
+        foods: PLAN.ideas[0].foods,
+        allergens: ["egg", "wheat"],
+        foodCategory: "grain_cereal",
+      }),
+    );
+    expect(onLogIdea.mock.calls[0][0]).not.toHaveProperty("servingTip");
   });
 
   it("gives a viewer the plan without Log this", async () => {
     h.row = { week_start: WEEK, plan: PLAN };
     renderCard({ role: "viewer" });
     fireEvent.click(await screen.findByRole("button", { name: "See 4 meal ideas" }));
-    expect(screen.getByText("Banana pancakes")).toBeInTheDocument();
+    expect(screen.getByText(NAME_A)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Log / })).not.toBeInTheDocument();
   });
 
@@ -237,8 +256,8 @@ describe("MealPlanCard plan", () => {
     h.row = { week_start: WEEK, plan: PLAN };
     renderCard({ statuses: { ...STATUSES, egg: "reaction_noted" } });
     fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
-    expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
-    expect(screen.getByText("Sweet potato wedges")).toBeInTheDocument();
+    expect(screen.queryByText(NAME_A)).not.toBeInTheDocument();
+    expect(screen.getByText(NAME_B)).toBeInTheDocument();
   });
 
   it("renders the new plan, open, after a successful generate", async () => {
@@ -248,15 +267,13 @@ describe("MealPlanCard plan", () => {
     });
     renderCard();
     fireEvent.click(await screen.findByRole("button", { name: "Your first plan is free" }));
-    expect(await screen.findByText("Banana pancakes")).toBeInTheDocument();
+    expect(await screen.findByText(NAME_A)).toBeInTheDocument();
     expect(h.invoke).toHaveBeenCalledWith("generate-meal-plan", {
       body: {
         childId: "child-1",
         weekStart: WEEK,
         correctedAgeMonths: 8,
         method: "mix",
-        introducedAllergens: ["egg", "wheat"],
-        reactionAllergens: [],
       },
     });
     expect(h.invoke).toHaveBeenCalledTimes(1);
@@ -272,28 +289,24 @@ describe("MealPlanCard plan", () => {
 });
 
 describe("MealPlanCard catalog prep", () => {
-  const foods = ["wheat-infant-cereal", "egg-scrambled", "banana"];
-  const catalog = foods.map((slug) => FOOD_BY_SLUG.get(slug)!);
-  const catalogIdea = {
-    ...PLAN.ideas[0],
-    foods,
-    blwPrep: buildPrep(catalog, "blw", "6-8"),
-    traditionalPrep: buildPrep(catalog, "traditional", "6-8"),
-  };
+  const catalog = PLAN.ideas[0].foods.map((slug) => FOOD_BY_SLUG.get(slug)!);
 
-  it("puts each food's prep on its own line under the Baby-led and Spoon-fed labels", async () => {
-    h.row = { week_start: WEEK, plan: { ...PLAN, ideas: [catalogIdea, ...PLAN.ideas.slice(1)] } };
-    renderCard();
+  it("rebuilds each food's prep from the catalog for the child's age, even when the stored prep differs", async () => {
+    h.row = { week_start: WEEK, plan: PLAN }; // stored prep: "Cut into finger-length strips." / "Mash with a fork."
+    renderCard({ ageMonths: 10 });
     fireEvent.click(await screen.findByRole("button", { name: "See 4 meal ideas" }));
-    const row = screen.getByText("Banana pancakes").closest("li")!;
+    const row = screen.getByText(NAME_A).closest("li")!;
     const lists = row.querySelectorAll("ul");
     expect(lists).toHaveLength(2);
     for (const [i, method] of (["blw", "traditional"] as const).entries()) {
       const items = [...lists[i].querySelectorAll("li")].map((li) => li.textContent);
-      expect(items).toEqual(catalog.map((f) => `${f.name}: ${f.prep[method]["6-8"]}`));
+      expect(items).toEqual(catalog.map((f) => `${f.name}: ${f.prep[method]["9-11"]}`));
     }
     expect(row).toHaveTextContent("Baby-led:");
     expect(row).toHaveTextContent("Spoon-fed:");
+    expect(row).not.toHaveTextContent("Cut into finger-length strips.");
+    expect(row).not.toHaveTextContent("Mash with a fork.");
+    expect(screen.queryByText("Roast until soft.")).not.toBeInTheDocument();
   });
 });
 
@@ -333,7 +346,7 @@ describe("MealPlanCard week note", () => {
     h.premium = { isPremium: false, isLoading: true };
     h.row = { week_start: WEEK, plan: PLAN };
     renderCard();
-    expect(await screen.findByText(PLAN.intro)).toBeInTheDocument();
+    expect(await screen.findByText(INTRO)).toBeInTheDocument();
     expect(screen.queryByText("New plan Monday")).not.toBeInTheDocument();
     expect(screen.queryByText("Your free plan for this week")).not.toBeInTheDocument();
     expect(screen.getByText(MEAL_PLAN_DISCLAIMER)).toBeInTheDocument();
@@ -363,20 +376,20 @@ describe("MealPlanCard allergen gating", () => {
     const client = newClient();
     const { rerender } = render(<Card statuses={undefined} client={client} />);
     await new Promise((r) => setTimeout(r, 20));
-    expect(screen.queryByText(PLAN.intro)).not.toBeInTheDocument();
+    expect(screen.queryByText(INTRO)).not.toBeInTheDocument();
     expect(screen.queryByText(/meal ideas/)).not.toBeInTheDocument();
 
     rerender(<Card statuses={{ ...STATUSES, egg: "reaction_noted" }} client={client} />);
     fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
-    expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
+    expect(screen.queryByText(NAME_A)).not.toBeInTheDocument();
   });
 
   it("drops an idea whose allergen is still being introduced", async () => {
     h.row = { week_start: WEEK, plan: PLAN };
     renderCard({ statuses: { ...STATUSES, egg: "in_progress" } });
     fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
-    expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
-    expect(screen.getByText("Avocado on toast")).toBeInTheDocument();
+    expect(screen.queryByText(NAME_A)).not.toBeInTheDocument();
+    expect(screen.getByText(NAME_C)).toBeInTheDocument();
   });
 
   it("shows the offline notice, not an endless skeleton, when allergens can't load offline", () => {
@@ -465,7 +478,6 @@ describe("useGenerateMealPlan error copy", () => {
     weekStart: WEEK,
     ageMonths: 8,
     method: "blw" as const,
-    allergenStatuses: STATUSES,
   };
 
   const cases: [number, MealPlanErrorCode][] = [

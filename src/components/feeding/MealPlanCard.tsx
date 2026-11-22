@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from "react";
-import { CalendarClock, ChevronDown, Lightbulb, Plus, Sparkles } from "lucide-react";
+import { CalendarClock, ChevronDown, Plus, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,12 +81,6 @@ function IdeaRow({
           <Prep label={method === "mix" ? "Spoon-fed:" : undefined} prep={idea.traditionalPrep} foods={idea.foods} />
         )}
       </div>
-      {idea.servingTip && (
-        <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
-          <Lightbulb className="w-4 h-4 mt-0.5 shrink-0 text-feeding" aria-hidden />
-          <span>{idea.servingTip}</span>
-        </p>
-      )}
       <div className="flex flex-wrap items-center gap-2">
         {idea.allergens.map((slug) => (
           <Badge key={slug} variant="outline" className="text-xs font-semibold">
@@ -212,6 +206,7 @@ export function MealPlanCard({
         .map(([slug]) => slug)
     : undefined;
   const { data, isLoading } = useMealPlan(childId, weekStart, {
+    ageMonths,
     allowedAllergens,
     enabled: !!allergenStatuses,
   });
@@ -234,7 +229,7 @@ export function MealPlanCard({
     if (buildInFlight.current || generating || !allergenStatuses) return;
     buildInFlight.current = true;
     generate.mutate(
-      { childId, weekStart, ageMonths, method, allergenStatuses },
+      { childId, weekStart, ageMonths, method },
       {
         onSuccess: () => setJustBuilt(true),
         onError: (err) => {

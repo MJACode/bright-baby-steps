@@ -5,13 +5,22 @@
 //
 // parseMealPlan re-validates every stored plan before it renders (a writer can
 // put arbitrary JSON in their own family's row through PostgREST). Each idea's
-// `foods` must be known catalog slugs; its allergens and food category are
-// RE-DERIVED from the catalog (src/lib/foodCatalog.ts, the same module the
-// server builds from), never trusted from the row, and an idea whose derived
-// allergens fall outside `allowedAllergens` (when given) is dropped.
+// `foods` must be known catalog slugs old enough for the child; everything a
+// parent reads is REBUILT from the catalog (src/lib/foodCatalog.ts, the same
+// module the server builds from) with the server's own builders: the name,
+// the prep for the child's current age band and the plan's method, the
+// allergens and the food category, plus the fixed intro. No stored text is
+// ever rendered (an old row's servingTip is ignored), and an idea whose
+// derived allergens fall outside `allowedAllergens` (when given) is dropped.
 
 import { FOOD_BY_SLUG, FOOD_CATALOG } from "@/lib/foodCatalog";
 import { ALLERGEN_SLUGS } from "@/services/allergenService";
+import {
+  MEAL_PLAN_INTROS,
+  ageBand,
+  buildIdeaName,
+  buildPrep,
+} from "../../supabase/functions/_shared/mealPlan.ts";
 
 export type AllergenSlug = (typeof ALLERGEN_SLUGS)[number];
 
@@ -38,7 +47,8 @@ export const MEAL_PLAN_MAX_AGE_MONTHS = 36;
 
 /**
  * Everything generate-meal-plan receives. Deliberately no name, date of
- * birth, or free text — this type is the whole request body.
+ * birth, free text or allergen state (the server reads the child's allergen
+ * introductions itself, under RLS) — this type is the whole request body.
  */
 export interface GenerateMealPlanRequest {
   childId: string;
@@ -46,21 +56,18 @@ export interface GenerateMealPlanRequest {
   weekStart: string;
   correctedAgeMonths: number;
   method: SolidsMethod;
-  introducedAllergens: AllergenSlug[];
-  reactionAllergens: AllergenSlug[];
 }
 
 export interface MealIdea {
   id: string;
   name: string;
   mealSlot: MealSlot;
-  /** Catalog slugs (1–3). The source of `allergens` and `foodCategory`. */
+  /** Catalog slugs (1–3). The source of every other field but `id` and `mealSlot`. */
   foods: string[];
   /** Present for method "blw" and "mix". */
   blwPrep?: string;
   /** Present for method "traditional" and "mix". */
   traditionalPrep?: string;
-  servingTip?: string;
   allergens: AllergenSlug[];
   foodCategory: MealFoodCategory;
 }
@@ -98,54 +105,52 @@ function uniqueSlugs(slugs: Iterable<string>): AllergenSlug[] {
 }
 
 /**
- * Builds the request body. `allergenStatuses` is keyed by allergen slug with
- * getAllergenStatus() values: "introduced" counts as introduced,
- * "reaction_noted" as a reaction; "in_progress" / "not_started" are neither,
- * so the plan leaves them out until the parent signs the introduction off.
- * Returns null when the child is outside the supported age range.
+ * Builds the request body. Returns null when the child is outside the
+ * supported age range.
  */
 export function buildMealPlanRequest({
   childId,
   weekStart,
   ageMonths,
   method,
-  allergenStatuses,
 }: {
   childId: string;
   weekStart: string;
   /** Age in months, already corrected for prematurity. */
   ageMonths: number;
   method: SolidsMethod;
-  allergenStatuses: Partial<Record<string, string>>;
 }): GenerateMealPlanRequest | null {
   if (!Number.isFinite(ageMonths)) return null;
   const correctedAgeMonths = Math.floor(ageMonths);
   if (correctedAgeMonths < MEAL_PLAN_MIN_AGE_MONTHS || correctedAgeMonths > MEAL_PLAN_MAX_AGE_MONTHS) return null;
-  const entries = Object.entries(allergenStatuses);
-  return {
-    childId,
-    weekStart,
-    correctedAgeMonths,
-    method,
-    introducedAllergens: uniqueSlugs(entries.filter(([, s]) => s === "introduced").map(([slug]) => slug)),
-    reactionAllergens: uniqueSlugs(entries.filter(([, s]) => s === "reaction_noted").map(([slug]) => slug)),
-  };
+  return { childId, weekStart, correctedAgeMonths, method };
+}
+
+export interface ParseMealPlanOptions {
+  /**
+   * The child's current corrected age in months. Picks the catalog prep band,
+   * and drops an idea with a food the child isn't old enough for.
+   */
+  ageMonths: number;
+  /** When given, ideas with any other allergen are dropped. */
+  allowedAllergens?: readonly string[];
 }
 
 /**
- * Re-validates a stored or returned plan before it renders. Malformed ideas,
- * prep fields that don't match the plan's method, and (when
- * `allowedAllergens` is given) ideas declaring any other allergen are
- * dropped. Fewer than 3 usable ideas -> null.
+ * Re-validates a stored or returned plan before it renders, and rebuilds
+ * every displayed string from the catalog. Malformed ideas, unknown or
+ * too-old-for-the-child foods, and (when `allowedAllergens` is given) ideas
+ * with any other allergen are dropped. Only `weekStart`, `method`, and each
+ * idea's `id`, `mealSlot` and `foods` are read from the row. Fewer than 3
+ * usable ideas, or no usable age -> null.
  */
-export function parseMealPlan(
-  raw: unknown,
-  { allowedAllergens }: { allowedAllergens?: readonly string[] } = {},
-): MealPlan | null {
-  if (!isRecord(raw)) return null;
+export function parseMealPlan(raw: unknown, { ageMonths, allowedAllergens }: ParseMealPlanOptions): MealPlan | null {
+  if (!isRecord(raw) || !Number.isFinite(ageMonths)) return null;
   const weekStart = cleanText(raw.weekStart);
   if (!weekStart || !isSolidsMethod(raw.method)) return null;
   const method = raw.method;
+  const age = Math.floor(ageMonths);
+  const band = ageBand(age);
   const wantBlw = method === "blw" || method === "mix";
   const wantTraditional = method === "traditional" || method === "mix";
   const allowed = allowedAllergens ? new Set(allowedAllergens) : null;
@@ -155,13 +160,8 @@ export function parseMealPlan(
     if (ideas.length >= MAX_IDEAS) break;
     if (!isRecord(item)) continue;
     const id = cleanText(item.id);
-    const name = cleanText(item.name);
-    if (!id || !name || ideas.some((i) => i.id === id)) continue;
+    if (!id || ideas.some((i) => i.id === id)) continue;
     if (typeof item.mealSlot !== "string" || !SLOT_SET.has(item.mealSlot)) continue;
-
-    const blwPrep = wantBlw ? cleanText(item.blwPrep) : null;
-    const traditionalPrep = wantTraditional ? cleanText(item.traditionalPrep) : null;
-    if ((wantBlw && !blwPrep) || (wantTraditional && !traditionalPrep)) continue;
 
     // Foods: 1–3 distinct known catalog slugs; one unknown slug drops the idea.
     const rawFoods = item.foods;
@@ -170,22 +170,28 @@ export function parseMealPlan(
     const foods = rawFoods as string[];
     if (new Set(foods).size !== foods.length) continue;
     const catalogFoods = foods.map((f) => FOOD_BY_SLUG.get(f)!);
+    // Never show a band's "Not offered at this age." prep.
+    if (catalogFoods.some((f) => f.minAgeMonths > age)) continue;
 
     // Re-derived, not read from the row.
     const allergens = uniqueSlugs(catalogFoods.flatMap((f) => f.allergens));
     if (allowed && allergens.some((s) => !allowed.has(s))) continue;
-    const foodCategory = catalogFoods[0].category as MealFoodCategory;
 
-    const idea: MealIdea = { id, name, mealSlot: item.mealSlot as MealSlot, foods, allergens, foodCategory };
-    if (blwPrep) idea.blwPrep = blwPrep;
-    if (traditionalPrep) idea.traditionalPrep = traditionalPrep;
-    const servingTip = cleanText(item.servingTip);
-    if (servingTip) idea.servingTip = servingTip;
+    const idea: MealIdea = {
+      id,
+      name: buildIdeaName(catalogFoods),
+      mealSlot: item.mealSlot as MealSlot,
+      foods,
+      allergens,
+      foodCategory: catalogFoods[0].category as MealFoodCategory,
+    };
+    if (wantBlw) idea.blwPrep = buildPrep(catalogFoods, "blw", band);
+    if (wantTraditional) idea.traditionalPrep = buildPrep(catalogFoods, "traditional", band);
     ideas.push(idea);
   }
   if (ideas.length < MIN_IDEAS) return null;
 
-  return { weekStart, method, intro: cleanText(raw.intro) ?? "", ideas };
+  return { weekStart, method, intro: MEAL_PLAN_INTROS[method], ideas };
 }
 
 /**
@@ -200,7 +206,7 @@ export function isMealPlanCurrent(storedWeekStart: string | null | undefined, we
 export function currentMealPlan(
   row: { week_start: string; plan: unknown } | null | undefined,
   weekStart: string,
-  opts: { allowedAllergens?: readonly string[] } = {},
+  opts: ParseMealPlanOptions,
 ): MealPlan | null {
   if (!row || !isMealPlanCurrent(row.week_start, weekStart)) return null;
   return parseMealPlan(row.plan, opts);

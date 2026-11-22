@@ -64,11 +64,17 @@ export const mealPlanQueryKey = (childId: string | undefined) => ["meal-plan", c
  * to tell a used free plan from an unused one. `allowedAllergens` (the
  * introduced allergen slugs) drops any stored idea outside them, so an
  * allergen with a reaction logged after the plan was built stops showing.
+ * `ageMonths` (corrected) picks the catalog prep band the plan is rebuilt
+ * with: parseMealPlan renders no stored text.
  */
 export function useMealPlan(
   childId: string | undefined,
   weekStart: string,
-  { allowedAllergens, enabled = true }: { allowedAllergens?: readonly string[]; enabled?: boolean } = {},
+  {
+    ageMonths,
+    allowedAllergens,
+    enabled = true,
+  }: { ageMonths: number; allowedAllergens?: readonly string[]; enabled?: boolean },
 ) {
   return useQuery({
     queryKey: mealPlanQueryKey(childId),
@@ -82,7 +88,7 @@ export function useMealPlan(
       return data;
     },
     select: (row) => ({
-      plan: currentMealPlan(row, weekStart, { allowedAllergens }),
+      plan: currentMealPlan(row, weekStart, { ageMonths, allowedAllergens }),
       storedWeekStart: row?.week_start ?? null,
     }),
     enabled: enabled && !!childId,
@@ -102,7 +108,7 @@ export function useGenerateMealPlan(childId: string | undefined) {
       if (!body) throw new MealPlanError("invalid_input");
       const { data, error } = await supabase.functions.invoke("generate-meal-plan", { body });
       if (error) throw new MealPlanError(await readInvokeErrorCode(error));
-      const plan = parseMealPlan(data);
+      const plan = parseMealPlan(data, { ageMonths: input.ageMonths });
       if (!plan) throw new MealPlanError("unusable_plan");
       return plan;
     },

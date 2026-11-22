@@ -19,16 +19,22 @@
 //      every catalog allergen in the server-derived allowed set — and picks
 //      1–3 of them per idea. It receives no allergen lists at all (the
 //      eligible list is all it needs), no name, no DOB.
-//   3. sanitizePlan: each idea is rebuilt from the catalog. allergens = the
-//      union of the foods' catalog allergens, foodCategory = the first food's
-//      category, blwPrep / traditionalPrep = the catalog prep for the child's
-//      age band ("Food name: prep" per food). The model writes only name,
-//      mealSlot, servingTip and the intro; those free-text strings still go
-//      through the keyword filter below (hazardsIn in free-text mode,
-//      allergensMentioned, OFF_TONE_RE) as a second layer. Unknown or
-//      ineligible slugs, repeats past MAX_FOOD_REPEATS and PLAN_LIMITS breaches
-//      drop the idea. Fewer than MIN_IDEAS survivors -> null (-> 422).
-// The keyword lists are exported consts so the tests lock them.
+//   3. sanitizePlan: the model picks foods ONLY (founder decision
+//      2026-11-22). Per idea it returns { mealSlot, foods: slug[1-3] }; any
+//      other key it sends (name, servingTip, intro, prep, allergens, ...) is
+//      discarded, so no model-written text reaches a parent. Each idea is
+//      built from the catalog: name = buildIdeaName (catalog food names),
+//      allergens = the union of the foods' catalog allergens, foodCategory =
+//      the first food's category, blwPrep / traditionalPrep = the catalog prep
+//      for the child's age band ("Food name: prep" per food). The plan intro
+//      is a fixed string per method (MEAL_PLAN_INTROS). Unknown or ineligible
+//      slugs, a repeated combination, repeats past MAX_FOOD_REPEATS and
+//      PLAN_LIMITS breaches drop the idea. Fewer than MIN_IDEAS survivors ->
+//      null (-> 422).
+// The keyword lists below (hazardsIn, allergensMentioned) no longer screen
+// model text, since there is none; they stay as exported consts because the
+// catalog tests lint every prep string with them (src/test/foodCatalog.test.ts)
+// and the tests lock them.
 
 import { FOOD_CATALOG, IRON_RICH_SLUGS, MAX_FOOD_REPEATS, PLAN_LIMITS } from "./foodCatalog.ts";
 import type { AgeBand, CatalogFood } from "./foodCatalog.ts";
@@ -72,18 +78,27 @@ export const MAX_AGE_MONTHS = 36;
 export const UNDER_ONE_MONTHS = 12;
 
 export const MAX_INTRO = 240;
+/** Cap on a built idea name; longer combinations fall back to "<first food> plate". */
 export const MAX_NAME = 60;
 /** Foods per idea the model may pick. */
 export const MAX_FOODS_PER_IDEA = 3;
 /** Below this many eligible catalog foods there is no plan to build (-> 422 no_eligible_foods, before any paid call). */
 export const MIN_ELIGIBLE_FOODS = 5;
-export const MAX_SERVING_TIP = 160;
 /** The prompt asks for 5–7 ideas; at most MAX_IDEAS are kept. */
 export const MAX_IDEAS = 7;
 /** Fewer survivors than this after filtering -> 422. */
 export const MIN_IDEAS = 3;
 
-export const FALLBACK_INTRO = "Here are a few meal ideas to try with your baby this week.";
+/**
+ * The plan intro, fixed per method (no model text). Brand voice: warm,
+ * "your baby", no nutrient claims. Each is at most MAX_INTRO characters
+ * (locked by the tests).
+ */
+export const MEAL_PLAN_INTROS: Readonly<Record<SolidsMethod, string>> = {
+  blw: "Here are this week's ideas, built from foods your baby is ready for. Offer them as finger foods, pick what fits your days, and follow your baby's lead.",
+  traditional: "Here are this week's ideas, built from foods your baby is ready for. Serve them from a spoon, pick what fits your days, and follow your baby's lead.",
+  mix: "Here are this week's ideas, built from foods your baby is ready for. Mix finger foods and spoon-feeding, pick what fits your days, and follow your baby's lead.",
+};
 
 const ALLERGEN_SET: ReadonlySet<string> = new Set(ALLERGEN_SLUGS);
 const METHOD_SET: ReadonlySet<string> = new Set(SOLIDS_METHODS);
@@ -120,7 +135,6 @@ export type MealIdea = {
   /** Catalog prep for the age band, "Food name: prep" per food. */
   blwPrep?: string;
   traditionalPrep?: string;
-  servingTip?: string;
   allergens: AllergenSlug[];
   foodCategory: FoodCategory;
 };
@@ -341,7 +355,10 @@ function limitLines(eligible: readonly CatalogFood[]): string[] {
 
 /**
  * The user turn. Lists only the eligible foods (slug, name, category, an
- * iron-rich marker). No allergen lists, no notes, no name or DOB.
+ * iron-rich marker). No allergen lists, no notes, no name or DOB. The model
+ * answers with slugs only, so the age rules below steer its choices; the
+ * catalog (which has no honey, cow's milk drink or added salt/sugar foods)
+ * is what enforces them.
  */
 export function buildUserText(input: ValidInput, eligible: readonly CatalogFood[] = eligibleFoods(input)): string {
   return [
@@ -350,8 +367,7 @@ export function buildUserText(input: ValidInput, eligible: readonly CatalogFood[
     `Foods you may use (pick by slug, spelled exactly; use no other food):`,
     ...eligible.map((f) => `- ${f.slug}: ${f.name} (${f.category}${IRON_RICH.has(f.slug) ? ", iron-rich" : ""})`),
     `Plan limits:`,
-    `- 5 to 7 ideas, 1 to ${MAX_FOODS_PER_IDEA} foods each. At least 2 ideas include an iron-rich food.`,
-    `- The iron-rich marker is for choosing foods only. Never mention iron, protein, vitamins or any other nutrient in the intro, names or tips.`,
+    `- 5 to 7 ideas, 1 to ${MAX_FOODS_PER_IDEA} foods each, spread across meal slots. At least 2 ideas include an iron-rich food.`,
     `- Use any one food in at most ${MAX_FOOD_REPEATS} ideas.`,
     ...limitLines(eligible),
     input.correctedAgeMonths < UNDER_ONE_MONTHS
@@ -363,6 +379,37 @@ export function buildUserText(input: ValidInput, eligible: readonly CatalogFood[
 /** Catalog prep for `foods` in one method and band: "Food name: prep" per food. */
 export function buildPrep(foods: readonly CatalogFood[], method: "blw" | "traditional", band: AgeBand): string {
   return foods.map((f) => `${f.name}: ${f.prep[method][band]}`).join(" ");
+}
+
+/**
+ * First words that stay capitalised mid-name: proper nouns (none lead a
+ * catalog name today; listed so a future "Greek yogurt" reads right).
+ * Acronyms (two or more capitals, e.g. "BBQ") are kept by rule.
+ */
+export const PROPER_NOUN_LEADS: ReadonlySet<string> = new Set([
+  "Greek", "French", "Italian", "Mexican", "Indian", "Thai", "Japanese", "Brazil",
+]);
+
+/** A catalog name as the 2nd or 3rd item of a list: first letter lower-cased unless it leads with a proper noun or acronym. */
+export function lowerLeadingWord(name: string): string {
+  const first = name.split(/[\s(/-]/, 1)[0];
+  if (/^[A-Z0-9]{2,}$/.test(first) || PROPER_NOUN_LEADS.has(first)) return name;
+  return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/**
+ * The idea name, built only from catalog names: "Banana";
+ * "Scrambled egg & banana"; "Avocado, banana & pear". Over MAX_NAME ->
+ * "<first food's name> plate" (every catalog name + " plate" fits, locked by
+ * the tests).
+ */
+export function buildIdeaName(foods: readonly Pick<CatalogFood, "name">[]): string {
+  const names = foods.map((f, i) => (i === 0 ? f.name : lowerLeadingWord(f.name)));
+  let name: string;
+  if (names.length <= 1) name = names[0] ?? "";
+  else if (names.length === 2) name = `${names[0]} & ${names[1]}`;
+  else name = `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+  return name.length <= MAX_NAME ? name : `${foods[0].name} plate`;
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +428,7 @@ export type FormHazard = {
 };
 
 /**
- * Every scan (and every stored string, via cleanString) runs on normalized
+ * Every scan runs on normalized
  * text: NFKC (fullwidth / compatibility forms), curly quotes and primes to
  * straight ones (so "cow\u2019s" matches "cow's"), and zero-width / soft-hyphen
  * characters removed (so "hon\u200Bey" matches "honey").
@@ -450,14 +497,6 @@ export const ALWAYS_HAZARD_RE =
 export const WHOLE_NUT_RE =
   /(?<!(?:ground|powdered)\s)\b(?:nuts?|peanuts?|almonds?|cashews?|walnuts?|pecans?|pistachios?|hazelnuts?|macadamias?|brazil nuts?|pine nuts?)\b(?![\s-]+(?:butters?|flour|meal|powder|puffs?|milk|oil|free|sauce))/i;
 
-/**
- * Free-text mode (catalog prep) version of WHOLE_NUT_RE: "Peanut oat
- * porridge" names a catalog food whose prep is already safe, so only an
- * explicitly unsafe nut form trips.
- */
-export const WHOLE_NUT_FREE_TEXT_RE =
-  /\b(?:whole|chopped|crushed|halved|roasted|salted|raw|handful of|a few)\s+(?:\w+\s+)?(?:nuts?|peanuts?|almonds?|cashews?|walnuts?|pecans?|pistachios?|hazelnuts?|macadamias?)\b(?![\s-]+(?:butters?|flour|meal|powder|puffs?))/i;
-
 export const FORM_HAZARDS: readonly FormHazard[] = [
   {
     id: "round_fruit",
@@ -512,58 +551,8 @@ export const ALLERGEN_KEYWORDS: Readonly<Record<AllergenSlug, RegExp>> = {
   sesame: /\b(?:sesame|tahini|hummus|houmous|halva|za'?atar)\b/i,
 };
 
-/**
- * Tone backstop: no calorie counting, no pressure to eat, no medical claims.
- * Division of responsibility (Satter): the parent decides what / when / where,
- * the baby decides whether and how much.
- */
-export const OFF_TONE_RE = new RegExp(
-  "\\b(?:" +
-    [
-      "calori\\w*",
-      "kcals?",
-      "weight (?:gain|loss)",
-      "lose weight",
-      "gain weight",
-      "clean (?:the|their|your|his|her) plate",
-      "finish (?:the|their|your|his|her) (?:plate|bowl|portion)",
-      "one more bite",
-      "make (?:your baby|them|him|her) eat",
-      "picky",
-      "fussy eater",
-      "diagnos\\w*",
-      "cures?",
-      "cured",
-      "detox\\w*",
-      "superfoods?",
-      "boosts? (?:immunity|immune|brain|iq)",
-      "prevents? (?:allerg\\w*|illness|disease)",
-      "must eat",
-    ].join("|") +
-    ")\\b",
-  "i",
-);
-
-/**
- * Nutrient claims ("an iron-rich week", "packed with protein"). The iron-rich
- * count is a prompt request, not a guarantee (a plan with fewer than 2
- * iron-rich ideas is kept), so model text may not claim a nutrient focus: an
- * intro that matches falls back to FALLBACK_INTRO and a tip that matches is
- * omitted.
- */
-export const NUTRIENT_CLAIM_RE =
-  /\b(?:iron|protein|vitamins?|calcium|zinc|omega[\s-]?3s?|fib(?:re|er)|nutrients?|nutrition)[\s-]+(?:rich|packed|filled|boost\w*|focus\w*|heavy)\b|\b(?:rich|high|packed|loaded|full|bursting)\s+(?:in|with|of)\s+(?:iron|protein|vitamins?|calcium|zinc|omega[\s-]?3s?|fib(?:re|er)|nutrients)\b|\b(?:boosts?|focus(?:es|ed|ing)?\s+on|great\s+source\s+of|source\s+of)\s+(?:iron|protein|vitamins?|calcium|zinc|nutrients?)\b/i;
-
-/**
- * The ids of the hazard rules this text trips, given the child's age. Empty = safe.
- *
- * `freeText: true` is for model-written strings (name, servingTip, intro) when
- * the prep comes from the catalog: a FORM_HAZARDS food then trips only on an
- * explicitly unsafe form ("whole grapes", "raw carrot", "a spoonful of peanut
- * butter"), since the size / texture instructions are the catalog's, not the
- * model's. Every other rule applies unchanged.
- */
-export function hazardsIn(raw: string, correctedAgeMonths: number, { freeText = false }: { freeText?: boolean } = {}): string[] {
+/** The ids of the hazard rules this text trips, given the child's age. Empty = safe. */
+export function hazardsIn(raw: string, correctedAgeMonths: number): string[] {
   const text = normalizeText(raw);
   const hits: string[] = [];
   if (correctedAgeMonths < UNDER_ONE_MONTHS) {
@@ -573,10 +562,10 @@ export function hazardsIn(raw: string, correctedAgeMonths: number, { freeText = 
     if (ADDED_SALT_SUGAR_RE.test(withoutNegations)) hits.push("added_salt_sugar_under_12m");
   }
   if (ALWAYS_HAZARD_RE.test(text)) hits.push("always_hazard");
-  if ((freeText ? WHOLE_NUT_FREE_TEXT_RE : WHOLE_NUT_RE).test(text)) hits.push("whole_nuts");
+  if (WHOLE_NUT_RE.test(text)) hits.push("whole_nuts");
   for (const h of FORM_HAZARDS) {
     if (!h.food.test(text)) continue;
-    if (h.unsafe?.test(text) || (!freeText && !h.safe?.test(text))) hits.push(h.id);
+    if (h.unsafe?.test(text) || !h.safe?.test(text)) hits.push(h.id);
   }
   return hits;
 }
@@ -591,27 +580,13 @@ export function allergensMentioned(raw: string): AllergenSlug[] {
 // Sanitizer
 // ---------------------------------------------------------------------------
 
-/** Normalize, trim + collapse whitespace; null when not a string, empty, over `max`, or off-tone. */
-export function cleanString(v: unknown, max: number): string | null {
-  if (typeof v !== "string") return null;
-  const s = normalizeText(v).replace(/\s+/g, " ").trim();
-  if (s.length === 0 || s.length > max) return null;
-  if (OFF_TONE_RE.test(s)) return null;
-  return s;
-}
-
-/** A model-written string passes the second-layer keyword filter for this child. */
-function freeTextOk(text: string, input: ValidInput, allowed: ReadonlySet<string>): boolean {
-  if (hazardsIn(text, input.correctedAgeMonths, { freeText: true }).length > 0) return false;
-  return allergensMentioned(text).every((s) => allowed.has(s));
-}
-
 /**
  * Validate model output and build the MealPlan from the catalog. The model
- * contributes, per idea, only { name, mealSlot, foods: slug[1-3], servingTip? }
- * plus the plan intro; every other field (including any prep, allergens or
- * category it volunteers) is ignored. Idea ids are assigned here. Returns null
- * when fewer than MIN_IDEAS ideas survive (-> 422 unusable_plan).
+ * contributes, per idea, only { mealSlot, foods: slug[1-3] }. Every other key
+ * (name, servingTip, prep, allergens, category, id, and the plan-level intro)
+ * is never read, so nothing the model writes reaches the stored plan. Ids,
+ * names and the intro are built here. Returns null when fewer than MIN_IDEAS
+ * ideas survive (-> 422 unusable_plan).
  */
 export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
   if (!isPlainObject(raw)) return null;
@@ -623,6 +598,7 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
   const wantTraditional = input.method === "traditional" || input.method === "mix";
 
   const ideas: MealIdea[] = [];
+  const seenCombos = new Set<string>();
   const seenNames = new Set<string>();
   const foodUses = new Map<string, number>();
   const limitUses = new Map<string, number>();
@@ -630,8 +606,6 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
     if (ideas.length >= MAX_IDEAS) break;
     if (!isPlainObject(item)) continue;
 
-    const name = cleanString(item.name, MAX_NAME);
-    if (!name || seenNames.has(name.toLowerCase())) continue;
     const mealSlot = item.mealSlot;
     if (typeof mealSlot !== "string" || !SLOT_SET.has(mealSlot)) continue;
 
@@ -649,21 +623,22 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
     }
     if (foods.length === 0) continue;
 
+    // The same combination twice (in any order), or two ideas that would read
+    // the same (the "<food> plate" fallback), is a repeat.
+    const combo = foods.map((f) => f.slug).sort().join("+");
+    const name = buildIdeaName(foods);
+    if (seenCombos.has(combo) || seenNames.has(name.toLowerCase())) continue;
+
     // Variety and frequency limits across the plan.
     if (foods.some((f) => (foodUses.get(f.slug) ?? 0) >= MAX_FOOD_REPEATS)) continue;
     const hitLimits = PLAN_LIMITS.filter((l) => foods.some((f) => l.slugs.includes(f.slug)));
     if (hitLimits.some((l) => (limitUses.get(l.id) ?? 0) >= l.maxIdeas)) continue;
 
-    // Second layer over the model's own words. A failing name drops the idea;
-    // a failing (or over-length / off-tone) tip is omitted.
-    if (!freeTextOk(name, input, allowed)) continue;
-    let servingTip = cleanString(item.servingTip, MAX_SERVING_TIP);
-    if (servingTip && (!freeTextOk(servingTip, input, allowed) || NUTRIENT_CLAIM_RE.test(servingTip))) servingTip = null;
-
     const allergenSet = new Set<string>(foods.flatMap((f) => f.allergens));
     // eligibleFoods already guarantees this; kept as a hard backstop.
     if ([...allergenSet].some((a) => !allowed.has(a))) continue;
 
+    seenCombos.add(combo);
     seenNames.add(name.toLowerCase());
     for (const f of foods) foodUses.set(f.slug, (foodUses.get(f.slug) ?? 0) + 1);
     for (const l of hitLimits) limitUses.set(l.id, (limitUses.get(l.id) ?? 0) + 1);
@@ -678,17 +653,9 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
     };
     if (wantBlw) idea.blwPrep = buildPrep(foods, "blw", band);
     if (wantTraditional) idea.traditionalPrep = buildPrep(foods, "traditional", band);
-    if (servingTip) idea.servingTip = servingTip;
     ideas.push(idea);
   }
   if (ideas.length < MIN_IDEAS) return null;
 
-  // The intro is checked against the same free-text rules: a hazard or
-  // off-list allergen in it falls back to the fixed line.
-  // The iron-rich request is not enforced (a plan short of 2 iron-rich ideas
-  // is still returned), so the intro may not claim a nutrient focus either.
-  let intro = cleanString(raw.intro, MAX_INTRO);
-  if (intro && (!freeTextOk(intro, input, allowed) || NUTRIENT_CLAIM_RE.test(intro))) intro = null;
-
-  return { weekStart: input.weekStart, method: input.method, intro: intro ?? FALLBACK_INTRO, ideas };
+  return { weekStart: input.weekStart, method: input.method, intro: MEAL_PLAN_INTROS[input.method], ideas };
 }

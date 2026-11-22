@@ -12,15 +12,21 @@
 //              method: "blw" | "traditional" | "mix" }
 //            introducedAllergens / reactionAllergens are still accepted from
 //            old clients and IGNORED (see "Allergens" below). Body cap 16 KB.
-//   200      MealPlan { weekStart, method, intro (≤240),
-//              ideas: 3–7 × { id ("idea-N"), name (≤60),
+//   Model    returns { ideas: [{ mealSlot, foods: catalogSlug[1–3] }] } and
+//            nothing else is read: it writes no text a parent sees.
+//   200      MealPlan { weekStart, method,
+//              intro (fixed per method, MEAL_PLAN_INTROS; ≤240),
+//              ideas: 3–7 × { id ("idea-N"),
+//                name (built from catalog names, buildIdeaName; ≤60),
 //                mealSlot: breakfast|lunch|dinner|snack,
 //                foods: catalogSlug[1–3],
 //                blwPrep? / traditionalPrep? (catalog prep for the age band,
 //                  "Food name: prep" per food; blw -> blwPrep only,
 //                  traditional -> traditionalPrep only, mix -> both),
-//                servingTip? (≤160), allergens: slug[] (union of the foods'
-//                catalog allergens), foodCategory (first food's category) } }
+//                allergens: slug[] (union of the foods' catalog allergens),
+//                foodCategory (first food's category) } }
+//            No servingTip (removed 2026-11-22; old stored rows may still
+//            carry one, and the client ignores it).
 //            The plan is also upserted into meal_plans before the 200.
 //   Errors   { error: code } with
 //            400 invalid_input, 401 unauthorized,
@@ -43,12 +49,14 @@
 //     those with minAgeMonths <= age whose catalog allergens are all
 //     introduced without a reaction, so a stale offline cache or a reaction
 //     logged on another phone can't put a reacted-to allergen in the plan.
-//   * The model picks foods; it never writes prep. sanitizePlan
-//     (../_shared/mealPlan.ts) drops ideas with unknown / ineligible slugs,
-//     a food used in more than 2 ideas, or a PLAN_LIMITS breach (canned
-//     tuna, rice products: once per plan), then builds allergens, category
-//     and prep from ../_shared/foodCatalog.ts. The model's name / servingTip /
-//     intro still go through the keyword filter as a second layer.
+//   * The model picks foods ONLY (founder decision 2026-11-22): no name, no
+//     tip, no intro, no prep. sanitizePlan (../_shared/mealPlan.ts) reads
+//     just mealSlot + foods from each idea, drops ideas with unknown /
+//     ineligible slugs, a repeated combination, a food used in more than 2
+//     ideas, or a PLAN_LIMITS breach (canned tuna, rice products, cottage
+//     cheese: once per plan), then builds the name, allergens, category and
+//     prep from ../_shared/foodCatalog.ts and uses a fixed intro. Any other
+//     key the model returns is discarded.
 //   * Gate: Flare+ (the caller's own subscription, as generate-activity-plan
 //     checks it, OR the child's owner via child_owner_is_premium so partners
 //     on a Flare+ family qualify) OR no meal_plans row exists for the child
@@ -86,30 +94,20 @@ const MEAL_PLAN_MAX_TOKENS = 2000;
 const MAX_BODY_BYTES = 16 * 1024;
 
 // Appended to the nutrition persona prompt.
-const MEAL_PLAN_INSTRUCTION = `You are now building this week's meal ideas: a short, warm set of solid food ideas that one tired parent can make at home for their baby. You are given the baby's corrected age in months, how the family offers solids, and a list of foods chosen for this baby. You do not know the baby's name, and you never need it — say "your baby".
+const MEAL_PLAN_INSTRUCTION = `You are now choosing this week's meal ideas: a short set of food combinations that one tired parent can make at home for their baby. You are given the baby's corrected age in months, how the family offers solids, and a list of foods chosen for this baby. You only choose which foods go together and when to offer them. The app writes every name, preparation step and message the parent sees, from its own checked food list, so you write no text at all.
 
-Return ONLY this JSON object — no prose, no code fences:
+Return ONLY this JSON object, with no prose and no code fences:
 {
-  "intro": "one or two warm sentences, at most 240 characters",
   "ideas": [
-    {
-      "name": "short, appetizing name for the combination, at most 60 characters",
-      "mealSlot": "breakfast" | "lunch" | "dinner" | "snack",
-      "foods": ["1 to 3 food slugs, exactly as listed"],
-      "servingTip": "optional: one short, friendly pairing or routine idea, at most 160 characters"
-    }
+    { "mealSlot": "breakfast" | "lunch" | "dinner" | "snack", "foods": ["1 to 3 food slugs, exactly as listed"] }
   ]
 }
 
 Rules:
-- ideas: 5 to 7, spread across meal slots. Pick foods ONLY from the provided list, spelled exactly as given. Never invent a food and never name a food in "name" that is not in that idea's foods.
+- ideas: 5 to 7, spread across meal slots. Pick foods ONLY from the provided list, spelled exactly as given. Never invent a food.
+- Each idea is a combination that makes sense together at that meal. Do not repeat the same combination.
 - Follow the plan limits given with the food list: at least 2 ideas include an iron-rich food, no food in more than 2 ideas, and the listed once-per-plan foods at most once.
-- Do not write preparation, cutting, size or texture instructions anywhere — the app adds safety-checked preparation for each food. The servingTip is about pairing, timing or mood, never about how to cut or cook.
-- Under 12 months, milk (breast milk or formula) is still your baby's main nutrition and solids are for learning and exploring. Say so warmly in the intro.
-- Under 12 months: never mention honey, cow's milk as a drink, or added salt or sugar.
-- Follow the division of responsibility: you decide what, when and where food is offered; your baby decides whether and how much to eat. Never pressure, never count calories, portions or bites, never suggest "one more bite".
-- No medical claims, no diagnosis, no "superfoods", nothing about weight. This is everyday food inspiration, not medical advice.
-- Plain, friendly language for a parent, not a clinician. Keep every string within its character limit.`;
+- No other keys: no names, tips, intro, preparation, allergens or notes. Anything else you add is discarded.`;
 
 function json(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -241,7 +239,7 @@ serve(async (req) => {
       return json(502, { error: "coach_unavailable" });
     }
 
-    // 5. Parse + sanitize (hazard and allergen filter).
+    // 5. Parse + build the plan from the catalog (only mealSlot + foods are read).
     const completion = await response.json();
     const text = (completion?.content ?? [])
       .filter((b: { type: string }) => b.type === "text")
