@@ -403,16 +403,6 @@ export const CALL_911: GuidanceSection = {
   followUp: [CALL_911_EPINEPHRINE, CALL_911_POSITIONING],
 };
 
-// Log solids reaction step only (founder, 2026-11-22, option A): after a meal a
-// single cough is usually gagging, so the 911 cough sign names the persistent
-// one. CALL_911 itself, used by the tracker, is unchanged.
-export const CALL_911_AFTER_MEAL: GuidanceSection = {
-  ...CALL_911,
-  items: CALL_911.items.map((item) =>
-    item.replace("a repeated cough", "a repeated cough that starts after eating and doesn't clear"),
-  ),
-};
-
 export const CALL_PEDIATRICIAN_KEEP_WATCHING =
   "Keep watching for the full 2 hours. If anything on the emergency list appears, call 911.";
 

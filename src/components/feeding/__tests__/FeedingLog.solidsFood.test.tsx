@@ -383,11 +383,8 @@ describe("Log solids reaction food", () => {
     await openSolid();
     noteReaction();
     expect(screen.getByText("Get emergency help now — call 911 if you see")).toBeInTheDocument();
-    // Founder option A: the after-meal cough sign, on this step only.
-    expect(
-      screen.getByText("Trouble breathing, wheezing, a repeated cough that starts after eating and doesn't clear, or a hoarse cry"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Trouble breathing, wheezing, a repeated cough, or a hoarse cry")).not.toBeInTheDocument();
+    // Emergency signs are never narrowed here (legal R7): same CALL_911 as the tracker.
+    expect(screen.getByText("Trouble breathing, wheezing, a repeated cough, or a hoarse cry")).toBeInTheDocument();
   });
 
   it("defaults Which food? to the picked food and saves a reaction avoid row linked to the log", async () => {

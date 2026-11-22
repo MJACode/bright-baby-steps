@@ -289,7 +289,7 @@ describe("generatePediatricianReport — foods you're leaving out", () => {
     const out = texts();
     expect(out).toContain("ALLERGEN INTRODUCTIONS");
     expect(out).toContain("Foods you're leaving out");
-    expect(out).toContain("Grandma's lentil stew (parent's description): Reaction, added Nov 10, 2026 — Hives on cheeks");
+    expect(out).toContain("Grandma's lentil stew (parent's description): Reaction noted by parent, added Nov 10, 2026 — Hives on cheeks");
     expect(out).toContain("Banana: Not a fan yet, added Nov 21, 2026");
   });
 
@@ -311,7 +311,7 @@ describe("generatePediatricianReport — avoid list that failed to load", () => 
   it("says the list couldn't load rather than printing nothing", () => {
     generatePediatricianReport({ ...baseData, foodAvoidances: [], foodAvoidancesError: true }, new Set(["allergens"]));
     expect(texts()).toContain("FOODS YOU'RE LEAVING OUT");
-    expect(texts()).toContain("Your Foods you're leaving out list couldn't be loaded. Try the export again.");
+    expect(texts()).toContain("We couldn't load the foods you're leaving out. Try creating the report again.");
   });
 
   it("prints nothing for an empty list that loaded fine", () => {

@@ -59,7 +59,7 @@ export const logReactionAllergenTitle = (food: string, allergenList: string) => 
 export const LOG_REACTION_ALLERGEN_BODY =
   "This reaction may be linked to one of these. You might want to add it to the allergen tracker so it's in your pediatrician report. Keep only the allergens that were in what your baby ate.";
 export const logReactionAllergenEffect = (allergen: string) =>
-  `Adding it marks ${allergen} as Review with Pediatrician in the tracker.`;
+  `Adding it marks ${allergen} as Review with Pediatrician in the tracker and leaves every food with ${allergen} out of your meal ideas.`;
 export const LOG_REACTION_ALLERGEN_CONFIRM = "Add to allergen tracker";
 export const LOG_REACTION_ALLERGEN_SKIP = "Not now";
 export const LOG_REACTION_PEDIATRICIAN_NUDGE = "Tell your pediatrician what you saw. It's saved in your pediatrician report.";

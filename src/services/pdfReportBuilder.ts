@@ -527,13 +527,13 @@ function renderAllergens(h: PdfHelpers, data: ReportData) {
   renderFoodAvoidances(h, data.foodAvoidances ?? [], allergens.length === 0, !!data.foodAvoidancesError);
 }
 
-// Not in the approved copy set (2026-11-22): pending review.
+// Legal pre-review wording (2026-11-22).
 export const FOOD_AVOIDANCES_LOAD_FAILED =
-  "Your Foods you're leaving out list couldn't be loaded. Try the export again.";
+  "We couldn't load the foods you're leaving out. Try creating the report again.";
 
 const MAX_FOOD_AVOIDANCES = 40;
 const AVOID_REASON_LABEL: Record<ReportFoodAvoidance["reason"], string> = {
-  reaction: "Reaction",
+  reaction: "Reaction noted by parent",
   preference: "Not a fan yet",
 };
 

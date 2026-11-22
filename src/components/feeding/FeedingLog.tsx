@@ -45,7 +45,7 @@ import {
 } from "@/services/allergenService";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
 import { usePreferences } from "@/hooks/usePreferences";
-import { CALL_911_AFTER_MEAL, REACTION_SAVED_TOAST, exposureLoggedToast, joinNames, spokenAllergenName, startIntroToast } from "@/services/allergenService";
+import { CALL_911, REACTION_SAVED_TOAST, exposureLoggedToast, joinNames, spokenAllergenName, startIntroToast } from "@/services/allergenService";
 import { GuidanceBlock } from "@/components/feeding/GuidanceBlock";
 import { FoodSearchField } from "@/components/feeding/FoodSearchField";
 import { FoodAllergenSuggestion, ReactionFoodStep, type ReactionFood, type ReactionPlan } from "@/components/feeding/SolidsFoodAssist";
@@ -972,7 +972,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                         rows={2}
                       />
                     </div>
-                    <GuidanceBlock section={CALL_911_AFTER_MEAL} tone="destructive" />
+                    <GuidanceBlock section={CALL_911} tone="destructive" />
                     {showReactionFood && (
                       <ReactionFoodStep
                         value={reactionFood}
