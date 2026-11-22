@@ -128,7 +128,7 @@ describe("food catalog: content invariants", () => {
 
 // ---------------------------------------------------------------------------
 // Serving shapes ("How to serve" illustrations). Engineering-derived from the
-// prep strings; needs nutrition review (see the foodCatalog.ts header).
+// prep strings; nutrition-reviewed 2026-11-22 (see the foodCatalog.ts header).
 // ---------------------------------------------------------------------------
 
 /**

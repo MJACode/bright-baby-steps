@@ -17,8 +17,9 @@ export const SERVE_SHAPE_CAPTIONS: Record<ServeShape, string> = {
   flattened: "Round foods pressed flat with your finger or a fork so they're no longer round.",
   quartered: "Round foods cut lengthwise into quarters, so no piece stays round.",
   "bite-size": "Small, soft pieces about the size of a chickpea that squish easily between your fingers.",
-  // PENDING NUTRITION REVIEW: added with the palm-chunk shape (coordinator, 2026-11-22), not in the approved set.
-  "palm-chunk": "Soft pieces about the size of your baby's palm, big enough to hold in a fist and soft enough to squish.",
+  // Added with the palm-chunk shape; nutrition-approved 2026-11-22.
+  "palm-chunk":
+    "Soft pieces about the size of your baby's palm, so part sticks out of their fist, and soft enough to squish between your fingers.",
 };
 
 export const AVOID_SECTION_TITLE = "Foods you're leaving out";
@@ -73,13 +74,14 @@ export const logContainsConfirm = (allergen: string) => `Log ${allergen} exposur
 export const LOG_CONTAINS_CONFIRM_MULTI = "Log exposures";
 export const LOG_CONTAINS_DISMISS = "Not now";
 
-// Not in the 2026-11-22 approved set: written with the save-time fix, pending
-// nutrition / copy review.
+// Written with the save-time fix; nutrition-approved 2026-11-22.
 export const PENDING_UNDO = "Undo";
 /** The tracker reaction dialog's own severity question. */
 export const REACTION_SEVERITY_LABEL = "How strong is it?";
 export const exposurePendingText = (allergen: string) => `${allergen} exposure will be logged when you save.`;
 export const reactionPendingText = (allergenList: string, severity: string) =>
   `A ${severity.toLowerCase()} reaction to ${allergenList} will be added to the allergen tracker when you save.`;
-export const allergenTrackerFailedText = (allergenList: string) =>
-  `The solids saved, but ${allergenList} didn't reach the allergen tracker. Add it there from the allergen's page.`;
+export const allergenTrackerFailedText = (allergenList: string, count: number) =>
+  `The solids saved, but ${allergenList} didn't reach the allergen tracker. Open the allergen tracker to add ${count === 1 ? "it" : "them"}.`;
+export const reactionFoodFailedText = (food: string) =>
+  `The solids saved, but ${food} wasn't added to Foods you're leaving out. Open this entry, check the food under "Which food?", and save again.`;

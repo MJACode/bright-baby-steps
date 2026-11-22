@@ -17,28 +17,44 @@ function Arrow({ x1, x2, y }: { x1: number; x2: number; y: number }) {
   return <path d={`M${x1} ${y} H${x2} M${x2 - 7} ${y - 6} L${x2} ${y} L${x2 - 7} ${y + 6}`} className="fill-none" />;
 }
 
-/** An adult finger seen from above, nail at the right-hand end: the size reference. */
-function Finger({ x, y, length, width }: { x: number; y: number; length: number; width: number }) {
+/**
+ * Two adult fingers held together, seen from above with the tips at the
+ * right-hand end: the size reference. One outline and one divider, so the
+ * seam doesn't draw as a doubled line.
+ */
+function TwoFingers({ x, y, length, width }: { x: number; y: number; length: number; width: number }) {
   const r = width / 2;
+  const end = x + length - r;
   return (
-    <g strokeDasharray="4 3">
-      <path
-        d={`M${x} ${y} H${x + length - r} A${r} ${r} 0 0 1 ${x + length - r} ${y + width} H${x}`}
-        className={REFERENCE}
-      />
-      <rect x={x + length - r - 5} y={y + 3} width={6} height={width - 6} rx={2} className={REFERENCE} strokeDasharray="none" />
-    </g>
+    <path
+      d={`M${x} ${y} H${end} A${r} ${r} 0 0 1 ${end} ${y + width} A${r} ${r} 0 0 1 ${end} ${y + 2 * width} H${x} M${x} ${y + width} H${end}`}
+      className={REFERENCE}
+      strokeDasharray="4 3"
+    />
   );
 }
 
+/** A fingertip pressing down from above, ending at `bottom`: the softness cue. */
+function Fingertip({ x, bottom }: { x: number; bottom: number }) {
+  return <path d={`M${x} 2 V${bottom - 10} A10 10 0 0 0 ${x + 20} ${bottom - 10} V2`} className={REFERENCE} strokeDasharray="4 3" />;
+}
+
+// One lengthwise grape quarter seen from the side: a flat cut face (the
+// straight edge) and a curved skin side, pointed at both ends.
+const WEDGE = "M-4.5 -27 C7.5 -14 7.5 14 -4.5 27 Z";
+
 const SHAPES: Record<ServeShape, ReactNode> = {
-  // Two adult fingers held together, then one soft-cooked strip as long and
-  // as wide as them, rounded at the ends and sagging as soft food does.
+  // A flat soft-cooked strip with gently rounded corners, dented by a
+  // fingertip to show it squishes, above two adult fingers held together that
+  // match its length and width.
   spear: (
     <>
-      <Finger x={26} y={6} length={108} width={13} />
-      <Finger x={26} y={20} length={108} width={13} />
-      <path d="M37 55 Q80 66 123 55 A11.5 11.5 0 0 1 123 78 Q80 89 37 78 A11.5 11.5 0 0 1 37 55 Z" className={FOOD} />
+      <Fingertip x={89} bottom={38} />
+      <path
+        d="M34 34 H89 Q99 43 109 34 H126 Q130 34 130 38 V54 Q130 58 126 58 H34 Q30 58 30 54 V38 Q30 34 34 34 Z"
+        className={FOOD}
+      />
+      <TwoFingers x={30} y={65} length={100} width={12} />
     </>
   ),
   // A bowl of smooth mash with a spoon resting in it.
@@ -88,17 +104,18 @@ const SHAPES: Record<ServeShape, ReactNode> = {
       <path d="M112 50 V62 M120 50 V62 M128 50 V62 M136 50 V62 M112 50 H136 M124 50 V22" className="fill-none" />
     </>
   ),
-  // One whole grape, then that same grape cut along its length into four
-  // quarters, pulled apart so every cut shows and no piece stays round.
+  // One whole grape, then that grape cut lengthwise into four narrow wedges,
+  // fanned out and spaced well apart so the group can't read as round.
   quartered: (
     <>
-      <ellipse cx="32" cy="52" rx="15" ry="25" className={FOOD} />
-      <path d="M32 27 q2 -7 6 -9" className="fill-none" />
-      <Arrow x1={56} x2={82} y={52} />
-      <path d="M104 22.3 A20 32 0 0 0 104 77.7 Z" className={FOOD} />
-      <path d="M108 22.3 A20 32 0 0 1 118 18 L118 82 A20 32 0 0 1 108 77.7 Z" className={FOOD} />
-      <path d="M122 18 A20 32 0 0 1 132 22.3 L132 77.7 A20 32 0 0 1 122 82 Z" className={FOOD} />
-      <path d="M136 22.3 A20 32 0 0 1 136 77.7 Z" className={FOOD} />
+      <ellipse cx="26" cy="52" rx="13" ry="24" className={FOOD} />
+      <path d="M26 28 q2 -7 6 -9" className="fill-none" />
+      <Arrow x1={47} x2={71} y={52} />
+      {[
+        [92, -10], [111, -4], [130, 4], [149, 10],
+      ].map(([cx, angle]) => (
+        <path key={cx} d={WEDGE} transform={`translate(${cx} 52) rotate(${angle})`} className={FOOD} />
+      ))}
     </>
   ),
   // Small soft pieces, one squished under a fingertip to show the size and give.
@@ -117,7 +134,8 @@ const SHAPES: Record<ServeShape, ReactNode> = {
     </>
   ),
   // A baby's open hand (dashed) beside one soft, uneven chunk about the size
-  // of that palm: big enough to hold in a fist, flaking where it was pulled apart.
+  // of that palm, flaking where it was pulled apart and dented by a fingertip
+  // so it reads soft.
   "palm-chunk": (
     <>
       <g strokeDasharray="4 3">
@@ -126,9 +144,10 @@ const SHAPES: Record<ServeShape, ReactNode> = {
         <path d="M70 44 C74 38 82 40 80 48 L72 64" className={REFERENCE} />
       </g>
       <path
-        d="M98 48 C96 34 112 28 122 34 C134 30 146 40 142 52 C150 62 140 80 126 76 C116 84 98 80 100 68 C90 64 92 54 98 48 Z"
+        d="M98 48 C96 36 104 30 112 32 Q122 42 132 32 C142 32 148 42 142 52 C150 62 140 80 126 76 C116 84 98 80 100 68 C90 64 92 54 98 48 Z"
         className={FOOD}
       />
+      <Fingertip x={112} bottom={37} />
       <path d="M108 50 q8 5 15 -1 M110 63 q10 4 19 -3" className="fill-none" />
     </>
   ),

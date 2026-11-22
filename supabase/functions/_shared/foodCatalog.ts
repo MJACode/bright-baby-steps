@@ -47,7 +47,9 @@
 // `notes` are for reviewers only; they are not shown or sent to the model.
 //
 // `shapes` (added 2026-11-22, "How to serve" sheet, tasks/todo-solids-avoid-
-// and-serve.md Phase 3) — NEEDS NUTRITION REVIEW before the sheet ships.
+// and-serve.md Phase 3). Nutrition-reviewed 2026-11-22: hard-boiled egg
+// blw 6-8 is spear (lengthwise wedges; quartered is for round foods only),
+// mozzarella blw 6-8 thin-spread, paneer blw 6-8 and tempeh blw 12+ ground.
 // Engineering derived one ServeShape per method x age band from the prep
 // string next to it, picking the FIRST serving option the string offers
 // ("Mash ..., or offer small soft cubes" -> mash). The shape only picks an
@@ -110,7 +112,7 @@ export type CatalogFood = {
     blw: Record<AgeBand, string>;
     traditional: Record<AgeBand, string>;
   };
-  /** Illustration per method x band, derived from `prep` (see header; needs nutrition review). */
+  /** Illustration per method x band, derived from `prep` (see header; nutrition-reviewed 2026-11-22). */
   shapes: {
     blw: Record<AgeBand, ServeShape>;
     traditional: Record<AgeBand, ServeShape>;
@@ -1332,7 +1334,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Cook sticky or short-grain rice until very soft and press into small balls or logs your baby can hold.",
+        "6-8": "Cook sticky or short-grain rice until very soft and press into balls or logs about the size of your baby's palm.",
         "9-11": "Offer small soft rice balls, or let your baby scoop soft rice.",
         "12+": "Serve soft-cooked rice for your baby to eat with hands or a spoon."
       },
@@ -1965,7 +1967,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "ground", "9-11": "ground", "12+": "spear" },
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
       "traditional": { "6-8": "ground", "9-11": "mash", "12+": "ground" }
     },
     "notes": "minAge 9 because it's dense and firm. Some tempeh contains barley/grain or wheat; label check. Consumers should hide 6-8 strings when minAge > band."
@@ -2224,7 +2226,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Boil an egg until the yolk is fully firm, peel, and cut into quarters lengthwise for your baby to hold.",
+        "6-8": "Boil an egg until the yolk is fully firm, peel, and cut it lengthwise into 4 wedges for your baby to hold.",
         "9-11": "Chop a fully cooked hard-boiled egg into small soft pieces.",
         "12+": "Offer chopped or sliced hard-boiled egg, cooked until the yolk is fully firm."
       },
@@ -2235,7 +2237,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "quartered", "9-11": "bite-size", "12+": "bite-size" },
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
       "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Well-cooked egg for allergen introduction. Pasteurized/fully cooked only."
@@ -2597,7 +2599,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "thin-spread", "12+": "thin-spread" },
+      "blw": { "6-8": "thin-spread", "9-11": "thin-spread", "12+": "thin-spread" },
       "traditional": { "6-8": "mash", "9-11": "mash", "12+": "thin-spread" }
     },
     "notes": "Pasteurized. Fresh mozzarella is lower sodium."
@@ -2649,7 +2651,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       }
     },
     "shapes": {
-      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
       "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Pasteurized; naturally low sodium. Firm cheese, so thin strips only."

@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast";
 import { assertCanWrite, ROLE_UNRESOLVED_MESSAGE, VIEW_ONLY_MESSAGE, type Role } from "@/hooks/useCurrentRole";
 import { mealPlanQueryKey } from "@/hooks/useMealPlan";
 import { isRlsViewerDenied } from "@/lib/handleRlsError";
-import { FOOD_AVOIDANCE_COLUMNS, appendReactionNote, type FoodAvoidance } from "@/lib/foodAvoidances";
+import { AVOID_NOTE_MAX, FOOD_AVOIDANCE_COLUMNS, appendReactionNote, type FoodAvoidance } from "@/lib/foodAvoidances";
 import type { AvoidReason } from "@/lib/solidsAvoidCopy";
 
 export const foodAvoidancesQueryKey = (childId: string | undefined) => ["food-avoidances", childId] as const;
@@ -52,7 +52,8 @@ class FoodAvoidanceGoneError extends Error {
  * created_by is left to the column default (the policy pins it to the writer).
  */
 export async function writeFoodAvoidance(input: SaveFoodAvoidanceInput): Promise<FoodAvoidance> {
-  let note = input.note?.trim() || null;
+  // The column CHECK caps the note; a merged note is cut in appendReactionNote.
+  let note = input.note?.trim().slice(0, AVOID_NOTE_MAX) || null;
   let source = input.sourceFeedingLogId ?? null;
   if (input.foodSlug) {
     const { data: existing, error } = await supabase

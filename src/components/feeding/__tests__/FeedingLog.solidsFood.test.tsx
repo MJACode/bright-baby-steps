@@ -5,7 +5,11 @@ import FeedingLog from "@/components/feeding/FeedingLog";
 import { toast } from "@/hooks/use-toast";
 import { REACTION_NOTED_DESCRIPTION, REACTION_SAVED_TOAST } from "@/services/allergenService";
 import { writeSolidsAllergenPlan } from "@/services/solidsAllergenWrites";
-import { AVOID_OTHER_SAVED_NOTE, LOG_REACTION_PEDIATRICIAN_NUDGE } from "@/lib/solidsAvoidCopy";
+import { writeFoodAvoidance } from "@/hooks/useFoodAvoidances";
+import { AVOID_NOTE_MAX } from "@/lib/foodAvoidances";
+import {
+  AVOID_OTHER_SAVED_NOTE, LOG_REACTION_FOOD_LABEL, LOG_REACTION_PEDIATRICIAN_NUDGE, reactionFoodFailedText,
+} from "@/lib/solidsAvoidCopy";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -23,8 +27,13 @@ type Intro = { id: string; allergen_id: string; status: string; completed_at: st
 
 const { writes, state, db } = vi.hoisted(() => ({
   writes: [] as Write[],
-  state: { eggFirstMsAgo: 0, failExposureFor: null as string | null },
-  db: { intros: [] as Intro[], avoids: [] as Record<string, unknown>[] },
+  state: {
+    eggFirstMsAgo: 0,
+    failExposureFor: null as string | null,
+    failAvoidWrite: false,
+    avoidRead: "ok" as "ok" | "pending" | "error",
+  },
+  db: { intros: [] as Intro[], avoids: [] as Record<string, unknown>[], logs: [] as Record<string, unknown>[] },
 }));
 
 const allergen = (id: string, slug: string, name: string, sort_order: number) => ({ id, slug, name, sort_order });
@@ -52,12 +61,20 @@ const seed = (): Intro[] => [
 
 vi.mock("@/integrations/supabase/client", () => {
   const makeChain = (table: string) => {
-    const s: { op?: Write["op"]; payload?: Record<string, unknown>; eq: Record<string, unknown> } = { eq: {} };
+    const s: { op?: Write["op"]; payload?: Record<string, unknown>; eq: Record<string, unknown>; before?: boolean } = { eq: {} };
     const result = (single: boolean) => {
       const p = s.payload ?? {};
       if (s.op) writes.push({ table, op: s.op, payload: p, id: s.eq.id as string | undefined });
+      if (table === "feeding_logs" && !single) {
+        if (s.op === "insert") db.logs.push(p);
+        if (!s.op) return { data: s.before ? [] : db.logs, error: null, count: s.before ? 0 : db.logs.length };
+      }
       if (table === "child_food_avoidances") {
+        if ((s.op === "insert" || s.op === "upsert") && state.failAvoidWrite) {
+          return { data: null, error: { code: "08006", message: "network" } };
+        }
         if (s.op === "insert" || s.op === "upsert") return { data: { id: `avoid-${writes.length}`, ...p }, error: null };
+        if (!s.op && !single && state.avoidRead === "error") return { data: null, error: { code: "08006", message: "network" } };
         if (single) return { data: db.avoids.find((r) => r.food_slug === s.eq.food_slug) ?? null, error: null };
         return { data: db.avoids, error: null };
       }
@@ -110,7 +127,7 @@ vi.mock("@/integrations/supabase/client", () => {
       is: () => chain,
       in: () => chain,
       gte: () => chain,
-      lt: () => chain,
+      lt: () => Object.assign(s, { before: true }) && chain,
       order: () => chain,
       limit: () => chain,
       delete: () => Object.assign(s, { op: "delete" }) && chain,
@@ -119,7 +136,10 @@ vi.mock("@/integrations/supabase/client", () => {
       upsert: (payload: Record<string, unknown>) => Object.assign(s, { op: "upsert", payload }) && chain,
       maybeSingle: async () => result(true),
       single: async () => result(true),
-      then: (resolve: (v: unknown) => unknown) => Promise.resolve(result(false)).then(resolve),
+      then: (resolve: (v: unknown) => unknown) =>
+        table === "child_food_avoidances" && !s.op && state.avoidRead === "pending"
+          ? new Promise(() => {})
+          : Promise.resolve(result(false)).then(resolve),
     };
     return chain;
   };
@@ -192,14 +212,18 @@ const noteReaction = (text = "rash on cheeks") => {
 };
 
 const save = () => fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
+const update = () => fireEvent.click(screen.getByRole("button", { name: "Update solids" }));
 const of = (table: string, op: Write["op"]) => writes.filter((w) => w.table === table && w.op === op);
 
 beforeEach(() => {
   writes.length = 0;
   state.eggFirstMsAgo = DAY;
   state.failExposureFor = null;
+  state.failAvoidWrite = false;
+  state.avoidRead = "ok";
   db.intros = seed();
   db.avoids = [];
+  db.logs = [];
   vi.mocked(toast).mockClear();
 });
 
@@ -527,5 +551,124 @@ describe("Log solids reaction food", () => {
     save();
     await waitFor(() => expect(of("child_food_avoidances", "upsert")).toHaveLength(1));
     expect(of("allergen_reactions", "insert")).toHaveLength(0);
+  });
+});
+
+const solidLog = (over: Record<string, unknown> = {}) => ({
+  id: "log-old",
+  child_id: "child-1",
+  parent_id: "parent-1",
+  feeding_type: "solid",
+  logged_at: ago(HOUR),
+  food_description: "Avocado",
+  food_category: "fruit",
+  food_slug: "avocado",
+  reaction_noted: true,
+  reaction_description: "rash",
+  side: null, duration_minutes: null, amount_oz: null, amount_oz_left: null, amount_oz_right: null,
+  notes: null, source: "manual",
+  ...over,
+});
+
+const openEditOf = async (name: RegExp) => {
+  fireEvent.click(await screen.findByRole("button", { name }));
+  await screen.findByText("Edit solids");
+};
+
+describe("Log solids reaction food on an edit", () => {
+  it("after a failed avoid write, reopening the log offers the food the parent picked, not the Food Description pick", async () => {
+    state.failAvoidWrite = true;
+    renderLog();
+    await openSolid();
+    await pickFood("avoc", "Avocado");
+    noteReaction("hives on chin");
+    // The parent says the reaction was to something else.
+    fireEvent.click(screen.getByRole("button", { name: /Avocado/, pressed: true }));
+    fireEvent.change(screen.getByPlaceholderText("Search foods"), { target: { value: "scram" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Scrambled egg" }));
+    save();
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+        description: expect.stringContaining(reactionFoodFailedText("Scrambled egg")),
+      })),
+    );
+    const logId = of("feeding_logs", "insert")[0].payload.id;
+
+    state.failAvoidWrite = false;
+    await openEditOf(/Edit solid feed, Avocado/);
+    expect(await screen.findByText(LOG_REACTION_FOOD_LABEL)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scrambled egg/, pressed: true })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Avocado/, pressed: true })).not.toBeInTheDocument();
+    update();
+    await waitFor(() => expect(of("child_food_avoidances", "upsert").length).toBeGreaterThan(1));
+    expect(of("child_food_avoidances", "upsert").at(-1)!.payload).toEqual(
+      expect.objectContaining({ food_slug: "egg-scrambled", reason: "reaction", source_feeding_log_id: logId }),
+    );
+  });
+
+  it("with no recoverable pick, leaves Which food? empty instead of defaulting to food_slug", async () => {
+    db.logs = [solidLog()];
+    renderLog();
+    await openEditOf(/Edit solid feed, Avocado/);
+    expect(await screen.findByText(LOG_REACTION_FOOD_LABEL)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Avocado/, pressed: true })).not.toBeInTheDocument();
+    update();
+    await waitFor(() => expect(of("feeding_logs", "update")).toHaveLength(1));
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(writes.filter((w) => w.table === "child_food_avoidances")).toHaveLength(0);
+  });
+
+  it.each(["pending", "error"] as const)("hides Which food? while the avoid list is %s", async (mode) => {
+    state.avoidRead = mode;
+    db.logs = [solidLog()];
+    renderLog();
+    await openEditOf(/Edit solid feed, Avocado/);
+    expect(screen.getByText("Describe the reaction")).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByText(LOG_REACTION_FOOD_LABEL)).not.toBeInTheDocument();
+  });
+});
+
+describe("Log solids food_slug payload", () => {
+  it("sends no food_slug key when nothing was picked", async () => {
+    renderLog();
+    await openSolid();
+    fireEvent.change(screen.getByPlaceholderText("e.g. pureed sweet potato"), { target: { value: "Grandma's stew" } });
+    save();
+    await waitFor(() => expect(of("feeding_logs", "insert")).toHaveLength(1));
+    expect(of("feeding_logs", "insert")[0].payload).not.toHaveProperty("food_slug");
+  });
+
+  it("sends food_slug: null when an edit drops the pick", async () => {
+    db.logs = [solidLog({ reaction_noted: false, reaction_description: null })];
+    renderLog();
+    await openEditOf(/Edit solid feed, Avocado/);
+    fireEvent.change(screen.getByPlaceholderText("e.g. pureed sweet potato"), { target: { value: "Avocado toast" } });
+    update();
+    await waitFor(() => expect(of("feeding_logs", "update")).toHaveLength(1));
+    expect(of("feeding_logs", "update")[0].payload).toEqual(
+      expect.objectContaining({ food_description: "Avocado toast", food_slug: null }),
+    );
+  });
+});
+
+describe("reaction note length", () => {
+  const long = "r".repeat(AVOID_NOTE_MAX + 100);
+
+  it("caps the Describe the reaction field at the avoid note limit", async () => {
+    renderLog();
+    await openSolid();
+    noteReaction();
+    expect(screen.getByPlaceholderText("e.g. mild rash on cheeks, fussiness after eating")).toHaveAttribute(
+      "maxLength", String(AVOID_NOTE_MAX),
+    );
+  });
+
+  it.each([
+    ["a catalog food", { foodSlug: "avocado" }, "upsert"],
+    ["Something else", { customFood: "Grandma's stew" }, "insert"],
+  ] as const)("cuts a first reaction note on %s to the column limit", async (_label, food, op) => {
+    await writeFoodAvoidance({ childId: "child-1", reason: "reaction", note: long, ...food });
+    expect(of("child_food_avoidances", op)[0].payload.note).toBe("r".repeat(AVOID_NOTE_MAX));
   });
 });

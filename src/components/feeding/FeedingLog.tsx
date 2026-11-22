@@ -50,11 +50,11 @@ import { GuidanceBlock } from "@/components/feeding/GuidanceBlock";
 import { FoodSearchField } from "@/components/feeding/FoodSearchField";
 import { FoodAllergenSuggestion, ReactionFoodStep, type ReactionFood, type ReactionPlan } from "@/components/feeding/SolidsFoodAssist";
 import { writeSolidsAllergenPlan, type SolidsAllergenResult } from "@/services/solidsAllergenWrites";
-import { allergensInFood } from "@/lib/foodAvoidances";
+import { AVOID_NOTE_MAX, allergensInFood } from "@/lib/foodAvoidances";
 import { foodAvoidancesQueryKey, useFoodAvoidances, writeFoodAvoidance } from "@/hooks/useFoodAvoidances";
 import { mealPlanQueryKey } from "@/hooks/useMealPlan";
 import { FOOD_BY_SLUG, type CatalogFood } from "@/lib/foodCatalog";
-import { AVOID_OTHER_SAVED_NOTE, allergenTrackerFailedText } from "@/lib/solidsAvoidCopy";
+import { AVOID_OTHER_SAVED_NOTE, allergenTrackerFailedText, reactionFoodFailedText } from "@/lib/solidsAvoidCopy";
 import { isMilkFeedType, orderFeedTypes, type MilkFeedType } from "@/lib/feedTypeOrder";
 
 type FeedingLogRow = Tables<"feeding_logs">;
@@ -394,7 +394,19 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     setFoodDesc(log.food_description || "");
     setFoodCategory(log.food_category || "");
     setFoodSlug(log.food_slug && FOOD_BY_SLUG.has(log.food_slug) ? log.food_slug : null);
-    setReactionFood(log.food_slug && FOOD_BY_SLUG.has(log.food_slug) ? { kind: "catalog", slug: log.food_slug } : null);
+    // The reaction food can differ from the Food Description pick, so food_slug
+    // never stands in for it: offer the parent's own unsaved answer, or nothing.
+    const unsaved = unsavedReactionFoods.get(log.id);
+    if (unsaved && "foodSlug" in unsaved && FOOD_BY_SLUG.has(unsaved.foodSlug)) {
+      setReactionFood({ kind: "catalog", slug: unsaved.foodSlug });
+      reactionFoodTouched.current = true;
+    } else if (unsaved && "customFood" in unsaved) {
+      setReactionFood({ kind: "custom" });
+      setCustomReactionFood(unsaved.customFood);
+      reactionFoodTouched.current = true;
+    } else {
+      setReactionFood(null);
+    }
     setReactionNoted(log.reaction_noted || false);
     setReactionDescription(log.reaction_description || "");
     setNotes(log.notes || "");
@@ -520,7 +532,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
   const logHasAvoid = !!editingId && !!avoidances?.some((r) => r.source_feeding_log_id === editingId);
   const showReactionFood = feedType === "solid" && reactionNoted && canLogServings && online
     && (!editingId || avoidQuery.isSuccess) && !logHasAvoid;
-  const reactionFoodToSave =
+  const reactionFoodToSave: ReactionFoodToSave | null =
     !showReactionFood ? null
       : reactionFood?.kind === "catalog" ? { foodSlug: reactionFood.slug, name: FOOD_BY_SLUG.get(reactionFood.slug)?.name ?? reactionFood.slug }
         : reactionFood?.kind === "custom" && customReactionFood.trim() ? { customFood: customReactionFood.trim(), name: customReactionFood.trim() }
@@ -627,7 +639,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
         note: reactionDescription,
         sourceFeedingLogId: logId,
         notedAt: loggedAt,
-        ...("foodSlug" in food ? { foodSlug: food.foodSlug! } : { customFood: food.customFood! }),
+        ...("foodSlug" in food ? { foodSlug: food.foodSlug } : { customFood: food.customFood }),
       });
       return "saved";
     } catch (err) {
@@ -676,6 +688,8 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       const servings = await logFeedServings();
       const tracker = await saveAllergenPlan();
       const avoid = await saveReactionFood(logId, result);
+      if (avoid === "failed" && reactionFoodToSave) unsavedReactionFoods.set(logId, reactionFoodToSave);
+      else if (avoid === "saved") unsavedReactionFoods.delete(logId);
       return { result, ...servings, tracker, avoid, avoidFood: reactionFoodToSave };
     },
     onSuccess: ({ result, logged, failed, tracker, avoid, avoidFood }) => {
@@ -704,7 +718,9 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
         logged.length > 0 ? feedServingsLoggedText(logged) : "",
         failed.length > 0 ? feedServingsFailedText(failed) : "",
         watchLine,
-        trackerFailedNames.length ? allergenTrackerFailedText(joinNames(trackerFailedNames.map(spokenAllergenName))) : "",
+        trackerFailedNames.length
+          ? allergenTrackerFailedText(joinNames(trackerFailedNames.map(spokenAllergenName)), trackerFailedNames.length)
+          : "",
         avoid === "saved" && avoidFood && "customFood" in avoidFood ? AVOID_OTHER_SAVED_NOTE : "",
         avoid === "failed" && avoidFood ? reactionFoodFailedText(avoidFood.name) : "",
       ].filter(Boolean).join(" ");
@@ -968,6 +984,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                       <Textarea
                         value={reactionDescription}
                         onChange={(e) => setReactionDescription(e.target.value)}
+                        maxLength={AVOID_NOTE_MAX}
                         placeholder="e.g. mild rash on cheeks, fussiness after eating"
                         rows={2}
                       />
@@ -1148,9 +1165,12 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
   );
 });
 
-function reactionFoodFailedText(food: string): string {
-  return `The solids saved, but ${food} wasn't added to Foods you're leaving out. Open this entry and save it again to add it.`;
-}
+type ReactionFoodToSave = { foodSlug: string; name: string } | { customFood: string; name: string };
+
+// "Which food?" answers whose avoid write didn't land, by log id, so reopening
+// the log to retry offers the same food. Session memory only: after a reload
+// the parent picks again.
+const unsavedReactionFoods = new Map<string, ReactionFoodToSave>();
 
 function allergenIdsForSlugs(allergens: ReadonlyArray<{ id: string; slug: string }>, slugs: readonly string[]): string[] {
   return allergens.filter((a) => slugs.includes(a.slug)).map((a) => a.id);
