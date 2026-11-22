@@ -55,6 +55,7 @@ import { foodAvoidancesQueryKey, useFoodAvoidances, writeFoodAvoidance } from "@
 import { mealPlanQueryKey } from "@/hooks/useMealPlan";
 import { FOOD_BY_SLUG, type CatalogFood } from "@/lib/foodCatalog";
 import { AVOID_OTHER_SAVED_NOTE, allergenTrackerFailedText, reactionFoodFailedText } from "@/lib/solidsAvoidCopy";
+import { unsavedReactionFoods, type ReactionFoodToSave } from "@/lib/unsavedReactionFoods";
 import { isMilkFeedType, orderFeedTypes, type MilkFeedType } from "@/lib/feedTypeOrder";
 
 type FeedingLogRow = Tables<"feeding_logs">;
@@ -1164,13 +1165,6 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     </div>
   );
 });
-
-type ReactionFoodToSave = { foodSlug: string; name: string } | { customFood: string; name: string };
-
-// "Which food?" answers whose avoid write didn't land, by log id, so reopening
-// the log to retry offers the same food. Session memory only: after a reload
-// the parent picks again.
-const unsavedReactionFoods = new Map<string, ReactionFoodToSave>();
 
 function allergenIdsForSlugs(allergens: ReadonlyArray<{ id: string; slug: string }>, slugs: readonly string[]): string[] {
   return allergens.filter((a) => slugs.includes(a.slug)).map((a) => a.id);

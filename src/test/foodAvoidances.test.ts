@@ -88,3 +88,20 @@ describe("appendReactionNote", () => {
     expect(out.startsWith(original)).toBe(true);
   });
 });
+
+describe("allergenTrackerFailedText", () => {
+  it("says 'it' for one allergen and 'them' for several", async () => {
+    const { allergenTrackerFailedText } = await import("@/lib/solidsAvoidCopy");
+    expect(allergenTrackerFailedText("egg", 1)).toMatch(/to add it\.$/);
+    expect(allergenTrackerFailedText("egg and milk", 2)).toMatch(/to add them\.$/);
+  });
+});
+
+describe("clearUnsavedReactionFoods", () => {
+  it("wipes unsaved reaction picks (sign-out / account switch)", async () => {
+    const { unsavedReactionFoods, clearUnsavedReactionFoods } = await import("@/lib/unsavedReactionFoods");
+    unsavedReactionFoods.set("log-1", { customFood: "banana muffin", name: "banana muffin" });
+    clearUnsavedReactionFoods();
+    expect(unsavedReactionFoods.size).toBe(0);
+  });
+});

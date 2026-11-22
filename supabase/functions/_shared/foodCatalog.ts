@@ -1958,7 +1958,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "blw": {
         "6-8": "Not offered at this age.",
         "9-11": "Steam tempeh 10 minutes until soft, then crumble into small soft pieces mixed into a soft food.",
-        "12+": "Steam tempeh until soft and offer thin strips or small crumbles."
+        "12+": "Steam tempeh until soft and offer small crumbles or thin strips."
       },
       "traditional": {
         "6-8": "Not offered at this age.",
@@ -2588,7 +2588,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Offer thin, finger-length strips of fresh mozzarella, or melt shredded mozzarella onto a soft food. Never offer cubes.",
+        "6-8": "Melt shredded mozzarella onto a soft food, or offer thin, finger-length strips of fresh mozzarella. Never offer cubes.",
         "9-11": "Offer shredded mozzarella or thin small pieces your baby can pick up.",
         "12+": "Offer shredded or thinly sliced mozzarella. Avoid cubes and string-cheese sticks until at least age 4."
       },
@@ -2640,7 +2640,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Simmer paneer in water until soft, then offer thin finger-length strips, or crumble it into a soft food. Never offer cubes.",
+        "6-8": "Simmer paneer in water until soft, then crumble it into a soft food, or offer thin finger-length strips. Never offer cubes.",
         "9-11": "Crumble soft paneer into small pieces your baby can pick up.",
         "12+": "Offer crumbled paneer or thin strips. Avoid cubes until at least age 4."
       },
