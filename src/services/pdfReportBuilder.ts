@@ -39,7 +39,7 @@ export interface ReportData {
   diapers: any[];
   sleeps: any[];
   allergens: any[];
-  /** Solids avoid list (allergens section). Optional until the PDF renders it. */
+  /** Solids avoid list, printed in the allergens section. */
   foodAvoidances?: ReportFoodAvoidance[];
   illnesses: any[];
   medications: any[];
@@ -521,8 +521,33 @@ function renderTemperature(h: PdfHelpers, data: ReportData) {
 // ── Allergens ──
 function renderAllergens(h: PdfHelpers, data: ReportData) {
   const allergens = data.allergens ?? [];
-  if (!allergens.length) return;
+  if (allergens.length) renderAllergenIntroductions(h, allergens);
+  renderFoodAvoidances(h, data.foodAvoidances ?? [], allergens.length === 0);
+}
 
+const MAX_FOOD_AVOIDANCES = 40;
+const AVOID_REASON_LABEL: Record<ReportFoodAvoidance["reason"], string> = {
+  reaction: "Reaction",
+  preference: "Not a fan yet",
+};
+
+// fetchReportData orders reactions first, then newest, so a cap keeps every
+// reaction ahead of preferences.
+function renderFoodAvoidances(h: PdfHelpers, rows: ReportFoodAvoidance[], ownHeading: boolean) {
+  if (!rows.length) return;
+  if (ownHeading) h.heading("Foods you're leaving out");
+  else h.subheading("Foods you're leaving out");
+  const shown = rows.slice(0, MAX_FOOD_AVOIDANCES);
+  if (rows.length > shown.length) h.bodyText(`Showing ${shown.length} of ${rows.length}.`, 4);
+  for (const row of shown) {
+    const added = format(parseISO(row.addedAt), "MMM d, yyyy");
+    const source = row.isCustom ? " (parent's description)" : "";
+    h.bodyText(`${row.food}${source}: ${AVOID_REASON_LABEL[row.reason]}, added ${added}${row.note ? ` — ${row.note}` : ""}`, 4);
+  }
+  h.spacer();
+}
+
+function renderAllergenIntroductions(h: PdfHelpers, allergens: ReportData["allergens"]) {
   h.heading("Allergen Introductions");
 
   const statusLabel = (s: string) => {

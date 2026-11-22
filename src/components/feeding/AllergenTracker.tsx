@@ -4,10 +4,7 @@ import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData"
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
-import {
-  assertCanWrite, useCurrentRoleQuery, ROLE_UNRESOLVED_MESSAGE, VIEW_ONLY_MESSAGE,
-} from "@/hooks/useCurrentRole";
-import { isRlsViewerDenied } from "@/lib/handleRlsError";
+import { assertCanWrite, useCurrentRoleQuery } from "@/hooks/useCurrentRole";
 import { parseChildDate } from "@/lib/childAge";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +25,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AddChildDialog } from "@/components/AddChildDialog";
+import { GuidanceBlock } from "@/components/feeding/GuidanceBlock";
 import { toast } from "@/hooks/use-toast";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -39,9 +37,9 @@ import {
   recentOtherFirstExposure, spacingNoteText, SPACING_NOTE_TITLE, SPACING_NOTE_START, SPACING_NOTE_NOT_YET,
   severityConfig, type Severity, type AllergenStatus,
   exposureWatchEnd, isExposureInWatchWindow, exposureAwaitingReaction,
-  SYMPTOM_CHIPS, classifyReaction, resolveReactionSeverity, isReaction, type ReactionLevel,
+  SYMPTOM_CHIPS, classifyReaction, isReaction, type ReactionLevel,
   beforeYouStartFor, CALL_911, CALL_911_EPINEPHRINE, CALL_911_POSITIONING,
-  CALL_PEDIATRICIAN, CALL_PEDIATRICIAN_KEEP_WATCHING, SAVE_COPY, USUALLY_NOT_A_REACTION,
+  CALL_PEDIATRICIAN, CALL_PEDIATRICIAN_KEEP_WATCHING, USUALLY_NOT_A_REACTION,
   LATER_SAME_DAY, NEXT_FEW_DAYS, GUIDANCE_FOOTER,
   FIRST_EXPOSURE_HELPER, startIntroToast,
   EMERGENCY_BANNER_TITLE, PEDIATRICIAN_BANNER_TITLE, ACTION_PLAN, REACTION_NOTED_DESCRIPTION,
@@ -49,32 +47,12 @@ import {
   isAwaitingSignOff, getMaintenanceState, maintenanceGuidance, maintenanceRemindersActive,
   sortDueIntroducedFirst,
 } from "@/services/allergenService";
-import { insertAllergenExposure, type InsertedExposure } from "@/services/allergenExposureWrite";
+import {
+  ReactionHalfSavedError, StartExposureError, describeAllergenWriteError, describeStartExposureError,
+  saveAllergenExposure, startAllergenIntro, AllergenWriteError, type ReactionTarget, type SaveExposureInput,
+} from "@/services/allergenTrackerWrites";
 
 const REACTION_INPUT_HINT = "Pick how strong it is or what you see to save.";
-
-type GuidanceTone = "destructive" | "warning" | "muted";
-
-const GUIDANCE_TONE: Record<GuidanceTone, { box: string; title: string; followUp: string }> = {
-  destructive: { box: "bg-destructive/10 border-destructive/30", title: "text-destructive", followUp: "font-bold text-destructive" },
-  warning: { box: "bg-warning/10 border-warning/30", title: "text-warning", followUp: "font-semibold text-foreground" },
-  muted: { box: "bg-muted/60 border-border", title: "text-muted-foreground", followUp: "text-muted-foreground" },
-};
-
-function GuidanceBlock({ section, tone }: { section: GuidanceSection; tone: GuidanceTone }) {
-  const t = GUIDANCE_TONE[tone];
-  return (
-    <div className={cn("rounded-lg border p-3 space-y-2 text-left", t.box)}>
-      <p className={cn("text-sm font-bold", t.title)}>{section.title}</p>
-      <ul className="list-disc pl-4 space-y-1 text-sm text-foreground">
-        {section.items.map((item) => <li key={item}>{item}</li>)}
-      </ul>
-      {section.followUp?.map((line) => (
-        <p key={line} className={cn("text-sm", t.followUp)}>{line}</p>
-      ))}
-    </div>
-  );
-}
 
 function WatchForSection({ defaultOpen, children }: { defaultOpen: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -155,74 +133,6 @@ function ReactionBanner({ level }: { level: ReactionLevel }) {
   return null;
 }
 
-type ReactionTarget =
-  | { mode: "new_exposure"; introId: string; allergenId: string; exposureNum: number }
-  | {
-      mode: "existing_exposure";
-      introId: string;
-      exposureId: string;
-      exposureNum: number;
-      previousReactionObserved: boolean | null;
-    };
-
-type SaveExposureInput = {
-  target: ReactionTarget;
-  /** When a new exposure happened; ignored for a reaction on an existing one. */
-  at?: Date;
-  /** Earliest allowed time for `at` (the latest exposure already logged). */
-  notBefore?: Date;
-  severity: Severity;
-  symptoms: string[];
-  notes: string;
-};
-
-// Carries copy we wrote for the parent, so onError can show it verbatim
-// without ever passing raw PostgREST text through.
-class AllergenWriteError extends Error {}
-
-function describeAllergenWriteError(err: unknown, title: string): { title: string; description: string } {
-  if (err instanceof Error && (err.message === VIEW_ONLY_MESSAGE || err.message === ROLE_UNRESOLVED_MESSAGE)) {
-    return { title, description: err.message };
-  }
-  if (isRlsViewerDenied(err)) return { title, description: VIEW_ONLY_MESSAGE };
-  if (err instanceof AllergenWriteError) return { title, description: err.message };
-  return { title, description: "Nothing was saved. Check your connection and try again." };
-}
-
-// The exposure row outlived a failed reaction insert. Carrying its id lets a
-// retry attach the reaction to it instead of inserting a duplicate exposure.
-class ReactionHalfSavedError extends AllergenWriteError {
-  constructor(readonly orphanExposureId: string) {
-    super(SAVE_COPY.reactionHalfSaved);
-  }
-}
-
-class StartExposureError extends Error {
-  constructor(readonly cause: unknown, readonly rolledBack: boolean) {
-    super("allergen exposure log insert failed");
-  }
-}
-
-function describeStartExposureError(err: unknown, allergenName?: string): { title: string; description: string } {
-  if ((err as { code?: string })?.code === "23505") {
-    return {
-      title: "Already started",
-      description: `${allergenName ?? "This allergen"} was already started on another device. We've refreshed it.`,
-    };
-  }
-  const title = "Couldn't log that exposure";
-  if (err instanceof Error && (err.message === VIEW_ONLY_MESSAGE || err.message === ROLE_UNRESOLVED_MESSAGE)) {
-    return { title, description: err.message };
-  }
-  if (isRlsViewerDenied(err) || (err instanceof StartExposureError && isRlsViewerDenied(err.cause))) {
-    return { title, description: VIEW_ONLY_MESSAGE };
-  }
-  if (err instanceof StartExposureError && !err.rolledBack) {
-    return { title, description: SAVE_COPY.startHalfSaved };
-  }
-  return { title, description: SAVE_COPY.startNotSaved };
-}
-
 export default function AllergenTracker() {
   const { user } = useAuth();
   const { activeChild } = useChildren();
@@ -280,40 +190,7 @@ export default function AllergenTracker() {
   const startIntro = useMutation({
     mutationFn: async ({ allergenId, at }: { allergenId: string; at: Date }) => {
       assertCanWrite(roleResolved, role);
-
-      const loggedAt = clampExposureTime(at).toISOString();
-
-      const { data, error } = await supabase.from("allergen_introductions").insert({
-        allergen_id: allergenId,
-        child_id: activeChild!.id,
-        parent_id: user!.id,
-        status: "in_progress",
-        first_introduced_at: loggedAt,
-      }).select().single();
-      if (error) throw error;
-
-      // Written explicitly so a back-dated exposure's watch window starts at
-      // logged_at, never at insert time.
-      const exposure = {
-        logged_at: loggedAt,
-        observation_window_ends_at: exposureWatchEnd({ logged_at: loggedAt }).toISOString(),
-      };
-      const { error: logError } = await supabase.from("allergen_exposure_logs").insert({
-        allergen_id: allergenId,
-        allergen_introduction_id: data.id,
-        child_id: activeChild!.id,
-        parent_id: user!.id,
-        exposure_number: 1,
-        ...exposure,
-      });
-      if (logError) {
-        // An introduction with no exposure renders as In Progress with no way
-        // to log exposure #1, so undo it rather than leave it half-saved.
-        const { data: deleted, error: rollbackError } = await supabase
-          .from("allergen_introductions").delete().eq("id", data.id).select("id");
-        throw new StartExposureError(logError, !rollbackError && !!deleted?.length);
-      }
-      return { allergenId: data.allergen_id as string, exposure };
+      return startAllergenIntro({ childId: activeChild!.id, parentId: user!.id, allergenId, at });
     },
     onSuccess: ({ allergenId, exposure }) => {
       setTimeDialog(null);
@@ -347,77 +224,11 @@ export default function AllergenTracker() {
   // An expected child's date is in the future; a min after the max would lock the calendar.
   const startMinDate = childDob && childDob.getTime() <= Date.now() ? childDob : undefined;
 
-  // Reactions are SEPARATE rows from exposure logs (clean audit trail for the
-  // pediatrician export). Every reaction also moves the introduction to
-  // "reaction_observed" — that stored status is what the export reads.
+  // Reactions are separate rows from exposure logs; see saveAllergenExposure.
   const saveExposure = useMutation({
-    mutationFn: async ({ target, at, notBefore, severity: rawSeverity, symptoms, notes }: SaveExposureInput) => {
+    mutationFn: async (input: SaveExposureInput) => {
       assertCanWrite(roleResolved, role);
-      const reacted = isReaction(rawSeverity, symptoms);
-      const severity = resolveReactionSeverity(rawSeverity, symptoms);
-      let newExposure: InsertedExposure | null = null;
-
-      let exposureId: string;
-      if (target.mode === "existing_exposure") {
-        const { data, error } = await supabase
-          .from("allergen_exposure_logs")
-          .update({ reaction_observed: true })
-          .eq("id", target.exposureId)
-          .select("id");
-        if (error) throw error;
-        if (!data?.length) throw new AllergenWriteError(SAVE_COPY.exposureGone);
-        exposureId = target.exposureId;
-      } else {
-        const inserted = await insertAllergenExposure({
-          childId: activeChild!.id,
-          parentId: user!.id,
-          allergenId: target.allergenId,
-          introId: target.introId,
-          exposureNumber: target.exposureNum,
-          at: at ?? new Date(),
-          notBefore,
-          reacted,
-        });
-        newExposure = inserted.exposure;
-        exposureId = inserted.id;
-      }
-
-      if (reacted) {
-        const { error: rxError } = await supabase.from("allergen_reactions").insert({
-          exposure_log_id: exposureId,
-          child_id: activeChild!.id,
-          parent_id: user!.id,
-          severity,
-          symptoms,
-          parent_description: notes, // verbatim — never summarize
-          ...(newExposure ? { observed_at: newExposure.logged_at } : {}),
-        });
-        if (rxError) {
-          // An RLS-blocked rollback returns zero rows and no error, so a missing
-          // row counts as a failed rollback too.
-          const { data: rolledBack, error: rollbackError } = target.mode === "existing_exposure"
-            ? await supabase.from("allergen_exposure_logs")
-                .update({ reaction_observed: target.previousReactionObserved }).eq("id", exposureId).select("id")
-            : await supabase.from("allergen_exposure_logs").delete().eq("id", exposureId).select("id");
-          if (rollbackError || !rolledBack?.length) throw new ReactionHalfSavedError(exposureId);
-          throw new AllergenWriteError(SAVE_COPY.reactionNotSaved);
-        }
-      }
-
-      // Only a reaction moves the stored status. A clean exposure never
-      // completes the intro: that takes the parent's explicit sign-off.
-      // The exposure is already saved, so a failed status write is a warning,
-      // not an error — throwing would invite a retry that duplicates the log.
-      let warning: string | null = null;
-      if (reacted) {
-        const { data, error } = await supabase
-          .from("allergen_introductions")
-          .update({ status: "reaction_observed", completed_at: null })
-          .eq("id", target.introId)
-          .select("id");
-        if (error || !data?.length) warning = SAVE_COPY.reactionStatusStale;
-      }
-      return { level: classifyReaction(symptoms, severity), reacted, warning, newExposure };
+      return saveAllergenExposure({ childId: activeChild!.id, parentId: user!.id }, input);
     },
     onSuccess: ({ level, reacted, warning, newExposure }) => {
       closeReactionDialog();

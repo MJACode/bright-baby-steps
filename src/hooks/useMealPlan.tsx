@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { buildMealPlanRequest, currentMealPlan, parseMealPlan, type MealPlan } from "@/lib/mealPlan";
+import { buildMealPlanRequest, currentMealPlan, parseMealPlan, withoutAvoidedFoods, type MealPlan } from "@/lib/mealPlan";
 
 /** Every `{ error }` code generate-meal-plan returns, plus "network" for no response at all. */
 export type MealPlanErrorCode =
@@ -65,7 +65,8 @@ export const mealPlanQueryKey = (childId: string | undefined) => ["meal-plan", c
  * introduced allergen slugs) drops any stored idea outside them, so an
  * allergen with a reaction logged after the plan was built stops showing.
  * `ageMonths` (corrected) picks the catalog prep band the plan is rebuilt
- * with: parseMealPlan renders no stored text.
+ * with: parseMealPlan renders no stored text. `avoidSlugs` (the child's
+ * avoided catalog foods) come out of the cached plan straight away.
  */
 export function useMealPlan(
   childId: string | undefined,
@@ -73,8 +74,9 @@ export function useMealPlan(
   {
     ageMonths,
     allowedAllergens,
+    avoidSlugs = [],
     enabled = true,
-  }: { ageMonths: number; allowedAllergens?: readonly string[]; enabled?: boolean },
+  }: { ageMonths: number; allowedAllergens?: readonly string[]; avoidSlugs?: readonly string[]; enabled?: boolean },
 ) {
   return useQuery({
     queryKey: mealPlanQueryKey(childId),
@@ -87,10 +89,13 @@ export function useMealPlan(
       if (error) throw error;
       return data;
     },
-    select: (row) => ({
-      plan: currentMealPlan(row, weekStart, { ageMonths, allowedAllergens }),
-      storedWeekStart: row?.week_start ?? null,
-    }),
+    select: (row) => {
+      const plan = currentMealPlan(row, weekStart, { ageMonths, allowedAllergens });
+      return {
+        plan: plan && withoutAvoidedFoods(plan, avoidSlugs, ageMonths),
+        storedWeekStart: row?.week_start ?? null,
+      };
+    },
     enabled: enabled && !!childId,
   });
 }

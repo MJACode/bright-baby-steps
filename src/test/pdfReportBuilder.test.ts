@@ -273,3 +273,34 @@ describe("generatePediatricianReport", () => {
     expect(textCalls.some((t) => t.includes("Premature"))).toBe(true);
   });
 });
+
+describe("generatePediatricianReport — foods you're leaving out", () => {
+  const texts = () => mockDoc.text.mock.calls.map((c) => (Array.isArray(c[0]) ? c[0].join(" ") : String(c[0])));
+  const rows: ReportData["foodAvoidances"] = [
+    { food: "Grandma's lentil stew", isCustom: true, reason: "reaction", note: "Hives on cheeks", addedAt: "2026-11-10T10:00:00Z" },
+    { food: "Banana", isCustom: false, reason: "preference", note: null, addedAt: "2026-11-21T10:00:00Z" },
+  ];
+
+  it("prints each food with its reason, date and note under the allergens", () => {
+    generatePediatricianReport(
+      { ...baseData, allergens: [{ status: "completed", allergens: { name: "Egg" } }], foodAvoidances: rows },
+      new Set(["allergens"]),
+    );
+    const out = texts();
+    expect(out).toContain("ALLERGEN INTRODUCTIONS");
+    expect(out).toContain("Foods you're leaving out");
+    expect(out).toContain("Grandma's lentil stew (parent's description): Reaction, added Nov 10, 2026 — Hives on cheeks");
+    expect(out).toContain("Banana: Not a fan yet, added Nov 21, 2026");
+  });
+
+  it("prints the list under its own heading when no allergen is tracked yet", () => {
+    generatePediatricianReport({ ...baseData, foodAvoidances: rows }, new Set(["allergens"]));
+    expect(texts()).toContain("FOODS YOU'RE LEAVING OUT");
+    expect(texts()).not.toContain("ALLERGEN INTRODUCTIONS");
+  });
+
+  it("is left out when the allergens section isn't picked", () => {
+    generatePediatricianReport({ ...baseData, foodAvoidances: rows }, new Set(["feeding"]));
+    expect(texts().some((t) => t.includes("Banana"))).toBe(false);
+  });
+});

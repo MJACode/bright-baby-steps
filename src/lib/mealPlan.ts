@@ -195,6 +195,42 @@ export function parseMealPlan(raw: unknown, { ageMonths, allowedAllergens }: Par
 }
 
 /**
+ * The plan with every food in `avoidSlugs` taken out, so a "Not for us" or a
+ * reaction hides the food at once rather than on the next generate (the server
+ * only excludes avoided foods when it builds a plan). Each idea that keeps any
+ * food is rebuilt from the catalog like parseMealPlan does — name, prep,
+ * allergens, category; an idea left with no foods is dropped. The plan stays
+ * even below MIN_IDEAS: those ideas are still good ones.
+ */
+export function withoutAvoidedFoods(plan: MealPlan, avoidSlugs: readonly string[], ageMonths: number): MealPlan {
+  if (avoidSlugs.length === 0) return plan;
+  const avoid = new Set(avoidSlugs);
+  const band = ageBand(Math.floor(ageMonths));
+  const ideas: MealIdea[] = [];
+  for (const idea of plan.ideas) {
+    const foods = idea.foods.filter((f) => !avoid.has(f));
+    if (foods.length === idea.foods.length) {
+      ideas.push(idea);
+      continue;
+    }
+    if (foods.length === 0) continue;
+    const catalogFoods = foods.map((f) => FOOD_BY_SLUG.get(f)!);
+    const rebuilt: MealIdea = {
+      id: idea.id,
+      name: buildIdeaName(catalogFoods),
+      mealSlot: idea.mealSlot,
+      foods,
+      allergens: uniqueSlugs(catalogFoods.flatMap((f) => f.allergens)),
+      foodCategory: catalogFoods[0].category as MealFoodCategory,
+    };
+    if (idea.blwPrep !== undefined) rebuilt.blwPrep = buildPrep(catalogFoods, "blw", band);
+    if (idea.traditionalPrep !== undefined) rebuilt.traditionalPrep = buildPrep(catalogFoods, "traditional", band);
+    ideas.push(rebuilt);
+  }
+  return { ...plan, ideas };
+}
+
+/**
  * True when the stored plan covers `weekStart` or a later week (the server
  * 409s any request for a week on or before the stored one).
  */

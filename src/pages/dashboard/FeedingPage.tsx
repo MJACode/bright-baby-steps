@@ -14,6 +14,7 @@ import AllergenTracker from "@/components/feeding/AllergenTracker";
 import { PageInstructions } from "@/components/PageInstructions";
 import { SolidsMethodPicker } from "@/components/feeding/SolidsMethodPicker";
 import { MealPlanCard } from "@/components/feeding/MealPlanCard";
+import { FoodAvoidList } from "@/components/feeding/FoodAvoidList";
 import { ALLERGENS_ANCHOR, VITAMINS_PATH } from "@/lib/feedingRoutes";
 import { MEAL_PLAN_MIN_AGE_MONTHS, isSolidsMethod, type MealIdea } from "@/lib/mealPlan";
 import { SOLIDS_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
@@ -72,6 +73,8 @@ function SolidsPlanSlot({
           onLogIdea={onLogIdea}
         />
       )}
+      {/* Right under the plan it filters, where "Not for us" sends foods. */}
+      <FoodAvoidList childId={child.id} role={role} roleResolved={isResolved} />
     </div>
   );
 }
@@ -118,7 +121,12 @@ export default function FeedingPage() {
     );
   }, [allergens, introductions]);
   const logIdea = (idea: MealIdea) =>
-    solidsLog.current?.open({ foodDesc: idea.name, foodCategory: idea.foodCategory, allergenSlugs: idea.allergens });
+    solidsLog.current?.open({
+      foodDesc: idea.name,
+      foodCategory: idea.foodCategory,
+      allergenSlugs: idea.allergens,
+      ...(idea.foods?.length === 1 ? { foodSlug: idea.foods[0] } : {}),
+    });
   const totalAllergens = allergens?.length ?? 0;
 
   // Keyed on location.key so a repeat tap on the same link (a push arriving

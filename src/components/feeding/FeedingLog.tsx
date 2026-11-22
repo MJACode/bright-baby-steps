@@ -45,6 +45,15 @@ import {
 } from "@/services/allergenService";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
 import { usePreferences } from "@/hooks/usePreferences";
+import { CALL_911 } from "@/services/allergenService";
+import { GuidanceBlock } from "@/components/feeding/GuidanceBlock";
+import { FoodSearchField } from "@/components/feeding/FoodSearchField";
+import { FoodAllergenSuggestion, ReactionFoodStep, type ReactionFood } from "@/components/feeding/SolidsFoodAssist";
+import { allergensInFood } from "@/lib/foodAvoidances";
+import { foodAvoidancesQueryKey, useFoodAvoidances, writeFoodAvoidance } from "@/hooks/useFoodAvoidances";
+import { mealPlanQueryKey } from "@/hooks/useMealPlan";
+import { FOOD_BY_SLUG, type CatalogFood } from "@/lib/foodCatalog";
+import { AVOID_OTHER_SAVED_NOTE } from "@/lib/solidsAvoidCopy";
 import { isMilkFeedType, orderFeedTypes, type MilkFeedType } from "@/lib/feedTypeOrder";
 
 type FeedingLogRow = Tables<"feeding_logs">;
@@ -58,6 +67,8 @@ export interface SolidsPrefill {
   foodCategory?: string;
   /** Allergen slugs to pre-tick. Only signed-off allergens render as chips. */
   allergenSlugs?: string[];
+  /** The catalog food this entry is, when it is exactly one. */
+  foodSlug?: string;
 }
 
 export interface FeedingLogHandle {
@@ -160,6 +171,16 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
   const [amountOzRight, setAmountOzRight] = useState("");
   const [foodDesc, setFoodDesc] = useState("");
   const [foodCategory, setFoodCategory] = useState("");
+  // The catalog food picked from the Food Description suggestions; null for free text.
+  const [foodSlug, setFoodSlug] = useState<string | null>(null);
+  const [reactionFood, setReactionFood] = useState<ReactionFood>(null);
+  const [customReactionFood, setCustomReactionFood] = useState("");
+  // Once the parent answers "Which food?" themselves, a later Food Description
+  // pick no longer moves it.
+  const reactionFoodTouched = useRef(false);
+  // Serving chips the pick ticked (not the parent), so un-picking the food
+  // can untick them again.
+  const autoChipIds = useRef<string[]>([]);
   const [reactionNoted, setReactionNoted] = useState(false);
   const [reactionDescription, setReactionDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -307,6 +328,9 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     setEditingId(null);
     setEditingRow(null);
     pendingAllergenSlugs.current = null;
+    setFoodSlug(null); setReactionFood(null); setCustomReactionFood("");
+    reactionFoodTouched.current = false;
+    autoChipIds.current = [];
     setFeedType(defaultFeedType); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setAllergenIds([]); setDerivedStart(new Date());
   };
 
@@ -360,6 +384,8 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     setAmountOzRight(log.amount_oz_right ? String(log.amount_oz_right) : "");
     setFoodDesc(log.food_description || "");
     setFoodCategory(log.food_category || "");
+    setFoodSlug(log.food_slug && FOOD_BY_SLUG.has(log.food_slug) ? log.food_slug : null);
+    setReactionFood(log.food_slug && FOOD_BY_SLUG.has(log.food_slug) ? { kind: "catalog", slug: log.food_slug } : null);
     setReactionNoted(log.reaction_noted || false);
     setReactionDescription(log.reaction_description || "");
     setNotes(log.notes || "");
@@ -386,6 +412,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     amount_oz_right: feedType === "pump" && amountOzRight ? Number(amountOzRight) : null,
     food_description: feedType === "solid" ? foodDesc || null : null,
     food_category: feedType === "solid" ? foodCategory || null : null,
+    food_slug: feedType === "solid" ? foodSlug : null,
     reaction_noted: feedType === "solid" ? reactionNoted : false,
     reaction_description: feedType === "solid" && reactionNoted ? reactionDescription || null : null,
     notes: notes || null,
@@ -416,6 +443,10 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
         setFoodDesc(prefill.foodDesc);
         const category = prefill.foodCategory ?? "";
         setFoodCategory((SOLID_FOOD_CATEGORIES as readonly string[]).includes(category) ? category : "");
+        if (prefill.foodSlug && FOOD_BY_SLUG.has(prefill.foodSlug)) {
+          setFoodSlug(prefill.foodSlug);
+          setReactionFood({ kind: "catalog", slug: prefill.foodSlug });
+        }
         const slugs = prefill.allergenSlugs ?? [];
         if (allergens) setAllergenIds(allergenIdsForSlugs(allergens, slugs));
         else pendingAllergenSlugs.current = slugs;
@@ -428,6 +459,48 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     (a) => getAllergenStatus(introductions?.find((i) => i.allergen_id === a.id)) === "introduced",
   );
   const showAllergenChips = feedType === "solid" && !editingId && canLogServings && introducedAllergens.length > 0;
+  const pickedFood = foodSlug ? FOOD_BY_SLUG.get(foodSlug) : undefined;
+
+  const untickAutoChips = () => {
+    const auto = autoChipIds.current;
+    autoChipIds.current = [];
+    if (auto.length) setAllergenIds((prev) => prev.filter((id) => !auto.includes(id)));
+  };
+
+  // A pick fills the group and ticks the signed-off allergens it contains; all
+  // of it stays editable. Allergens not signed off get a suggestion instead.
+  const pickFood = (food: CatalogFood) => {
+    untickAutoChips();
+    setFoodDesc(food.name);
+    setFoodSlug(food.slug);
+    if ((SOLID_FOOD_CATEGORIES as readonly string[]).includes(food.category)) setFoodCategory(food.category);
+    const toTick = allergensInFood(food, introducedAllergens)
+      .map((a) => a.id)
+      .filter((id) => !allergenIds.includes(id));
+    autoChipIds.current = toTick;
+    if (toTick.length) setAllergenIds((prev) => [...prev, ...toTick]);
+    if (!reactionFoodTouched.current) setReactionFood({ kind: "catalog", slug: food.slug });
+  };
+
+  const changeFoodDesc = (text: string) => {
+    setFoodDesc(text);
+    if (pickedFood && text !== pickedFood.name) {
+      setFoodSlug(null);
+      untickAutoChips();
+      if (!reactionFoodTouched.current) setReactionFood(null);
+    }
+  };
+
+  // A reaction food is offered once per log: a new entry, or an edit whose log
+  // has no avoid row yet (so re-saving an edit can't stack free-text rows).
+  const { data: avoidances } = useFoodAvoidances(isSolids ? activeChild?.id : undefined);
+  const logHasAvoid = !!editingId && !!avoidances?.some((r) => r.source_feeding_log_id === editingId);
+  const showReactionFood = feedType === "solid" && reactionNoted && canLogServings && online && !logHasAvoid;
+  const reactionFoodToSave =
+    !showReactionFood ? null
+      : reactionFood?.kind === "catalog" ? { foodSlug: reactionFood.slug, name: FOOD_BY_SLUG.get(reactionFood.slug)?.name ?? reactionFood.slug }
+        : reactionFood?.kind === "custom" && customReactionFood.trim() ? { customFood: customReactionFood.trim(), name: customReactionFood.trim() }
+          : null;
   // A reaction belongs on the allergen itself (reaction row, status, triage),
   // so a feed with "Reaction noted" logs no clean servings.
   const servingAllergenIds = showAllergenChips && online && !reactionNoted
@@ -470,16 +543,16 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     return { logged, failed };
   };
 
-  const saveFeedRow = async (): Promise<SubmitResult> => {
+  const saveFeedRow = async (): Promise<{ result: SubmitResult; logId: string }> => {
     if (editingId) {
       // Editing an existing completed log.
-      return submitLog({
+      return { logId: editingId, result: await submitLog({
         action: "update",
         table: "feeding_logs",
         rowId: editingId,
         childId: editingRow?.child_id ?? activeChild!.id,
         patch: getPayload(),
-      });
+      }) };
     }
     if (activeRow && activeRow.feeding_type === feedType) {
       // Finalize the active (timer-started) row. We must clear the in-progress
@@ -489,7 +562,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       // bound to activeRow while the user has switched the form to Solid; in
       // that case we fall through to a fresh INSERT and leave the row intact.
       const payload = getPayload();
-      return submitLog({
+      return { logId: activeRow.id, result: await submitLog({
         action: "update",
         table: "feeding_logs",
         rowId: activeRow.id,
@@ -506,11 +579,36 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
           duration_seconds_left: null,
           duration_seconds_right: null,
         },
-      });
+      }) };
     }
     // Pure manual entry — no active session was running.
     const row = { ...getPayload(), id: newLogId(), child_id: activeChild!.id, parent_id: user!.id };
-    return submitLog({ action: "insert", table: "feeding_logs", rowId: row.id, childId: row.child_id, row });
+    return {
+      logId: row.id,
+      result: await submitLog({ action: "insert", table: "feeding_logs", rowId: row.id, childId: row.child_id, row }),
+    };
+  };
+
+  // The reaction food goes on the avoid list, linked to the log it was noted
+  // on. That link needs the log on the server, so a queued (offline) log skips
+  // it. The feed is already saved: a failure is reported, never thrown.
+  const saveReactionFood = async (logId: string, result: SubmitResult): Promise<"saved" | "failed" | null> => {
+    const food = reactionFoodToSave;
+    if (!food) return null;
+    if (result === "queued") return "failed";
+    try {
+      await writeFoodAvoidance({
+        childId: activeChild!.id,
+        reason: "reaction",
+        note: reactionDescription,
+        sourceFeedingLogId: logId,
+        ...("foodSlug" in food ? { foodSlug: food.foodSlug! } : { customFood: food.customFood! }),
+      });
+      return "saved";
+    } catch (err) {
+      console.error("food avoidance insert failed", (err as { code?: string })?.code ?? null);
+      return "failed";
+    }
   };
 
   const saveMutation = useMutation({
@@ -521,18 +619,26 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       if (isSolids !== (feedType === "solid")) {
         throw new Error("This entry doesn't match this tab. Close it and log it again.");
       }
-      const result = await saveFeedRow();
-      return { result, ...(await logFeedServings()) };
+      const { result, logId } = await saveFeedRow();
+      const servings = await logFeedServings();
+      const avoid = await saveReactionFood(logId, result);
+      return { result, ...servings, avoid, avoidFood: reactionFoodToSave };
     },
-    onSuccess: ({ result, logged, failed }) => {
+    onSuccess: ({ result, logged, failed, avoid, avoidFood }) => {
       if (logged.length > 0 || failed.length > 0) {
         queryClient.invalidateQueries({ queryKey: ["allergen-introductions"] });
+      }
+      if (avoid === "saved") {
+        queryClient.invalidateQueries({ queryKey: foodAvoidancesQueryKey(activeChild?.id) });
+        queryClient.invalidateQueries({ queryKey: mealPlanQueryKey(activeChild?.id) });
       }
       closeDialog();
       const description = [
         result === "queued" ? QUEUED_TOAST_DESCRIPTION : "",
         logged.length > 0 ? feedServingsLoggedText(logged) : "",
         failed.length > 0 ? feedServingsFailedText(failed) : "",
+        avoid === "saved" && avoidFood && "customFood" in avoidFood ? AVOID_OTHER_SAVED_NOTE : "",
+        avoid === "failed" && avoidFood ? reactionFoodFailedText(avoidFood.name) : "",
       ].filter(Boolean).join(" ");
       const title = isSolids
         ? editingId ? "Solids updated! ✏️" : "Solids logged! 🥣"
@@ -692,8 +798,14 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
             {feedType === "solid" && (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <Label>Food Description</Label>
-                  <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
+                  <Label htmlFor="solid-food-desc">Food Description</Label>
+                  <FoodSearchField
+                    id="solid-food-desc"
+                    value={foodDesc}
+                    onValueChange={changeFoodDesc}
+                    onPick={pickFood}
+                    placeholder="e.g. pureed sweet potato"
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -709,6 +821,18 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                     </SelectContent>
                   </Select>
                 </div>
+
+                {pickedFood && !reactionNoted && allergens && introductions && (
+                  <FoodAllergenSuggestion
+                    key={pickedFood.slug}
+                    food={pickedFood}
+                    allergens={allergens}
+                    introductions={introductions}
+                    at={loggedAt}
+                    writer={{ childId: activeChild.id, parentId: user!.id, role, roleResolved }}
+                    canWrite={canLogServings && online && !editingId}
+                  />
+                )}
 
                 {showAllergenChips && (
                   <div className="space-y-2">
@@ -733,11 +857,12 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                                   "touch-target h-auto min-h-[48px] text-sm gap-1.5",
                                   selected && "bg-feeding hover:bg-feeding/90",
                                 )}
-                                onClick={() =>
+                                onClick={() => {
+                                  autoChipIds.current = autoChipIds.current.filter((id) => id !== a.id);
                                   setAllergenIds((prev) =>
                                     selected ? prev.filter((id) => id !== a.id) : [...prev, a.id],
-                                  )
-                                }
+                                  );
+                                }}
                               >
                                 <span aria-hidden="true">{allergenEmoji[a.slug] ?? "🍽️"}</span>
                                 {a.name}
@@ -764,14 +889,34 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
                 </div>
 
                 {reactionNoted && (
-                  <div className="space-y-1 ml-6">
-                    <Label className="text-xs">Describe the reaction</Label>
-                    <Textarea
-                      value={reactionDescription}
-                      onChange={(e) => setReactionDescription(e.target.value)}
-                      placeholder="e.g. mild rash on cheeks, fussiness after eating"
-                      rows={2}
-                    />
+                  <div className="space-y-3">
+                    <div className="space-y-1 ml-6">
+                      <Label className="text-xs">Describe the reaction</Label>
+                      <Textarea
+                        value={reactionDescription}
+                        onChange={(e) => setReactionDescription(e.target.value)}
+                        placeholder="e.g. mild rash on cheeks, fussiness after eating"
+                        rows={2}
+                      />
+                    </div>
+                    <GuidanceBlock section={CALL_911} tone="destructive" />
+                    {showReactionFood && (
+                      <ReactionFoodStep
+                        value={reactionFood}
+                        onChange={(next) => {
+                          reactionFoodTouched.current = true;
+                          setReactionFood(next);
+                        }}
+                        customFood={customReactionFood}
+                        onCustomFoodChange={setCustomReactionFood}
+                        allergens={allergens ?? []}
+                        introductions={introductions}
+                        at={loggedAt}
+                        notes={reactionDescription}
+                        writer={{ childId: activeChild.id, parentId: user!.id, role, roleResolved }}
+                        canWriteAllergens={!!allergens}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -931,6 +1076,10 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     </div>
   );
 });
+
+function reactionFoodFailedText(food: string): string {
+  return `The solids saved, but ${food} wasn't added to Foods you're leaving out. Open this entry and save it again to add it.`;
+}
 
 function allergenIdsForSlugs(allergens: ReadonlyArray<{ id: string; slug: string }>, slugs: readonly string[]): string[] {
   return allergens.filter((a) => slugs.includes(a.slug)).map((a) => a.id);

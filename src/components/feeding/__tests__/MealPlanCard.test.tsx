@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { MealPlanCard } from "@/components/feeding/MealPlanCard";
 import { MEAL_PLAN_ERROR_COPY, MealPlanError, useGenerateMealPlan, type MealPlanErrorCode } from "@/hooks/useMealPlan";
 import { MEAL_PLAN_DISCLAIMER, MEAL_PLAN_MILK_FIRST_COPY, MEAL_PLAN_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
@@ -17,16 +17,54 @@ const h = vi.hoisted(() => ({
   premium: { isPremium: false, isLoading: false },
   ownerPremium: { isChildOwnerPremium: false, isLoading: false },
   online: true,
+  avoids: [] as Record<string, unknown>[],
+  avoidWrites: [] as { op: string; payload?: Record<string, unknown>; id?: string }[],
 }));
+
+// child_food_avoidances: a list read, an upsert that returns its row, and a
+// delete that returns what it removed. Every other table is the meal_plans read.
+const avoidChain = () => {
+  const s: { op?: string; payload?: Record<string, unknown>; id?: string } = {};
+  const result = () => {
+    if (!s.op) return { data: h.avoids, error: null };
+    h.avoidWrites.push({ op: s.op, payload: s.payload, id: s.id });
+    if (s.op === "upsert") {
+      const row = { id: `avoid-${h.avoidWrites.length}`, created_at: "2026-11-20T00:00:00Z", updated_at: "2026-11-20T00:00:00Z", ...s.payload };
+      h.avoids = [row, ...h.avoids];
+      return { data: row, error: null };
+    }
+    if (s.op === "delete") {
+      h.avoids = h.avoids.filter((r) => r.id !== s.id);
+      return { data: [{ id: s.id }], error: null };
+    }
+    return { data: [], error: null };
+  };
+  const chain: Record<string, unknown> = {
+    select: () => chain,
+    eq: (col: string, val: string) => {
+      if (col === "id") s.id = val;
+      return chain;
+    },
+    order: () => chain,
+    upsert: (payload: Record<string, unknown>) => Object.assign(s, { op: "upsert", payload }) && chain,
+    delete: () => Object.assign(s, { op: "delete" }) && chain,
+    single: async () => result(),
+    then: (resolve: (v: unknown) => unknown) => Promise.resolve(result()).then(resolve),
+  };
+  return chain;
+};
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
-    from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => {
-        h.reads += 1;
-        return h.readError ? { data: null, error: h.readError } : { data: h.row, error: null };
-      } }) }),
-    }),
+    from: (table: string) =>
+      table === "child_food_avoidances"
+        ? avoidChain()
+        : {
+            select: () => ({ eq: () => ({ maybeSingle: async () => {
+              h.reads += 1;
+              return h.readError ? { data: null, error: h.readError } : { data: h.row, error: null };
+            } }) }),
+          },
     functions: { invoke: (...args: unknown[]) => h.invoke(...args) },
   },
 }));
@@ -143,6 +181,8 @@ beforeEach(() => {
   h.premium = { isPremium: false, isLoading: false };
   h.ownerPremium = { isChildOwnerPremium: false, isLoading: false };
   h.online = true;
+  h.avoids = [];
+  h.avoidWrites = [];
 });
 
 describe("MealPlanCard button states", () => {
@@ -264,7 +304,8 @@ describe("MealPlanCard plan", () => {
     renderCard({ statuses: { ...STATUSES, egg: "reaction_noted" } });
     fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
     expect(screen.queryByText(NAME_A)).not.toBeInTheDocument();
-    expect(screen.getByText(NAME_B)).toBeInTheDocument();
+    // A one-food idea is named for its food, which its food row also shows.
+    expect(screen.getAllByText(NAME_B).length).toBeGreaterThan(0);
   });
 
   it("renders the new plan, open, after a successful generate", async () => {
@@ -585,5 +626,89 @@ describe("useGenerateMealPlan error copy", () => {
     for (const copy of Object.values(MEAL_PLAN_ERROR_COPY)) {
       expect(copy).toMatch(/try again|Sign in|Ask the parent|Flare\+|showing now/i);
     }
+  });
+});
+
+describe("MealPlanCard Not for us", () => {
+  const openPlan = async () => {
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard();
+    fireEvent.click(await screen.findByRole("button", { name: "See 4 meal ideas" }));
+  };
+
+  it("hides the food straight away, saves a preference avoid, and Undo brings it back", async () => {
+    await openPlan();
+    fireEvent.click(screen.getByRole("button", { name: "Not for us: Banana" }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "How to serve Banana" })).not.toBeInTheDocument());
+    // The idea keeps its other foods and is renamed from them.
+    const rest = ["wheat-infant-cereal", "egg-scrambled"].map((slug) => FOOD_BY_SLUG.get(slug)!);
+    expect(screen.getByText(buildIdeaName(rest))).toBeInTheDocument();
+    expect(screen.queryByText(NAME_A)).not.toBeInTheDocument();
+
+    expect(h.avoidWrites[0]).toEqual(
+      expect.objectContaining({
+        op: "upsert",
+        payload: expect.objectContaining({ child_id: "child-1", food_slug: "banana", reason: "preference" }),
+      }),
+    );
+    await waitFor(() =>
+      expect(h.toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Banana is off the menu for now",
+          description: "We'll leave it out of your meal ideas. You can bring it back from Foods you're leaving out.",
+        }),
+      ),
+    );
+
+    const { action } = h.toast.mock.calls.at(-1)![0] as { action: { props: { onClick: () => void; children: string } } };
+    expect(action.props.children).toBe("Undo");
+    act(() => action.props.onClick());
+    await waitFor(() => expect(h.avoidWrites.at(-1)).toEqual(expect.objectContaining({ op: "delete", id: "avoid-1" })));
+    expect(await screen.findByRole("button", { name: "How to serve Banana" })).toBeInTheDocument();
+    expect(screen.getByText(NAME_A)).toBeInTheDocument();
+  });
+
+  it("drops an idea whose only food is left out", async () => {
+    await openPlan();
+    expect(screen.getByRole("heading", { name: "Lunch" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Not for us: Sweet potato" }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Lunch" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "How to serve Sweet potato" })).not.toBeInTheDocument();
+  });
+
+  it("leaves out foods already on the avoid list, reactions and preferences alike", async () => {
+    h.avoids = [
+      { id: "x1", child_id: "child-1", food_slug: "sweet-potato", custom_food: null, reason: "reaction", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" },
+      { id: "x2", child_id: "child-1", food_slug: null, custom_food: "Banana bread", reason: "reaction", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" },
+    ];
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard();
+    fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
+    expect(screen.queryByRole("heading", { name: "Lunch" })).not.toBeInTheDocument();
+    // Free text is record-only: it never filters the plan.
+    expect(screen.getByRole("button", { name: "How to serve Banana" })).toBeInTheDocument();
+  });
+
+  it("gives a viewer How to serve but no Not for us", async () => {
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard({ role: "viewer" });
+    fireEvent.click(await screen.findByRole("button", { name: "See 4 meal ideas" }));
+    expect(screen.getByRole("button", { name: "How to serve Banana" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Not for us/ })).not.toBeInTheDocument();
+  });
+
+  it("opens How to serve with the plan's methods at the child's age", async () => {
+    await openPlan();
+    fireEvent.click(screen.getByRole("button", { name: "How to serve Banana" }));
+    const sheet = await screen.findByRole("dialog");
+    const banana = FOOD_BY_SLUG.get("banana")!;
+    expect(within(sheet).getByRole("heading", { name: "Banana" })).toBeInTheDocument();
+    // Age 8 -> the "6-8" band; a mix plan shows both methods.
+    expect(within(sheet).getByTestId("serve-shape-blw").querySelector("svg")).toHaveAttribute("data-shape", banana.shapes.blw["6-8"]);
+    expect(within(sheet).getByTestId("serve-shape-traditional").querySelector("svg")).toHaveAttribute("data-shape", banana.shapes.traditional["6-8"]);
+    expect(within(sheet).getByText(banana.prep.blw["6-8"])).toBeInTheDocument();
+    expect(within(sheet).getByText(banana.prep.traditional["6-8"])).toBeInTheDocument();
+    expect(within(sheet).getByText("Gagging or choking?")).toBeInTheDocument();
   });
 });
