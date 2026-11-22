@@ -10,6 +10,10 @@ Trigger: founder review of the Food page. One release (founder chose not to phas
 - Feed-type order: **auto-sort by last-7-day usage + pin one to top**
 - Ideas/recipes: **AI weekly meal plan**, Flare+, **1 free plan per child**
 - Feeding method: **per child — Baby-led / Traditional / Mix**, asked on first Solids visit, editable
+- Vitamins stay **parents-only** (caregiver routes unchanged)
+- Solids tab order: **Log solids → method + meal plan → Allergens → history**
+- Feed Coach counts **milk feeds only**
+- Meal plan safety: **curated food catalog** — the model picks foods from a vetted list; allergens and prep text come from the catalog, not model prose. Keyword filter stays as a second layer on model-written text. Allergen status derived server-side.
 
 ## Phase A — Backend (`backend` agent) — CONTAINS A MIGRATION → founder approves merge
 - [ ] Migration `children.solids_method text CHECK IN ('blw','traditional','mix')` nullable
