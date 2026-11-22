@@ -14,6 +14,7 @@ import { MealPlanError, generateMealPlanMutationKey, useGenerateMealPlan, useMea
 import type { Role } from "@/hooks/useCurrentRole";
 import { allergenEmoji } from "@/services/allergenService";
 import {
+  MEAL_PLAN_CATALOG_MIN_AGE_MONTHS,
   MEAL_PLAN_MAX_AGE_MONTHS,
   MEAL_SLOTS,
   canGenerateMealPlan,
@@ -21,9 +22,42 @@ import {
   type MealPlan,
   type SolidsMethod,
 } from "@/lib/mealPlan";
-import { MEAL_ALLERGEN_LABELS, MEAL_PLAN_DISCLAIMER, MEAL_SLOT_LABELS } from "@/lib/mealPlanCopy";
+import {
+  MEAL_ALLERGEN_LABELS,
+  MEAL_PLAN_DISCLAIMER,
+  MEAL_PLAN_TOO_EARLY_COPY,
+  MEAL_SLOT_LABELS,
+} from "@/lib/mealPlanCopy";
+import { splitPrep } from "@/lib/mealPlanPrep";
 
 const ctaClass = "min-h-[48px] w-full bg-feeding text-white font-bold hover:bg-feeding/90";
+
+/** One method's prep: a single line for one food, a bulleted line per food otherwise. */
+function Prep({ label, prep, foods }: { label?: string; prep: string; foods: string[] }) {
+  const segments = splitPrep(prep, foods);
+  if (segments.length === 1) {
+    return (
+      <p>
+        {label && <span className="font-semibold">{label}</span>} {segments[0].text}
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-1">
+      {label && <p className="font-semibold">{label}</p>}
+      <ul className="space-y-1">
+        {segments.map((seg, i) => (
+          <li key={i} className="flex items-start gap-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-feeding" aria-hidden />
+            <span>
+              <span className="font-semibold">{seg.food}:</span> {seg.text}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function IdeaRow({
   idea,
@@ -39,22 +73,14 @@ function IdeaRow({
   return (
     <li className="rounded-xl bg-background/70 p-3 space-y-2">
       <p className="text-base font-bold">{idea.name}</p>
-      {method === "mix" ? (
-        <div className="space-y-1 text-sm leading-relaxed">
-          {idea.blwPrep && (
-            <p>
-              <span className="font-semibold">Baby-led:</span> {idea.blwPrep}
-            </p>
-          )}
-          {idea.traditionalPrep && (
-            <p>
-              <span className="font-semibold">Spoon-fed:</span> {idea.traditionalPrep}
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm leading-relaxed">{method === "blw" ? idea.blwPrep : idea.traditionalPrep}</p>
-      )}
+      <div className="space-y-2 text-sm leading-relaxed">
+        {method !== "traditional" && idea.blwPrep && (
+          <Prep label={method === "mix" ? "Baby-led:" : undefined} prep={idea.blwPrep} foods={idea.foods} />
+        )}
+        {method !== "blw" && idea.traditionalPrep && (
+          <Prep label={method === "mix" ? "Spoon-fed:" : undefined} prep={idea.traditionalPrep} foods={idea.foods} />
+        )}
+      </div>
       {idea.servingTip && (
         <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
           <Lightbulb className="w-4 h-4 mt-0.5 shrink-0 text-feeding" aria-hidden />
@@ -247,6 +273,12 @@ export function MealPlanCard({
   );
 
   const weekNotePremium = premiumLoading ? null : isPremium;
+
+  // The server has no foods for a baby this young (422 no_eligible_foods), so
+  // the method stays editable above and Build waits.
+  if (ageMonths < MEAL_PLAN_CATALOG_MIN_AGE_MONTHS) {
+    return shell(<p className="text-sm leading-relaxed">{MEAL_PLAN_TOO_EARLY_COPY}</p>);
+  }
 
   if (!allergenStatuses) {
     if (allergenError) {

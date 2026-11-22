@@ -3,7 +3,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { MealPlanCard } from "@/components/feeding/MealPlanCard";
 import { MEAL_PLAN_ERROR_COPY, MealPlanError, useGenerateMealPlan, type MealPlanErrorCode } from "@/hooks/useMealPlan";
-import { MEAL_PLAN_DISCLAIMER } from "@/lib/mealPlanCopy";
+import { MEAL_PLAN_DISCLAIMER, MEAL_PLAN_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
+import { buildPrep } from "../../../../supabase/functions/_shared/mealPlan";
+import { FOOD_BY_SLUG } from "@/lib/foodCatalog";
 import type { Role } from "@/hooks/useCurrentRole";
 
 const h = vi.hoisted(() => ({
@@ -269,6 +271,48 @@ describe("MealPlanCard plan", () => {
   });
 });
 
+describe("MealPlanCard catalog prep", () => {
+  const foods = ["wheat-infant-cereal", "egg-scrambled", "banana"];
+  const catalog = foods.map((slug) => FOOD_BY_SLUG.get(slug)!);
+  const catalogIdea = {
+    ...PLAN.ideas[0],
+    foods,
+    blwPrep: buildPrep(catalog, "blw", "6-8"),
+    traditionalPrep: buildPrep(catalog, "traditional", "6-8"),
+  };
+
+  it("puts each food's prep on its own line under the Baby-led and Spoon-fed labels", async () => {
+    h.row = { week_start: WEEK, plan: { ...PLAN, ideas: [catalogIdea, ...PLAN.ideas.slice(1)] } };
+    renderCard();
+    fireEvent.click(await screen.findByRole("button", { name: "See 4 meal ideas" }));
+    const row = screen.getByText("Banana pancakes").closest("li")!;
+    const lists = row.querySelectorAll("ul");
+    expect(lists).toHaveLength(2);
+    for (const [i, method] of (["blw", "traditional"] as const).entries()) {
+      const items = [...lists[i].querySelectorAll("li")].map((li) => li.textContent);
+      expect(items).toEqual(catalog.map((f) => `${f.name}: ${f.prep[method]["6-8"]}`));
+    }
+    expect(row).toHaveTextContent("Baby-led:");
+    expect(row).toHaveTextContent("Spoon-fed:");
+  });
+});
+
+describe("MealPlanCard 4–5 months", () => {
+  it("keeps Build hidden and never calls the planner before the catalog's first foods", async () => {
+    renderCard({ ageMonths: 5 });
+    expect(await screen.findByText(MEAL_PLAN_TOO_EARLY_COPY)).toBeInTheDocument();
+    expect(MEAL_PLAN_TOO_EARLY_COPY).toBe("Meal ideas start at 6 months, when most babies are ready for solids.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(h.invoke).not.toHaveBeenCalled();
+  });
+
+  it("offers Build from 6 months", async () => {
+    renderCard({ ageMonths: 6 });
+    expect(await screen.findByRole("button", { name: "Your first plan is free" })).toBeInTheDocument();
+  });
+});
+
 describe("MealPlanCard week note", () => {
   it("promises a Monday plan only to Flare+", async () => {
     h.premium = { isPremium: true, isLoading: false };
@@ -430,6 +474,7 @@ describe("useGenerateMealPlan error copy", () => {
     [403, "no_write_access"],
     [409, "plan_exists_this_week"],
     [422, "unusable_plan"],
+    [422, "no_eligible_foods"],
     [500, "save_failed"],
     [500, "internal_error"],
     [502, "coach_unavailable"],
@@ -447,7 +492,7 @@ describe("useGenerateMealPlan error copy", () => {
     expect(h.toast).toHaveBeenCalledWith(
       expect.objectContaining({ title: MEAL_PLAN_ERROR_COPY[code] }),
     );
-    if (code === "plan_exists_this_week") {
+    if (code === "plan_exists_this_week" || code === "no_eligible_foods") {
       expect(h.toast.mock.calls[0][0]).not.toHaveProperty("variant");
     } else {
       expect(h.toast.mock.calls[0][0]).toHaveProperty("variant", "destructive");

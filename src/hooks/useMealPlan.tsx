@@ -11,6 +11,7 @@ export type MealPlanErrorCode =
   | "premium_required"
   | "plan_exists_this_week"
   | "unusable_plan"
+  | "no_eligible_foods"
   | "save_failed"
   | "internal_error"
   | "coach_unavailable"
@@ -26,6 +27,8 @@ export const MEAL_PLAN_ERROR_COPY: Record<MealPlanErrorCode, string> = {
   plan_exists_this_week: "This week's plan was already built, so it's showing now.",
   unusable_plan:
     "We couldn't put together a safe set of ideas this time. Nothing was saved, so you can try again in a bit.",
+  no_eligible_foods:
+    "There aren't enough foods that fit your baby yet to build a plan. Each allergen you introduce opens up more foods, so try again after the next one.",
   save_failed: "Your plan was built but didn't save. Nothing was used up — try again in a bit.",
   internal_error: "Something went wrong on our side while building your plan. Try again in a bit.",
   coach_unavailable: "The meal planner is busy right now. Try again in a few minutes.",
@@ -111,6 +114,11 @@ export function useGenerateMealPlan(childId: string | undefined) {
       // The caller opens the upgrade sheet; the refetch shows the used free plan.
       if (code === "premium_required") {
         return queryClient.invalidateQueries({ queryKey: mealPlanQueryKey(input.childId) });
+      }
+      // Not a failure: nothing was built or used up, and the copy says what unlocks it.
+      if (code === "no_eligible_foods") {
+        toast({ title: MEAL_PLAN_ERROR_COPY[code] });
+        return;
       }
       if (code === "plan_exists_this_week") {
         toast({ title: MEAL_PLAN_ERROR_COPY[code] });

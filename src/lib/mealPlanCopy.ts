@@ -1,4 +1,4 @@
-import type { MealSlot, SolidsMethod } from "@/lib/mealPlan";
+import { MEAL_PLAN_CATALOG_MIN_AGE_MONTHS, type MealSlot, type SolidsMethod } from "@/lib/mealPlan";
 
 /** Legal-approved (2026-11-22). Shown under every plan view, stored plans included. Change it here only. */
 export const MEAL_PLAN_DISCLAIMER =
@@ -34,3 +34,6 @@ export const MEAL_ALLERGEN_LABELS: Record<string, string> = {
 
 export const SOLIDS_TOO_EARLY_COPY =
   "Solids usually start around 6 months. Meal ideas and your feeding-style choice will be here when your baby's ready.";
+
+/** Between MEAL_PLAN_MIN_AGE_MONTHS and the catalog's youngest food. */
+export const MEAL_PLAN_TOO_EARLY_COPY = `Meal ideas start at ${MEAL_PLAN_CATALOG_MIN_AGE_MONTHS} months, when most babies are ready for solids.`;
