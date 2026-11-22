@@ -3461,3 +3461,13 @@ The finance disclaimer shown on the Financial page (under the intro, below the c
 **New follow-ups:**
 1. Registered pediatric dietitian review of the catalog before or soon after launch (portion sizes for strawberries / raspberries at 6–8 mo, squashed legumes at 12+, peanut dose and the NIAID high-risk-infant path, arsenic / mercury frequency limits, brand-variable allergen tags for infant cereal and tortillas). Founder decision pending.
 2. Outside-counsel questions in the parent entry remain open.
+
+### 2026-11-22 (addendum 2) — Final QA corrections: AI picks foods only; disclosure wording fixed
+
+**Reviewer:** in-house (founder decision + final QA finding). **Risk level:** Medium (unchanged).
+
+**Correction to addendum 1:** it said "no allergen names" are sent to Anthropic. That was wrong. QA printed the real prompt: the eligible-food list includes names such as "Smooth peanut butter (thinned)", "Scrambled egg", "Plain whole-milk yogurt", "Salmon", so Anthropic can read which allergens the child tolerates directly from the food names. Treat this as allergen-tolerance status sent directly (not identifiable to a child: no name, id or DOB). What is still not sent: a separate allergen list, any reaction detail, or whether a food was excluded because of a reaction vs. not yet introduced. Privacy § 4, `/subprocessors` and CLAUDE.md reworded to say exactly this. FAQ wording was already accurate.
+
+**Founder decision — AI picks foods only:** QA showed the model-written meal name, serving tip and intro could still name off-list hazard foods ("Hot dog pieces") or contradict catalog prep ("Cut the grapes in half"). The model now returns only meal slot + 1–3 catalog slugs per idea. Meal names are built from catalog names, the intro is fixed copy, and serving tips are removed. The client rebuilds name and prep from the catalog on every render, so stored text never displays. Privacy § 4 now states the AI only chooses which foods go together.
+
+**Outside-counsel question 1 (above) now reads:** is sending allergen-tolerance status (via food names) to an already-disclosed AI processor a material change under § 312.5(a)(1), or a separate-consent disclosure under § 312.5(a)(2)?
