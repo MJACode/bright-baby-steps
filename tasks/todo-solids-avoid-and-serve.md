@@ -84,3 +84,10 @@ Frontend: put these in constants keyed by id. Reaction wording reuses src/servic
 - Food with no allergen → nudge only (no ACTION_PLAN wording). Show CALL_911 on the reaction step unchanged.
 - Shapes: no blw "6-8" = bite-size. Quartered drawing must show lengthwise quarters. Spear must read soft-cooked.
 - "Something else" text: fuzzy-match against catalog names and suggest the match.
+
+## Founder decisions, round 2 (2026-11-22, delegated to PM)
+1. Cough wording A: Log solids reaction step only → "a repeated cough that starts after eating and doesn't clear". CALL_911 elsewhere unchanged.
+2. Add a 9th shape, palm-chunk (soft palm-sized pieces that aren't strips). Caption pending nutrition review.
+3. Privacy § 2 line + COPPA "What we collect" line + legal-review-log entry, in this PR.
+4. Existing MCP grants get get_food_avoidances without re-consent. Logged as an accepted risk.
+5. Reactions confirmed from Log solids need a parent-picked severity (the tracker's picker). Never default to Mild.
