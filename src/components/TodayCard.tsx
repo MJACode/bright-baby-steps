@@ -22,6 +22,7 @@ import { resolveTrackingSchedule, trackingDayKey } from "@/lib/trackingDay";
 import { useSignProgress } from "@/hooks/useSignProgress";
 import { useSignPractice } from "@/hooks/useSignPractice";
 import { useTrackingNow } from "@/hooks/useTrackingNow";
+import { FEEDING_ALLERGENS_PATH } from "@/lib/feedingRoutes";
 import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData";
 import {
   dueMaintenanceAllergenNames,
@@ -221,7 +222,7 @@ export function TodayCard({
 }
 
 const SIGNS_PATH = "/dashboard/signs";
-const ALLERGENS_PATH = "/dashboard/feeding?tab=allergens";
+const ALLERGENS_PATH = FEEDING_ALLERGENS_PATH;
 
 interface SignsSlotBlockProps {
   divider: boolean;

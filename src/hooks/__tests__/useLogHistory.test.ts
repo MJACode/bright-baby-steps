@@ -25,6 +25,18 @@ function seedHistory(table: LogHistoryTable) {
 }
 
 describe("useLogHistory query key", () => {
+  it("keeps a filtered history under the table root and apart from the unfiltered one", async () => {
+    const client = new QueryClient();
+    const milk = logHistoryQueryKey("feeding_logs", CHILD_ID, 14, 0, { column: "feeding_type", op: "neq", value: "solid" });
+    const solids = logHistoryQueryKey("feeding_logs", CHILD_ID, 14, 0, { column: "feeding_type", op: "eq", value: "solid" });
+    expect(milk).not.toEqual(solids);
+    expect(milk[2]).toBe(CHILD_ID);
+    for (const key of [milk, solids]) client.setQueryData(key, { logs: [], nextOlderDate: null, truncated: false });
+    invalidateAfterLogWrite(client);
+    expect(client.getQueryState(milk)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(solids)?.isInvalidated).toBe(true);
+  });
+
   it.each(TABLES)(
     "$table history is invalidated by a bare [$root] invalidate",
     async ({ table, root }) => {

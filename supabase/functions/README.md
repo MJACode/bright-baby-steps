@@ -35,7 +35,7 @@ provided by the platform.
 
 | Secret | Used by | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | briefing, weekly-insights, chat, extract-memory, generate-activity-plan, generate-sign-plan, generate-speech-class, visit-prep-questions | |
+| `ANTHROPIC_API_KEY` | briefing, weekly-insights, chat, extract-memory, generate-activity-plan, generate-meal-plan, generate-sign-plan, generate-speech-class, visit-prep-questions | |
 | `RESEND_API_KEY` | send-vpc-email, send-visit-reminder-email, inactive-account-purge, request-feature | |
 | `VPC_FROM_EMAIL` | send-vpc-email, send-visit-reminder-email, inactive-account-purge, request-feature | Resend-verified sender |
 | `FEATURE_REQUEST_TO_EMAIL` | request-feature | Optional. Inbox for early-access requests; defaults to `Matt@graceflare.com` |

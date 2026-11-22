@@ -21,6 +21,7 @@ vi.mock("@/integrations/supabase/client", () => {
         if (col === "id") state.id = val;
         return chain;
       },
+      neq: () => chain,
       is: () => chain,
       in: () => chain,
       gte: () => chain,
@@ -269,14 +270,14 @@ describe("FeedingLog start time when a live timer row is bound", () => {
     expect(writes.find((w) => w.op === "insert")?.payload.logged_at).toBe(CORRECTED_AT);
   });
 
-  it("logs a solid at now, not at the bound bottle session's start", async () => {
+  it("logs a pump at now, not at the bound bottle session's start", async () => {
     activeRow = bottleRow();
     renderLog();
 
     await waitFor(() => expect(startedValue()).toBe(ROW_LOGGED_AT));
-    fireEvent.click(screen.getByRole("button", { name: "🥣 Solid" }));
+    fireEvent.click(screen.getByRole("button", { name: "🧴 Pump" }));
 
-    // Leaving bottle drops the row, so the solid entry is a fresh INSERT that
+    // Leaving bottle drops the row, so the pump entry is a fresh INSERT that
     // must not inherit the hour the bottle session began.
     await waitFor(() => expect(startedValue()).not.toBe(ROW_LOGGED_AT));
     fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
@@ -323,8 +324,7 @@ describe("FeedingLog when the dialog is closed without saving", () => {
     renderLog();
 
     await waitFor(() => expect(startedValue()).toBe(ROW_LOGGED_AT));
-    fireEvent.click(screen.getByRole("button", { name: "🥣 Solid" }));
-    fireEvent.change(screen.getByPlaceholderText("e.g. pureed sweet potato"), {
+    fireEvent.change(screen.getByPlaceholderText("Any observations..."), {
       target: { value: "avocado" },
     });
 

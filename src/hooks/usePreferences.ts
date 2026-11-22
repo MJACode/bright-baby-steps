@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useAuth } from "./useAuth";
+import { isMilkFeedType, type MilkFeedType } from "@/lib/feedTypeOrder";
 
 export type ThemePreference = "light" | "dark" | "system";
 
@@ -9,7 +10,9 @@ export interface Preferences {
   showNotifications: boolean;
   calendarView: "day" | "week";
   sleepPlanCollapsed: boolean;
-  lastFeedingType: "bottle" | "breast" | "solid";
+  lastFeedingType: "bottle" | "breast";
+  /** Milk feed type the parent asked to keep first in Log a Feed (per device). */
+  pinnedFeedType: MilkFeedType | null;
   lastBottleOz: string;
   calmMode: boolean;
   hiddenHomeSections: string[];
@@ -35,6 +38,7 @@ const defaults: Preferences = {
   calendarView: "day",
   sleepPlanCollapsed: false,
   lastFeedingType: "bottle",
+  pinnedFeedType: null,
   lastBottleOz: "",
   calmMode: false,
   hiddenHomeSections: [],
@@ -72,6 +76,14 @@ function loadPrefs(key: string): Preferences {
         merged.hiddenHomeSections = [...merged.hiddenHomeSections, "briefing"];
       }
       merged.homeSectionsMigrated = true;
+    }
+
+    // Solids left Log a Feed for their own tab, so a stored "solid" is stale.
+    if (merged.lastFeedingType !== "bottle" && merged.lastFeedingType !== "breast") {
+      merged.lastFeedingType = defaults.lastFeedingType;
+    }
+    if (merged.pinnedFeedType !== null && !isMilkFeedType(merged.pinnedFeedType)) {
+      merged.pinnedFeedType = null;
     }
 
     return merged;

@@ -1,6 +1,7 @@
+import { createRef, type ComponentProps } from "react";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import FeedingLog, { type SolidFeedDraft } from "@/components/feeding/FeedingLog";
+import FeedingLog, { type FeedingLogHandle } from "@/components/feeding/FeedingLog";
 import { toast } from "@/hooks/use-toast";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
 
@@ -75,6 +76,7 @@ vi.mock("@/integrations/supabase/client", () => {
         if (col === "allergen_introduction_id") s.introId = val as string;
         return chain;
       },
+      neq: () => chain,
       is: () => chain,
       in: () => chain,
       gte: () => chain,
@@ -146,15 +148,19 @@ vi.mock("@/hooks/useActiveFeed", async (importOriginal) => {
   };
 });
 
-const tree = (props: Parameters<typeof FeedingLog>[0] = {}, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) => (
+// The chips live on the Solids tab's sheet.
+const tree = (
+  props: ComponentProps<typeof FeedingLog> = {},
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) => (
   <QueryClientProvider client={client}>
-    <FeedingLog {...props} />
+    <FeedingLog mode="solids" {...props} />
   </QueryClientProvider>
 );
 
 const openSolid = async () => {
-  fireEvent.click(await screen.findByRole("button", { name: /Log a feed/i }));
-  fireEvent.click(screen.getByRole("button", { name: "🥣 Solid" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Log solids" }));
+  await screen.findByText("Food Description");
 };
 
 const exposureInserts = () => writes.filter((w) => w.table === "allergen_exposure_logs" && w.op === "insert");
@@ -187,7 +193,7 @@ describe("FeedingLog allergen chips", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Peanut/ }));
     fireEvent.click(screen.getByRole("button", { name: /Sesame/ }));
     fireEvent.click(screen.getByTestId("pick-Started"));
-    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
 
     await waitFor(() => expect(exposureInserts()).toHaveLength(2));
     expect(insertAllergenExposure).toHaveBeenCalledTimes(2);
@@ -207,7 +213,7 @@ describe("FeedingLog allergen chips", () => {
       }),
     ]);
     await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith({ title: "Feed logged! 🍼", description: "Counted as a serving of peanut and sesame." }),
+      expect(toast).toHaveBeenCalledWith({ title: "Solids logged! 🥣", description: "Counted as a serving of peanut and sesame." }),
     );
   });
 
@@ -215,9 +221,9 @@ describe("FeedingLog allergen chips", () => {
     render(tree());
     await openSolid();
     await screen.findByRole("button", { name: /Peanut/ });
-    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
     await waitFor(() => expect(feedInserts()).toHaveLength(1));
-    await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Feed logged! 🍼" }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith({ title: "Solids logged! 🥣" }));
     expect(insertAllergenExposure).not.toHaveBeenCalled();
   });
 
@@ -229,7 +235,7 @@ describe("FeedingLog allergen chips", () => {
     expect(
       screen.getByText("Log a reaction on the allergen itself in the Allergen Tracker, so it reaches your pediatrician report."),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
     await waitFor(() => expect(feedInserts()).toHaveLength(1));
     await waitFor(() => expect(toast).toHaveBeenCalled());
     expect(insertAllergenExposure).not.toHaveBeenCalled();
@@ -240,10 +246,10 @@ describe("FeedingLog allergen chips", () => {
     render(tree());
     await openSolid();
     fireEvent.click(await screen.findByRole("button", { name: /Peanut/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith({
-        title: "Feed logged! 🍼",
+        title: "Solids logged! 🥣",
         description: 'The feed saved, but the serving of peanut didn\'t. Tap "Had it today" in the Allergen Tracker to add it.',
       }),
     );
@@ -260,10 +266,10 @@ describe("FeedingLog allergen chips", () => {
       expect(screen.queryByRole("button", { name: /Peanut/ })).not.toBeInTheDocument();
       expect(screen.getByText("You're offline. Log allergen servings in the Allergen Tracker once you're back online.")).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole("button", { name: "Save Feed" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
       await waitFor(() =>
         expect(toast).toHaveBeenCalledWith({
-          title: "Feed logged! 🍼",
+          title: "Solids logged! 🥣",
           description: "Saved on this phone. It'll sync when you're back online.",
         }),
       );
@@ -284,19 +290,52 @@ describe("FeedingLog allergen chips", () => {
     expect(screen.queryByText("Allergens in this meal (optional)")).not.toBeInTheDocument();
   });
 
-  it("carries picked chips through View Allergen Tracker and back", async () => {
-    const onNavigateToAllergens = vi.fn();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { rerender } = render(tree({ onNavigateToAllergens }, client));
-    await openSolid();
-    fireEvent.click(await screen.findByRole("button", { name: /Sesame/ }));
-    fireEvent.click(screen.getByRole("button", { name: /View Allergen Tracker/ }));
-    expect(onNavigateToAllergens).toHaveBeenCalledWith(expect.objectContaining({ allergenIds: [SESAME.id] }));
+  it("opens pre-filled from the handle, with matching signed-off chips ticked", async () => {
+    const ref = createRef<FeedingLogHandle>();
+    render(tree({ ref }));
+    await screen.findByRole("button", { name: "Log solids" });
 
-    const draft = onNavigateToAllergens.mock.calls[0][0] as SolidFeedDraft;
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Save Feed" })).not.toBeInTheDocument());
-    rerender(tree({ onNavigateToAllergens, pendingResume: draft, onConsumeResume: vi.fn() }, client));
+    act(() => ref.current!.open({ foodDesc: "Sesame toast fingers", foodCategory: "grain_cereal", allergenSlugs: ["sesame", "egg"] }));
+
+    expect(await screen.findByText("Log solids", { selector: "h2" })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Sesame toast fingers")).toBeInTheDocument();
+    expect(screen.getByText("🌾 Grain/Cereal")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: /Sesame/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Peanut/ })).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Save solids" }));
+    await waitFor(() => expect(exposureInserts()).toHaveLength(1));
+    expect(feedInserts()[0].payload).toEqual(
+      expect.objectContaining({ feeding_type: "solid", food_description: "Sesame toast fingers", food_category: "grain_cereal" }),
+    );
+    expect(exposureInserts()[0].payload).toEqual(expect.objectContaining({ allergen_id: SESAME.id }));
+  });
+
+  it("ticks prefilled chips that resolve after the catalog loads", async () => {
+    const ref = createRef<FeedingLogHandle>();
+    render(tree({ ref }));
+    // Before any query has settled, so the slugs wait for the allergen list.
+    act(() => ref.current!.open({ foodDesc: "Peanut puffs", allergenSlugs: ["peanut"] }));
+    expect(await screen.findByRole("button", { name: /Peanut/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Sesame/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("leaves an unknown prefill category blank", async () => {
+    const ref = createRef<FeedingLogHandle>();
+    render(tree({ ref }));
+    await screen.findByRole("button", { name: "Log solids" });
+    act(() => ref.current!.open({ foodDesc: "Mango", foodCategory: "dessert" }));
+    expect(await screen.findByDisplayValue("Mango")).toBeInTheDocument();
+    expect(screen.getByText("Select a category")).toBeInTheDocument();
+  });
+
+  it("opens blank with no prefill and offers no milk types", async () => {
+    const ref = createRef<FeedingLogHandle>();
+    render(tree({ ref }));
+    await screen.findByRole("button", { name: "Log solids" });
+    act(() => ref.current!.open());
+    expect(await screen.findByPlaceholderText("e.g. pureed sweet potato")).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "🤱 Breast" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "🍼 Bottle" })).not.toBeInTheDocument();
   });
 });

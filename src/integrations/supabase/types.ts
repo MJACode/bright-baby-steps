@@ -948,6 +948,7 @@ export type Database = {
           parent_id: string
           photo_url: string | null
           retroactive_setup_completed_at: string | null
+          solids_method: string | null
           temperament: string | null
           updated_at: string
         }
@@ -970,6 +971,7 @@ export type Database = {
           parent_id: string
           photo_url?: string | null
           retroactive_setup_completed_at?: string | null
+          solids_method?: string | null
           temperament?: string | null
           updated_at?: string
         }
@@ -992,6 +994,7 @@ export type Database = {
           parent_id?: string
           photo_url?: string | null
           retroactive_setup_completed_at?: string | null
+          solids_method?: string | null
           temperament?: string | null
           updated_at?: string
         }
@@ -1964,6 +1967,44 @@ export type Database = {
           token_endpoint_auth_method?: string
         }
         Relationships: []
+      }
+      meal_plans: {
+        Row: {
+          child_id: string
+          created_at: string
+          id: string
+          parent_id: string
+          plan: Json
+          updated_at: string
+          week_start: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          id?: string
+          parent_id: string
+          plan: Json
+          updated_at?: string
+          week_start: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          id?: string
+          parent_id?: string
+          plan?: Json
+          updated_at?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meal_plans_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: true
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       medication_logs: {
         Row: {

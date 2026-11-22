@@ -23,6 +23,8 @@ import SleepPage from "./pages/dashboard/SleepPage";
 import SleepHistoryPage from "./pages/dashboard/SleepHistoryPage";
 import DiapersPage from "./pages/dashboard/DiapersPage";
 import FeedingPage from "./pages/dashboard/FeedingPage";
+import VitaminsPage from "./pages/dashboard/VitaminsPage";
+import { FEEDING_ALLERGENS_PATH } from "@/lib/feedingRoutes";
 
 import MilestonesPage from "./pages/dashboard/MilestonesPage";
 import ChildContextPage from "./pages/dashboard/ChildContextPage";
@@ -110,7 +112,8 @@ const App = () => (
                 <Route path="sleep/history" element={<SleepHistoryPage />} />
                 <Route path="diapers" element={<DiapersPage />} />
                 <Route path="feeding" element={<FeedingPage />} />
-                <Route path="allergens" element={<Navigate to="/dashboard/feeding?tab=allergens" replace />} />
+                <Route path="allergens" element={<Navigate to={FEEDING_ALLERGENS_PATH} replace />} />
+                <Route path="vitamins" element={<VitaminsPage />} />
                 <Route path="milestones" element={<MilestonesPage />} />
                 <Route
                   path="signs"

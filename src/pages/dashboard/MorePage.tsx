@@ -7,7 +7,7 @@
 // surface, reached from Profile and from the AI surfaces that use it.
 
 import { Link } from "react-router-dom";
-import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Scale, Sparkles, Stethoscope, TrendingUp, User } from "lucide-react";
+import { Activity, Brain, ChevronRight, DollarSign, Ear, FileText, Pill, Scale, Sparkles, Stethoscope, TrendingUp, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { usePremium } from "@/hooks/usePremium";
@@ -25,7 +25,16 @@ interface ToolItem {
   parentsOnly?: boolean;
 }
 
+// Vitamins leads: it's the only daily log here (moved off the Food page).
 const tools: ToolItem[] = [
+  {
+    label: "Vitamins",
+    description: "Vitamin D and other daily supplements",
+    icon: Pill,
+    path: "/dashboard/vitamins",
+    colorClass: "bg-feeding/10",
+    iconClass: "text-feeding",
+  },
   {
     label: "Medical",
     description: "Visits, vaccines, meds, temperature",
