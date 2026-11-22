@@ -170,7 +170,9 @@ describe("MealPlanCard button states", () => {
   it("shows 'New plan Monday' when this week's plan is spent", async () => {
     h.row = { week_start: WEEK, plan: { weekStart: WEEK, method: "mix", ideas: [] } };
     renderCard();
-    expect(await screen.findByText("New plan Monday")).toBeInTheDocument();
+    expect(await screen.findByText("Your free plan for this week")).toBeInTheDocument();
+    expect(screen.getByText(MEAL_PLAN_DISCLAIMER)).toBeInTheDocument();
+    expect(screen.queryByText("New plan Monday")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /plan/ })).not.toBeInTheDocument();
   });
 
@@ -191,7 +193,7 @@ describe("MealPlanCard plan", () => {
     h.row = { week_start: WEEK, plan: PLAN };
     renderCard();
     expect(await screen.findByText(PLAN.intro)).toBeInTheDocument();
-    expect(screen.getByText("New plan Monday")).toBeInTheDocument();
+    expect(screen.getByText("Your free plan for this week")).toBeInTheDocument();
     expect(screen.getByText(MEAL_PLAN_DISCLAIMER)).toBeInTheDocument();
     expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
 
@@ -263,6 +265,152 @@ describe("MealPlanCard plan", () => {
   });
 });
 
+describe("MealPlanCard week note", () => {
+  it("promises a Monday plan only to Flare+", async () => {
+    h.premium = { isPremium: true, isLoading: false };
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard();
+    expect(await screen.findByText("New plan Monday")).toBeInTheDocument();
+    expect(screen.queryByText("Your free plan for this week")).not.toBeInTheDocument();
+  });
+
+  it("counts the child owner's Flare+ for the Monday note", async () => {
+    h.ownerPremium = { isChildOwnerPremium: true, isLoading: false };
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard({ role: "coparent" as Role });
+    expect(await screen.findByText("New plan Monday")).toBeInTheDocument();
+  });
+
+  it("says nothing about next week while the plan tier is loading", async () => {
+    h.premium = { isPremium: false, isLoading: true };
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard();
+    expect(await screen.findByText(PLAN.intro)).toBeInTheDocument();
+    expect(screen.queryByText("New plan Monday")).not.toBeInTheDocument();
+    expect(screen.queryByText("Your free plan for this week")).not.toBeInTheDocument();
+    expect(screen.getByText(MEAL_PLAN_DISCLAIMER)).toBeInTheDocument();
+  });
+});
+
+describe("MealPlanCard allergen gating", () => {
+  const Card = ({ statuses, client }: { statuses: Record<string, string> | undefined; client: QueryClient }) => (
+    <QueryClientProvider client={client}>
+      <MealPlanCard
+        childId="child-1"
+        weekStart={WEEK}
+        ageMonths={8}
+        method="mix"
+        allergenStatuses={statuses}
+        role="owner"
+        roleResolved
+        onLogIdea={vi.fn()}
+      />
+    </QueryClientProvider>
+  );
+  const newClient = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+
+  it("shows no plan text until allergen statuses arrive, then the filtered plan", async () => {
+    h.row = { week_start: WEEK, plan: PLAN };
+    const client = newClient();
+    const { rerender } = render(<Card statuses={undefined} client={client} />);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText(PLAN.intro)).not.toBeInTheDocument();
+    expect(screen.queryByText(/meal ideas/)).not.toBeInTheDocument();
+
+    rerender(<Card statuses={{ ...STATUSES, egg: "reaction_noted" }} client={client} />);
+    fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
+    expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
+  });
+
+  it("drops an idea whose allergen is still being introduced", async () => {
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard({ statuses: { ...STATUSES, egg: "in_progress" } });
+    fireEvent.click(await screen.findByRole("button", { name: "See 3 meal ideas" }));
+    expect(screen.queryByText("Banana pancakes")).not.toBeInTheDocument();
+    expect(screen.getByText("Avocado on toast")).toBeInTheDocument();
+  });
+
+  it("shows the offline notice, not an endless skeleton, when allergens can't load offline", () => {
+    h.online = false;
+    render(<Card statuses={undefined} client={newClient()} />);
+    expect(screen.getByText("Available when you're back online")).toBeInTheDocument();
+  });
+
+  it("explains a failed allergen load and retries it", () => {
+    const retry = vi.fn();
+    render(
+      <QueryClientProvider client={newClient()}>
+        <MealPlanCard
+          childId="child-1"
+          weekStart={WEEK}
+          ageMonths={8}
+          method="mix"
+          allergenStatuses={undefined}
+          allergenError
+          onRetryAllergens={retry}
+          role="owner"
+          roleResolved
+          onLogIdea={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText(/allergen list didn't load/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("MealPlanCard generate guard", () => {
+  const Card = ({ client }: { client: QueryClient }) => (
+    <QueryClientProvider client={client}>
+      <MealPlanCard
+        childId="child-1"
+        weekStart={WEEK}
+        ageMonths={8}
+        method="mix"
+        allergenStatuses={STATUSES}
+        role="owner"
+        roleResolved
+        onLogIdea={vi.fn()}
+      />
+    </QueryClientProvider>
+  );
+  const pending = () => {
+    let resolve!: (v: unknown) => void;
+    h.invoke.mockImplementation(() => new Promise((r) => (resolve = r)));
+    return () => resolve({ data: null, error: httpError(502, "coach_unavailable") });
+  };
+
+  it("fires one paid call for two synchronous taps", async () => {
+    const finish = pending();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<Card client={client} />);
+    const button = await screen.findByRole("button", { name: "Your first plan is free" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    await waitFor(() => expect(h.invoke).toHaveBeenCalled());
+    expect(h.invoke).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+  });
+
+  it("a card remounted mid-generate (tab switch) shows the building state, not a second button", async () => {
+    const finish = pending();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    const first = render(<Card client={client} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Your first plan is free" }));
+    await waitFor(() => expect(h.invoke).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    render(<Card client={client} />);
+    expect(await screen.findByText(/Building your plan/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Your first plan is free" })).not.toBeInTheDocument();
+    expect(h.invoke).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    expect(await screen.findByRole("button", { name: "Your first plan is free" })).toBeInTheDocument();
+  });
+});
+
 describe("useGenerateMealPlan error copy", () => {
   const input = {
     childId: "child-1",
@@ -285,7 +433,7 @@ describe("useGenerateMealPlan error copy", () => {
 
   it.each(cases)("%i %s toasts its own copy", async (status, code) => {
     h.invoke.mockResolvedValue({ data: null, error: httpError(status, code) });
-    const { result } = renderHook(() => useGenerateMealPlan(), { wrapper: wrapper() });
+    const { result } = renderHook(() => useGenerateMealPlan("child-1"), { wrapper: wrapper() });
     let thrown: unknown;
     await act(async () => {
       thrown = await result.current.mutateAsync(input).catch((e) => e);
@@ -304,7 +452,7 @@ describe("useGenerateMealPlan error copy", () => {
 
   it("premium_required throws its code and leaves the toast to the card", async () => {
     h.invoke.mockResolvedValue({ data: null, error: httpError(403, "premium_required") });
-    const { result } = renderHook(() => useGenerateMealPlan(), { wrapper: wrapper() });
+    const { result } = renderHook(() => useGenerateMealPlan("child-1"), { wrapper: wrapper() });
     let thrown: unknown;
     await act(async () => {
       thrown = await result.current.mutateAsync(input).catch((e) => e);
@@ -315,7 +463,7 @@ describe("useGenerateMealPlan error copy", () => {
 
   it("no response at all reads as a connection problem", async () => {
     h.invoke.mockResolvedValue({ data: null, error: new Error("Failed to fetch") });
-    const { result } = renderHook(() => useGenerateMealPlan(), { wrapper: wrapper() });
+    const { result } = renderHook(() => useGenerateMealPlan("child-1"), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync(input).catch(() => undefined);
     });
@@ -324,7 +472,7 @@ describe("useGenerateMealPlan error copy", () => {
 
   it("a 200 that fails the shape check reads as unusable_plan", async () => {
     h.invoke.mockResolvedValue({ data: { ideas: [] }, error: null });
-    const { result } = renderHook(() => useGenerateMealPlan(), { wrapper: wrapper() });
+    const { result } = renderHook(() => useGenerateMealPlan("child-1"), { wrapper: wrapper() });
     await act(async () => {
       await result.current.mutateAsync(input).catch(() => undefined);
     });
@@ -333,7 +481,7 @@ describe("useGenerateMealPlan error copy", () => {
 
   it("every copy line says what to do next", () => {
     for (const copy of Object.values(MEAL_PLAN_ERROR_COPY)) {
-      expect(copy).toMatch(/try again|Sign in|Ask the parent|Flare\+|Monday/i);
+      expect(copy).toMatch(/try again|Sign in|Ask the parent|Flare\+|showing now/i);
     }
   });
 });

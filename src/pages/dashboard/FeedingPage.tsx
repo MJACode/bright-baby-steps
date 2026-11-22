@@ -34,10 +34,14 @@ type ActiveChild = NonNullable<ReturnType<typeof useChildren>["activeChild"]>;
 function SolidsPlanSlot({
   child,
   allergenStatuses,
+  allergenError,
+  onRetryAllergens,
   onLogIdea,
 }: {
   child: ActiveChild;
   allergenStatuses: Record<string, string> | undefined;
+  allergenError: boolean;
+  onRetryAllergens: () => void;
   onLogIdea: (idea: MealIdea) => void;
 }) {
   const { role, isResolved } = useCurrentRoleQuery(child.id);
@@ -61,6 +65,8 @@ function SolidsPlanSlot({
           ageMonths={ageMonths}
           method={method}
           allergenStatuses={allergenStatuses}
+          allergenError={allergenError}
+          onRetryAllergens={onRetryAllergens}
           role={role}
           roleResolved={isResolved}
           onLogIdea={onLogIdea}
@@ -94,8 +100,15 @@ export default function FeedingPage() {
   const solidsLog = useRef<FeedingLogHandle>(null);
   const allergensSection = useRef<HTMLElement>(null);
 
-  const { data: introductions } = useAllergenIntroductions(activeChild?.id);
-  const { data: allergens } = useAllergens();
+  const introductionsQuery = useAllergenIntroductions(activeChild?.id);
+  const allergensQuery = useAllergens();
+  const introductions = introductionsQuery.data;
+  const allergens = allergensQuery.data;
+  const allergenError = introductionsQuery.isError || allergensQuery.isError;
+  const retryAllergens = () => {
+    if (introductionsQuery.isError) void introductionsQuery.refetch();
+    if (allergensQuery.isError) void allergensQuery.refetch();
+  };
 
   const completedCount = introductions?.filter((i) => getAllergenStatus(i) === "introduced").length ?? 0;
   const allergenStatuses = useMemo(() => {
@@ -161,7 +174,13 @@ export default function FeedingPage() {
             </Button>
           )}
           {activeChild && (
-            <SolidsPlanSlot child={activeChild} allergenStatuses={allergenStatuses} onLogIdea={logIdea} />
+            <SolidsPlanSlot
+              child={activeChild}
+              allergenStatuses={allergenStatuses}
+              allergenError={allergenError}
+              onRetryAllergens={retryAllergens}
+              onLogIdea={logIdea}
+            />
           )}
           <section
             id={ALLERGENS_ANCHOR}

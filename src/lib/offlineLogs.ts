@@ -696,7 +696,10 @@ export const FIX_ROUTE: Record<OfflineLogTable, { href: string; label: string }>
   diaper_logs: { href: "/dashboard/diapers", label: "Open diapers" },
 };
 
-/** FIX_ROUTE, sending a failed solid to the Solids tab its history lives on. */
+/**
+ * FIX_ROUTE, sending a failed solid to the Solids tab its history lives on. A
+ * delete-only failure carries no row fields, so it can't tell and opens Feeding.
+ */
 export function fixRouteFor(failure: Pick<SyncFailure, "table" | "writes">): { href: string; label: string } {
   if (failure.table === "feeding_logs") {
     let type: unknown;

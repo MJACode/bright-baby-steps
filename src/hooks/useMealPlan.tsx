@@ -23,7 +23,7 @@ export const MEAL_PLAN_ERROR_COPY: Record<MealPlanErrorCode, string> = {
   no_write_access:
     "Only parents and caregivers who can edit can build a meal plan. Ask the parent who invited you to build it.",
   premium_required: "Your free meal plan is used. Flare+ builds a fresh plan every week.",
-  plan_exists_this_week: "This week's plan is already here. A new one comes Monday.",
+  plan_exists_this_week: "This week's plan was already built, so it's showing now.",
   unusable_plan:
     "We couldn't put together a safe set of ideas this time. Nothing was saved, so you can try again in a bit.",
   save_failed: "Your plan was built but didn't save. Nothing was used up — try again in a bit.",
@@ -86,10 +86,14 @@ export function useMealPlan(
   });
 }
 
-export function useGenerateMealPlan() {
+/** Keys the in-flight generate so a remounted card (Radix unmounts tab content) still sees it. */
+export const generateMealPlanMutationKey = (childId: string | undefined) => ["generate-meal-plan", childId] as const;
+
+export function useGenerateMealPlan(childId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    mutationKey: generateMealPlanMutationKey(childId),
     mutationFn: async (input: Parameters<typeof buildMealPlanRequest>[0]): Promise<MealPlan> => {
       const body = buildMealPlanRequest(input);
       if (!body) throw new MealPlanError("invalid_input");

@@ -9,7 +9,8 @@ import { UpgradeSheet } from "@/components/UpgradeSheet";
 import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { useIsOnline } from "@/hooks/useOfflineSync";
 import { useChildOwnerPremium, usePremium } from "@/hooks/usePremium";
-import { MealPlanError, useGenerateMealPlan, useMealPlan } from "@/hooks/useMealPlan";
+import { useIsMutating } from "@tanstack/react-query";
+import { MealPlanError, generateMealPlanMutationKey, useGenerateMealPlan, useMealPlan } from "@/hooks/useMealPlan";
 import type { Role } from "@/hooks/useCurrentRole";
 import { allergenEmoji } from "@/services/allergenService";
 import {
@@ -83,15 +84,28 @@ function IdeaRow({
   );
 }
 
+/** Only Flare+ (own or the child owner's) gets a new plan each Monday; null while that's unknown. */
+function WeekNote({ isPremium }: { isPremium: boolean | null }) {
+  if (isPremium === null) return null;
+  return (
+    <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+      <CalendarClock className="w-4 h-4" aria-hidden />
+      {isPremium ? "New plan Monday" : "Your free plan for this week"}
+    </p>
+  );
+}
+
 function PlanView({
   plan,
   canLog,
   defaultOpen,
+  isPremium,
   onLog,
 }: {
   plan: MealPlan;
   canLog: boolean;
   defaultOpen: boolean;
+  isPremium: boolean | null;
   onLog: (idea: MealIdea) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -120,9 +134,7 @@ function PlanView({
           );
         })}
       </CollapsibleContent>
-      <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-        <CalendarClock className="w-4 h-4" aria-hidden /> New plan Monday
-      </p>
+      <WeekNote isPremium={isPremium} />
       <p className="text-xs leading-relaxed text-muted-foreground">{MEAL_PLAN_DISCLAIMER}</p>
     </Collapsible>
   );
@@ -142,6 +154,8 @@ export function MealPlanCard({
   allergenStatuses,
   role,
   roleResolved,
+  allergenError = false,
+  onRetryAllergens,
   onLogIdea,
 }: {
   childId: string;
@@ -151,6 +165,9 @@ export function MealPlanCard({
   ageMonths: number;
   method: SolidsMethod;
   allergenStatuses: Record<string, string> | undefined;
+  /** An allergen query failed, so `allergenStatuses` won't arrive without a retry. */
+  allergenError?: boolean;
+  onRetryAllergens?: () => void;
   role: Role;
   roleResolved: boolean;
   onLogIdea: (idea: MealIdea) => void;
@@ -172,7 +189,10 @@ export function MealPlanCard({
     allowedAllergens,
     enabled: !!allergenStatuses,
   });
-  const generate = useGenerateMealPlan();
+  const generate = useGenerateMealPlan(childId);
+  // Survives a tab switch: Radix unmounts the Solids tab, and a remounted card
+  // must not offer a second paid generate while the first is still running.
+  const generating = useIsMutating({ mutationKey: generateMealPlanMutationKey(childId) }) > 0 || generate.isPending;
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [justBuilt, setJustBuilt] = useState(false);
   // `disabled={generate.isPending}` only lands on the next render, so a fast
@@ -185,7 +205,7 @@ export function MealPlanCard({
   if (ageMonths > MEAL_PLAN_MAX_AGE_MONTHS) return null;
 
   const handleGenerate = () => {
-    if (buildInFlight.current || !allergenStatuses) return;
+    if (buildInFlight.current || generating || !allergenStatuses) return;
     buildInFlight.current = true;
     generate.mutate(
       { childId, weekStart, ageMonths, method, allergenStatuses },
@@ -226,17 +246,39 @@ export function MealPlanCard({
     </div>
   );
 
-  if (!allergenStatuses || isLoading) {
-    if (!online && isLoading) return shell(<OfflineAiNotice />);
+  const weekNotePremium = premiumLoading ? null : isPremium;
+
+  if (!allergenStatuses) {
+    if (allergenError) {
+      return shell(
+        <>
+          <p className="text-sm leading-relaxed">
+            Your allergen list didn't load, so your meal plan can't show yet. Check your connection and try again.
+          </p>
+          {onRetryAllergens && (
+            <Button type="button" variant="outline" className="touch-target" onClick={onRetryAllergens}>
+              Try again
+            </Button>
+          )}
+        </>,
+      );
+    }
+    if (!online) return shell(<OfflineAiNotice />);
+    return shell(loadingBody);
+  }
+  if (isLoading) {
+    if (!online) return shell(<OfflineAiNotice />);
     return shell(loadingBody);
   }
 
   const plan = data?.plan ?? null;
   if (plan) {
-    return shell(<PlanView plan={plan} canLog={canEdit} defaultOpen={justBuilt} onLog={onLogIdea} />);
+    return shell(
+      <PlanView plan={plan} canLog={canEdit} defaultOpen={justBuilt} isPremium={weekNotePremium} onLog={onLogIdea} />,
+    );
   }
 
-  if (generate.isPending) {
+  if (generating) {
     return shell(
       <>
         <p className="text-sm font-semibold" role="status">
@@ -257,9 +299,7 @@ export function MealPlanCard({
     // ideas all name an allergen with a reaction since): the week is spent.
     return shell(
       <>
-        <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <CalendarClock className="w-4 h-4" aria-hidden /> New plan Monday
-        </p>
+        <WeekNote isPremium={weekNotePremium} />
         <p className="text-xs leading-relaxed text-muted-foreground">{MEAL_PLAN_DISCLAIMER}</p>
       </>,
     );
