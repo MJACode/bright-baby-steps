@@ -37,7 +37,8 @@ import {
   type SolidsMethod,
   type ValidInput,
 } from "../../supabase/functions/_shared/mealPlan";
-import { FOOD_BY_SLUG, MAX_FOOD_REPEATS } from "../../supabase/functions/_shared/foodCatalog";
+import { FOOD_BY_SLUG, IRON_RICH_SLUGS, MAX_FOOD_REPEATS } from "../../supabase/functions/_shared/foodCatalog";
+import { NUTRIENT_CLAIM_RE } from "../../supabase/functions/_shared/mealPlan";
 
 /** Reported to the coordinator; update deliberately when the catalog changes. */
 const SEVEN_MONTH_PEANUT_EGG_ELIGIBLE = 73;
@@ -845,4 +846,56 @@ describe("server-derived allergen lists (B10)", () => {
     expect(src).not.toMatch(/t\.slice\(/);
     expect(src).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
   });
+});
+
+describe("follow-up: cottage cheese limit and iron claims", () => {
+  it("cottage cheese appears in at most one idea", () => {
+    const milk = input({ introducedAllergens: ["milk"] });
+    const names = survivors(
+      [idea("Cottage cheese and pear", ["cottage-cheese", "pear"]), idea("Cottage cheese again", ["cottage-cheese", "peach"])],
+      milk,
+    );
+    expect(names).toContain("Cottage cheese and pear");
+    expect(names).not.toContain("Cottage cheese again");
+  });
+
+  it("keeps a plan with fewer than 2 iron-rich ideas", () => {
+    const fruitOnly = ["banana", "avocado", "pear", "peach"].map((f) => idea(`Just ${f}`, [f]));
+    const out = sanitizePlan(plan(fruitOnly), input());
+    expect(out).not.toBeNull();
+    expect(out!.ideas.some((i) => i.foods.some((f) => IRON_RICH_SLUGS.includes(f)))).toBe(false);
+  });
+
+  it("tells the model not to mention nutrients", () => {
+    expect(buildUserText(input())).toContain("Never mention iron, protein, vitamins or any other nutrient");
+  });
+
+  it.each([
+    "An iron-rich week of easy ideas.",
+    "These meals are packed with protein.",
+    "A week rich in iron for your baby.",
+    "Every idea is a great source of iron.",
+    "We focus on iron this week.",
+    "Lots of vitamin-packed bites.",
+  ])("an intro claiming a nutrient focus falls back: %s", (intro) => {
+    expect(NUTRIENT_CLAIM_RE.test(intro)).toBe(true);
+    expect(sanitizePlan(plan(SAFE_IDEAS, intro), input())!.intro).toBe(FALLBACK_INTRO);
+  });
+
+  it("a nutrient-claim tip is omitted; the idea stays", () => {
+    const out = sanitizePlan(
+      plan([...SAFE_IDEAS.slice(0, 3), idea("Lentils", ["brown-lentils"], { servingTip: "High in iron, so great for lunch." })]),
+      input(),
+    )!;
+    const lentils = out.ideas.find((i) => i.name === "Lentils")!;
+    expect(lentils).toBeDefined();
+    expect(lentils.servingTip).toBeUndefined();
+  });
+
+  it.each(["Soft, easy ideas for this week.", "Milk is still your baby's main nutrition. Solids are for exploring.", "Iron-fortified oat cereal"])(
+    "does not flag ordinary text: %s",
+    (text) => {
+      expect(NUTRIENT_CLAIM_RE.test(text)).toBe(false);
+    },
+  );
 });

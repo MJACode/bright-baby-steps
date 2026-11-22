@@ -40,6 +40,10 @@
 // foodCatalog.test.ts ("prep never names an allergen the food isn't tagged
 // with").
 //
+// Follow-up 2026-11-22 (coordinator): every hazard food's 12+ prep says
+// "until at least age 4" in BOTH methods (spoon-fed strings and the ground
+// meats were missing it); foodCatalog.test.ts checks both.
+//
 // `notes` are for reviewers only; they are not shown or sent to the model.
 
 import type { AllergenSlug, FoodCategory } from "./mealPlan.ts";
@@ -75,12 +79,14 @@ export const IRON_RICH_SLUGS: readonly string[] = [
 
 /**
  * Per-plan frequency limits from the catalog review (arsenic in rice, mercury
- * in tuna): at most `maxIdeas` ideas in one weekly plan may contain any of
+ * in tuna, sodium in cottage cheese): at most `maxIdeas` ideas in one weekly plan may contain any of
  * `slugs`. Enforced by sanitizePlan, and stated in the prompt.
  */
 export const PLAN_LIMITS: readonly { id: string; slugs: readonly string[]; maxIdeas: number }[] = [
   { id: "canned_tuna", slugs: ["canned-light-tuna"], maxIdeas: 1 },
   { id: "rice", slugs: ["rice-infant-cereal", "rice", "congee", "rice-noodles", "idli"], maxIdeas: 1 },
+  // Sodium (moderate-high even in low-sodium cottage cheese; catalog review).
+  { id: "cottage_cheese", slugs: ["cottage-cheese"], maxIdeas: 1 },
 ];
 
 /** No single food may appear in more than this many ideas of one plan. */
@@ -141,7 +147,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Peel, core and steam pear until very soft, then purée until smooth.",
         "9-11": "Mash very ripe or steamed pear, leaving soft lumps.",
-        "12+": "Serve small soft pieces of ripe or steamed pear, or finely grated pear."
+        "12+": "Serve small soft pieces of ripe or steamed pear, or finely grated pear. Avoid firm raw pieces until at least age 4."
       }
     },
     "notes": "Firm raw pear is treated like raw apple (hard fruit)."
@@ -298,7 +304,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Purée ripe strawberries until smooth, or stir into a thicker fruit purée.",
         "9-11": "Mash ripe strawberries, leaving soft lumps, or offer small soft pieces.",
-        "12+": "Serve strawberries quartered lengthwise or chopped small."
+        "12+": "Serve strawberries quartered lengthwise or chopped small until at least age 4."
       }
     },
     "notes": "Contact rash around the mouth is common and usually not allergy."
@@ -455,7 +461,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Soak pitted prunes in hot water until very soft, then purée until smooth.",
         "9-11": "Mash soaked prunes, leaving soft lumps.",
-        "12+": "Serve soaked prunes finely chopped or mashed into porridge."
+        "12+": "Serve soaked prunes finely chopped or mashed into porridge. Avoid whole dried fruit until at least age 4."
       }
     },
     "notes": "Useful for constipation. Dried fruit only rehydrated and chopped; check for stray pits."
@@ -534,7 +540,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Steam carrot until very soft, then purée until smooth.",
         "9-11": "Mash cooked carrot, leaving soft lumps.",
-        "12+": "Serve soft-cooked pieces or finely grated raw carrot."
+        "12+": "Serve soft-cooked pieces or finely grated raw carrot. Avoid raw sticks and rounds until at least age 4."
       }
     },
     "notes": "CDC choking-hazard list: raw carrot."
@@ -747,7 +753,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Steam parsnip until very soft, then purée until smooth.",
         "9-11": "Mash soft-cooked parsnip, leaving soft lumps.",
-        "12+": "Serve small soft-cooked pieces."
+        "12+": "Serve small soft-cooked pieces. Keep parsnip cooked soft until at least age 4."
       }
     }
   },
@@ -1294,12 +1300,12 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "blw": {
         "6-8": "Cook ground beef all the way through, then shape into soft finger-length logs, or stir fine crumbles into a soft food your baby can scoop.",
         "9-11": "Offer small, soft crumbles of fully cooked beef mixed into a soft food.",
-        "12+": "Offer soft crumbles or small pieces of soft meatball, fully cooked."
+        "12+": "Offer soft crumbles or small pieces of soft meatball, fully cooked. Avoid chunks of meat until at least age 4."
       },
       "traditional": {
         "6-8": "Cook beef all the way through, then purée with water, breast milk or formula until smooth.",
         "9-11": "Finely mince cooked beef and mix into a lumpy vegetable mash.",
-        "12+": "Serve small soft crumbles of fully cooked beef."
+        "12+": "Serve small soft crumbles of fully cooked beef. Avoid chunks until at least age 4."
       }
     },
     "notes": "Iron-rich (heme). Cook to 160°F. Logs may need a binder; AI combos supply it, allergen-tagged separately."
@@ -1319,7 +1325,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Slow-cook beef until very tender, then purée with cooking liquid or water until smooth.",
         "9-11": "Finely shred tender beef into a lumpy mash.",
-        "12+": "Serve thin, tender shreds of beef."
+        "12+": "Serve thin, tender shreds of beef. Avoid chunks until at least age 4."
       }
     },
     "notes": "Iron-rich. Use no-salt cooking liquid. Gagging likely with strips; that's normal learning, not choking."
@@ -1334,12 +1340,12 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "blw": {
         "6-8": "Cook ground turkey all the way through and shape into soft finger-length logs, or stir crumbles into a soft food your baby can scoop.",
         "9-11": "Offer small, soft crumbles of fully cooked turkey mixed into a soft food.",
-        "12+": "Offer soft crumbles or small pieces of soft meatball, fully cooked."
+        "12+": "Offer soft crumbles or small pieces of soft meatball, fully cooked. Avoid chunks of meat until at least age 4."
       },
       "traditional": {
         "6-8": "Cook turkey all the way through, then purée with water, breast milk or formula until smooth.",
         "9-11": "Finely mince cooked turkey into a lumpy vegetable mash.",
-        "12+": "Serve small soft crumbles of fully cooked turkey."
+        "12+": "Serve small soft crumbles of fully cooked turkey. Avoid chunks until at least age 4."
       }
     },
     "notes": "Dark-meat blends have more iron than breast. Cook to 165°F."
@@ -1359,7 +1365,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Cook chicken thigh until tender, then purée with water, breast milk or formula until smooth.",
         "9-11": "Finely shred cooked chicken into a lumpy mash.",
-        "12+": "Serve thin, tender shreds of chicken."
+        "12+": "Serve thin, tender shreds of chicken. Avoid chunks until at least age 4."
       }
     },
     "notes": "Dark meat = more iron. Cook to 165°F. Check for small bones/cartilage."
@@ -1379,7 +1385,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Slow-cook pork until very tender, then purée with cooking liquid or water until smooth.",
         "9-11": "Finely shred tender pork into a lumpy mash.",
-        "12+": "Serve thin, tender shreds of pork."
+        "12+": "Serve thin, tender shreds of pork. Avoid chunks until at least age 4."
       }
     },
     "notes": "Plain, unseasoned; no BBQ sauce (sugar/salt). Excludes ham, bacon, sausage (sodium, nitrites)."
@@ -1394,12 +1400,12 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "blw": {
         "6-8": "Cook ground lamb all the way through and shape into soft finger-length logs your baby can hold.",
         "9-11": "Offer small, soft crumbles of fully cooked lamb mixed into a soft food.",
-        "12+": "Offer soft crumbles or small pieces of soft lamb kofta, fully cooked."
+        "12+": "Offer soft crumbles or small pieces of soft lamb kofta, fully cooked. Avoid chunks of meat until at least age 4."
       },
       "traditional": {
         "6-8": "Cook lamb all the way through, then purée with water until smooth.",
         "9-11": "Finely mince cooked lamb into a lumpy vegetable mash.",
-        "12+": "Serve small soft crumbles of fully cooked lamb."
+        "12+": "Serve small soft crumbles of fully cooked lamb. Avoid chunks until at least age 4."
       }
     },
     "notes": "Iron-rich. Cook to 160°F. Mild spices (cumin, cinnamon) fine; no salt."
@@ -1531,7 +1537,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Cook peeled shrimp through, then blend very finely into a vegetable purée.",
         "9-11": "Finely mince cooked shrimp into a lumpy mash.",
-        "12+": "Serve cooked shrimp chopped smaller than a pea."
+        "12+": "Serve cooked shrimp chopped smaller than a pea until at least age 4."
       }
     },
     "notes": "Only crustacean entry; crab/lobster could be added the same way. Imitation crab excluded (wheat, egg, fish, sodium)."
@@ -1618,7 +1624,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Cook shelled edamame until very soft and purée until smooth.",
         "9-11": "Mash cooked edamame, leaving soft lumps.",
-        "12+": "Serve cooked edamame flattened or halved."
+        "12+": "Serve cooked edamame flattened or halved until at least age 4."
       }
     },
     "notes": "Round, firm bean; treat as hazard food."
@@ -1738,7 +1744,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Blend soft-cooked chickpeas with water until smooth.",
         "9-11": "Mash chickpeas with a fork, leaving soft lumps.",
-        "12+": "Serve chickpeas flattened or mashed."
+        "12+": "Serve chickpeas flattened or mashed until at least age 4."
       }
     },
     "notes": "Rinse canned; firm round legume, treated as hazard."
@@ -1887,7 +1893,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Stir 2 teaspoons of smooth peanut butter, thinned with warm water, into a purée your baby already eats.",
         "9-11": "Stir thinned smooth peanut butter into porridge or a mash.",
-        "12+": "Stir in or spread thinly. Never by the spoonful."
+        "12+": "Stir in or spread thinly. Never by the spoonful. No whole peanuts or chunky peanut butter until at least age 4."
       }
     },
     "notes": "AAP/NIAID: ~2 g peanut protein (about 2 tsp PB) ~3x/week to maintain. High-risk infants (severe eczema/egg allergy) should see pediatrician first. Look for no-salt, no-sugar-added."
@@ -1931,7 +1937,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Stir thinned smooth almond butter into a purée your baby already eats.",
         "9-11": "Stir thinned almond butter into porridge or a mash.",
-        "12+": "Stir in or spread thinly. Never by the spoonful."
+        "12+": "Stir in or spread thinly. Never by the spoonful. No whole nuts until at least age 4."
       }
     },
     "notes": "Tree nuts are introduced individually; a reaction to one doesn't mean all."
@@ -1953,7 +1959,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Stir thinned smooth cashew butter into a purée your baby already eats.",
         "9-11": "Stir thinned cashew butter into porridge or a mash.",
-        "12+": "Stir in or spread thinly. Never by the spoonful."
+        "12+": "Stir in or spread thinly. Never by the spoonful. No whole nuts until at least age 4."
       }
     },
     "notes": "Cashew and pistachio are cross-reactive."
@@ -1975,7 +1981,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Stir finely ground walnut powder into a smooth purée your baby already eats.",
         "9-11": "Stir finely ground walnuts into porridge or a mash.",
-        "12+": "Stir finely ground walnuts into soft foods."
+        "12+": "Stir finely ground walnuts into soft foods. No whole or chopped nuts until at least age 4."
       }
     },
     "notes": "Grind to flour consistency; no chunks."
@@ -1997,7 +2003,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Stir almond flour into a smooth purée your baby already eats.",
         "9-11": "Stir almond flour into porridge or a mash.",
-        "12+": "Stir almond flour into soft foods."
+        "12+": "Stir almond flour into soft foods. No whole nuts until at least age 4."
       }
     }
   },
@@ -2128,7 +2134,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Melt shredded mozzarella into a hot vegetable purée and stir until smooth.",
         "9-11": "Stir shredded mozzarella into a lumpy mash.",
-        "12+": "Serve shredded or thinly sliced mozzarella."
+        "12+": "Serve shredded or thinly sliced mozzarella. Avoid cubes until at least age 4."
       }
     },
     "notes": "Pasteurized. Fresh mozzarella is lower sodium."
@@ -2150,7 +2156,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Melt finely shredded cheddar into a hot vegetable purée and stir until smooth.",
         "9-11": "Stir shredded cheddar into a lumpy mash.",
-        "12+": "Serve shredded or melted cheddar."
+        "12+": "Serve shredded or melted cheddar. Avoid cubes until at least age 4."
       }
     },
     "notes": "Pasteurized; moderate sodium, use small amounts. Not processed cheese slices."
@@ -2172,7 +2178,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "traditional": {
         "6-8": "Simmer paneer until soft, then blend into a vegetable purée until smooth.",
         "9-11": "Crumble soft paneer into a lumpy vegetable mash.",
-        "12+": "Serve crumbled soft paneer."
+        "12+": "Serve crumbled soft paneer. Avoid cubes until at least age 4."
       }
     },
     "notes": "Pasteurized; naturally low sodium. Firm cheese, so thin strips only."

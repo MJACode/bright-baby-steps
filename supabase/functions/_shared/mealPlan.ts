@@ -351,6 +351,7 @@ export function buildUserText(input: ValidInput, eligible: readonly CatalogFood[
     ...eligible.map((f) => `- ${f.slug}: ${f.name} (${f.category}${IRON_RICH.has(f.slug) ? ", iron-rich" : ""})`),
     `Plan limits:`,
     `- 5 to 7 ideas, 1 to ${MAX_FOODS_PER_IDEA} foods each. At least 2 ideas include an iron-rich food.`,
+    `- The iron-rich marker is for choosing foods only. Never mention iron, protein, vitamins or any other nutrient in the intro, names or tips.`,
     `- Use any one food in at most ${MAX_FOOD_REPEATS} ideas.`,
     ...limitLines(eligible),
     input.correctedAgeMonths < UNDER_ONE_MONTHS
@@ -544,6 +545,16 @@ export const OFF_TONE_RE = new RegExp(
 );
 
 /**
+ * Nutrient claims ("an iron-rich week", "packed with protein"). The iron-rich
+ * count is a prompt request, not a guarantee (a plan with fewer than 2
+ * iron-rich ideas is kept), so model text may not claim a nutrient focus: an
+ * intro that matches falls back to FALLBACK_INTRO and a tip that matches is
+ * omitted.
+ */
+export const NUTRIENT_CLAIM_RE =
+  /\b(?:iron|protein|vitamins?|calcium|zinc|omega[\s-]?3s?|fib(?:re|er)|nutrients?|nutrition)[\s-]+(?:rich|packed|filled|boost\w*|focus\w*|heavy)\b|\b(?:rich|high|packed|loaded|full|bursting)\s+(?:in|with|of)\s+(?:iron|protein|vitamins?|calcium|zinc|omega[\s-]?3s?|fib(?:re|er)|nutrients)\b|\b(?:boosts?|focus(?:es|ed|ing)?\s+on|great\s+source\s+of|source\s+of)\s+(?:iron|protein|vitamins?|calcium|zinc|nutrients?)\b/i;
+
+/**
  * The ids of the hazard rules this text trips, given the child's age. Empty = safe.
  *
  * `freeText: true` is for model-written strings (name, servingTip, intro) when
@@ -647,7 +658,7 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
     // a failing (or over-length / off-tone) tip is omitted.
     if (!freeTextOk(name, input, allowed)) continue;
     let servingTip = cleanString(item.servingTip, MAX_SERVING_TIP);
-    if (servingTip && !freeTextOk(servingTip, input, allowed)) servingTip = null;
+    if (servingTip && (!freeTextOk(servingTip, input, allowed) || NUTRIENT_CLAIM_RE.test(servingTip))) servingTip = null;
 
     const allergenSet = new Set<string>(foods.flatMap((f) => f.allergens));
     // eligibleFoods already guarantees this; kept as a hard backstop.
@@ -674,8 +685,10 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
 
   // The intro is checked against the same free-text rules: a hazard or
   // off-list allergen in it falls back to the fixed line.
+  // The iron-rich request is not enforced (a plan short of 2 iron-rich ideas
+  // is still returned), so the intro may not claim a nutrient focus either.
   let intro = cleanString(raw.intro, MAX_INTRO);
-  if (intro && !freeTextOk(intro, input, allowed)) intro = null;
+  if (intro && (!freeTextOk(intro, input, allowed) || NUTRIENT_CLAIM_RE.test(intro))) intro = null;
 
   return { weekStart: input.weekStart, method: input.method, intro: intro ?? FALLBACK_INTRO, ideas };
 }

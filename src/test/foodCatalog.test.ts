@@ -29,15 +29,18 @@ function allStrings(f: (typeof FOOD_CATALOG)[number]): string[] {
 }
 
 /**
- * The advisor's hazard foods (round fruit, firm legumes, carrot, apple,
- * parsnip, prunes, firm cheese, nut butters, meat strips): their 12+ baby-led
- * strings must keep the "until at least age 4" warning.
+ * The advisor's hazard foods (round fruit, firm legumes, carrot, apple, pear,
+ * parsnip, prunes, firm cheese, nut butters and ground nuts, meat, shrimp):
+ * their 12+ strings must keep the "until at least age 4" warning in BOTH
+ * methods.
  */
 const HAZARD_FOOD_SLUGS = [
   "grapes", "blueberries", "blackberries", "cherries", "cherry-tomatoes", "edamame", "chickpeas",
   "carrot", "apple", "parsnip", "prunes-rehydrated", "mozzarella", "cheddar", "paneer",
   "peanut-butter-thinned", "almond-butter-thinned", "cashew-butter-thinned",
   "beef-strips-slow-cooked", "chicken-thigh", "pork-shoulder-shredded",
+  "ground-beef", "ground-turkey", "ground-lamb", "walnuts-ground", "almonds-ground",
+  "shrimp-minced", "pear", "strawberries",
 ];
 
 describe("food catalog: single source of truth", () => {
@@ -83,11 +86,14 @@ describe("food catalog: content invariants", () => {
     }
   });
 
-  it.each(HAZARD_FOOD_SLUGS)("hazard food %s says 'age 4' in its 12+ baby-led prep", (slug) => {
-    const f = FOOD_BY_SLUG.get(slug);
-    expect(f).toBeDefined();
-    expect(f!.prep.blw["12+"]).toContain("age 4");
-  });
+  it.each(HAZARD_FOOD_SLUGS.flatMap((slug) => METHODS.map((m) => [slug, m] as const)))(
+    "hazard food %s says 'until at least age 4' in its 12+ %s prep",
+    (slug, method) => {
+      const f = FOOD_BY_SLUG.get(slug);
+      expect(f).toBeDefined();
+      expect(f!.prep[method]["12+"]).toContain("until at least age 4");
+    },
+  );
 
   it("prep never names an allergen the food isn't tagged with", () => {
     // Reviewer rule: prep is shown verbatim whatever the leave-out list is,
@@ -105,6 +111,10 @@ describe("food catalog: content invariants", () => {
         for (const m of METHODS) expect(f.prep[m][ageBand(age)]).not.toMatch(/not offered/i);
       }
     }
+  });
+
+  it("cottage cheese is limited to once per plan", () => {
+    expect(PLAN_LIMITS.find((l) => l.id === "cottage_cheese")).toEqual({ id: "cottage_cheese", slugs: ["cottage-cheese"], maxIdeas: 1 });
   });
 
   it("iron-rich and plan-limit slugs all exist in the catalog", () => {
