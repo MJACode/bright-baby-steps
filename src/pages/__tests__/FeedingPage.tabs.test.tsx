@@ -5,7 +5,20 @@ import FeedingPage from "@/pages/dashboard/FeedingPage";
 import { FEEDING_ALLERGENS_PATH } from "@/lib/feedingRoutes";
 import { routeForNotificationType } from "@/lib/notificationRoutes";
 
-const { openSpy } = vi.hoisted(() => ({ openSpy: vi.fn() }));
+const { openSpy, child } = vi.hoisted(() => ({
+  openSpy: vi.fn(),
+  child: {
+    current: {} as Record<string, unknown>,
+  },
+}));
+
+const IDEA = {
+  id: "i1",
+  name: "Egg and spinach muffin",
+  mealSlot: "breakfast",
+  allergens: ["egg", "wheat"],
+  foodCategory: "protein",
+};
 
 vi.mock("@/components/feeding/FeedingLog", () => ({
   default: forwardRef<{ open: () => void }, { mode?: string }>(function FeedingLogStub({ mode = "milk" }, ref) {
@@ -15,9 +28,34 @@ vi.mock("@/components/feeding/FeedingLog", () => ({
 }));
 vi.mock("@/components/feeding/AllergenTracker", () => ({ default: () => <div data-testid="allergen-tracker" /> }));
 vi.mock("@/components/PageInstructions", () => ({ PageInstructions: () => null }));
-vi.mock("@/hooks/useChildren", () => ({ useChildren: () => ({ activeChild: { id: "child-1", name: "Rae" } }) }));
+vi.mock("@/hooks/useChildren", () => ({
+  useChildren: () => ({ activeChild: child.current }),
+  getAgeInMonths: (dob: string) => {
+    const d = new Date(dob);
+    const n = new Date();
+    return (n.getFullYear() - d.getFullYear()) * 12 + n.getMonth() - d.getMonth();
+  },
+}));
+vi.mock("@/hooks/useCurrentRole", () => ({ useCurrentRoleQuery: () => ({ role: "owner", isResolved: true }) }));
+vi.mock("@/components/feeding/SolidsMethodPicker", () => ({
+  SolidsMethodPicker: ({ method }: { method: string | null }) => <div data-testid="method-picker">{method ?? "unset"}</div>,
+}));
+vi.mock("@/components/feeding/MealPlanCard", () => ({
+  MealPlanCard: ({ onLogIdea }: { onLogIdea: (idea: typeof IDEA) => void }) => (
+    <button type="button" data-testid="meal-plan-card" onClick={() => onLogIdea(IDEA)}>
+      Log this
+    </button>
+  ),
+}));
+
+const monthsAgo = (m: number) => {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - m);
+  return d.toISOString().slice(0, 10);
+};
 vi.mock("@/hooks/useAllergenData", () => ({
-  useAllergens: () => ({ data: Array.from({ length: 9 }, (_, i) => ({ id: `a${i}` })) }),
+  useAllergens: () => ({ data: Array.from({ length: 9 }, (_, i) => ({ id: `a${i}`, slug: `s${i}` })) }),
   useAllergenIntroductions: () => ({
     data: [
       { allergen_id: "a0", status: "completed" },
@@ -32,6 +70,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = scrollIntoView;
 });
 beforeEach(() => {
+  child.current = { id: "child-1", name: "Rae", date_of_birth: monthsAgo(8), solids_method: "mix" };
   scrollIntoView.mockClear();
   openSpy.mockClear();
 });
@@ -68,13 +107,17 @@ describe("FeedingPage tabs", () => {
     expect(screen.getByLabelText("2 of 9 allergens introduced")).toBeInTheDocument();
   });
 
-  it("lays out Solids as Log solids, allergens, then solids history", () => {
+  it("lays out Solids as Log solids, method, meal plan, allergens, then solids history", () => {
     renderAt("/dashboard/feeding?tab=solids");
     expect(selectedTab()).toHaveTextContent("Solids");
     const button = screen.getByRole("button", { name: "Log solids" });
+    const method = screen.getByTestId("method-picker");
+    const plan = screen.getByTestId("meal-plan-card");
     const tracker = screen.getByTestId("allergen-tracker");
     const history = screen.getByTestId("feeding-log-solids");
-    expect(button.compareDocumentPosition(tracker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button.compareDocumentPosition(method) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(method.compareDocumentPosition(plan) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(plan.compareDocumentPosition(tracker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(tracker.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByTestId("feeding-log-milk")).not.toBeInTheDocument();
     expect(scrollIntoView).not.toHaveBeenCalled();
@@ -84,6 +127,32 @@ describe("FeedingPage tabs", () => {
     renderAt("/dashboard/feeding?tab=solids");
     fireEvent.click(screen.getByRole("button", { name: "Log solids" }));
     expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("Log this on a meal idea opens the solids sheet prefilled from the idea", () => {
+    renderAt("/dashboard/feeding?tab=solids");
+    fireEvent.click(screen.getByTestId("meal-plan-card"));
+    expect(openSpy).toHaveBeenCalledWith({
+      foodDesc: "Egg and spinach muffin",
+      foodCategory: "protein",
+      allergenSlugs: ["egg", "wheat"],
+    });
+  });
+
+  it("asks the feeding style before showing a meal plan", () => {
+    child.current = { ...child.current, solids_method: null };
+    renderAt("/dashboard/feeding?tab=solids");
+    expect(screen.getByTestId("method-picker")).toHaveTextContent("unset");
+    expect(screen.queryByTestId("meal-plan-card")).not.toBeInTheDocument();
+  });
+
+  it("under 4 months shows a gentle note instead of the picker and plan, and keeps Log solids", () => {
+    child.current = { ...child.current, date_of_birth: monthsAgo(2) };
+    renderAt("/dashboard/feeding?tab=solids");
+    expect(screen.getByText(/Solids usually start around 6 months/)).toBeInTheDocument();
+    expect(screen.queryByTestId("method-picker")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("meal-plan-card")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Log solids" })).toBeInTheDocument();
   });
 
   it("writes the tab back to the URL", () => {

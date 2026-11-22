@@ -1,5 +1,6 @@
 import { onlineManager, type Mutation, type QueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { SOLIDS_PATH } from "@/lib/feedingRoutes";
 
 // Offline logging ("log now, sync later") for the three log tables. Every write
 // goes through `submitOfflineLog`, which patches the cache optimistically and
@@ -694,6 +695,19 @@ export const FIX_ROUTE: Record<OfflineLogTable, { href: string; label: string }>
   feeding_logs: { href: "/dashboard/feeding", label: "Open feeding" },
   diaper_logs: { href: "/dashboard/diapers", label: "Open diapers" },
 };
+
+/** FIX_ROUTE, sending a failed solid to the Solids tab its history lives on. */
+export function fixRouteFor(failure: Pick<SyncFailure, "table" | "writes">): { href: string; label: string } {
+  if (failure.table === "feeding_logs") {
+    let type: unknown;
+    for (const w of failure.writes) {
+      const fields: Record<string, unknown> = w.action === "insert" ? w.row : w.action === "update" ? w.patch : {};
+      if ("feeding_type" in fields) type = fields.feeding_type;
+    }
+    if (type === "solid") return { href: SOLIDS_PATH, label: "Open solids" };
+  }
+  return FIX_ROUTE[failure.table];
+}
 
 /** What happened and what to do next, in a parent's words. */
 export function describeSyncFailure(failure: Pick<SyncFailure, "table" | "kind">, childName: string) {

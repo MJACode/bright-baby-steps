@@ -83,7 +83,9 @@ type WeekFeedRow = Pick<FeedingLogRow, "logged_at" | "feeding_type">;
 // One fetch feeds both the chart and the Log a Feed type order.
 function useFeedingWeek(childId: string | undefined, enabled: boolean) {
   return useQuery({
-    queryKey: ["feeding-trends-7d", childId],
+    // "typed": rows gained feeding_type; the persisted cache still holds the
+    // old shape under the bare key.
+    queryKey: ["feeding-trends-7d", childId, "typed"],
     queryFn: async (): Promise<WeekFeedRow[]> => {
       const sevenAgo = subDays(startOfDay(new Date()), 6).toISOString();
       const { data, error } = await supabase
@@ -282,9 +284,23 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
     [weekRows, prefs.pinnedFeedType],
   );
 
+  // Each mode's history is fetched filtered, but the offline layer writes an
+  // insert into every feeding-logs cache for the child, so filter again here.
+  const shownLogs = useMemo(
+    () => history.logs.filter((l) => (l.feeding_type === "solid") === isSolids),
+    [history.logs, isSolids],
+  );
+
+  // Frozen while the dialog is open so toggling "Keep first" doesn't move the
+  // button under the parent's finger; the new order shows on the next open.
+  const [dialogFeedOrder, setDialogFeedOrder] = useState<MilkFeedType[] | null>(null);
+  if (dialogOpen && !dialogFeedOrder) setDialogFeedOrder(feedOrder);
+  if (!dialogOpen && dialogFeedOrder) setDialogFeedOrder(null);
+  const shownFeedOrder = dialogFeedOrder ?? feedOrder;
+
   const loggedByNames = useLoggedByNames([
     ...(logs?.map((l) => l.parent_id) ?? []),
-    ...history.logs.map((l) => l.parent_id),
+    ...shownLogs.map((l) => l.parent_id),
   ]);
 
   const resetForm = () => {
@@ -333,6 +349,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
   };
 
   const openEdit = (log: FeedingLogRow) => {
+    if ((log.feeding_type === "solid") !== isSolids) return;
     setEditingId(log.id);
     setEditingRow(log);
     setFeedType(log.feeding_type as FeedType);
@@ -600,7 +617,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
             {!isSolids && (
               <div className="space-y-1">
                 <div className="grid grid-cols-3 gap-2">
-                  {feedOrder.map((type) => (
+                  {shownFeedOrder.map((type) => (
                     <Button
                       key={type}
                       type="button"
@@ -823,7 +840,7 @@ const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function Feedin
       <div className="space-y-2">
         <h2 className="font-display font-bold text-sm">{isSolids ? "Solids history" : "History"}</h2>
         <GroupedLogList<FeedingLogRow>
-          logs={history.logs}
+          logs={shownLogs}
           isLoading={history.isLoading}
           isError={history.isError}
           hasEarlier={history.hasEarlier}

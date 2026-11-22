@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import FeedingLog from "@/components/feeding/FeedingLog";
+import { applyOptimisticWrite } from "@/lib/offlineLogs";
 import type { ActiveFeedRow } from "@/hooks/useActiveFeed";
 
 type Filter = { col: string; op: "eq" | "neq"; val: unknown };
@@ -221,6 +222,62 @@ describe("FeedingLog milk mode", () => {
     expect(state.writes.find((w) => w.op === "insert")?.payload).toEqual(
       expect.objectContaining({ feeding_type: "bottle", amount_oz: 4, food_description: null }),
     );
+  });
+});
+
+describe("FeedingLog shared caches", () => {
+  it("an optimistic solid insert lands in Solids history only, never the milk list", async () => {
+    state.rows = [row("b1", "bottle", 30), { ...row("s1", "solid", 60), food_description: "Avocado" } as Row];
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <div data-testid="milk">
+          <FeedingLog mode="milk" />
+        </div>
+        <div data-testid="solids">
+          <FeedingLog mode="solids" />
+        </div>
+      </QueryClientProvider>,
+    );
+    const milk = within(screen.getByTestId("milk"));
+    const solids = within(screen.getByTestId("solids"));
+    await milk.findByRole("button", { name: /Edit bottle feed/ });
+    await solids.findByRole("button", { name: /Edit solid feed, Avocado/ });
+
+    applyOptimisticWrite(client, {
+      action: "insert",
+      table: "feeding_logs",
+      rowId: "s2",
+      childId: "child-1",
+      row: { ...row("s2", "solid", 1), food_description: "Pear" },
+    });
+
+    await solids.findByRole("button", { name: /Edit solid feed, Pear/ });
+    expect(milk.queryByRole("button", { name: /Edit solid feed/ })).not.toBeInTheDocument();
+
+    applyOptimisticWrite(client, {
+      action: "insert",
+      table: "feeding_logs",
+      rowId: "b2",
+      childId: "child-1",
+      row: { ...row("b2", "pump", 2) },
+    });
+    await milk.findByRole("button", { name: /Edit pump feed/ });
+    expect(solids.queryByRole("button", { name: /Edit pump feed/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("FeedingLog type order while open", () => {
+  it("pinning a type doesn't reorder the buttons under the parent's finger", async () => {
+    state.rows = [row("1", "bottle", 10), row("2", "bottle", 200)];
+    renderLog();
+    await waitFor(() => expect(state.feedingFilters.length).toBeGreaterThan(1));
+    await openSheet();
+    await waitFor(() => expect(typeButtons()[0]).toHaveTextContent("Bottle"));
+    const before = typeButtons().map((b) => b.textContent);
+    fireEvent.click(screen.getByRole("button", { name: "🧴 Pump" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Keep Pump first" }));
+    expect(typeButtons().map((b) => b.textContent)).toEqual(before);
   });
 });
 

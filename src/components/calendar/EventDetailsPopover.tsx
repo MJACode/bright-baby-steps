@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import type { DayEvent } from "@/hooks/useDayEvents";
 import { useLoggedByNames } from "@/hooks/useLoggedByNames";
 import { LoggedByChip } from "@/components/LoggedByChip";
+import { SOLIDS_PATH } from "@/lib/feedingRoutes";
 
 const SOURCE_LABEL: Record<string, { icon: typeof Mic; label: string }> = {
   voice: { icon: Mic, label: "Voice" },
@@ -23,7 +24,8 @@ function formatDuration(min: number | null): string {
 
 function eventLabel(e: DayEvent): { icon: typeof UtensilsCrossed; tone: string; title: string; editPath: string; editLabel: string } {
   if (e.kind === "feed") {
-    return { icon: UtensilsCrossed, tone: "text-feeding bg-feeding/10", title: "Feed", editPath: "/dashboard/feeding", editLabel: "Food" };
+    const editPath = e.feedingType === "solid" ? SOLIDS_PATH : "/dashboard/feeding";
+    return { icon: UtensilsCrossed, tone: "text-feeding bg-feeding/10", title: "Feed", editPath, editLabel: "Food" };
   }
   if (e.kind === "sleep") {
     return { icon: Moon, tone: "text-sleep bg-sleep/10", title: "Sleep", editPath: "/dashboard/sleep", editLabel: "Sleep" };

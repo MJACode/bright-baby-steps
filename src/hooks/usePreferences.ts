@@ -10,7 +10,6 @@ export interface Preferences {
   showNotifications: boolean;
   calendarView: "day" | "week";
   sleepPlanCollapsed: boolean;
-  lastFeedingType: "bottle" | "breast";
   /** Milk feed type the parent asked to keep first in Log a Feed (per device). */
   pinnedFeedType: MilkFeedType | null;
   lastBottleOz: string;
@@ -37,7 +36,6 @@ const defaults: Preferences = {
   showNotifications: true,
   calendarView: "day",
   sleepPlanCollapsed: false,
-  lastFeedingType: "bottle",
   pinnedFeedType: null,
   lastBottleOz: "",
   calmMode: false,
@@ -78,10 +76,6 @@ function loadPrefs(key: string): Preferences {
       merged.homeSectionsMigrated = true;
     }
 
-    // Solids left Log a Feed for their own tab, so a stored "solid" is stale.
-    if (merged.lastFeedingType !== "bottle" && merged.lastFeedingType !== "breast") {
-      merged.lastFeedingType = defaults.lastFeedingType;
-    }
     if (merged.pinnedFeedType !== null && !isMilkFeedType(merged.pinnedFeedType)) {
       merged.pinnedFeedType = null;
     }

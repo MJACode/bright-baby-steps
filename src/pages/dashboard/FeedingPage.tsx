@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UtensilsCrossed, Carrot, Plus } from "lucide-react";
-import { useChildren } from "@/hooks/useChildren";
+import { getAgeInMonths, useChildren } from "@/hooks/useChildren";
+import { useCurrentRoleQuery } from "@/hooks/useCurrentRole";
+import { useTrackingNow } from "@/hooks/useTrackingNow";
 import { useAllergens, useAllergenIntroductions } from "@/hooks/useAllergenData";
 import { getAllergenStatus } from "@/services/allergenService";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +12,13 @@ import { Button } from "@/components/ui/button";
 import FeedingLog, { type FeedingLogHandle } from "@/components/feeding/FeedingLog";
 import AllergenTracker from "@/components/feeding/AllergenTracker";
 import { PageInstructions } from "@/components/PageInstructions";
+import { SolidsMethodPicker } from "@/components/feeding/SolidsMethodPicker";
+import { MealPlanCard } from "@/components/feeding/MealPlanCard";
 import { ALLERGENS_ANCHOR, VITAMINS_PATH } from "@/lib/feedingRoutes";
+import { MEAL_PLAN_MIN_AGE_MONTHS, isSolidsMethod, type MealIdea } from "@/lib/mealPlan";
+import { SOLIDS_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
+import { planWeekStart } from "@/lib/planWeek";
+import { resolveTrackingSchedule, trackingDayDate } from "@/lib/trackingDay";
 
 const FEEDING_TABS = ["feeding", "solids"];
 
@@ -19,6 +27,47 @@ const FEEDING_TABS = ["feeding", "solids"];
 function resolveTab(param: string | null): string {
   if (param === "allergens") return "solids";
   return param && FEEDING_TABS.includes(param) ? param : "feeding";
+}
+
+type ActiveChild = NonNullable<ReturnType<typeof useChildren>["activeChild"]>;
+
+function SolidsPlanSlot({
+  child,
+  allergenStatuses,
+  onLogIdea,
+}: {
+  child: ActiveChild;
+  allergenStatuses: Record<string, string> | undefined;
+  onLogIdea: (idea: MealIdea) => void;
+}) {
+  const { role, isResolved } = useCurrentRoleQuery(child.id);
+  const schedule = resolveTrackingSchedule(child);
+  const now = useTrackingNow(schedule);
+  const weekStart = planWeekStart(trackingDayDate(now, schedule) ?? now);
+  const ageMonths = getAgeInMonths(child.date_of_birth, child.is_premature ?? false, child.due_date);
+  const method = isSolidsMethod(child.solids_method) ? child.solids_method : null;
+
+  if (child.is_expected || ageMonths < MEAL_PLAN_MIN_AGE_MONTHS) {
+    return <p className="text-sm text-muted-foreground leading-relaxed">{SOLIDS_TOO_EARLY_COPY}</p>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <SolidsMethodPicker childId={child.id} method={method} role={role} roleResolved={isResolved} />
+      {method && (
+        <MealPlanCard
+          childId={child.id}
+          weekStart={weekStart}
+          ageMonths={ageMonths}
+          method={method}
+          allergenStatuses={allergenStatuses}
+          role={role}
+          roleResolved={isResolved}
+          onLogIdea={onLogIdea}
+        />
+      )}
+    </div>
+  );
 }
 
 const triggerClass =
@@ -49,6 +98,14 @@ export default function FeedingPage() {
   const { data: allergens } = useAllergens();
 
   const completedCount = introductions?.filter((i) => getAllergenStatus(i) === "introduced").length ?? 0;
+  const allergenStatuses = useMemo(() => {
+    if (!allergens || !introductions) return undefined;
+    return Object.fromEntries(
+      allergens.map((a) => [a.slug, getAllergenStatus(introductions.find((i) => i.allergen_id === a.id))]),
+    );
+  }, [allergens, introductions]);
+  const logIdea = (idea: MealIdea) =>
+    solidsLog.current?.open({ foodDesc: idea.name, foodCategory: idea.foodCategory, allergenSlugs: idea.allergens });
   const totalAllergens = allergens?.length ?? 0;
 
   // Keyed on location.key so a repeat tap on the same link (a push arriving
@@ -93,8 +150,7 @@ export default function FeedingPage() {
           <FeedingLog mode="milk" />
         </TabsContent>
         <TabsContent value="solids" className="mt-4 space-y-6">
-          {/* Pass 2: solids method chip + this week's meal plan card go here.
-              Its "Log this" calls solidsLog.current?.open({ foodDesc, foodCategory, allergenSlugs }). */}
+          {/* Log solids first: logged several times a day; the plan is weekly (founder, 2026-11-22). */}
           {activeChild && (
             <Button
               type="button"
@@ -103,6 +159,9 @@ export default function FeedingPage() {
             >
               <Plus className="w-5 h-5" /> Log solids
             </Button>
+          )}
+          {activeChild && (
+            <SolidsPlanSlot child={activeChild} allergenStatuses={allergenStatuses} onLogIdea={logIdea} />
           )}
           <section
             id={ALLERGENS_ANCHOR}

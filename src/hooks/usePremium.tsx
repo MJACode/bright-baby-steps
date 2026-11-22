@@ -106,6 +106,7 @@ export const PREMIUM_FEATURES = {
   "visit-prep-ai": "Unlimited AI visit prep",
   "activity-library": "Activity Library & weekly play plans",
   "baby-signs": "Sign Language — ASL-based program",
+  "meal-plan": "Weekly solids meal plans",
 } as const;
 
 export type PremiumFeature = keyof typeof PREMIUM_FEATURES;
