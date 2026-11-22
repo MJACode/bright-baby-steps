@@ -44,7 +44,7 @@ export function useChildren() {
   // supabase-js strips keys whose value is undefined from the UPDATE payload,
   // so passing `undefined` is a silent no-op — null is what reaches the server.
   const updateChild = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; name?: string; date_of_birth?: string; gender?: string | null; is_premature?: boolean | null; due_date?: string | null; is_expected?: boolean | null; interests?: string[]; temperament?: string | null; day_start_time?: string | null; night_start_time?: string | null }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; name?: string; date_of_birth?: string; gender?: string | null; is_premature?: boolean | null; due_date?: string | null; is_expected?: boolean | null; interests?: string[]; temperament?: string | null; day_start_time?: string | null; night_start_time?: string | null; solids_method?: "blw" | "traditional" | "mix" | null }) => {
       const { data, error } = await supabase
         .from("children")
         .update(updates)

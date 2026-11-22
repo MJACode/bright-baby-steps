@@ -1,13 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-
-export type SolidFeedDraft = {
-  foodDesc: string;
-  foodCategory: string;
-  reactionNoted: boolean;
-  reactionDescription: string;
-  notes: string;
-  allergenIds: string[];
-};
+import { forwardRef, useState, useMemo, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MobileDateTimePicker } from "@/components/MobileDateTimePicker";
 import { getErrorMessage } from "@/lib/handleRlsError";
@@ -22,8 +13,9 @@ import { badgeVariants } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UtensilsCrossed, Plus, Pencil, ShieldAlert, AlertTriangle, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { UtensilsCrossed, Plus, Pencil, AlertTriangle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, subDays, startOfDay } from "date-fns";
 import { AddChildDialog } from "@/components/AddChildDialog";
@@ -52,8 +44,30 @@ import {
   feedServingsLoggedText, feedServingsFailedText,
 } from "@/services/allergenService";
 import { insertAllergenExposure } from "@/services/allergenExposureWrite";
+import { usePreferences } from "@/hooks/usePreferences";
+import { isMilkFeedType, orderFeedTypes, type MilkFeedType } from "@/lib/feedTypeOrder";
 
 type FeedingLogRow = Tables<"feeding_logs">;
+
+export type FeedingLogMode = "milk" | "solids";
+
+/** Values for a new solids entry, e.g. from a meal-plan idea's "Log this". */
+export interface SolidsPrefill {
+  foodDesc: string;
+  /** fruit | vegetable | grain_cereal | protein | dairy | other; anything else leaves it blank. */
+  foodCategory?: string;
+  /** Allergen slugs to pre-tick. Only signed-off allergens render as chips. */
+  allergenSlugs?: string[];
+}
+
+export interface FeedingLogHandle {
+  /** Opens a fresh entry. In solids mode, `prefill` fills the solid form. */
+  open: (prefill?: SolidsPrefill) => void;
+}
+
+type FeedType = MilkFeedType | "solid";
+
+const SOLID_FOOD_CATEGORIES = ["fruit", "vegetable", "grain_cereal", "protein", "dairy", "other"] as const;
 
 const foodCategories = [
   { value: "fruit", label: "🍎 Fruit" },
@@ -64,21 +78,31 @@ const foodCategories = [
   { value: "other", label: "🍽️ Other" },
 ];
 
-function FeedingTrendsChart({ childId }: { childId: string }) {
-  const { data: trendLogs } = useQuery({
-    queryKey: ["feeding-trends-7d", childId],
-    queryFn: async () => {
+type WeekFeedRow = Pick<FeedingLogRow, "logged_at" | "feeding_type">;
+
+// One fetch feeds both the chart and the Log a Feed type order.
+function useFeedingWeek(childId: string | undefined, enabled: boolean) {
+  return useQuery({
+    // "typed": rows gained feeding_type; the persisted cache still holds the
+    // old shape under the bare key.
+    queryKey: ["feeding-trends-7d", childId, "typed"],
+    queryFn: async (): Promise<WeekFeedRow[]> => {
       const sevenAgo = subDays(startOfDay(new Date()), 6).toISOString();
       const { data, error } = await supabase
         .from("feeding_logs")
-        .select("logged_at")
-        .eq("child_id", childId)
+        .select("logged_at, feeding_type")
+        .eq("child_id", childId!)
         .gte("logged_at", sevenAgo)
         .order("logged_at");
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
+    enabled: !!childId && enabled,
   });
+}
+
+function FeedingTrendsChart({ rows }: { rows: WeekFeedRow[] | undefined }) {
+  const trendLogs = useMemo(() => rows?.filter((r) => r.feeding_type !== "solid"), [rows]);
 
   const chartData = useMemo(() => {
     const days = Array.from({ length: 7 }, (_, i) => {
@@ -103,20 +127,20 @@ function FeedingTrendsChart({ childId }: { childId: string }) {
   );
 }
 
-const feedingTypes = [
-  { value: "breast", label: "🤱 Breast" },
-  { value: "bottle", label: "🍼 Bottle" },
-  { value: "pump", label: "🧴 Pump" },
-  { value: "solid", label: "🥣 Solid" },
-];
+const feedTypeLabels: Record<MilkFeedType, { button: string; name: string }> = {
+  breast: { button: "🤱 Breast", name: "Breast" },
+  bottle: { button: "🍼 Bottle", name: "Bottle" },
+  pump: { button: "🧴 Pump", name: "Pump" },
+};
 
 interface FeedingLogProps {
-  onNavigateToAllergens?: (draft?: SolidFeedDraft) => void;
-  pendingResume?: SolidFeedDraft | null;
-  onConsumeResume?: () => void;
+  /** "milk": breast / bottle / pump. "solids": the solid form only. */
+  mode?: FeedingLogMode;
 }
 
-export default function FeedingLog({ onNavigateToAllergens, pendingResume, onConsumeResume }: FeedingLogProps) {
+const FeedingLog = forwardRef<FeedingLogHandle, FeedingLogProps>(function FeedingLog({ mode = "milk" }, ref) {
+  const isSolids = mode === "solids";
+  const defaultFeedType: FeedType = isSolids ? "solid" : "breast";
   const { user } = useAuth();
   const { activeChild } = useChildren();
   const queryClient = useQueryClient();
@@ -128,7 +152,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   // History reaches further back than the page query's 50 rows, so the delete
   // path can't look the row back up by id — hold onto the row itself.
   const [editingRow, setEditingRow] = useState<FeedingLogRow | null>(null);
-  const [feedType, setFeedType] = useState("breast");
+  const [feedType, setFeedType] = useState<FeedType>(defaultFeedType);
   const [side, setSide] = useState<string>("");
   const [durationMin, setDurationMin] = useState("");
   const [amountOz, setAmountOz] = useState("");
@@ -193,27 +217,6 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     if (!authored) setDerivedStart(new Date(row.logged_at));
   }, [bindActiveRow, setDerivedStart]);
 
-  // Resume the in-progress solid feed when the user comes back from the
-  // Allergen Tracker via the "← Back to your feed log" banner.
-  // Note: `dialogOpen` is intentionally NOT in the dep array. Reading it via
-  // closure is sufficient for the guard; including it would let the effect
-  // re-fire each time the dialog closes and re-open it (the regression
-  // captured in tasks/lessons-frontend.md).
-  useEffect(() => {
-    if (pendingResume && !dialogOpen) {
-      setFeedType("solid");
-      setFoodDesc(pendingResume.foodDesc);
-      setFoodCategory(pendingResume.foodCategory);
-      setReactionNoted(pendingResume.reactionNoted);
-      setReactionDescription(pendingResume.reactionDescription);
-      setNotes(pendingResume.notes);
-      setAllergenIds(pendingResume.allergenIds);
-      setDialogOpen(true);
-      onConsumeResume?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingResume, onConsumeResume]);
-
   // When the user arrives on the Feeding page with an active timer running
   // (e.g. tapped the "Nursing in progress" banner), the live timer UI lives
   // inside the log dialog. Auto-open the dialog once per active session so
@@ -223,7 +226,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const { active: pageActiveFeed } = useActiveFeed(activeChild?.id);
   const autoOpenedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!pageActiveFeed) return;
+    // Live timers are milk feeds; the solids sheet never binds one.
+    if (isSolids || !pageActiveFeed || !isMilkFeedType(pageActiveFeed.feeding_type)) return;
     if (autoOpenedFor.current === pageActiveFeed.id) return;
     autoOpenedFor.current = pageActiveFeed.id;
     setEditingId(null);
@@ -231,7 +235,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     setFeedType(pageActiveFeed.feeding_type);
     setSide(pageActiveFeed.side ?? "");
     setDialogOpen(true);
-  }, [pageActiveFeed?.id, pageActiveFeed?.feeding_type, pageActiveFeed?.side]);
+  }, [isSolids, pageActiveFeed?.id, pageActiveFeed?.feeding_type, pageActiveFeed?.side]);
 
   // Bottle no longer has an in-app timer (you just log the oz), but the Apple
   // Watch can still start a bottle timer — an active row with source='timer'
@@ -270,17 +274,40 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     table: "feeding_logs",
     childId: activeChild?.id,
     dateColumn: "logged_at",
+    where: { column: "feeding_type", op: isSolids ? "eq" : "neq", value: "solid" },
   });
+
+  const { data: weekRows } = useFeedingWeek(activeChild?.id, !isSolids);
+  const { prefs, setPrefs } = usePreferences();
+  const feedOrder = useMemo(
+    () => orderFeedTypes(weekRows ?? [], prefs.pinnedFeedType),
+    [weekRows, prefs.pinnedFeedType],
+  );
+
+  // Each mode's history is fetched filtered, but the offline layer writes an
+  // insert into every feeding-logs cache for the child, so filter again here.
+  const shownLogs = useMemo(
+    () => history.logs.filter((l) => (l.feeding_type === "solid") === isSolids),
+    [history.logs, isSolids],
+  );
+
+  // Frozen while the dialog is open so toggling "Keep first" doesn't move the
+  // button under the parent's finger; the new order shows on the next open.
+  const [dialogFeedOrder, setDialogFeedOrder] = useState<MilkFeedType[] | null>(null);
+  if (dialogOpen && !dialogFeedOrder) setDialogFeedOrder(feedOrder);
+  if (!dialogOpen && dialogFeedOrder) setDialogFeedOrder(null);
+  const shownFeedOrder = dialogFeedOrder ?? feedOrder;
 
   const loggedByNames = useLoggedByNames([
     ...(logs?.map((l) => l.parent_id) ?? []),
-    ...history.logs.map((l) => l.parent_id),
+    ...shownLogs.map((l) => l.parent_id),
   ]);
 
   const resetForm = () => {
     setEditingId(null);
     setEditingRow(null);
-    setFeedType("breast"); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setAllergenIds([]); setDerivedStart(new Date());
+    pendingAllergenSlugs.current = null;
+    setFeedType(defaultFeedType); setSide(""); setDurationMin(""); setAmountOz(""); setAmountOzLeft(""); setAmountOzRight(""); setFoodDesc(""); setFoodCategory(""); setReactionNoted(false); setReactionDescription(""); setNotes(""); setAllergenIds([]); setDerivedStart(new Date());
   };
 
   // Every close goes through here. Radix only calls onOpenChange for closes it
@@ -311,10 +338,21 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     });
   };
 
+  // A bound live timer decides the type; otherwise the most-used (or pinned)
+  // type comes first and is pre-selected.
+  const openNew = () => {
+    if (!isSolids) {
+      const live = pageActiveFeed?.feeding_type;
+      setFeedType(isMilkFeedType(live) ? live : feedOrder[0]);
+    }
+    setDialogOpen(true);
+  };
+
   const openEdit = (log: FeedingLogRow) => {
+    if ((log.feeding_type === "solid") !== isSolids) return;
     setEditingId(log.id);
     setEditingRow(log);
-    setFeedType(log.feeding_type);
+    setFeedType(log.feeding_type as FeedType);
     setSide(log.side || "");
     setDurationMin(log.duration_minutes ? String(log.duration_minutes) : "");
     setAmountOz(log.amount_oz ? String(log.amount_oz) : "");
@@ -361,6 +399,31 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   const canLogServings = roleResolved && role !== "viewer";
   const { data: allergens } = useAllergens(feedType === "solid");
   const { data: introductions } = useAllergenIntroductions(feedType === "solid" ? activeChild?.id : undefined);
+  // A prefill can land before the allergen catalog has loaded.
+  const pendingAllergenSlugs = useRef<string[] | null>(null);
+  useEffect(() => {
+    const slugs = pendingAllergenSlugs.current;
+    if (!allergens || !slugs) return;
+    pendingAllergenSlugs.current = null;
+    setAllergenIds(allergenIdsForSlugs(allergens, slugs));
+  }, [allergens]);
+
+  useImperativeHandle(ref, () => ({
+    open: (prefill) => {
+      resetForm();
+      bindActiveRow(null);
+      if (isSolids && prefill) {
+        setFoodDesc(prefill.foodDesc);
+        const category = prefill.foodCategory ?? "";
+        setFoodCategory((SOLID_FOOD_CATEGORIES as readonly string[]).includes(category) ? category : "");
+        const slugs = prefill.allergenSlugs ?? [];
+        if (allergens) setAllergenIds(allergenIdsForSlugs(allergens, slugs));
+        else pendingAllergenSlugs.current = slugs;
+      }
+      openNew();
+    },
+  }));
+
   const introducedAllergens = (allergens ?? []).filter(
     (a) => getAllergenStatus(introductions?.find((i) => i.allergen_id === a.id)) === "introduced",
   );
@@ -454,6 +517,10 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
     // The feed itself queues offline; this wrapper must not pause with it.
     networkMode: "always",
     mutationFn: async () => {
+      // Each tab writes only its own kind of feed.
+      if (isSolids !== (feedType === "solid")) {
+        throw new Error("This entry doesn't match this tab. Close it and log it again.");
+      }
       const result = await saveFeedRow();
       return { result, ...(await logFeedServings()) };
     },
@@ -467,11 +534,14 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
         logged.length > 0 ? feedServingsLoggedText(logged) : "",
         failed.length > 0 ? feedServingsFailedText(failed) : "",
       ].filter(Boolean).join(" ");
-      toast({ title: editingId ? "Feed updated! ✏️" : "Feed logged! 🍼", ...(description ? { description } : {}) });
+      const title = isSolids
+        ? editingId ? "Solids updated! ✏️" : "Solids logged! 🥣"
+        : editingId ? "Feed updated! ✏️" : "Feed logged! 🍼";
+      toast({ title, ...(description ? { description } : {}) });
     },
     onError: (err) => {
       toast({
-        title: "Couldn't save feed",
+        title: isSolids ? "Couldn't save solids" : "Couldn't save feed",
         description: getErrorMessage(err, "Please try again."),
         variant: "destructive",
       });
@@ -479,6 +549,8 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   });
 
   if (!activeChild) {
+    // The Solids tab's allergen tracker already carries the add-a-child prompt.
+    if (isSolids) return null;
     return (
       <div className="space-y-6">
         <div>
@@ -498,254 +570,277 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
   // row (source='timer' with duration still NULL) means baby is feeding right
   // now — skip it so "it's been Xh" measures from the last finished feed.
   const lastCompletedFeed = logs?.find(
-    (l) => !(l.duration_minutes === null && l.source === "timer"),
+    (l) => l.feeding_type !== "solid" && !(l.duration_minutes === null && l.source === "timer"),
   );
   const lastFeedAt = lastCompletedFeed ? new Date(lastCompletedFeed.logged_at) : null;
 
+  const dialogTitle = isSolids
+    ? editingId ? "Edit solids" : "Log solids"
+    : editingId ? "Edit Feed" : "Log a Feed";
+  const saveLabel = isSolids
+    ? editingId ? "Update solids" : "Save solids"
+    : editingId ? "Update Feed" : "Save Feed";
+  const selectedMilkType = isMilkFeedType(feedType) ? feedType : null;
+
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-display text-xl font-bold flex items-center gap-2">
-            <UtensilsCrossed className="w-6 h-6 text-feeding" /> Feeding
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s feeding log</p>
+      {!isSolids && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-display text-xl font-bold flex items-center gap-2">
+              <UtensilsCrossed className="w-6 h-6 text-feeding" /> Feeding
+            </h2>
+            <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s feeding log</p>
+          </div>
+          <Button
+            size="icon"
+            aria-label="Add a feed"
+            onClick={openNew}
+            className="rounded-full bg-feeding hover:bg-feeding/90 text-white touch-target w-12 h-12"
+          >
+            <Plus className="w-6 h-6" />
+          </Button>
         </div>
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={(open) => {
-            if (open) setDialogOpen(true);
-            else closeDialog();
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button size="icon" className="rounded-full bg-feeding hover:bg-feeding/90 text-white touch-target w-12 h-12">
-              <Plus className="w-6 h-6" />
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle className="font-display">{editingId ? "Edit Feed" : "Log a Feed"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-4 gap-2">
-                {feedingTypes.map((ft) => (
-                  <Button key={ft.value} type="button" variant={feedType === ft.value ? "default" : "outline"} onClick={() => setFeedType(ft.value)} className="touch-target text-xs px-2">
-                    {ft.label}
-                  </Button>
-                ))}
-              </div>
-
-              {feedType === "breast" && (
-                <NursingTimer
-                  childId={activeChild.id}
-                  side={side}
-                  onSideChange={setSide}
-                  onDurationChange={handleTimerDuration}
-                  onTimerStartAt={setDerivedStart}
-                  onPastStartApplied={setAuthoredStart}
-                  onActiveRowChange={handleActiveRowChange}
-                  initialMinutes={durationMin ? Number(durationMin) : undefined}
-                  editMode={!!editingId}
-                />
-              )}
-
-              {feedType === "pump" && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label>Left Breast (oz)</Label>
-                      <Input type="number" step="0.5" value={amountOzLeft} onChange={(e) => setAmountOzLeft(e.target.value)} placeholder="0" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label>Right Breast (oz)</Label>
-                      <Input type="number" step="0.5" value={amountOzRight} onChange={(e) => setAmountOzRight(e.target.value)} placeholder="0" />
-                    </div>
-                  </div>
-                  {(amountOzLeft || amountOzRight) && (
-                    <p className="text-xs text-muted-foreground text-center">
-                      Total: {((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)).toFixed(1)} oz
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {feedType === "bottle" && (
-                <div className="space-y-1">
-                  <Label>Amount (oz)</Label>
-                  <Input type="number" step="0.5" value={amountOz} onChange={(e) => setAmountOz(e.target.value)} placeholder="4" />
-                </div>
-              )}
-
-              {feedType === "solid" && (
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label>Food Description</Label>
-                    <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label>Food Group</Label>
-                    <Select value={foodCategory} onValueChange={setFoodCategory}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {foodCategories.map((cat) => (
-                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {showAllergenChips && (
-                    <div className="space-y-2">
-                      <Label>{FEED_ALLERGEN_CHIPS_LABEL}</Label>
-                      {!online ? (
-                        <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_OFFLINE_NOTE}</p>
-                      ) : reactionNoted ? (
-                        <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_REACTION_NOTE}</p>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap gap-2">
-                            {introducedAllergens.map((a) => {
-                              const selected = allergenIds.includes(a.id);
-                              return (
-                                <Button
-                                  key={a.id}
-                                  type="button"
-                                  size="sm"
-                                  variant={selected ? "default" : "outline"}
-                                  aria-pressed={selected}
-                                  className={cn(
-                                    "touch-target h-auto min-h-[48px] text-sm gap-1.5",
-                                    selected && "bg-feeding hover:bg-feeding/90",
-                                  )}
-                                  onClick={() =>
-                                    setAllergenIds((prev) =>
-                                      selected ? prev.filter((id) => id !== a.id) : [...prev, a.id],
-                                    )
-                                  }
-                                >
-                                  <span aria-hidden="true">{allergenEmoji[a.slug] ?? "🍽️"}</span>
-                                  {a.name}
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_HELPER}</p>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="reaction-noted"
-                      checked={reactionNoted}
-                      onCheckedChange={(checked) => setReactionNoted(checked === true)}
-                    />
-                    <Label htmlFor="reaction-noted" className="text-sm cursor-pointer flex items-center gap-1.5">
-                      <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
-                      Reaction noted
-                    </Label>
-                  </div>
-
-                  {reactionNoted && (
-                    <div className="space-y-1 ml-6">
-                      <Label className="text-xs">Describe the reaction</Label>
-                      <Textarea
-                        value={reactionDescription}
-                        onChange={(e) => setReactionDescription(e.target.value)}
-                        placeholder="e.g. mild rash on cheeks, fussiness after eating"
-                        rows={2}
-                      />
-                    </div>
-                  )}
-
-                  {onNavigateToAllergens && (
+      )}
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (open) openNew();
+          else closeDialog();
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display">{dialogTitle}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!isSolids && (
+              <div className="space-y-1">
+                <div className="grid grid-cols-3 gap-2">
+                  {shownFeedOrder.map((type) => (
                     <Button
+                      key={type}
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-xs text-feeding hover:text-feeding/80 px-0"
-                      onClick={() => {
-                        // The draft above is what crosses the tab switch, and
-                        // pendingResume puts it back on the way in.
-                        onNavigateToAllergens({ foodDesc, foodCategory, reactionNoted, reactionDescription, notes, allergenIds });
-                        closeDialog();
-                      }}
+                      variant={feedType === type ? "default" : "outline"}
+                      aria-pressed={feedType === type}
+                      onClick={() => setFeedType(type)}
+                      className="touch-target text-sm px-2"
                     >
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      View Allergen Tracker →
+                      {feedTypeLabels[type].button}
                     </Button>
-                  )}
+                  ))}
                 </div>
-              )}
+                {selectedMilkType && !editingId && (
+                  <div className="flex items-center justify-end gap-3">
+                    <Label
+                      htmlFor="keep-feed-type-first"
+                      className="touch-target flex items-center justify-end flex-1 text-sm font-semibold text-muted-foreground cursor-pointer"
+                    >
+                      Keep {feedTypeLabels[selectedMilkType].name} first
+                    </Label>
+                    <Switch
+                      id="keep-feed-type-first"
+                      checked={prefs.pinnedFeedType === selectedMilkType}
+                      onCheckedChange={(on) => setPrefs({ pinnedFeedType: on ? selectedMilkType : null })}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
+            {feedType === "breast" && (
+              <NursingTimer
+                childId={activeChild.id}
+                side={side}
+                onSideChange={setSide}
+                onDurationChange={handleTimerDuration}
+                onTimerStartAt={setDerivedStart}
+                onPastStartApplied={setAuthoredStart}
+                onActiveRowChange={handleActiveRowChange}
+                initialMinutes={durationMin ? Number(durationMin) : undefined}
+                editMode={!!editingId}
+              />
+            )}
+
+            {feedType === "pump" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Left Breast (oz)</Label>
+                    <Input type="number" step="0.5" value={amountOzLeft} onChange={(e) => setAmountOzLeft(e.target.value)} placeholder="0" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Right Breast (oz)</Label>
+                    <Input type="number" step="0.5" value={amountOzRight} onChange={(e) => setAmountOzRight(e.target.value)} placeholder="0" />
+                  </div>
+                </div>
+                {(amountOzLeft || amountOzRight) && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Total: {((Number(amountOzLeft) || 0) + (Number(amountOzRight) || 0)).toFixed(1)} oz
+                  </p>
+                )}
+              </div>
+            )}
+
+            {feedType === "bottle" && (
               <div className="space-y-1">
-                <MobileDateTimePicker value={loggedAt} onChange={setAuthoredStart} maxDate={new Date()} label="Started" />
+                <Label>Amount (oz)</Label>
+                <Input type="number" step="0.5" value={amountOz} onChange={(e) => setAmountOz(e.target.value)} placeholder="4" />
               </div>
+            )}
 
-              <div className="space-y-1">
-                <Label>Notes (optional)</Label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
-              </div>
+            {feedType === "solid" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label>Food Description</Label>
+                  <Input value={foodDesc} onChange={(e) => setFoodDesc(e.target.value)} placeholder="e.g. pureed sweet potato" />
+                </div>
 
-              <div className="flex gap-2 pt-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 touch-target"
-                  onClick={closeDialog}
-                  disabled={saveMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => saveMutation.mutate()}
-                  className="flex-1 touch-target bg-feeding hover:bg-feeding/90"
-                  disabled={saveMutation.isPending}
-                >
-                  {saveMutation.isPending ? "Saving..." : editingId ? "Update Feed" : "Save Feed"}
-                </Button>
+                <div className="space-y-1">
+                  <Label>Food Group</Label>
+                  <Select value={foodCategory} onValueChange={setFoodCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {foodCategories.map((cat) => (
+                        <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {showAllergenChips && (
+                  <div className="space-y-2">
+                    <Label>{FEED_ALLERGEN_CHIPS_LABEL}</Label>
+                    {!online ? (
+                      <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_OFFLINE_NOTE}</p>
+                    ) : reactionNoted ? (
+                      <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_REACTION_NOTE}</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-2">
+                          {introducedAllergens.map((a) => {
+                            const selected = allergenIds.includes(a.id);
+                            return (
+                              <Button
+                                key={a.id}
+                                type="button"
+                                size="sm"
+                                variant={selected ? "default" : "outline"}
+                                aria-pressed={selected}
+                                className={cn(
+                                  "touch-target h-auto min-h-[48px] text-sm gap-1.5",
+                                  selected && "bg-feeding hover:bg-feeding/90",
+                                )}
+                                onClick={() =>
+                                  setAllergenIds((prev) =>
+                                    selected ? prev.filter((id) => id !== a.id) : [...prev, a.id],
+                                  )
+                                }
+                              >
+                                <span aria-hidden="true">{allergenEmoji[a.slug] ?? "🍽️"}</span>
+                                {a.name}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-xs text-muted-foreground">{FEED_ALLERGEN_CHIPS_HELPER}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="reaction-noted"
+                    checked={reactionNoted}
+                    onCheckedChange={(checked) => setReactionNoted(checked === true)}
+                  />
+                  <Label htmlFor="reaction-noted" className="text-sm cursor-pointer flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-[hsl(var(--warning))]" />
+                    Reaction noted
+                  </Label>
+                </div>
+
+                {reactionNoted && (
+                  <div className="space-y-1 ml-6">
+                    <Label className="text-xs">Describe the reaction</Label>
+                    <Textarea
+                      value={reactionDescription}
+                      onChange={(e) => setReactionDescription(e.target.value)}
+                      placeholder="e.g. mild rash on cheeks, fussiness after eating"
+                      rows={2}
+                    />
+                  </div>
+                )}
               </div>
-              {editingId && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full touch-target gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={handleDelete}
-                  disabled={saveMutation.isPending || deleteLog.isPending}
-                >
-                  <Trash2 className="w-4 h-4" /> Delete entry
-                </Button>
-              )}
+            )}
+
+            <div className="space-y-1">
+              <MobileDateTimePicker value={loggedAt} onChange={setAuthoredStart} maxDate={new Date()} label="Started" />
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
 
+            <div className="space-y-1">
+              <Label>Notes (optional)</Label>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any observations..." rows={2} />
+            </div>
 
-      {/* Feed Coach — the predicted hunger window over the hunger-cue reminder,
-          which escalates to "consider a feed" once it's been longer than the
-          age-typical interval. First thing under the header, the same place the
-          Sleep tab puts its coach strip. */}
-      <FeedCoachCard
-        activeChild={activeChild}
-        lastFeedAt={lastFeedAt}
-        feedInProgress={!!pageActiveFeed}
-        variant="strip"
-      />
+            <div className="flex gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 touch-target"
+                onClick={closeDialog}
+                disabled={saveMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => saveMutation.mutate()}
+                className="flex-1 touch-target bg-feeding hover:bg-feeding/90"
+                disabled={saveMutation.isPending}
+              >
+                {saveMutation.isPending ? "Saving..." : saveLabel}
+              </Button>
+            </div>
+            {editingId && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full touch-target gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleDelete}
+                disabled={saveMutation.isPending || deleteLog.isPending}
+              >
+                <Trash2 className="w-4 h-4" /> Delete entry
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-      {/* 7-Day Trends Chart */}
-      {activeChild && <FeedingTrendsChart childId={activeChild.id} />}
+      {!isSolids && (
+        <>
+          {/* Feed Coach — the predicted hunger window over the hunger-cue reminder,
+              which escalates to "consider a feed" once it's been longer than the
+              age-typical interval. First thing under the header, the same place the
+              Sleep tab puts its coach strip. */}
+          <FeedCoachCard
+            activeChild={activeChild}
+            lastFeedAt={lastFeedAt}
+            feedInProgress={!!pageActiveFeed}
+            variant="strip"
+          />
+
+          <FeedingTrendsChart rows={weekRows} />
+        </>
+      )}
 
       <div className="space-y-2">
-        <h2 className="font-display font-bold text-sm">History</h2>
+        <h2 className="font-display font-bold text-sm">{isSolids ? "Solids history" : "History"}</h2>
         <GroupedLogList<FeedingLogRow>
-          logs={history.logs}
+          logs={shownLogs}
           isLoading={history.isLoading}
           isError={history.isError}
           hasEarlier={history.hasEarlier}
@@ -755,7 +850,7 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
           getDate={(log) => log.logged_at}
           schedule={history.schedule}
           summarize={summarizeFeedingDay}
-          labels={{ unit: "feed", unitPlural: "feeds" }}
+          labels={isSolids ? { unit: "solid", unitPlural: "solids" } : { unit: "feed", unitPlural: "feeds" }}
           renderRow={(log) => {
             const detail = [
               log.feeding_type === "pump" && (log.amount_oz_left || log.amount_oz_right)
@@ -818,13 +913,15 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
               <CardContent className="p-6 flex flex-col items-center justify-center gap-3">
                 <UtensilsCrossed className="w-10 h-10 text-feeding/40" />
                 <p className="text-sm text-muted-foreground text-center">
-                  Log {activeChild.name}'s first feed to start spotting patterns
+                  {isSolids
+                    ? `Log ${activeChild.name}'s first solids to see them here`
+                    : `Log ${activeChild.name}'s first feed to start spotting patterns`}
                 </p>
                 <Button
-                  onClick={() => setDialogOpen(true)}
+                  onClick={openNew}
                   className="gap-1.5 touch-target bg-feeding hover:bg-feeding/90 text-white"
                 >
-                  <Plus className="w-4 h-4" /> Log a feed
+                  <Plus className="w-4 h-4" /> {isSolids ? "Log solids" : "Log a feed"}
                 </Button>
               </CardContent>
             </Card>
@@ -833,4 +930,10 @@ export default function FeedingLog({ onNavigateToAllergens, pendingResume, onCon
       </div>
     </div>
   );
+});
+
+function allergenIdsForSlugs(allergens: ReadonlyArray<{ id: string; slug: string }>, slugs: readonly string[]): string[] {
+  return allergens.filter((a) => slugs.includes(a.slug)).map((a) => a.id);
 }
+
+export default FeedingLog;

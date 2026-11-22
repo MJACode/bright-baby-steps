@@ -13,6 +13,13 @@ import {
 
 export type LogHistoryTable = "sleep_logs" | "feeding_logs" | "diaper_logs";
 
+/** One column filter applied to the window, its count and the has-earlier probe alike. */
+export interface LogHistoryWhere {
+  column: string;
+  op: "eq" | "neq";
+  value: string;
+}
+
 const DAYS_PER_PAGE = LOG_HISTORY_PAGE_DAYS;
 const MAX_ROWS = 1000;
 const NO_LOGS: never[] = [];
@@ -34,8 +41,11 @@ export function logHistoryQueryKey(
   // window's lower bound, so it has to key the cache or the list would keep
   // rendering the old span until something else invalidated it.
   dayStartMin = 0,
+  where?: LogHistoryWhere,
 ) {
-  return [HISTORY_KEY_ROOT[table], "history", childId, days, dayStartMin];
+  const key: unknown[] = [HISTORY_KEY_ROOT[table], "history", childId, days, dayStartMin];
+  if (where) key.push(`${where.column}:${where.op}:${where.value}`);
+  return key;
 }
 
 const CHILD_ID_INDEX = 2;
@@ -97,30 +107,40 @@ export function capHistoryWindow<TRow>({
   return { logs: kept.length > 0 ? kept : rows, truncated };
 }
 
+// The builder's generics over a union of tables recurse too deep for tsc when
+// narrowed dynamically, so the filter is applied through a structural view.
+function applyWhere<Q>(query: Q, where: LogHistoryWhere | undefined): Q {
+  if (!where) return query;
+  const filterable = query as unknown as Record<LogHistoryWhere["op"], (column: string, value: string) => Q>;
+  return filterable[where.op](where.column, where.value);
+}
+
 interface UseLogHistoryOptions {
   table: LogHistoryTable;
   childId: string | undefined;
   // sleep sessions belong to the day they STARTED (a 7pm–6am night is filed
   // under the evening), which is also how the weekly chart buckets them.
   dateColumn: "started_at" | "logged_at";
+  where?: LogHistoryWhere;
 }
 
-export function useLogHistory<TRow>({ table, childId, dateColumn }: UseLogHistoryOptions) {
+export function useLogHistory<TRow>({ table, childId, dateColumn, where }: UseLogHistoryOptions) {
   const [days, setDays] = useState(DAYS_PER_PAGE);
   const schedule = useTrackingSchedule();
 
   const query = useQuery({
-    queryKey: logHistoryQueryKey(table, childId, days, schedule.dayStartMin),
+    queryKey: logHistoryQueryKey(table, childId, days, schedule.dayStartMin, where),
     queryFn: async () => {
       // Starts at the family's day boundary, not local midnight — otherwise a
       // 07:00 day start would leave the oldest day in the window missing its
       // 00:00–07:00 rows and showing an undercounted total.
       const windowStart = trackingWindowStart(days, schedule).toISOString();
 
-      const { data, error, count } = await supabase
+      const windowQuery = supabase
         .from(table)
         .select("*", { count: "exact" })
-        .eq("child_id", childId!)
+        .eq("child_id", childId!);
+      const { data, error, count } = await applyWhere(windowQuery, where)
         .gte(dateColumn, windowStart)
         .order(dateColumn, { ascending: false })
         .limit(MAX_ROWS + 1);
@@ -140,10 +160,11 @@ export function useLogHistory<TRow>({ table, childId, dateColumn }: UseLogHistor
       // The DATE of the newest row before the window, not just whether one
       // exists — "Show earlier days" has to widen far enough to actually reach
       // it, otherwise a parent with a logging gap taps and nothing appears.
-      const { data: older, error: olderError } = await supabase
+      const olderQuery = supabase
         .from(table)
         .select(dateColumn)
-        .eq("child_id", childId!)
+        .eq("child_id", childId!);
+      const { data: older, error: olderError } = await applyWhere(olderQuery, where)
         .lt(dateColumn, windowStart)
         .order(dateColumn, { ascending: false })
         .limit(1);

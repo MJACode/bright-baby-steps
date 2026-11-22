@@ -74,6 +74,8 @@ export function useFeedCoach(activeChild: FeedCoachChild | null) {
         .from("feeding_logs")
         .select("logged_at")
         .eq("child_id", activeChild!.id)
+        // Milk feeds only: the coach's copy and intervals are about milk.
+        .neq("feeding_type", "solid")
         .gte("logged_at", since)
         .order("logged_at", { ascending: false })
         .limit(60);

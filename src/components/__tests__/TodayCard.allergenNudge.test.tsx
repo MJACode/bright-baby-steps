@@ -79,7 +79,7 @@ describe("TodayCard allergen nudge", () => {
   it("names the due allergens and links to the allergen tracker", () => {
     renderCard("2026-01-01");
     const link = screen.getByRole("link", { name: /Keep it on the menu: Peanut due this week/ });
-    expect(link).toHaveAttribute("href", "/dashboard/feeding?tab=allergens");
+    expect(link).toHaveAttribute("href", "/dashboard/feeding?tab=solids#allergens");
     expect(screen.queryByText(/Egg/)).not.toBeInTheDocument();
   });
 

@@ -30,6 +30,12 @@ verify_jwt = true
 [functions.generate-sign-plan]
 verify_jwt = true
 
+# Solids weekly meal plan (Food page, Nov 2026). Called from the app via
+# supabase.functions.invoke with the parent's JWT; same mode as
+# generate-sign-plan.
+[functions.generate-meal-plan]
+verify_jwt = true
+
 [functions.generate-speech-class]
 verify_jwt = true
 

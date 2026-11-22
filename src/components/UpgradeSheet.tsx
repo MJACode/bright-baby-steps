@@ -56,6 +56,10 @@ const FEATURE_HOOK: Record<PremiumFeature, { headline: string; sub: string }> = 
     headline: "Talk with your baby before they can talk.",
     sub: "A staged, ASL-based sign program — 20 signs from MILK to THANK YOU, with progress tracking for every sign your baby learns.",
   },
+  "meal-plan": {
+    headline: "Fresh meal ideas every week.",
+    sub: "Flare+ builds a new weekly plan of solids ideas, matched to your baby's age, feeding style, and the allergens you've introduced.",
+  },
 };
 
 const PERKS = [

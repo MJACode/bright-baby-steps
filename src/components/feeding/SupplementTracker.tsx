@@ -157,10 +157,10 @@ export default function SupplementTracker() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="font-display text-xl font-bold flex items-center gap-2">
-            <Pill className="w-6 h-6 text-feeding" /> Supplements
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1">Add a child to start tracking supplements.</p>
+          <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+            <Pill className="w-6 h-6 text-feeding" /> Vitamins
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">Add a child to start tracking vitamins.</p>
         </div>
         <AddChildDialog />
       </div>
@@ -175,10 +175,10 @@ export default function SupplementTracker() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-display text-xl font-bold flex items-center gap-2">
-          <Pill className="w-6 h-6 text-feeding" /> Supplements
-        </h2>
-        <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s supplement tracker</p>
+        <h1 className="font-display text-2xl font-bold flex items-center gap-2">
+          <Pill className="w-6 h-6 text-feeding" /> Vitamins
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">{activeChild.name}'s vitamin D and other supplements</p>
       </div>
 
       {/* Quick-add defaults */}

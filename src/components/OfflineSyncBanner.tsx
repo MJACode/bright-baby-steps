@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useChildren } from "@/hooks/useChildren";
 import { useIsOnline, usePendingLogWrites, useSyncFailures } from "@/hooks/useOfflineSync";
 import {
-  FIX_ROUTE,
+  fixRouteFor,
   canRetrySyncFailure,
   describeSyncFailure,
   discardSyncFailure,
@@ -132,7 +132,7 @@ export function SyncFailuresSheet({
           {failures.map((failure) => {
             const childName = children.find((c) => c.id === failure.childId)?.name ?? "your baby";
             const copy = describeSyncFailure(failure, childName);
-            const fix = FIX_ROUTE[failure.table];
+            const fix = fixRouteFor(failure);
             const at = failure.at ? new Date(failure.at) : null;
             return (
               <li key={failure.rowId} className="rounded-2xl bg-muted/60 p-4 space-y-2">
