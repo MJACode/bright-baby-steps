@@ -3406,3 +3406,42 @@ The finance disclaimer shown on the Financial page (under the intro, below the c
 **P2 (optional):** the `/subprocessors` Resend *purpose* reads "parental-consent confirmations under COPPA, account notifications". An internal notification to Grace Flare about a user's request is arguably within "operating the service" rather than an account notification to the user. Consider widening the purpose to "... and internal notifications about requests you send us" at the next Subprocessors edit. Not blocking.
 
 **Outstanding:** if the email ever gains child data (name, age, signs progress), re-review § 4/§ 5 and the COPPA direct notice first.
+
+---
+
+## 2026-11-22 — Solids Meal Plan: `generate-meal-plan` weekly AI meal ideas (ninth Anthropic edge function) + `meal_plans` table + `children.solids_method`
+
+**Reviewer:** in-house (Claude `legal` pre-review, not legal advice; founder sign-off at merge). **Risk level:** Medium. It's the same processor and purpose already in the direct notice, but it is the first time Grace Flare's own functions send allergen status (health-adjacent) to Anthropic, it shows food suggestions for infants (choking / allergen safety), and the free plan reaches non-Flare+ accounts. Disclosures ship in the same PR as the function.
+
+**What changed:**
+- New edge function `supabase/functions/generate-meal-plan/` + helpers `supabase/functions/_shared/mealPlan.ts`. It is the ninth that calls Anthropic: briefing, weekly-insights, chat, extract-memory, generate-speech-class, visit-prep-questions, generate-activity-plan, generate-sign-plan, generate-meal-plan. `nutrition` persona + `MEAL_PLAN_INSTRUCTION`; `verify_jwt = true`. Gate, all checked BEFORE the paid call: caller Flare+ OR `child_owner_is_premium` (family-wide), OR no `meal_plans` row yet for the child (1 free plan per child); 409 if a stored week is on or after the requested week; 403 unless `partner_can_write(owner)`.
+- Migration `20261122000000_meal_plans.sql`: `children.solids_method` (`blw` | `traditional` | `mix` | NULL) and `public.meal_plans` (one current row per child, UNIQUE child_id, upserted weekly with the caller's JWT; no DELETE policy; `meal_plans_guard_write` trigger lets week_start only move forward).
+- Model output goes through a deterministic sanitizer: choking-hazard rules, under-12-month honey / cow's-milk-drink / added salt-sugar rules, an allergen keyword union with the declared allergens, an off-tone filter. Fewer than 3 surviving ideas -> 422, nothing stored.
+- Disclosures: Privacy § 2 (AI plans bullet; tracking bullet names solids method and noted reactions), § 4 (feature list + Meal Plan data clause; the "name ... stays with us" sentence scoped to Sign Language + Meal Plan, which also fixes an existing over-broad reading), "Last reviewed" -> November 22, 2026; `/subprocessors` Anthropic purpose + dataCategories, "Last reviewed" -> November 22, 2026; FAQ (AI features, third parties, stored data); Terms § 3 (meal ideas named + food-safety responsibility sentence); CoppaDirectNotice "How we use it" names meal plans (best practice); `EXPORT_TABLES` gains `mealPlans`.
+
+**Data sent to Anthropic (verified against code, `buildUserText`):** corrected age in whole months (4–36, floored); feeding method as fixed text; "already eats" = allergen slugs marked introduced and not reaction_noted; "leave out" = every other slug of the 9 (not introduced, in progress, or reaction noted); a fixed age-rule line. Not sent: child id, user id, name, DOB, gender, interests, notes, free text, which allergens had a reaction. The request is allowlist-rebuilt, slugs checked against the 9-slug list, body capped at 16 KB, and the body is never logged.
+
+**Data minimization (16 CFR § 312.7):** like the sign plan, no first name. The model needs an avoid list, not the reason for it, so reaction status is folded into "leave out" and can't be told apart from "not yet introduced" or "in progress". Inputs are bounded enums / integers.
+
+**Is the leave-out list health data?** Food-allergy reaction status is information about a health condition. Inside Grace Flare it was already collected (`allergen_introductions`, under VPC) and stays there. What reaches Anthropic is (a) not reasonably linkable to a child (no identifier, just age-in-months + a slug set) and (b) ambiguous about reactions by design. The disclosure is authorized and disclosed (Privacy § 4), so it is not a "breach" under the FTC Health Breach Notification Rule (16 CFR § 318, as amended 2024). The stored `meal_plans.plan` records, per idea, which allergens it contains (implying tolerated allergens): derived health-adjacent data tied to child_id, held under the same RLS / deletion / export regime as the allergen logs it comes from.
+
+**Retention / deletion:** one current plan per child, overwritten weekly. Kept until the child is deleted (`child_id ON DELETE CASCADE`) or the account is (`parent_id ON DELETE CASCADE` from `auth.users`, reached by `delete_user_account()` / `_purge_user_data()` and therefore by the 24-month inactive purge); no purge-function edit. No Storage objects. Flare+ lapse deletes nothing. Included in Export My Data (`mealPlans`). Anthropic-side retention as in Privacy § 4.
+
+**Subprocessor / DPA:** Anthropic, PBC — not a new subprocessor; no 30-day notice under Privacy § 5. DPA accepted 2026-05-08 covers the flow; no-training basis unchanged.
+
+**RLS:** SELECT owner or `has_partner_access`; INSERT/UPDATE `partner_can_write(parent_id)` + EXISTS owner binding on `children` (explicit WITH CHECK on UPDATE); no DELETE (keeps the weekly limit and free-plan marker honest). Viewers can read, not generate.
+
+**COPPA analysis:** same processor and purpose ("AI-assisted ... weekly plans") already in the signed direct notice; allergen and feeding data already collected under VPC; `solids_method` is a feeding preference within the noticed "feeding" category; less identifying than most existing flows. Non-material change under 16 CFR § 312.5(a)(1); no renewed VPC and no new direct notice, following the 2026-07-19 Activities, 2026-08-28 Baby Signs and 2026-10-06 sign-plan entries. Difference from the sign plan: first health-adjacent category (allergen status) Grace Flare itself sends to Anthropic — hence Medium, and hence question 1 below for outside counsel.
+
+**Safety / liability:** Terms § 3 names AI meal ideas and adds a food-safety responsibility sentence; every plan view shows the footer (AI-made, allergen check, safe texture, upright, supervision, pediatrician for allergens, 911).
+
+**Code refs:** PR #320 (commit hash at merge).
+
+**Follow-ups:**
+1. Server trusts client-supplied allergen lists; a stale offline cache could mark a reaction allergen as "already eats". Derive both lists server-side from `allergen_introductions` under the caller's RLS. P1 (safety) — targeted for this PR.
+2. Allergen keyword gaps for composite foods (pesto, teriyaki, Worcestershire, aioli, bechamel, naan, udon, seitan, panko, breaded, granola, pretzels, teething rusks, brioche / challah, Nutella, buttermilk, fortified cereal). P1 — targeted for this PR.
+3. Choking-hazard gaps vs AAP / CDC list (raisins / dried fruit, seeds, whole cherries / olives with pits, meat / cheese cubes or chunks, celery, raw peas, corn, fish with bones). P1 — targeted for this PR.
+4. Stored plans re-checked against the CURRENT allowed allergen set on every render; footer on every plan view. P0 for the UI pass.
+5. Anthropic error body logged on non-OK responses (request-describing, not child data). Log status + length only. P2.
+6. Existing over-disclosure: Privacy § 4, `/subprocessors` and CLAUDE.md still list "briefing" though the 2026-10-12 entry says the Home briefing was removed. Low risk; clean up separately.
+7. Outside counsel (when commissioned): (a) is sending allergen status (even ambiguous) to an already-disclosed AI processor a material change under § 312.5(a)(1) or a separate-consent disclosure under § 312.5(a)(2)? (b) WA My Health My Data Act / CT / NV consumer-health-data notice and consent for allergen-derived data; (c) adequacy of the footer + Terms § 3 against negligence / product-liability claims for an AI food idea.
