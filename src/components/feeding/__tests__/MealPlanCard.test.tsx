@@ -3,13 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { MealPlanCard } from "@/components/feeding/MealPlanCard";
 import { MEAL_PLAN_ERROR_COPY, MealPlanError, useGenerateMealPlan, type MealPlanErrorCode } from "@/hooks/useMealPlan";
-import { MEAL_PLAN_DISCLAIMER, MEAL_PLAN_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
+import { MEAL_PLAN_DISCLAIMER, MEAL_PLAN_MILK_FIRST_COPY, MEAL_PLAN_TOO_EARLY_COPY } from "@/lib/mealPlanCopy";
 import { MEAL_PLAN_INTROS, buildIdeaName } from "../../../../supabase/functions/_shared/mealPlan";
 import { FOOD_BY_SLUG } from "@/lib/foodCatalog";
 import type { Role } from "@/hooks/useCurrentRole";
 
 const h = vi.hoisted(() => ({
   row: null as { week_start: string; plan: unknown } | null,
+  readError: null as { message: string } | null,
+  reads: 0,
   invoke: vi.fn(),
   toast: vi.fn(),
   premium: { isPremium: false, isLoading: false },
@@ -20,7 +22,10 @@ const h = vi.hoisted(() => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: h.row, error: null }) }) }),
+      select: () => ({ eq: () => ({ maybeSingle: async () => {
+        h.reads += 1;
+        return h.readError ? { data: null, error: h.readError } : { data: h.row, error: null };
+      } }) }),
     }),
     functions: { invoke: (...args: unknown[]) => h.invoke(...args) },
   },
@@ -131,6 +136,8 @@ const httpError = (status: number, code: string) => ({
 
 beforeEach(() => {
   h.row = null;
+  h.readError = null;
+  h.reads = 0;
   h.invoke.mockReset();
   h.toast.mockReset();
   h.premium = { isPremium: false, isLoading: false };
@@ -285,6 +292,40 @@ describe("MealPlanCard plan", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Your first plan is free" }));
     expect(await screen.findByText("Upgrade sheet")).toBeInTheDocument();
     expect(h.toast).not.toHaveBeenCalled();
+  });
+});
+
+describe("MealPlanCard plan read error", () => {
+  it("shows a retry state with no Build button, and Try again re-reads the plan", async () => {
+    h.readError = { message: "Failed to fetch" };
+    renderCard();
+    expect(await screen.findByText("Your meal plan didn't load. Check your connection and try again.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Your first plan is free" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Build this week's meal plan" })).not.toBeInTheDocument();
+    expect(h.reads).toBe(1);
+
+    h.readError = null;
+    h.row = { week_start: WEEK, plan: PLAN };
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText(INTRO)).toBeInTheDocument();
+    expect(h.reads).toBe(2);
+    expect(screen.queryByText(/didn't load/)).not.toBeInTheDocument();
+  });
+});
+
+describe("MealPlanCard milk line", () => {
+  it("shows under the intro at 9 months", async () => {
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard({ ageMonths: 9 });
+    expect(await screen.findByText(INTRO)).toBeInTheDocument();
+    expect(screen.getByText(MEAL_PLAN_MILK_FIRST_COPY)).toBeInTheDocument();
+  });
+
+  it("is absent at 13 months", async () => {
+    h.row = { week_start: WEEK, plan: PLAN };
+    renderCard({ ageMonths: 13 });
+    expect(await screen.findByText(INTRO)).toBeInTheDocument();
+    expect(screen.queryByText(MEAL_PLAN_MILK_FIRST_COPY)).not.toBeInTheDocument();
   });
 });
 

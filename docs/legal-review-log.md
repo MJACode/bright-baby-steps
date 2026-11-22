@@ -3471,3 +3471,6 @@ The finance disclaimer shown on the Financial page (under the intro, below the c
 **Founder decision — AI picks foods only:** QA showed the model-written meal name, serving tip and intro could still name off-list hazard foods ("Hot dog pieces") or contradict catalog prep ("Cut the grapes in half"). The model now returns only meal slot + 1–3 catalog slugs per idea. Meal names are built from catalog names, the intro is fixed copy, and serving tips are removed. The client rebuilds name and prep from the catalog on every render, so stored text never displays. Privacy § 4 now states the AI only chooses which foods go together.
 
 **Outside-counsel question 1 (above) now reads:** is sending allergen-tolerance status (via food names) to an already-disclosed AI processor a material change under § 312.5(a)(1), or a separate-consent disclosure under § 312.5(a)(2)?
+
+### 2026-11-22 (addendum 3) — Privacy § 4 precision
+Privacy § 4 now reads "The AI only chooses which foods go together and at which meal" (QA: the model also picks the meal slot from a fixed list). Non-material wording precision; no data-flow change. Plan view also shows a fixed line for babies under 12 months that breast milk or formula is still the main food (standard AAP guidance, not model text).

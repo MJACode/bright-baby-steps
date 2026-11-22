@@ -25,6 +25,7 @@ import {
 import {
   MEAL_ALLERGEN_LABELS,
   MEAL_PLAN_DISCLAIMER,
+  MEAL_PLAN_MILK_FIRST_COPY,
   MEAL_PLAN_TOO_EARLY_COPY,
   MEAL_SLOT_LABELS,
 } from "@/lib/mealPlanCopy";
@@ -117,12 +118,14 @@ function WeekNote({ isPremium }: { isPremium: boolean | null }) {
 
 function PlanView({
   plan,
+  ageMonths,
   canLog,
   defaultOpen,
   isPremium,
   onLog,
 }: {
   plan: MealPlan;
+  ageMonths: number;
   canLog: boolean;
   defaultOpen: boolean;
   isPremium: boolean | null;
@@ -132,6 +135,7 @@ function PlanView({
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="space-y-3">
       {plan.intro && <p className="text-sm leading-relaxed">{plan.intro}</p>}
+      {ageMonths < 12 && <p className="text-sm leading-relaxed">{MEAL_PLAN_MILK_FIRST_COPY}</p>}
       <CollapsibleTrigger className="touch-target flex w-full items-center justify-between gap-2 text-sm font-semibold text-feeding group">
         {open ? "Hide ideas" : `See ${plan.ideas.length} meal ideas`}
         <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
@@ -205,7 +209,7 @@ export function MealPlanCard({
         .filter(([, status]) => status === "introduced")
         .map(([slug]) => slug)
     : undefined;
-  const { data, isLoading } = useMealPlan(childId, weekStart, {
+  const { data, isLoading, isError, isFetching, refetch } = useMealPlan(childId, weekStart, {
     ageMonths,
     allowedAllergens,
     enabled: !!allergenStatuses,
@@ -297,11 +301,22 @@ export function MealPlanCard({
     if (!online) return shell(<OfflineAiNotice />);
     return shell(loadingBody);
   }
+  // Without this, a failed read looks like "no plan yet" and offers Build.
+  if (isError && !data) {
+    return shell(
+      <>
+        <p className="text-sm leading-relaxed">Your meal plan didn't load. Check your connection and try again.</p>
+        <Button type="button" variant="outline" className="touch-target" disabled={isFetching} onClick={() => refetch()}>
+          Try again
+        </Button>
+      </>,
+    );
+  }
 
   const plan = data?.plan ?? null;
   if (plan) {
     return shell(
-      <PlanView plan={plan} canLog={canEdit} defaultOpen={justBuilt} isPremium={weekNotePremium} onLog={onLogIdea} />,
+      <PlanView plan={plan} ageMonths={ageMonths} canLog={canEdit} defaultOpen={justBuilt} isPremium={weekNotePremium} onLog={onLogIdea} />,
     );
   }
 
