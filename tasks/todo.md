@@ -58,6 +58,12 @@ Trigger: founder review of the Food page. One release (founder chose not to phas
 - [ ] CLAUDE.md "Eight edge functions" → nine
 - [ ] Meal plan "not medical advice" + choking-safety footer copy reviewed by `nutrition` + `legal`
 
+## Review — shipped 2026-11-22 (PR #320, deploy run 79 green)
+- Live: `meal_plans` (RLS on, 3 policies), `children.solids_method`, migration 20261122000000; `generate-meal-plan` ACTIVE, verify_jwt on.
+- Design changed twice after QA: keyword filter → curated 102-food catalog → AI picks foods only (no model text reaches parents). Allergen status derived server-side.
+- Disclosure corrected after QA printed the real prompt: food names can reveal tolerated allergens.
+- Follow-ups: registered-dietitian review of the catalog; short display names for catalog foods; lazy-load the ~85 KB catalog; outside-counsel questions in the legal log; manual device check of the Solids tab (free / Flare+ / partner; 4–5, 6, 9, 12+ months).
+
 ## Open risks
 - Vitamins in More: daily vitamin D logging gets harder to find. Watch supplement log volume after ship.
 - AI food content to infants: mitigated by hazard filter + nutrition persona + no-free-text input.
