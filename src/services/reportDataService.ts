@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { format, startOfDay, endOfDay } from "date-fns";
-import { generatePediatricianReport, ReportData, WordJournalEntry } from "@/services/pdfReportBuilder";
+import { generatePediatricianReport, ReportData, ReportFoodAvoidance, WordJournalEntry } from "@/services/pdfReportBuilder";
+import { FOOD_BY_SLUG } from "@/lib/foodCatalog";
 import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
@@ -15,6 +16,31 @@ function distinctWordCount(rows: { word_or_sound: string }[]): number {
   return new Set(rows.map((r) => r.word_or_sound.trim().toLowerCase())).size;
 }
 
+type FoodAvoidanceRow = {
+  food_slug: string | null;
+  custom_food: string | null;
+  reason: string;
+  note: string | null;
+  created_at: string;
+};
+
+/**
+ * child_food_avoidances rows -> report entries. Catalog slugs resolve to the
+ * catalog name (an unknown slug shows as-is rather than disappearing);
+ * custom_food is the parent's own text. Reactions first, then newest first.
+ */
+export function toReportFoodAvoidances(rows: readonly FoodAvoidanceRow[] | null | undefined): ReportFoodAvoidance[] {
+  return (rows ?? [])
+    .flatMap((r): ReportFoodAvoidance[] => {
+      const food = r.food_slug ? FOOD_BY_SLUG.get(r.food_slug)?.name ?? r.food_slug : r.custom_food?.trim();
+      if (!food || (r.reason !== "reaction" && r.reason !== "preference")) return [];
+      return [{ food, isCustom: !r.food_slug, reason: r.reason, note: r.note, addedAt: r.created_at }];
+    })
+    .sort((a, b) =>
+      a.reason === b.reason ? b.addedAt.localeCompare(a.addedAt) : a.reason === "reaction" ? -1 : 1,
+    );
+}
+
 export async function fetchReportData(
   childId: string,
   dateFrom: Date,
@@ -26,7 +52,7 @@ export async function fetchReportData(
   const fromDate = format(dateFrom, "yyyy-MM-dd");
   const toDate = format(dateTo, "yyyy-MM-dd");
 
-  const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes, temperatureRes, wordRes, wordTotalRes] =
+  const [feedingRes, diaperRes, sleepRes, milestoneRes, allergenRes, categoryRes, lastExportRes, supplementRes, illnessRes, medicationRes, temperatureRes, wordRes, wordTotalRes, avoidRes] =
     await Promise.all([
       sections.has("feeding")
         ? supabase.from("feeding_logs").select("*").eq("child_id", childId).gte("logged_at", from).lte("logged_at", to).order("logged_at", { ascending: false })
@@ -72,6 +98,16 @@ export async function fetchReportData(
       sections.has("words")
         ? supabase.from("speech_journal").select("word_or_sound").eq("child_id", childId)
         : Promise.resolve({ data: [], error: null }),
+      // Solids avoid list, with the allergens section. The current list, not
+      // windowed by date: a reaction from before the window still matters.
+      // A failed read (e.g. before the migration lands) yields [].
+      sections.has("allergens")
+        ? supabase
+            .from("child_food_avoidances")
+            .select("food_slug, custom_food, reason, note, created_at")
+            .eq("child_id", childId)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] }),
     ]);
 
   return {
@@ -80,6 +116,7 @@ export async function fetchReportData(
     sleeps: (sleepRes.data as any[]) ?? [],
     milestones: (milestoneRes.data as any[]) ?? [],
     allergens: (allergenRes.data as any[]) ?? [],
+    foodAvoidances: toReportFoodAvoidances(avoidRes.data as FoodAvoidanceRow[] | null),
     categories: (categoryRes.data as any[]) ?? [],
     lastExportDate: (lastExportRes.data as any[])?.[0]?.created_at ?? null,
     supplements: (supplementRes.data as any[]) ?? [],

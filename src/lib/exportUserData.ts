@@ -63,6 +63,7 @@ export const EXPORT_TABLES: readonly ExportTable[] = [
   { key: "childSignPractice", table: "child_sign_practice", label: "sign language practice days" },
   { key: "signPlans", table: "sign_plans", label: "sign language plans" },
   { key: "mealPlans", table: "meal_plans", label: "meal plans" },
+  { key: "foodAvoidances", table: "child_food_avoidances", label: "foods to avoid" },
   { key: "childLeaps", table: "child_leaps", label: "leaps" },
   { key: "customMilestones", table: "custom_milestones", label: "custom milestones" },
   { key: "milestoneFlags", table: "milestone_flags", label: "milestone flags" },

@@ -12,6 +12,18 @@ export interface WordJournalEntry {
   context: string | null;
 }
 
+/** One Solids avoid-list entry, resolved for display by fetchReportData. */
+export interface ReportFoodAvoidance {
+  /** Catalog food name, or the parent's own words for an "Other" food. */
+  food: string;
+  /** true when the food isn't from the catalog (custom_food). */
+  isCustom: boolean;
+  reason: "reaction" | "preference";
+  note: string | null;
+  /** created_at (ISO): when the food was added to the list. */
+  addedAt: string;
+}
+
 export interface ReportData {
   child: { name: string; date_of_birth: string; is_premature: boolean | null; due_date: string | null };
   dateFrom: Date;
@@ -27,6 +39,8 @@ export interface ReportData {
   diapers: any[];
   sleeps: any[];
   allergens: any[];
+  /** Solids avoid list (allergens section). Optional until the PDF renders it. */
+  foodAvoidances?: ReportFoodAvoidance[];
   illnesses: any[];
   medications: any[];
   temperatures: any[];

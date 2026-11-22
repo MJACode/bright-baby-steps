@@ -9,6 +9,10 @@ export {
   IRON_RICH_SLUGS,
   MAX_FOOD_REPEATS,
   PLAN_LIMITS,
+  SERVE_SHAPES,
+  ageBand,
+  serveShape,
   type AgeBand,
   type CatalogFood,
+  type ServeShape,
 } from "../../supabase/functions/_shared/foodCatalog.ts";

@@ -90,7 +90,7 @@ describe("parseMealPlan", () => {
       { childId: CHILD_ID, weekStart: WEEK, correctedAgeMonths: 10, method: "mix" },
       Date.UTC(2026, 10, 25, 12),
     )!;
-    const input = { ...request, introducedAllergens: ["egg" as const], reactionAllergens: [] };
+    const input = { ...request, introducedAllergens: ["egg" as const], reactionAllergens: [], avoidSlugs: [] };
     const server = sanitizePlan(
       {
         ideas: [["egg-scrambled", "zucchini"], ["butternut-squash"], ["red-lentils", "carrot"], ["pear"]].map((foods) => ({
