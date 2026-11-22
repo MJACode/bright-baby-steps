@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MEAL_PLAN_CATALOG_MIN_AGE_MONTHS,
   buildMealPlanRequest,
   currentMealPlan,
   isMealPlanCurrent,
@@ -17,6 +18,7 @@ function storedIdea(n: number, extra: Record<string, unknown> = {}): Record<stri
     id: `idea-${n}`,
     name: `Idea ${n}`,
     mealSlot: "lunch",
+    foods: ["zucchini"],
     blwPrep: "Steamed soft strips.",
     allergens: [],
     foodCategory: "vegetable",
@@ -74,6 +76,12 @@ describe("buildMealPlanRequest", () => {
   });
 });
 
+describe("MEAL_PLAN_CATALOG_MIN_AGE_MONTHS", () => {
+  it("is the youngest catalog minAgeMonths (below it the server 422s no_eligible_foods)", () => {
+    expect(MEAL_PLAN_CATALOG_MIN_AGE_MONTHS).toBe(6);
+  });
+});
+
 describe("isSolidsMethod", () => {
   it("accepts only the three methods", () => {
     expect(["blw", "traditional", "mix"].every(isSolidsMethod)).toBe(true);
@@ -84,20 +92,18 @@ describe("isSolidsMethod", () => {
 
 describe("parseMealPlan", () => {
   it("round-trips a server-sanitized plan unchanged", () => {
-    const input = validateInput(
-      { childId: CHILD_ID, weekStart: WEEK, correctedAgeMonths: 10, method: "mix", introducedAllergens: ["egg"], reactionAllergens: [] },
+    const request = validateInput(
+      { childId: CHILD_ID, weekStart: WEEK, correctedAgeMonths: 10, method: "mix" },
       Date.UTC(2026, 10, 25, 12),
     )!;
+    const input = { ...request, introducedAllergens: ["egg" as const], reactionAllergens: [] };
     const server = sanitizePlan(
       {
         intro: "Milk is still your baby's main food; solids are for exploring.",
-        ideas: [1, 2, 3, 4].map((n) => ({
-          name: `Steamed squash ${n}`,
+        ideas: [["egg-scrambled", "zucchini"], ["butternut-squash"], ["red-lentils", "carrot"], ["pear"]].map((foods, n) => ({
+          name: `Idea ${n}`,
           mealSlot: "dinner",
-          blwPrep: "Steamed soft wedges.",
-          traditionalPrep: "Steamed and mashed smooth.",
-          allergens: n === 1 ? ["egg"] : [],
-          foodCategory: "vegetable",
+          foods,
         })),
       },
       input,
@@ -127,8 +133,11 @@ describe("parseMealPlan", () => {
         storedIdea(2),
         storedIdea(3),
         storedIdea(4, { mealSlot: "brunch" }),
-        storedIdea(5, { allergens: ["gluten"] }),
-        storedIdea(6, { allergens: "egg" }),
+        storedIdea(5, { foods: "zucchini" }),
+        storedIdea(6, { foods: ["dragonfruit"] }),
+        storedIdea(8, { foods: [] }),
+        storedIdea(9, { foods: ["zucchini", "zucchini"] }),
+        storedIdea(10, { foods: ["pear", "plum", "peach", "kiwi"] }),
         storedIdea(1, { name: "Duplicate id" }),
         storedIdea(7, { blwPrep: "  " }),
       ]),
@@ -147,18 +156,33 @@ describe("parseMealPlan", () => {
     expect(mixMissing).toBeNull(); // mix needs both
   });
 
-  it("drops ideas with allergens outside allowedAllergens when given", () => {
-    const ideas = [storedIdea(1), storedIdea(2), storedIdea(3), storedIdea(4, { allergens: ["egg"] })];
+  it("re-derives allergens and category from the catalog, ignoring the stored values", () => {
+    const out = parseMealPlan(
+      stored([
+        storedIdea(1, { foods: ["egg-scrambled", "zucchini"], allergens: [], foodCategory: "fruit" }),
+        storedIdea(2, { foods: ["toast-strips"], allergens: ["wheat"] }),
+        storedIdea(3, { foods: ["pear"], allergens: ["peanut"] }),
+      ]),
+    )!;
+    expect(out.ideas[0].allergens).toEqual(["egg"]);
+    expect(out.ideas[0].foodCategory).toBe("protein");
+    expect(out.ideas[1].allergens).toEqual(["egg", "milk", "wheat", "soy", "sesame"]);
+    expect(out.ideas[2].allergens).toEqual([]);
+    expect(out.ideas[0].foods).toEqual(["egg-scrambled", "zucchini"]);
+  });
+
+  it("drops ideas whose catalog allergens fall outside allowedAllergens when given", () => {
+    const ideas = [storedIdea(1), storedIdea(2), storedIdea(3), storedIdea(4, { foods: ["egg-hard-boiled"], allergens: [] })];
     expect(parseMealPlan(stored(ideas))!.ideas).toHaveLength(4);
     expect(parseMealPlan(stored(ideas), { allowedAllergens: [] })!.ideas.map((i) => i.id)).not.toContain("idea-4");
     expect(parseMealPlan(stored(ideas), { allowedAllergens: ["egg"] })!.ideas).toHaveLength(4);
   });
 
-  it("coerces an unknown food category to other and drops unknown fields", () => {
+  it("takes the category from the catalog and drops unknown fields", () => {
     const out = parseMealPlan(
       stored([storedIdea(1, { foodCategory: "legume", calories: 90 }), storedIdea(2), storedIdea(3)], { extra: 1 }),
     )!;
-    expect(out.ideas[0].foodCategory).toBe("other");
+    expect(out.ideas[0].foodCategory).toBe("vegetable"); // zucchini's catalog category
     expect("calories" in out.ideas[0]).toBe(false);
     expect("extra" in out).toBe(false);
   });

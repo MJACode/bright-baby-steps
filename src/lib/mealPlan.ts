@@ -3,12 +3,14 @@
 // meal_plans.plan. Server side: supabase/functions/_shared/mealPlan.ts (the
 // constant lists here are locked against it by src/test/mealPlan.server.test.ts).
 //
-// parseMealPlan is a SHAPE check, not the safety filter: the hazard and
-// allergen filter runs on the server before the plan is stored. A writer can
-// still put arbitrary JSON in their own family's row through PostgREST, so
-// everything is re-validated here before it renders, and ideas that declare
-// an allergen outside `allowedAllergens` (when given) are dropped.
+// parseMealPlan re-validates every stored plan before it renders (a writer can
+// put arbitrary JSON in their own family's row through PostgREST). Each idea's
+// `foods` must be known catalog slugs; its allergens and food category are
+// RE-DERIVED from the catalog (src/lib/foodCatalog.ts, the same module the
+// server builds from), never trusted from the row, and an idea whose derived
+// allergens fall outside `allowedAllergens` (when given) is dropped.
 
+import { FOOD_BY_SLUG, FOOD_CATALOG } from "@/lib/foodCatalog";
 import { ALLERGEN_SLUGS } from "@/services/allergenService";
 
 export type AllergenSlug = (typeof ALLERGEN_SLUGS)[number];
@@ -26,6 +28,12 @@ export type MealFoodCategory = (typeof MEAL_FOOD_CATEGORIES)[number];
 
 /** The server rejects (400) a correctedAgeMonths outside this range. */
 export const MEAL_PLAN_MIN_AGE_MONTHS = 4;
+/**
+ * The youngest age any catalog food is offered at (6 today). Below it the
+ * server answers 422 no_eligible_foods without building a plan, so the card
+ * should not offer "Build a plan" yet.
+ */
+export const MEAL_PLAN_CATALOG_MIN_AGE_MONTHS = Math.min(...FOOD_CATALOG.map((f) => f.minAgeMonths));
 export const MEAL_PLAN_MAX_AGE_MONTHS = 36;
 
 /**
@@ -46,6 +54,8 @@ export interface MealIdea {
   id: string;
   name: string;
   mealSlot: MealSlot;
+  /** Catalog slugs (1–3). The source of `allergens` and `foodCategory`. */
+  foods: string[];
   /** Present for method "blw" and "mix". */
   blwPrep?: string;
   /** Present for method "traditional" and "mix". */
@@ -63,11 +73,10 @@ export interface MealPlan {
 }
 
 const MAX_IDEAS = 7;
+const MAX_FOODS_PER_IDEA = 3;
 const MIN_IDEAS = 3;
-const ALLERGEN_SET: ReadonlySet<string> = new Set(ALLERGEN_SLUGS);
 const METHOD_SET: ReadonlySet<string> = new Set(SOLIDS_METHODS);
 const SLOT_SET: ReadonlySet<string> = new Set(MEAL_SLOTS);
-const CATEGORY_SET: ReadonlySet<string> = new Set(MEAL_FOOD_CATEGORIES);
 
 export function isSolidsMethod(value: unknown): value is SolidsMethod {
   return typeof value === "string" && METHOD_SET.has(value);
@@ -154,17 +163,20 @@ export function parseMealPlan(
     const traditionalPrep = wantTraditional ? cleanText(item.traditionalPrep) : null;
     if ((wantBlw && !blwPrep) || (wantTraditional && !traditionalPrep)) continue;
 
-    if (!Array.isArray(item.allergens)) continue;
-    if (item.allergens.some((s) => typeof s !== "string" || !ALLERGEN_SET.has(s))) continue;
-    const allergens = uniqueSlugs(item.allergens as string[]);
+    // Foods: 1–3 distinct known catalog slugs; one unknown slug drops the idea.
+    const rawFoods = item.foods;
+    if (!Array.isArray(rawFoods) || rawFoods.length === 0 || rawFoods.length > MAX_FOODS_PER_IDEA) continue;
+    if (rawFoods.some((f) => typeof f !== "string" || !FOOD_BY_SLUG.has(f))) continue;
+    const foods = rawFoods as string[];
+    if (new Set(foods).size !== foods.length) continue;
+    const catalogFoods = foods.map((f) => FOOD_BY_SLUG.get(f)!);
+
+    // Re-derived, not read from the row.
+    const allergens = uniqueSlugs(catalogFoods.flatMap((f) => f.allergens));
     if (allowed && allergens.some((s) => !allowed.has(s))) continue;
+    const foodCategory = catalogFoods[0].category as MealFoodCategory;
 
-    const foodCategory =
-      typeof item.foodCategory === "string" && CATEGORY_SET.has(item.foodCategory)
-        ? (item.foodCategory as MealFoodCategory)
-        : "other";
-
-    const idea: MealIdea = { id, name, mealSlot: item.mealSlot as MealSlot, allergens, foodCategory };
+    const idea: MealIdea = { id, name, mealSlot: item.mealSlot as MealSlot, foods, allergens, foodCategory };
     if (blwPrep) idea.blwPrep = blwPrep;
     if (traditionalPrep) idea.traditionalPrep = traditionalPrep;
     const servingTip = cleanText(item.servingTip);

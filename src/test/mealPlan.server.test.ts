@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { canGenerateMealPlan, MEAL_FOOD_CATEGORIES, MEAL_SLOTS as CLIENT_SLOTS, SOLIDS_METHODS as CLIENT_METHODS } from "@/lib/mealPlan";
-import { ALLERGEN_SLUGS as CLIENT_ALLERGENS } from "@/services/allergenService";
+import { ALLERGEN_SLUGS as CLIENT_ALLERGENS, getAllergenStatus } from "@/services/allergenService";
 import {
   ALLERGEN_KEYWORDS,
   ALLERGEN_SLUGS,
@@ -13,13 +13,21 @@ import {
   FORM_HAZARDS,
   MAX_IDEAS,
   MAX_NAME,
-  MAX_PREP,
   MAX_SERVING_TIP,
+  MIN_ELIGIBLE_FOODS,
   MEAL_SLOTS,
   MIN_IDEAS,
   SOLIDS_METHODS,
+  INTRODUCTIONS_SELECT,
+  ageBand,
   allergensMentioned,
+  buildPrep,
+  eligibleFoods,
   allowedAllergens,
+  cleanString,
+  deriveAllergenLists,
+  introductionStatus,
+  normalizeText,
   buildUserText,
   hazardsIn,
   mealPlanGate,
@@ -29,6 +37,10 @@ import {
   type SolidsMethod,
   type ValidInput,
 } from "../../supabase/functions/_shared/mealPlan";
+import { FOOD_BY_SLUG, MAX_FOOD_REPEATS } from "../../supabase/functions/_shared/foodCatalog";
+
+/** Reported to the coordinator; update deliberately when the catalog changes. */
+const SEVEN_MONTH_PEANUT_EGG_ELIGIBLE = 73;
 
 // Locks the generate-meal-plan edge function's pure helpers, imported straight
 // from supabase/functions/_shared (same pattern as signPlan.server.test.ts).
@@ -64,32 +76,24 @@ function input(overrides: Partial<ValidInput> = {}): ValidInput {
 
 type RawIdea = Record<string, unknown>;
 
-function idea(name: string, extra: RawIdea = {}): RawIdea {
-  return {
-    name,
-    mealSlot: "lunch",
-    blwPrep: "Steam until soft enough to squash between your fingers, then cut into finger-length strips.",
-    traditionalPrep: "Steam until soft, then mash with a fork to a smooth texture.",
-    servingTip: "Offer alongside a familiar food.",
-    allergens: [],
-    foodCategory: "vegetable",
-    ...extra,
-  };
+/** A model idea: the model only supplies name, mealSlot, foods and servingTip. */
+function idea(name: string, foods: unknown, extra: RawIdea = {}): RawIdea {
+  return { name, mealSlot: "lunch", foods, ...extra };
 }
 
 const SAFE_IDEAS: RawIdea[] = [
-  idea("Sweet potato wedges"),
-  idea("Avocado spears", { foodCategory: "fruit", mealSlot: "breakfast" }),
-  idea("Soft-cooked broccoli florets", { mealSlot: "dinner" }),
-  idea("Lentil patties", { foodCategory: "protein" }),
-  idea("Banana halves", { foodCategory: "fruit", mealSlot: "snack" }),
+  idea("Sweet potato wedges", ["sweet-potato"]),
+  idea("Avocado spears", ["avocado"], { mealSlot: "breakfast" }),
+  idea("Broccoli and lentils", ["broccoli", "red-lentils"], { mealSlot: "dinner" }),
+  idea("Pear and oat porridge", ["pear", "oatmeal"], { mealSlot: "breakfast" }),
+  idea("Banana", ["banana"], { mealSlot: "snack" }),
 ];
 
 function plan(ideas: RawIdea[], intro: unknown = "Solids this week are for exploring. Milk is still your baby's main food."): Record<string, unknown> {
   return { intro, ideas };
 }
 
-/** The ideas from SAFE_IDEAS plus `extra`, sanitized; returns the surviving names. */
+/** SAFE_IDEAS[0..2] plus `extra`, sanitized; the surviving names (null = 422). */
 function survivors(extra: RawIdea[], inp: ValidInput = input()): string[] | null {
   const out = sanitizePlan(plan([...SAFE_IDEAS.slice(0, 3), ...extra]), inp);
   return out ? out.ideas.map((i) => i.name) : null;
@@ -125,17 +129,8 @@ describe("validateInput", () => {
       body({ name: "Maya", dateOfBirth: "2026-01-01", notes: "free text", introducedAllergens: ["egg", "peanut"] }),
       WED_UTC_NOON,
     );
-    expect(out).toEqual({
-      childId: CHILD_ID,
-      weekStart: WEEK,
-      correctedAgeMonths: 10,
-      method: "blw",
-      introducedAllergens: ["peanut", "egg"], // canonical order
-      reactionAllergens: [],
-    });
-    expect(Object.keys(out!).sort()).toEqual(
-      ["childId", "correctedAgeMonths", "introducedAllergens", "method", "reactionAllergens", "weekStart"],
-    );
+    // Client allergen lists are never read: the server derives them.
+    expect(out).toEqual({ childId: CHILD_ID, weekStart: WEEK, correctedAgeMonths: 10, method: "blw" });
   });
 
   it("floors a fractional age so 11.9 months still gets the under-12 rules", () => {
@@ -155,13 +150,22 @@ describe("validateInput", () => {
     ["age NaN", body({ correctedAgeMonths: Number.NaN })],
     ["unknown method", body({ method: "purees" })],
     ["missing method", body({ method: undefined })],
-    ["unknown allergen slug", body({ introducedAllergens: ["tree_nuts"] })],
-    ["duplicate slug", body({ introducedAllergens: ["egg", "egg"] })],
-    ["allergens not an array", body({ reactionAllergens: "egg" })],
-    ["missing reaction list", body({ reactionAllergens: undefined })],
-    ["too many slugs", body({ introducedAllergens: [...ALLERGEN_SLUGS, "egg"] })],
   ])("rejects %s", (_label, b) => {
     expect(validateInput(b, WED_UTC_NOON)).toBeNull();
+  });
+
+  it.each([
+    ["unknown allergen slug", { introducedAllergens: ["tree_nuts"] }],
+    ["duplicate slug", { introducedAllergens: ["egg", "egg"] }],
+    ["allergens not an array", { reactionAllergens: "egg" }],
+    ["no allergen lists at all", { introducedAllergens: undefined, reactionAllergens: undefined }],
+  ])("accepts and ignores client allergen fields: %s (old clients must not 400)", (_label, extra) => {
+    expect(validateInput(body(extra), WED_UTC_NOON)).toEqual({
+      childId: CHILD_ID,
+      weekStart: WEEK,
+      correctedAgeMonths: 10,
+      method: "blw",
+    });
   });
 
   it("accepts the age bounds 4 and 36", () => {
@@ -170,29 +174,68 @@ describe("validateInput", () => {
   });
 });
 
-describe("buildUserText (data minimization)", () => {
-  it("lists already-eaten and leave-out allergens without saying which had a reaction", () => {
-    const text = buildUserText(input({ introducedAllergens: ["egg", "milk"], reactionAllergens: ["egg"] }));
+describe("eligibleFoods + buildUserText (data minimization)", () => {
+  it("lists only eligible catalog slugs and no allergen state", () => {
+    const inp = input({ introducedAllergens: ["egg", "milk"], reactionAllergens: ["egg"] });
+    const text = buildUserText(inp);
     expect(text).toContain("Corrected age: 10 months.");
-    expect(text).toContain("(may appear): milk.");
-    expect(text).toMatch(/leave out entirely.*peanut, egg, wheat/);
-    expect(text.toLowerCase()).not.toContain("reaction");
+    expect(text).toContain("- yogurt-whole-milk: ");
+    expect(text).not.toContain("egg-scrambled"); // reaction
+    expect(text).not.toContain("peanut-butter-thinned"); // not introduced
+    expect(text).not.toContain("toast-strips"); // needs 5 allergens
+    expect(text.toLowerCase()).not.toMatch(/reaction|allergen|already eats|leave out/);
     expect(text).toContain("no honey");
+    for (const f of eligibleFoods(inp)) expect(text).toContain(`- ${f.slug}: ${f.name} (${f.category}`);
   });
 
-  it("states the method's prep field", () => {
-    expect(buildUserText(input({ method: "traditional" }))).toContain("traditionalPrep only");
-    expect(buildUserText(input({ method: "mix" }))).toContain("both blwPrep and traditionalPrep");
+  it("marks iron-rich foods and states the variety and frequency limits", () => {
+    const text = buildUserText(input());
+    expect(text).toContain("- red-lentils: Red lentils (protein, iron-rich)");
+    expect(text).toContain("At least 2 ideas include an iron-rich food");
+    expect(text).toContain(`at most ${MAX_FOOD_REPEATS} ideas`);
+    expect(text).toMatch(/At most 1 idea in the whole plan may use any of: rice-infant-cereal, rice, congee, rice-noodles, idli/);
+    // canned tuna needs fish, which isn't introduced: its limit line is omitted.
+    expect(text).not.toContain("canned-light-tuna");
+    expect(buildUserText(input({ introducedAllergens: ["fish"] }))).toContain("may use any of: canned-light-tuna");
+  });
+
+  it("filters by age: tempeh (minAgeMonths 9) is hidden at 8 months and offered at 9", () => {
+    const soy = { introducedAllergens: ["soy" as const] };
+    expect(eligibleFoods(input({ ...soy, correctedAgeMonths: 8 })).map((f) => f.slug)).not.toContain("tempeh");
+    expect(eligibleFoods(input({ ...soy, correctedAgeMonths: 9 })).map((f) => f.slug)).toContain("tempeh");
+  });
+
+  it("filters by allergen: every eligible food's allergens are allowed", () => {
+    const inp = input({ introducedAllergens: ["peanut", "egg", "milk"], reactionAllergens: ["milk"] });
+    const allowed = new Set(allowedAllergens(inp));
+    const eligible = eligibleFoods(inp);
+    expect(eligible.every((f) => f.allergens.every((a) => allowed.has(a)))).toBe(true);
+    expect(eligible.some((f) => f.allergens.includes("milk"))).toBe(false);
+    expect(eligible.map((f) => f.slug)).toEqual(expect.arrayContaining(["peanut-butter-thinned", "egg-scrambled"]));
+  });
+
+  it("nothing is eligible under the catalog's 6-month minimum", () => {
+    expect(eligibleFoods(input({ correctedAgeMonths: 5 }))).toHaveLength(0);
+    expect(eligibleFoods(input({ correctedAgeMonths: 6 })).length).toBeGreaterThanOrEqual(MIN_ELIGIBLE_FOODS);
+  });
+
+  it("7-month-old with only peanut and egg introduced: eligible count", () => {
+    const n = eligibleFoods(input({ correctedAgeMonths: 7, introducedAllergens: ["peanut", "egg"] })).length;
+    expect(n).toBe(SEVEN_MONTH_PEANUT_EGG_ELIGIBLE);
   });
 
   it("allowedAllergens excludes reaction allergens", () => {
     expect(allowedAllergens(input({ introducedAllergens: ["egg", "milk"], reactionAllergens: ["egg", "fish"] }))).toEqual(["milk"]);
   });
+
+  it("age bands: 4–8 -> 6-8, 9–11 -> 9-11, 12+ -> 12+", () => {
+    expect([4, 8, 9, 11, 12, 36].map(ageBand)).toEqual(["6-8", "6-8", "9-11", "9-11", "12+", "12+"]);
+  });
 });
 
 describe("hazard filter: under 12 months", () => {
-  it("drops honey at 10 months and keeps it at 14 months", () => {
-    const honey = idea("Oatmeal with honey", { foodCategory: "grain_cereal" });
+  it("drops a honey idea name at 10 months and keeps it at 14 months", () => {
+    const honey = idea("Oatmeal with honey", ["oatmeal"]);
     expect(survivors([honey], input({ correctedAgeMonths: 10 }))).not.toContain("Oatmeal with honey");
     expect(survivors([honey], input({ correctedAgeMonths: 14 }))).toContain("Oatmeal with honey");
   });
@@ -226,11 +269,18 @@ describe("hazard filter: all ages to 36 months", () => {
     expect(hazardsIn("Blueberries, smashed flat", 10)).toEqual([]);
     expect(hazardsIn("Cherry tomatoes cut in half", 20)).toContain("round_fruit");
     expect(hazardsIn("Pink grapefruit segments", 20)).toEqual([]);
-    const grapes = idea("Grapes", { blwPrep: "Serve whole grapes in a bowl.", foodCategory: "fruit" });
-    const quartered = idea("Quartered grapes", { blwPrep: "Quarter each grape lengthwise.", foodCategory: "fruit" });
-    const names = survivors([grapes, quartered], input({ correctedAgeMonths: 18 }));
-    expect(names).not.toContain("Grapes");
-    expect(names).toContain("Quartered grapes");
+    // Free text (catalog prep): only an explicitly unsafe form trips.
+    expect(hazardsIn("Peanut oat porridge", 8, { freeText: true })).toEqual([]);
+    expect(hazardsIn("Top with chopped peanuts", 8, { freeText: true })).toContain("whole_nuts");
+    expect(hazardsIn("A handful of almonds", 30, { freeText: true })).toContain("whole_nuts");
+    expect(hazardsIn("Grapes and yogurt", 18, { freeText: true })).toEqual([]);
+    expect(hazardsIn("Whole grapes and yogurt", 18, { freeText: true })).toContain("round_fruit");
+    const names = survivors(
+      [idea("Whole grapes", ["grapes"]), idea("Grape snack", ["grapes"], { servingTip: "Serve whole grapes in a bowl." })],
+      input({ correctedAgeMonths: 18 }),
+    );
+    expect(names).not.toContain("Whole grapes");
+    expect(names).toContain("Grape snack");
   });
 
   it("drops whole nuts but keeps thinned nut butter and ground nuts", () => {
@@ -280,35 +330,29 @@ describe("hazard filter: all ages to 36 months", () => {
 });
 
 describe("allergen filter", () => {
-  it("drops an idea whose declared allergens include a reaction allergen", () => {
-    const egg = idea("Egg strips", { allergens: ["egg"], foodCategory: "protein" });
-    const names = survivors([egg], input({ introducedAllergens: ["egg"], reactionAllergens: ["egg"] }));
-    expect(names).not.toContain("Egg strips");
+  it("drops an idea using a reaction allergen's food", () => {
+    const egg = idea("Egg strips", ["egg-omelet-strips"]);
+    expect(survivors([egg], input({ introducedAllergens: ["egg"], reactionAllergens: ["egg"] }))).not.toContain("Egg strips");
   });
 
-  it("drops an idea whose text mentions a reaction allergen even if undeclared", () => {
-    const sneaky = idea("Veggie frittata fingers", { allergens: [], foodCategory: "protein" });
+  it("drops an idea whose NAME mentions a reaction allergen, even with allergen-free foods", () => {
+    const sneaky = idea("Veggie frittata fingers", ["zucchini"]);
     expect(survivors([sneaky], input({ introducedAllergens: ["egg"], reactionAllergens: ["egg"] }))).not.toContain(
       "Veggie frittata fingers",
     );
   });
 
-  it("drops an idea with an allergen the child hasn't been introduced to", () => {
-    const salmon = idea("Flaked salmon", { allergens: ["fish"], foodCategory: "protein" });
-    expect(survivors([salmon], input())).not.toContain("Flaked salmon");
+  it("drops an idea with a food whose allergen the child hasn't been introduced to", () => {
+    expect(survivors([idea("Flaked salmon", ["salmon"])], input())).not.toContain("Flaked salmon");
+    expect(survivors([idea("Banana pancakes", ["banana"])], input())).not.toContain("Banana pancakes");
   });
 
-  it("keeps an introduced allergen and labels what the text implies", () => {
+  it("allergens are the union of the catalog foods' allergens, whatever the model says", () => {
     const out = sanitizePlan(
-      plan([...SAFE_IDEAS.slice(0, 3), idea("Omelette strips with spinach", { allergens: [], foodCategory: "protein" })]),
-      input({ introducedAllergens: ["egg"] }),
+      plan([...SAFE_IDEAS.slice(0, 3), idea("Eggy salmon", ["egg-scrambled", "salmon"], { allergens: [] })]),
+      input({ introducedAllergens: ["egg", "fish"] }),
     );
-    const omelette = out!.ideas.find((i) => i.name === "Omelette strips with spinach");
-    expect(omelette?.allergens).toEqual(["egg"]);
-  });
-
-  it("drops an idea declaring an unknown allergen slug", () => {
-    expect(survivors([idea("Mystery mash", { allergens: ["gluten"] })], input())).not.toContain("Mystery mash");
+    expect(out!.ideas.find((i) => i.name === "Eggy salmon")?.allergens).toEqual(["egg", "fish"]);
   });
 
   it("keyword lists catch the common forms", () => {
@@ -318,7 +362,7 @@ describe("allergen filter", () => {
     expect(allergensMentioned("Full-fat plain yogurt")).toEqual(["milk"]);
     expect(allergensMentioned("Peanut butter thinned")).toEqual(["peanut"]);
     expect(allergensMentioned("Eggplant and corn tortilla")).toEqual([]);
-    expect(allergensMentioned("Oat flour pancakes")).toEqual(["wheat"]); // pancakes, conservative
+    expect(allergensMentioned("Oat flour pancakes")).toEqual(["egg", "milk", "wheat"]); // dish name -> everything it usually holds
   });
 
   it("drops an intro that names an off-list allergen (fallback line)", () => {
@@ -327,13 +371,13 @@ describe("allergen filter", () => {
   });
 });
 
-describe("method -> prep fields", () => {
+describe("building ideas from catalog slugs", () => {
   const methods: Array<[SolidsMethod, boolean, boolean]> = [
     ["blw", true, false],
     ["traditional", false, true],
     ["mix", true, true],
   ];
-  it.each(methods)("%s keeps blwPrep=%s traditionalPrep=%s", (method, blw, trad) => {
+  it.each(methods)("%s fills blwPrep=%s traditionalPrep=%s from the catalog", (method, blw, trad) => {
     const out = sanitizePlan(plan(SAFE_IDEAS), input({ method }));
     expect(out?.method).toBe(method);
     for (const i of out!.ideas) {
@@ -342,11 +386,84 @@ describe("method -> prep fields", () => {
     }
   });
 
-  it("drops an idea missing the prep field its method needs", () => {
-    const noTrad = idea("No spoon version", { traditionalPrep: undefined });
-    expect(survivors([noTrad], input({ method: "traditional" }))).not.toContain("No spoon version");
-    expect(survivors([noTrad], input({ method: "mix" }))).not.toContain("No spoon version");
-    expect(survivors([noTrad], input({ method: "blw" }))).toContain("No spoon version");
+  it("prep is the catalog text for the age band, \"Food name: prep\" per food", () => {
+    const broccoli = FOOD_BY_SLUG.get("broccoli")!;
+    const lentils = FOOD_BY_SLUG.get("red-lentils")!;
+    for (const [age, band] of [[7, "6-8"], [10, "9-11"], [20, "12+"]] as const) {
+      const out = sanitizePlan(plan(SAFE_IDEAS), input({ method: "mix", correctedAgeMonths: age }))!;
+      const i = out.ideas.find((x) => x.name === "Broccoli and lentils")!;
+      expect(i.foods).toEqual(["broccoli", "red-lentils"]);
+      expect(i.blwPrep).toBe(`Broccoli: ${broccoli.prep.blw[band]} ${lentils.name}: ${lentils.prep.blw[band]}`);
+      expect(i.traditionalPrep).toBe(buildPrep([broccoli, lentils], "traditional", band));
+    }
+  });
+
+  it("foodCategory is the first food's category", () => {
+    const out = sanitizePlan(plan(SAFE_IDEAS), input())!;
+    expect(out.ideas.find((i) => i.name === "Broccoli and lentils")?.foodCategory).toBe("vegetable");
+    expect(out.ideas.find((i) => i.name === "Pear and oat porridge")?.foodCategory).toBe("fruit");
+  });
+
+  it("ignores prep, allergens and category the model volunteers", () => {
+    const out = sanitizePlan(
+      plan([
+        ...SAFE_IDEAS.slice(0, 3),
+        idea("Banana", ["banana"], { blwPrep: "Serve whole grapes", allergens: ["egg"], foodCategory: "dairy", id: "x" }),
+      ]),
+      input(),
+    )!;
+    const banana = out.ideas.find((i) => i.name === "Banana")!;
+    expect(banana.blwPrep).toBe(`Banana: ${FOOD_BY_SLUG.get("banana")!.prep.blw[ageBand(10)]}`);
+    expect(banana.allergens).toEqual([]);
+    expect(banana.foodCategory).toBe("fruit");
+    expect(banana.id).toBe("idea-4");
+  });
+
+  it.each([
+    ["an unknown slug", ["banana", "dragonfruit"]],
+    ["a misspelled slug", ["Sweet-Potato"]],
+    ["a duplicate slug", ["banana", "banana"]],
+    ["more than 3 foods", ["banana", "avocado", "pear", "peach"]],
+    ["no foods", []],
+    ["foods not an array", "banana"],
+    ["a non-string slug", [1]],
+  ])("drops an idea with %s", (_label, foods) => {
+    expect(survivors([idea("Test idea", foods)])).not.toContain("Test idea");
+  });
+
+  it("drops an age-ineligible food (tempeh at 7 months, even with soy introduced)", () => {
+    const tempeh = idea("Tempeh crumbles", ["tempeh"]);
+    const soy = { introducedAllergens: ["soy" as const] };
+    expect(survivors([tempeh], input({ ...soy, correctedAgeMonths: 7 }))).not.toContain("Tempeh crumbles");
+    const at10 = sanitizePlan(plan([...SAFE_IDEAS.slice(0, 3), tempeh]), input({ ...soy, correctedAgeMonths: 10 }))!;
+    const shown = at10.ideas.find((i) => i.name === "Tempeh crumbles")!;
+    expect(shown.blwPrep).not.toContain("Not offered");
+  });
+
+  it(`uses one food in at most ${MAX_FOOD_REPEATS} ideas`, () => {
+    const names = survivors([idea("Banana again", ["banana", "avocado"]), idea("Banana thrice", ["banana", "pear"])].concat(
+      [idea("Banana four", ["banana"])],
+    ));
+    // SAFE_IDEAS[0..2] has no banana: "again" (1) and "thrice" (2) fit, "four" (3) is dropped.
+    expect(names).toEqual(expect.arrayContaining(["Banana again", "Banana thrice"]));
+    expect(names).not.toContain("Banana four");
+  });
+
+  it("canned light tuna and rice products appear at most once per plan", () => {
+    const fish = input({ introducedAllergens: ["fish"] });
+    const tuna = survivors([idea("Tuna mash", ["canned-light-tuna", "avocado"]), idea("Tuna again", ["canned-light-tuna", "pear"])], fish);
+    expect(tuna).toContain("Tuna mash");
+    expect(tuna).not.toContain("Tuna again");
+    const rice = survivors([idea("Rice and peas", ["rice", "peas"]), idea("Congee bowl", ["congee"]), idea("Idli", ["idli"])]);
+    expect(rice).toContain("Rice and peas");
+    expect(rice).not.toContain("Congee bowl");
+    expect(rice).not.toContain("Idli");
+  });
+
+  it("a dropped idea does not use up a food's or limit's allowance", () => {
+    const names = survivors([idea("Calorie rice", ["rice"]), idea("Plain rice", ["rice"])]);
+    expect(names).not.toContain("Calorie rice");
+    expect(names).toContain("Plain rice");
   });
 });
 
@@ -362,79 +479,87 @@ describe("sanitizePlan shape", () => {
     expect(out!.ideas.map((i) => i.id)).toEqual(["idea-1", "idea-2", "idea-3", "idea-4", "idea-5"]);
     for (const i of out!.ideas) {
       expect(Object.keys(i).every((k) =>
-        ["id", "name", "mealSlot", "blwPrep", "traditionalPrep", "servingTip", "allergens", "foodCategory"].includes(k),
+        ["id", "name", "mealSlot", "foods", "blwPrep", "traditionalPrep", "servingTip", "allergens", "foodCategory"].includes(k),
       )).toBe(true);
     }
   });
 
-  it("drops over-length names and prep, omits an over-length serving tip", () => {
-    const longName = idea("x".repeat(MAX_NAME + 1));
-    const longPrep = idea("Long prep", { blwPrep: "y".repeat(MAX_PREP + 1) });
-    const longTip = idea("Long tip", { servingTip: "z".repeat(MAX_SERVING_TIP + 1) });
-    const out = sanitizePlan(plan([...SAFE_IDEAS.slice(0, 3), longName, longPrep, longTip]), input());
-    const names = out!.ideas.map((i) => i.name);
-    expect(names).not.toContain("x".repeat(MAX_NAME + 1));
-    expect(names).not.toContain("Long prep");
-    const tip = out!.ideas.find((i) => i.name === "Long tip");
+  it("drops over-length names, omits an over-length serving tip", () => {
+    const out = sanitizePlan(
+      plan([...SAFE_IDEAS.slice(0, 3), idea("x".repeat(MAX_NAME + 1), ["banana"]), idea("Long tip", ["pear"], { servingTip: "z".repeat(MAX_SERVING_TIP + 1) })]),
+      input(),
+    )!;
+    expect(out.ideas.map((i) => i.name)).not.toContain("x".repeat(MAX_NAME + 1));
+    const tip = out.ideas.find((i) => i.name === "Long tip");
     expect(tip).toBeDefined();
     expect(tip!.servingTip).toBeUndefined();
   });
 
-  it("drops invalid meal slots, coerces unknown food categories to other, dedupes names", () => {
+  it("keeps a clean serving tip; omits one that names an off-list allergen or a hazard", () => {
     const out = sanitizePlan(
       plan([
         ...SAFE_IDEAS.slice(0, 3),
-        idea("Brunch thing", { mealSlot: "brunch" }),
-        idea("Odd category", { foodCategory: "legume" }),
-        idea("sweet potato wedges"),
+        idea("Pear slices", ["pear"], { servingTip: "Lovely after a nap." }),
+        idea("Peach", ["peach"], { servingTip: "Serve next to some toast." }),
+        idea("Plum", ["plum"], { servingTip: "Try a few whole grapes too." }),
       ]),
       input(),
-    );
-    const names = out!.ideas.map((i) => i.name);
-    expect(names).not.toContain("Brunch thing");
-    expect(names).not.toContain("sweet potato wedges");
-    expect(out!.ideas.find((i) => i.name === "Odd category")?.foodCategory).toBe("other");
+    )!;
+    expect(out.ideas.find((i) => i.name === "Pear slices")?.servingTip).toBe("Lovely after a nap.");
+    expect(out.ideas.find((i) => i.name === "Peach")?.servingTip).toBeUndefined();
+    expect(out.ideas.find((i) => i.name === "Plum")?.servingTip).toBeUndefined();
   });
 
-  it("drops off-tone ideas (calories, pressure, medical claims)", () => {
+  it("drops invalid meal slots and dedupes names", () => {
+    const out = sanitizePlan(
+      plan([...SAFE_IDEAS.slice(0, 3), idea("Brunch thing", ["peach"], { mealSlot: "brunch" }), idea("sweet potato wedges", ["sweet-potato"])]),
+      input(),
+    )!;
+    const names = out.ideas.map((i) => i.name);
+    expect(names).not.toContain("Brunch thing");
+    expect(names).not.toContain("sweet potato wedges");
+  });
+
+  it("drops off-tone names; omits an off-tone tip", () => {
     const out = sanitizePlan(
       plan([
         ...SAFE_IDEAS.slice(0, 3),
-        idea("Calorie-dense mash"),
-        idea("Superfood bowl"),
-        idea("Pear slices", { servingTip: "Encourage one more bite before the end of the meal." }),
+        idea("Calorie-dense mash", ["potato"]),
+        idea("Superfood bowl", ["quinoa"]),
+        idea("Pear slices", ["pear"], { servingTip: "Encourage one more bite before the end of the meal." }),
       ]),
       input(),
-    );
-    const names = out!.ideas.map((i) => i.name);
+    )!;
+    const names = out.ideas.map((i) => i.name);
     expect(names).not.toContain("Calorie-dense mash");
     expect(names).not.toContain("Superfood bowl");
-    // An off-tone OPTIONAL tip is omitted, not fatal.
-    expect(out!.ideas.find((i) => i.name === "Pear slices")?.servingTip).toBeUndefined();
+    expect(out.ideas.find((i) => i.name === "Pear slices")?.servingTip).toBeUndefined();
   });
 
   it(`caps at ${MAX_IDEAS} ideas`, () => {
-    const many = Array.from({ length: 10 }, (_, n) => idea(`Squash idea ${n}`));
-    expect(sanitizePlan(plan(many), input())!.ideas).toHaveLength(MAX_IDEAS);
+    const slugs = ["banana", "avocado", "pear", "peach", "plum", "mango", "papaya", "kiwi", "watermelon", "zucchini"];
+    expect(sanitizePlan(plan(slugs.map((f, n) => idea(`Idea ${n}`, [f]))), input())!.ideas).toHaveLength(MAX_IDEAS);
   });
 
-  it("falls back to the fixed intro when the model's is missing or too long", () => {
+  it("falls back to the fixed intro when the model's is missing, too long, or names an off-list allergen", () => {
     expect(sanitizePlan(plan(SAFE_IDEAS, null), input())!.intro).toBe(FALLBACK_INTRO);
     expect(sanitizePlan(plan(SAFE_IDEAS, "a".repeat(241)), input())!.intro).toBe(FALLBACK_INTRO);
+    expect(sanitizePlan(plan(SAFE_IDEAS, "This week we try peanut for the first time."), input())!.intro).toBe(FALLBACK_INTRO);
+    expect(sanitizePlan(plan(SAFE_IDEAS), input())!.intro).toBe("Solids this week are for exploring. Milk is still your baby's main food.");
   });
 });
 
 describe(`422: fewer than ${MIN_IDEAS} ideas survive`, () => {
   it("returns null when only 2 survive", () => {
     const out = sanitizePlan(
-      plan([...SAFE_IDEAS.slice(0, 2), idea("Popcorn"), idea("Honey toast"), idea("Whole grapes")]),
+      plan([...SAFE_IDEAS.slice(0, 2), idea("Popcorn", ["banana"]), idea("Mystery", ["dragonfruit"]), idea("Salmon", ["salmon"])]),
       input(),
     );
     expect(out).toBeNull();
   });
 
   it("returns a plan when exactly 3 survive", () => {
-    expect(sanitizePlan(plan([...SAFE_IDEAS.slice(0, 3), idea("Popcorn")]), input())?.ideas).toHaveLength(3);
+    expect(sanitizePlan(plan([...SAFE_IDEAS.slice(0, 3), idea("Popcorn", ["banana"])]), input())?.ideas).toHaveLength(3);
   });
 
   it.each([null, [], "text", 1, { ideas: "nope" }])("returns null for %j", (raw) => {
@@ -467,29 +592,257 @@ describe("gate: Flare+ or the 1 free plan per child, then one plan per week", ()
   });
 });
 
-describe("a realistic model plan for a 7-month-old on BLW with no allergens yet", () => {
-  // Guards against an over-eager filter turning ordinary plans into 422s.
-  it("keeps the ordinary ideas and drops only the hazards", () => {
-    const raw = {
+describe("a realistic 7-month plan through the whole path", () => {
+  // validateInput -> deriveAllergenLists (DB rows) -> eligibleFoods ->
+  // buildUserText -> model JSON text -> JSON.parse -> sanitizePlan.
+  it("keeps the ordinary ideas, drops the unsafe ones, and builds catalog prep", () => {
+    const request = validateInput(
+      { ...body({ correctedAgeMonths: 7.4, method: "blw" }), introducedAllergens: ["milk", "fish"] }, // client lists ignored
+      WED_UTC_NOON,
+    )!;
+    const rows = [
+      { status: "completed", allergens: { slug: "peanut" }, allergen_exposure_logs: [{ reaction_observed: false }] },
+      { status: "completed", allergens: { slug: "egg" }, allergen_exposure_logs: [] },
+      { status: "in_progress", allergens: { slug: "milk" }, allergen_exposure_logs: [{ reaction_observed: false }] },
+    ];
+    const inp: ValidInput = { ...request, ...deriveAllergenLists(rows) };
+    expect(inp.introducedAllergens).toEqual(["peanut", "egg"]);
+    const eligible = eligibleFoods(inp);
+    const prompt = buildUserText(inp, eligible);
+    expect(prompt).toContain("peanut-butter-thinned");
+    expect(prompt).not.toContain("yogurt-whole-milk"); // milk only in progress
+
+    const modelText = JSON.stringify({
       intro: "Milk is still your baby's main nutrition. These ideas are for exploring new tastes and textures.",
       ideas: [
-        { name: "Roasted sweet potato wedges", mealSlot: "lunch", blwPrep: "Roast finger-length wedges until soft enough to squash between your fingers.", allergens: [], foodCategory: "vegetable" },
-        { name: "Avocado spears", mealSlot: "breakfast", blwPrep: "Cut a ripe avocado into thick spears; leave a little skin on for grip.", allergens: [], foodCategory: "fruit" },
-        { name: "Iron-fortified oat cereal", mealSlot: "breakfast", blwPrep: "Mix infant oat cereal with breast milk or formula until thick, and preload a spoon.", allergens: [], foodCategory: "grain_cereal" },
-        { name: "Shredded chicken thigh", mealSlot: "dinner", blwPrep: "Slow-cook until very tender and shred into soft strips.", allergens: [], foodCategory: "protein" },
-        { name: "Lentil and carrot mash fingers", mealSlot: "lunch", blwPrep: "Cook red lentils and carrot until very soft, mash and shape into soft fingers.", allergens: [], foodCategory: "protein" },
-        { name: "Blueberries", mealSlot: "snack", blwPrep: "Offer whole blueberries in a bowl.", allergens: [], foodCategory: "fruit" },
-        { name: "Yogurt with honey", mealSlot: "snack", blwPrep: "Stir a little honey into plain yogurt.", allergens: ["milk"], foodCategory: "dairy" },
+        { name: "Roasted sweet potato wedges", mealSlot: "lunch", foods: ["sweet-potato"] },
+        { name: "Avocado spears", mealSlot: "breakfast", foods: ["avocado"], servingTip: "Leave a little skin on for grip." },
+        { name: "Peanut oat porridge", mealSlot: "breakfast", foods: ["oat-infant-cereal", "peanut-butter-thinned"] },
+        { name: "Shredded chicken and squash", mealSlot: "dinner", foods: ["chicken-thigh", "butternut-squash"] },
+        { name: "Lentil and carrot mash", mealSlot: "lunch", foods: ["red-lentils", "carrot"] },
+        { name: "Yogurt and pear", mealSlot: "snack", foods: ["yogurt-whole-milk", "pear"] },
+        { name: "Scrambled egg and toast", mealSlot: "breakfast", foods: ["egg-scrambled", "toast-strips"] },
+        { name: "Honey banana", mealSlot: "snack", foods: ["banana"] },
       ],
-    };
-    const out = sanitizePlan(raw, input({ correctedAgeMonths: 7, method: "blw" }));
-    expect(out?.ideas.map((i) => i.name)).toEqual([
+    });
+    const out = sanitizePlan(JSON.parse(modelText), inp)!;
+    expect(out.ideas.map((i) => i.name)).toEqual([
       "Roasted sweet potato wedges",
       "Avocado spears",
-      "Iron-fortified oat cereal",
-      "Shredded chicken thigh",
-      "Lentil and carrot mash fingers",
+      "Peanut oat porridge",
+      "Shredded chicken and squash",
+      "Lentil and carrot mash",
     ]);
-    expect(out?.intro).toBe(raw.intro);
+    const porridge = out.ideas[2];
+    expect(porridge.allergens).toEqual(["peanut"]);
+    expect(porridge.foodCategory).toBe("grain_cereal");
+    expect(porridge.blwPrep).toContain(FOOD_BY_SLUG.get("peanut-butter-thinned")!.prep.blw["6-8"]);
+    expect(out.ideas.every((i) => i.traditionalPrep === undefined)).toBe(true);
+    expect(out.intro).toMatch(/^Milk is still/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// QA round 1 (2026-11-22): normalization, honey, milk, salt/sugar, keywords,
+// server-derived allergen lists. Every probe below got through the first cut.
+// ---------------------------------------------------------------------------
+
+const ZWSP = "\u200B";
+
+describe("normalizeText", () => {
+  it("straightens curly quotes, strips zero-width characters, applies NFKC", () => {
+    expect(normalizeText("Cow\u2019s milk")).toBe("Cow's milk");
+    expect(normalizeText(`hon${ZWSP}ey`)).toBe("honey");
+    expect(normalizeText("\uFF48\uFF4F\uFF4E\uFF45\uFF59")).toBe("honey"); // fullwidth
+    expect(normalizeText("za\u2018atar")).toBe("za'atar");
+  });
+
+  it("cleanString stores the normalized text", () => {
+    expect(cleanString(`Pear${ZWSP} \u2019wedges\u2019`, 60)).toBe("Pear 'wedges'");
+  });
+});
+
+describe("honey (under 12 months)", () => {
+  it.each(["Oatmeal with honey", "Honeyed carrots, steamed", "A bit of honeycomb", `Toast with hon${ZWSP}ey`, "Honey\u2011glazed squash"])(
+    "drops %s at 10 months",
+    (text) => {
+      expect(hazardsIn(text, 10)).toContain("honey_under_12m");
+    },
+  );
+
+  it("keeps honeydew", () => {
+    expect(hazardsIn("Ripe honeydew melon spears", 10)).not.toContain("honey_under_12m");
+  });
+});
+
+describe("cow's milk as a drink (under 12 months)", () => {
+  it.each([
+    "Offer cow\u2019s milk in an open cup",
+    "Serve milk alongside lunch",
+    "Offer milk with dinner",
+    "A beaker of milk",
+    "Warm milk in a bottle",
+    "Whole milk with breakfast",
+    "A banana milkshake",
+  ])("drops %j at 10 months", (text) => {
+    expect(hazardsIn(text, 10)).toContain("cow_milk_drink_under_12m");
+  });
+
+  it.each([
+    "Oats cooked in milk, mashed smooth",
+    "Porridge made with whole milk",
+    "Offer breast milk or formula in an open cup",
+    "Offer after a milk feed",
+    "Milk is still your baby's main nutrition",
+    "Thin with oat milk if needed",
+  ])("keeps %j at 10 months", (text) => {
+    expect(hazardsIn(text, 10)).not.toContain("cow_milk_drink_under_12m");
+  });
+
+  it("applies per sentence: cooking in one sentence does not clear a drink in another", () => {
+    expect(hazardsIn("Bake into muffins. Serve with a cup of milk", 10)).toContain("cow_milk_drink_under_12m");
+  });
+
+  it("allows milk as a drink from 12 months", () => {
+    expect(hazardsIn("Offer whole milk in an open cup", 12)).not.toContain("cow_milk_drink_under_12m");
+  });
+});
+
+describe("added salt and sugar (under 12 months)", () => {
+  it.each([
+    "Drizzle with agave",
+    "A little apple nectar",
+    "Stir in molasses",
+    "Toast fingers with jam",
+    "Simmer with a stock cube",
+    "Add a pinch of bouillon",
+    "No need to skip the salt",
+    "Don't avoid salt here",
+    "Season with soy sauce",
+    "Sprinkle with sug\u200Bar",
+  ])("drops %j", (text) => {
+    expect(hazardsIn(text, 9)).toContain("added_salt_sugar_under_12m");
+  });
+
+  it.each(["No added salt or sugar needed", "Without salt", "Use unsalted butter", "Sugar-free yogurt", "Never add salt or sugar"])(
+    "keeps %j",
+    (text) => {
+      expect(hazardsIn(text, 9)).not.toContain("added_salt_sugar_under_12m");
+    },
+  );
+});
+
+describe("cheap allergen keywords", () => {
+  it.each([
+    ["Plain milk with the meal", "milk"],
+    ["Cow\u2019s milk in the porridge", "milk"],
+    ["Buttermilk pancakes", "milk"],
+    ["Crumbled feta", "milk"],
+    ["Grilled halloumi strips", "milk"],
+    ["Mascarpone swirl", "milk"],
+    ["Labneh on toast", "milk"],
+    ["Skyr with pear", "milk"],
+    ["Cheesy polenta", "milk"],
+    ["Spaghetti with tomato", "wheat"],
+    ["Macaroni", "wheat"],
+    ["Penne with peas", "wheat"],
+    ["Flatbread strips", "wheat"],
+    ["Breadsticks", "wheat"],
+    ["Gnocchi", "wheat"],
+    ["Udon noodles", "wheat"],
+    ["Pesto pasta", "tree-nuts"],
+    ["Pesto pasta", "milk"],
+    ["Chicken satay strips", "peanut"],
+    ["Flaked catfish", "fish"],
+    ["Monkfish bites", "fish"],
+    ["Mini fishcakes", "fish"],
+    ["A dash of Worcestershire", "fish"],
+    ["Za\u2019atar flatbread", "sesame"],
+    ["French toast fingers", "egg"],
+    ["French toast fingers", "milk"],
+    ["French toast fingers", "wheat"],
+    ["Teriyaki salmon", "soy"],
+  ] as const)("%s -> %s", (text, slug) => {
+    expect(allergensMentioned(text)).toContain(slug);
+  });
+
+  it.each([
+    ["Offer breast milk or formula", "milk"],
+    ["Coconut milk curry", "milk"],
+    ["Offer after a milk feed", "milk"],
+    ["Milk is still your baby's main food", "milk"],
+    ["Peanut butter, thinned", "milk"],
+    ["Shellfish-free", "fish"],
+    ["Rice noodles", "wheat"],
+  ] as const)("%s is not %s", (text, slug) => {
+    expect(allergensMentioned(text)).not.toContain(slug);
+  });
+
+  it("drops an idea whose name says bare milk when milk had a reaction", () => {
+    const names = survivors([idea("Milk and oat porridge", ["oatmeal"])], input({ introducedAllergens: ["milk"], reactionAllergens: ["milk"] }));
+    expect(names).not.toContain("Milk and oat porridge");
+  });
+
+  it("drops a curly-apostrophe cow's milk name when milk isn't introduced", () => {
+    expect(survivors([idea("Porridge with cow\u2019s milk", ["oatmeal"])], input({ correctedAgeMonths: 14 }))).not.toContain(
+      "Porridge with cow\u2019s milk",
+    );
+  });
+});
+
+describe("server-derived allergen lists (B10)", () => {
+  const statuses = ["not_started", "in_progress", "completed", "paused", "skipped", "reaction_observed", "safe"];
+  const exposureSets: Array<{ reaction_observed: boolean | null }[] | undefined> = [
+    undefined,
+    [],
+    [{ reaction_observed: false }],
+    [{ reaction_observed: null }],
+    [{ reaction_observed: false }, { reaction_observed: true }],
+    [{ reaction_observed: false }, { reaction_observed: false }],
+  ];
+  for (const status of statuses) {
+    for (const exposures of exposureSets) {
+      it(`introductionStatus matches getAllergenStatus: ${status} / ${JSON.stringify(exposures)}`, () => {
+        const intro = { status, allergen_exposure_logs: exposures };
+        expect(introductionStatus(intro)).toBe(getAllergenStatus(intro));
+      });
+    }
+  }
+
+  it("undefined intro is not_started on both sides", () => {
+    expect(introductionStatus(undefined)).toBe(getAllergenStatus(undefined));
+  });
+
+  it("derives introduced and reaction lists from rows, in canonical order", () => {
+    const out = deriveAllergenLists([
+      { status: "completed", allergens: { slug: "sesame" }, allergen_exposure_logs: [] },
+      { status: "completed", allergens: { slug: "egg" }, allergen_exposure_logs: [{ reaction_observed: false }] },
+      // Signed off, then a reaction on a maintenance serving: a reaction wins.
+      { status: "completed", allergens: { slug: "milk" }, allergen_exposure_logs: [{ reaction_observed: true }] },
+      { status: "reaction_observed", allergens: [{ slug: "peanut" }], allergen_exposure_logs: [] },
+      { status: "in_progress", allergens: { slug: "fish" }, allergen_exposure_logs: [{ reaction_observed: false }] },
+      { status: "completed", allergens: { slug: "gluten" }, allergen_exposure_logs: [] },
+      { status: "completed", allergens: null, allergen_exposure_logs: [] },
+    ]);
+    expect(out).toEqual({ introducedAllergens: ["egg", "sesame"], reactionAllergens: ["peanut", "milk"] });
+  });
+
+  it("no rows -> nothing introduced", () => {
+    expect(deriveAllergenLists([])).toEqual({ introducedAllergens: [], reactionAllergens: [] });
+    expect(deriveAllergenLists(null)).toEqual({ introducedAllergens: [], reactionAllergens: [] });
+  });
+
+  it("selects exactly the columns the derivation reads", () => {
+    expect(INTRODUCTIONS_SELECT).toBe("status, allergens(slug), allergen_exposure_logs(reaction_observed)");
+  });
+
+  it("the edge function derives the lists and never passes the body's lists to the model", () => {
+    const src = readFileSync(resolve(__dirname, "../../supabase/functions/generate-meal-plan/index.ts"), "utf8");
+    expect(src).toContain('.from("allergen_introductions").select(INTRODUCTIONS_SELECT)');
+    expect(src).toContain("deriveAllergenLists(");
+    expect(src).not.toMatch(/body\.(?:introduced|reaction)Allergens/);
+    // B11: Anthropic error bodies are not logged.
+    expect(src).not.toMatch(/t\.slice\(/);
+    expect(src).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
   });
 });

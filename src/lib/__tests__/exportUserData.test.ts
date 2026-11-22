@@ -1,6 +1,6 @@
 import { EXPORT_TABLES, ExportReadError, collectUserData, exportUserData } from "@/lib/exportUserData";
 
-type Result = { data: unknown[] | null; error: { message: string } | null };
+type Result = { data: unknown[] | null; error: { message: string; code?: string } | null };
 
 const queried: { table: string; select: string; eq: [string, string][]; range: [number, number] }[] = [];
 let respond: (table: string, from: number) => Result = () => ({ data: [], error: null });
@@ -116,5 +116,29 @@ describe("exportUserData", () => {
     expect(err.message).toContain("allergen reactions");
     expect(createObjectURL).not.toHaveBeenCalled();
     expect(click).not.toHaveBeenCalled();
+  });
+
+  it.each(["PGRST205", "42P01"])(
+    "exports a not-yet-migrated table (%s) as an empty list instead of failing",
+    async (code) => {
+      respond = (table) =>
+        table === "meal_plans"
+          ? { data: null, error: { code, message: `relation "public.meal_plans" does not exist` } }
+          : { data: [], error: null };
+
+      const payload = await collectUserData(user);
+
+      expect(payload.mealPlans).toEqual([]);
+      expect(Object.keys(payload)).toEqual(expect.arrayContaining(EXPORT_TABLES.map((t) => t.key)));
+    },
+  );
+
+  it("still fails on other errors that carry a code", async () => {
+    respond = (table) =>
+      table === "meal_plans"
+        ? { data: null, error: { code: "42501", message: "permission denied for table meal_plans" } }
+        : { data: [], error: null };
+
+    await expect(collectUserData(user)).rejects.toBeInstanceOf(ExportReadError);
   });
 });

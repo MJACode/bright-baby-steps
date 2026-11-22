@@ -122,7 +122,7 @@ export class ExportReadError extends Error {
 
 const PAGE_SIZE = 1000;
 
-type PageResult = { data: unknown[] | null; error: { message: string } | null };
+type PageResult = { data: unknown[] | null; error: { message: string; code?: string } | null };
 interface PageQuery {
   eq(column: string, value: string): PageQuery;
   order(column: string, options: { ascending: boolean }): PageQuery;
@@ -147,12 +147,26 @@ async function readAll(entry: ExportTable, userId: string): Promise<unknown[]> {
   }
 }
 
+/**
+ * PostgREST's answer when the table isn't in the live schema yet: PGRST205
+ * (not in the schema cache) or Postgres 42P01 (undefined_table). The frontend
+ * can deploy before the deploy-functions.yml `migrate` job creates a new
+ * table, and a missing table holds no data to export, so it exports as []
+ * instead of failing the whole export (lessons-qa 2026-10-05). Any other error
+ * (permission denied, network) still fails the export.
+ */
+export function isMissingTableError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return code === "PGRST205" || code === "42P01";
+}
+
 export async function collectUserData(user: { id: string; email?: string | null }) {
   const results = await Promise.all(
     EXPORT_TABLES.map(async (entry) => {
       try {
         return { entry, rows: await readAll(entry, user.id) };
       } catch (err) {
+        if (isMissingTableError(err)) return { entry, rows: [] as unknown[] };
         return { entry, error: (err as { message?: string } | null)?.message ?? String(err) };
       }
     }),

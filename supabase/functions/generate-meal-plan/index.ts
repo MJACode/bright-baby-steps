@@ -1,41 +1,77 @@
 // "This week's meal plan" (Solids tab) — builds a one-week set of 5–7 solid
-// food ideas for a child.
+// food ideas for a child from the curated food catalog.
 //
 // Flare+ feature with 1 free plan per child. Wraps the `nutrition` persona
 // (single source of truth in ../_shared/personas.ts) with
 // MEAL_PLAN_INSTRUCTION and returns a sanitized MealPlan. Plan:
 // tasks/todo.md "Food page restructure + AI meal plan — Nov 2026", Phase A.
 //
-// Non-streaming (called via supabase.functions.invoke), cloned from
-// generate-sign-plan:
-//   * Data minimization: the request is allowlisted to childId, weekStart,
-//     correctedAgeMonths, method, introducedAllergens, reactionAllergens
-//     (allergen slugs only). Every other body field (name, DOB, free text) is
-//     ignored and never read. The prompt receives only "already eats" and
-//     "leave out" allergen lists — never which allergens had a reaction.
+// CONTRACT (POST, JSON, user JWT; non-streaming, supabase.functions.invoke)
+//   Request  { childId: uuid, weekStart: "YYYY-MM-DD" (the UTC Monday of
+//              now±1 day), correctedAgeMonths: number 4–36 (floored),
+//              method: "blw" | "traditional" | "mix" }
+//            introducedAllergens / reactionAllergens are still accepted from
+//            old clients and IGNORED (see "Allergens" below). Body cap 16 KB.
+//   200      MealPlan { weekStart, method, intro (≤240),
+//              ideas: 3–7 × { id ("idea-N"), name (≤60),
+//                mealSlot: breakfast|lunch|dinner|snack,
+//                foods: catalogSlug[1–3],
+//                blwPrep? / traditionalPrep? (catalog prep for the age band,
+//                  "Food name: prep" per food; blw -> blwPrep only,
+//                  traditional -> traditionalPrep only, mix -> both),
+//                servingTip? (≤160), allergens: slug[] (union of the foods'
+//                catalog allergens), foodCategory (first food's category) } }
+//            The plan is also upserted into meal_plans before the 200.
+//   Errors   { error: code } with
+//            400 invalid_input, 401 unauthorized,
+//            403 no_write_access | premium_required (+ upgradeUrl "/upgrade"),
+//            409 plan_exists_this_week (checked before premium),
+//            422 no_eligible_foods (fewer than MIN_ELIGIBLE_FOODS catalog foods
+//                fit this child — e.g. under the catalog's 6-month minimum —
+//                returned BEFORE any Anthropic call),
+//            422 unusable_plan (non-JSON, or < 3 ideas survive sanitizing),
+//            500 save_failed | internal_error, 502 coach_unavailable.
+//
+// Design:
+//   * Data minimization: only childId, weekStart, correctedAgeMonths and
+//     method are read from the body. The model receives the corrected age,
+//     the method and the list of ELIGIBLE catalog foods (slug, name,
+//     category, iron-rich marker) — no allergen lists, no name, no DOB.
+//   * Allergens come from the DATABASE: the child's allergen_introductions
+//     (+ exposure reactions) are read under the caller's RLS and run through
+//     the getAllergenStatus port (deriveAllergenLists). Eligible foods are
+//     those with minAgeMonths <= age whose catalog allergens are all
+//     introduced without a reaction, so a stale offline cache or a reaction
+//     logged on another phone can't put a reacted-to allergen in the plan.
+//   * The model picks foods; it never writes prep. sanitizePlan
+//     (../_shared/mealPlan.ts) drops ideas with unknown / ineligible slugs,
+//     a food used in more than 2 ideas, or a PLAN_LIMITS breach (canned
+//     tuna, rice products: once per plan), then builds allergens, category
+//     and prep from ../_shared/foodCatalog.ts. The model's name / servingTip /
+//     intro still go through the keyword filter as a second layer.
 //   * Gate: Flare+ (the caller's own subscription, as generate-activity-plan
 //     checks it, OR the child's owner via child_owner_is_premium so partners
 //     on a Flare+ family qualify) OR no meal_plans row exists for the child
-//     (the free plan). A row covering this week or later -> 409 first.
-//     All enforced HERE, before the paid Anthropic call.
+//     (the free plan). All enforced HERE, before the paid Anthropic call.
 //   * The server persists the plan itself, upserting meal_plans on child_id
 //     with the caller's JWT (NOT the service-role key), so the table's RLS is
 //     the write gate. parent_id is the child OWNER, resolved from children.
-//   * Model output goes through a deterministic hazard + allergen filter
-//     (../_shared/mealPlan.ts sanitizePlan): choking hazards, under-12-month
-//     rules, un-introduced or reaction allergens, off-tone text -> idea
-//     dropped. Fewer than 3 ideas survive -> 422.
 //
-// Neither the request body nor the model output is logged: both can name the
-// allergens a child eats. Failures log status codes and lengths only.
-//
-// Uses the same Anthropic pattern as generate-sign-plan — ANTHROPIC_API_KEY
-// env var, model in MEAL_PLAN_MODEL.
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS } from "../_shared/personas.ts";
-import { buildUserText, mealPlanGate, sanitizePlan, validateInput } from "../_shared/mealPlan.ts";
+import {
+  INTRODUCTIONS_SELECT,
+  MIN_ELIGIBLE_FOODS,
+  buildUserText,
+  deriveAllergenLists,
+  eligibleFoods,
+  mealPlanGate,
+  sanitizePlan,
+  validateInput,
+  type IntroductionRow,
+  type ValidInput,
+} from "../_shared/mealPlan.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,31 +86,27 @@ const MEAL_PLAN_MAX_TOKENS = 2000;
 const MAX_BODY_BYTES = 16 * 1024;
 
 // Appended to the nutrition persona prompt.
-const MEAL_PLAN_INSTRUCTION = `You are now building this week's meal ideas: a short, warm set of solid food ideas that one tired parent can make at home for their baby. You are given only the baby's corrected age in months, how the family offers solids, and which allergens the baby already eats. You do not know the baby's name, and you never need it — say "your baby".
+const MEAL_PLAN_INSTRUCTION = `You are now building this week's meal ideas: a short, warm set of solid food ideas that one tired parent can make at home for their baby. You are given the baby's corrected age in months, how the family offers solids, and a list of foods chosen for this baby. You do not know the baby's name, and you never need it — say "your baby".
 
 Return ONLY this JSON object — no prose, no code fences:
 {
   "intro": "one or two warm sentences, at most 240 characters",
   "ideas": [
     {
-      "name": "short food idea, at most 60 characters",
+      "name": "short, appetizing name for the combination, at most 60 characters",
       "mealSlot": "breakfast" | "lunch" | "dinner" | "snack",
-      "blwPrep": "how to prepare it as a finger food: size, shape and softness, at most 220 characters",
-      "traditionalPrep": "how to prepare it for spoon-feeding: texture, at most 220 characters",
-      "servingTip": "optional, one practical tip, at most 160 characters",
-      "allergens": ["every allergen slug the idea contains, from: peanut, egg, milk, wheat, soy, tree-nuts, fish, shellfish, sesame"],
-      "foodCategory": "fruit" | "vegetable" | "grain_cereal" | "protein" | "dairy" | "other"
+      "foods": ["1 to 3 food slugs, exactly as listed"],
+      "servingTip": "optional: one short, friendly pairing or routine idea, at most 160 characters"
     }
   ]
 }
 
 Rules:
-- ideas: 5 to 7, spread across meal slots, simple and made from everyday groceries. Lean on iron-rich foods (meat, beans, lentils, fortified cereal) paired with a fruit or vegetable.
-- Include only the prep fields the feeding method asks for.
+- ideas: 5 to 7, spread across meal slots. Pick foods ONLY from the provided list, spelled exactly as given. Never invent a food and never name a food in "name" that is not in that idea's foods.
+- Follow the plan limits given with the food list: at least 2 ideas include an iron-rich food, no food in more than 2 ideas, and the listed once-per-plan foods at most once.
+- Do not write preparation, cutting, size or texture instructions anywhere — the app adds safety-checked preparation for each food. The servingTip is about pairing, timing or mood, never about how to cut or cook.
 - Under 12 months, milk (breast milk or formula) is still your baby's main nutrition and solids are for learning and exploring. Say so warmly in the intro.
-- Allergens: use only allergens listed as already eaten, and list every one an idea contains in "allergens". Never include an allergen from the leave-out list, in any form or amount.
-- Safety: always describe a safe size and texture. Soft enough to squash between your fingers. Quarter grapes, cherry tomatoes and blueberries lengthwise or smash them. Cook hard fruit and vegetables (carrot, apple) until soft. Spread nut butters thinly or stir them into food, never in a lump. Never suggest whole nuts, popcorn, hot dog rounds, marshmallows, hard candy or gum.
-- Under 12 months: no honey in any form, no cow's milk as a drink (it is fine cooked into food), no added salt or sugar.
+- Under 12 months: never mention honey, cow's milk as a drink, or added salt or sugar.
 - Follow the division of responsibility: you decide what, when and where food is offered; your baby decides whether and how much to eat. Never pressure, never count calories, portions or bites, never suggest "one more bite".
 - No medical claims, no diagnosis, no "superfoods", nothing about weight. This is everyday food inspiration, not medical advice.
 - Plain, friendly language for a parent, not a clinician. Keep every string within its character limit.`;
@@ -116,15 +148,20 @@ serve(async (req) => {
     } catch {
       return json(400, { error: "invalid_input" });
     }
-    const input = validateInput(body, Date.now());
-    if (!input) return json(400, { error: "invalid_input" });
+    const request = validateInput(body, Date.now());
+    if (!request) return json(400, { error: "invalid_input" });
 
     // 3. Access, Flare+ state and the stored plan, under the caller's RLS.
-    const [childRes, planRes, subRes, ownerPlusRes] = await Promise.all([
-      supabase.from("children").select("id, parent_id").eq("id", input.childId).maybeSingle(),
-      supabase.from("meal_plans").select("week_start").eq("child_id", input.childId).maybeSingle(),
+    const [childRes, planRes, subRes, ownerPlusRes, introsRes] = await Promise.all([
+      supabase.from("children").select("id, parent_id").eq("id", request.childId).maybeSingle(),
+      supabase.from("meal_plans").select("week_start").eq("child_id", request.childId).maybeSingle(),
       supabase.from("subscriptions").select("tier, status").eq("user_id", userId).maybeSingle(),
-      supabase.rpc("child_owner_is_premium", { _child_id: input.childId }),
+      supabase.rpc("child_owner_is_premium", { _child_id: request.childId }),
+      // RLS: select_child_access_allergen_introductions /
+      // _allergen_exposure_logs (can_access_child); allergens is readable by
+      // every authenticated user. Every row for the child is needed, so no
+      // limit (at most one per allergen: UNIQUE (child_id, allergen_id)).
+      supabase.from("allergen_introductions").select(INTRODUCTIONS_SELECT).eq("child_id", request.childId),
     ]);
     if (childRes.error) throw new Error(`children lookup failed: ${childRes.error.message}`);
     const ownerId = childRes.data?.parent_id as string | undefined;
@@ -137,6 +174,13 @@ serve(async (req) => {
     if (canWrite !== true) return json(403, { error: "no_write_access" });
 
     if (planRes.error) throw new Error(`meal_plans lookup failed: ${planRes.error.message}`);
+    // Fail closed: without the child's real allergen state there is no safe
+    // allowed list, and the client's copy is not trusted.
+    if (introsRes.error) throw new Error(`allergen_introductions lookup failed: ${introsRes.error.message}`);
+    const input: ValidInput = {
+      ...request,
+      ...deriveAllergenLists(introsRes.data as unknown as IntroductionRow[]),
+    };
     // A failed premium lookup counts as "not premium" (the free plan still
     // works); it never grants access.
     const sub = subRes.data;
@@ -159,6 +203,12 @@ serve(async (req) => {
       return json(403, { error: "premium_required", upgradeUrl: "/upgrade" });
     }
 
+    // Nothing safe to offer (e.g. younger than every catalog food's
+    // minAgeMonths): stop before the paid call. Checked after the gate so a
+    // used free plan still reports premium_required.
+    const eligible = eligibleFoods(input);
+    if (eligible.length < MIN_ELIGIBLE_FOODS) return json(422, { error: "no_eligible_foods" });
+
     // 4. Anthropic.
     const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
     if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -176,7 +226,7 @@ serve(async (req) => {
           model: MEAL_PLAN_MODEL,
           max_tokens: MEAL_PLAN_MAX_TOKENS,
           system: `${PERSONA_PROMPTS.nutrition}\n\n${MEAL_PLAN_INSTRUCTION}`,
-          messages: [{ role: "user", content: buildUserText(input) }],
+          messages: [{ role: "user", content: buildUserText(input, eligible) }],
         }),
       });
     } catch (e) {
@@ -185,9 +235,9 @@ serve(async (req) => {
     }
 
     if (!response.ok) {
-      const t = await response.text();
-      // Anthropic's error body describes the request, not the child; truncated.
-      console.error("generate-meal-plan Anthropic error:", response.status, t.slice(0, 300));
+      // Status and length only: an error body can echo parts of the request.
+      const t = await response.text().catch(() => "");
+      console.error("generate-meal-plan Anthropic error:", response.status, "body length", t.length);
       return json(502, { error: "coach_unavailable" });
     }
 

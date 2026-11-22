@@ -1,22 +1,37 @@
 // Pure helpers for generate-meal-plan (Solids tab, "This week's meal plan").
 //
-// Kept free of Deno globals and imports on purpose so vitest can import this
-// file directly and lock the server logic (see src/test/mealPlan.server.test.ts,
-// which also locks the constant lists against the client).
+// Kept free of Deno globals and URL imports on purpose so vitest can import
+// this file directly and lock the server logic (see
+// src/test/mealPlan.server.test.ts, which also locks the constant lists
+// against the client). The only import is the relative ./foodCatalog.ts.
 //
 // The safety story, in order:
-//   1. validateInput: allowlist. Only childId, weekStart, correctedAgeMonths,
-//      method, introducedAllergens, reactionAllergens are read. No name, DOB or
-//      free text can reach the prompt.
-//   2. buildUserText: the model sees age, method and two allergen lists:
-//      "already eats" and "leave out". It is never told WHICH allergens had a
-//      reaction (data minimization: it only needs the avoid list).
-//   3. sanitizePlan: after the model output is parsed, every idea is rebuilt
-//      from known fields and run through a DETERMINISTIC filter. Anything that
-//      matches a hazard rule, mentions or declares an allergen the child hasn't
-//      been introduced to (or had a reaction to), or reads off-tone is dropped.
-//      Fewer than MIN_IDEAS survivors -> null (-> 422 unusable_plan).
+//   1. validateInput: allowlist. Only childId, weekStart, correctedAgeMonths
+//      and method are read. No name, DOB or free text can reach the prompt.
+//      The allergen lists are NOT taken from the body: the edge function derives
+//      them from allergen_introductions under the caller's RLS
+//      (deriveAllergenLists), so a reaction logged on another phone, or a stale
+//      offline cache, can't put a reacted-to allergen back in the plan. Old
+//      clients still send introducedAllergens / reactionAllergens; they are
+//      accepted and ignored.
+//   2. eligibleFoods + buildUserText: the model is shown ONLY the catalog
+//      foods (./foodCatalog.ts) this child may have — minAgeMonths <= age and
+//      every catalog allergen in the server-derived allowed set — and picks
+//      1–3 of them per idea. It receives no allergen lists at all (the
+//      eligible list is all it needs), no name, no DOB.
+//   3. sanitizePlan: each idea is rebuilt from the catalog. allergens = the
+//      union of the foods' catalog allergens, foodCategory = the first food's
+//      category, blwPrep / traditionalPrep = the catalog prep for the child's
+//      age band ("Food name: prep" per food). The model writes only name,
+//      mealSlot, servingTip and the intro; those free-text strings still go
+//      through the keyword filter below (hazardsIn in free-text mode,
+//      allergensMentioned, OFF_TONE_RE) as a second layer. Unknown or
+//      ineligible slugs, repeats past MAX_FOOD_REPEATS and PLAN_LIMITS breaches
+//      drop the idea. Fewer than MIN_IDEAS survivors -> null (-> 422).
 // The keyword lists are exported consts so the tests lock them.
+
+import { FOOD_CATALOG, IRON_RICH_SLUGS, MAX_FOOD_REPEATS, PLAN_LIMITS } from "./foodCatalog.ts";
+import type { AgeBand, CatalogFood } from "./foodCatalog.ts";
 
 // ---------------------------------------------------------------------------
 // Fixed vocabularies
@@ -58,7 +73,10 @@ export const UNDER_ONE_MONTHS = 12;
 
 export const MAX_INTRO = 240;
 export const MAX_NAME = 60;
-export const MAX_PREP = 220;
+/** Foods per idea the model may pick. */
+export const MAX_FOODS_PER_IDEA = 3;
+/** Below this many eligible catalog foods there is no plan to build (-> 422 no_eligible_foods, before any paid call). */
+export const MIN_ELIGIBLE_FOODS = 5;
 export const MAX_SERVING_TIP = 160;
 /** The prompt asks for 5–7 ideas; at most MAX_IDEAS are kept. */
 export const MAX_IDEAS = 7;
@@ -70,7 +88,6 @@ export const FALLBACK_INTRO = "Here are a few meal ideas to try with your baby t
 const ALLERGEN_SET: ReadonlySet<string> = new Set(ALLERGEN_SLUGS);
 const METHOD_SET: ReadonlySet<string> = new Set(SOLIDS_METHODS);
 const SLOT_SET: ReadonlySet<string> = new Set(MEAL_SLOTS);
-const CATEGORY_SET: ReadonlySet<string> = new Set(FOOD_CATEGORIES);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -79,12 +96,17 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // Types
 // ---------------------------------------------------------------------------
 
-export type ValidInput = {
+/** What validateInput reads from the request body. */
+export type RequestInput = {
   childId: string;
   weekStart: string;
   /** Whole months, floored (11.9 -> 11, so the under-12 rules still apply). */
   correctedAgeMonths: number;
   method: SolidsMethod;
+};
+
+/** RequestInput plus the allergen lists the server derived (deriveAllergenLists). */
+export type ValidInput = RequestInput & {
   introducedAllergens: AllergenSlug[];
   reactionAllergens: AllergenSlug[];
 };
@@ -93,6 +115,9 @@ export type MealIdea = {
   id: string;
   name: string;
   mealSlot: MealSlot;
+  /** Catalog slugs (1–3), in the model's order. The source of allergens, category and prep. */
+  foods: string[];
+  /** Catalog prep for the age band, "Food name: prep" per food. */
   blwPrep?: string;
   traditionalPrep?: string;
   servingTip?: string;
@@ -178,25 +203,16 @@ export function mealPlanGate(args: {
 // Input
 // ---------------------------------------------------------------------------
 
-function parseSlugList(v: unknown): AllergenSlug[] | null {
-  if (!Array.isArray(v) || v.length > ALLERGEN_SLUGS.length) return null;
-  const seen = new Set<string>();
-  for (const s of v) {
-    if (typeof s !== "string" || !ALLERGEN_SET.has(s) || seen.has(s)) return null;
-    seen.add(s);
-  }
-  // Canonical order, so the prompt text is stable.
-  return ALLERGEN_SLUGS.filter((s) => seen.has(s));
-}
-
 /**
  * Allowlist validation. Builds a fresh object from the permitted fields only,
  * so nothing else in the body can reach the prompt. Returns null on any
  * violation (-> 400 invalid_input).
  */
-export function validateInput(body: unknown, nowMs: number): ValidInput | null {
+export function validateInput(body: unknown, nowMs: number): RequestInput | null {
   if (!isPlainObject(body)) return null;
-  const { childId, weekStart, correctedAgeMonths, method, introducedAllergens, reactionAllergens } = body;
+  // introducedAllergens / reactionAllergens are deliberately not read (see
+  // header): the server derives them. Sending them is not an error.
+  const { childId, weekStart, correctedAgeMonths, method } = body;
 
   if (typeof childId !== "string" || !UUID_RE.test(childId)) return null;
   if (!isAcceptableWeekStart(weekStart, nowMs)) return null;
@@ -209,17 +225,71 @@ export function validateInput(body: unknown, nowMs: number): ValidInput | null {
     return null;
   }
   if (typeof method !== "string" || !METHOD_SET.has(method)) return null;
-  const introduced = parseSlugList(introducedAllergens);
-  const reaction = parseSlugList(reactionAllergens);
-  if (!introduced || !reaction) return null;
 
   return {
     childId,
     weekStart,
     correctedAgeMonths: Math.floor(correctedAgeMonths),
     method: method as SolidsMethod,
-    introducedAllergens: introduced,
-    reactionAllergens: reaction,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Server-derived allergen lists
+// ---------------------------------------------------------------------------
+
+/** One allergen_introductions row as the edge function selects it. */
+export type IntroductionRow = {
+  status: string;
+  /** PostgREST embeds a to-one FK as an object; tolerate an array too. */
+  allergens: { slug: string | null } | { slug: string | null }[] | null;
+  allergen_exposure_logs?: { reaction_observed: boolean | null }[] | null;
+};
+
+/** The select string generate-meal-plan uses for IntroductionRow. */
+export const INTRODUCTIONS_SELECT = "status, allergens(slug), allergen_exposure_logs(reaction_observed)";
+
+export type AllergenStatus = "not_started" | "in_progress" | "introduced" | "reaction_noted";
+
+/**
+ * Port of getAllergenStatus in src/services/allergenService.ts — keep the two
+ * identical (locked by mealPlan.server.test.ts over every status x exposure
+ * combination).
+ */
+export function introductionStatus(intro: Omit<IntroductionRow, "allergens"> | undefined): AllergenStatus {
+  if (!intro) return "not_started";
+  const exposures = intro.allergen_exposure_logs ?? [];
+  const hasReaction = exposures.some((e) => e.reaction_observed === true);
+  if (intro.status === "reaction_observed") return "reaction_noted";
+  if (intro.status === "safe") return "introduced";
+  if (hasReaction) return "reaction_noted";
+  if (intro.status === "completed") return "introduced";
+  if (intro.status === "not_started" && exposures.length === 0) return "not_started";
+  return "in_progress";
+}
+
+/**
+ * introduced = status "introduced" (signed off), reaction = "reaction_noted".
+ * "in_progress" is neither, so the plan leaves it out until the parent signs
+ * the introduction off. Unknown slugs are ignored.
+ */
+export function deriveAllergenLists(rows: readonly IntroductionRow[] | null | undefined): {
+  introducedAllergens: AllergenSlug[];
+  reactionAllergens: AllergenSlug[];
+} {
+  const introduced = new Set<string>();
+  const reaction = new Set<string>();
+  for (const row of rows ?? []) {
+    const a = Array.isArray(row.allergens) ? row.allergens[0] : row.allergens;
+    const slug = a?.slug;
+    if (typeof slug !== "string" || !ALLERGEN_SET.has(slug)) continue;
+    const status = introductionStatus(row);
+    if (status === "introduced") introduced.add(slug);
+    if (status === "reaction_noted") reaction.add(slug);
+  }
+  return {
+    introducedAllergens: ALLERGEN_SLUGS.filter((s) => introduced.has(s)),
+    reactionAllergens: ALLERGEN_SLUGS.filter((s) => reaction.has(s)),
   };
 }
 
@@ -229,25 +299,69 @@ export function allowedAllergens(input: ValidInput): AllergenSlug[] {
   return input.introducedAllergens.filter((s) => !reaction.has(s));
 }
 
+// ---------------------------------------------------------------------------
+// Catalog eligibility + prompt
+// ---------------------------------------------------------------------------
+
+/** Catalog prep band for a corrected age: 4–8 -> "6-8", 9–11 -> "9-11", 12+ -> "12+". */
+export function ageBand(correctedAgeMonths: number): AgeBand {
+  if (correctedAgeMonths >= 12) return "12+";
+  if (correctedAgeMonths >= 9) return "9-11";
+  return "6-8";
+}
+
+/**
+ * The catalog foods this child may be offered: old enough (minAgeMonths) and
+ * every catalog allergen introduced without a reaction. Catalog order.
+ */
+export function eligibleFoods(input: ValidInput): CatalogFood[] {
+  const allowed = new Set<string>(allowedAllergens(input));
+  return FOOD_CATALOG.filter(
+    (f) => f.minAgeMonths <= input.correctedAgeMonths && f.allergens.every((a) => allowed.has(a)),
+  );
+}
+
 const METHOD_TEXT: Record<SolidsMethod, string> = {
-  blw: "baby-led weaning (finger foods your baby feeds themself). Give blwPrep only.",
-  traditional: "traditional spoon-feeding (purees and mashes). Give traditionalPrep only.",
-  mix: "a mix of baby-led finger foods and spoon-feeding. Give both blwPrep and traditionalPrep.",
+  blw: "baby-led weaning (finger foods your baby feeds themself)",
+  traditional: "traditional spoon-feeding (purees and mashes)",
+  mix: "a mix of baby-led finger foods and spoon-feeding",
 };
 
-export function buildUserText(input: ValidInput): string {
-  const allowed = allowedAllergens(input);
-  const allowedSet = new Set<string>(allowed);
-  const avoid = ALLERGEN_SLUGS.filter((s) => !allowedSet.has(s));
+const IRON_RICH: ReadonlySet<string> = new Set(IRON_RICH_SLUGS);
+
+/** "rice-infant-cereal, rice, congee" — only the slugs in `eligible`. */
+function limitLines(eligible: readonly CatalogFood[]): string[] {
+  const have = new Set(eligible.map((f) => f.slug));
+  return PLAN_LIMITS.flatMap((l) => {
+    const slugs = l.slugs.filter((x) => have.has(x));
+    if (slugs.length === 0) return [];
+    return [`- At most ${l.maxIdeas} idea${l.maxIdeas === 1 ? "" : "s"} in the whole plan may use any of: ${slugs.join(", ")}.`];
+  });
+}
+
+/**
+ * The user turn. Lists only the eligible foods (slug, name, category, an
+ * iron-rich marker). No allergen lists, no notes, no name or DOB.
+ */
+export function buildUserText(input: ValidInput, eligible: readonly CatalogFood[] = eligibleFoods(input)): string {
   return [
     `Corrected age: ${input.correctedAgeMonths} months.`,
-    `Feeding method: ${METHOD_TEXT[input.method]}`,
-    `Allergens your baby already eats (may appear): ${allowed.length > 0 ? allowed.join(", ") : "none yet"}.`,
-    `Allergens to leave out entirely (never include, not even as an ingredient): ${avoid.length > 0 ? avoid.join(", ") : "none"}.`,
+    `Feeding method: ${METHOD_TEXT[input.method]}.`,
+    `Foods you may use (pick by slug, spelled exactly; use no other food):`,
+    ...eligible.map((f) => `- ${f.slug}: ${f.name} (${f.category}${IRON_RICH.has(f.slug) ? ", iron-rich" : ""})`),
+    `Plan limits:`,
+    `- 5 to 7 ideas, 1 to ${MAX_FOODS_PER_IDEA} foods each. At least 2 ideas include an iron-rich food.`,
+    `- Use any one food in at most ${MAX_FOOD_REPEATS} ideas.`,
+    ...limitLines(eligible),
     input.correctedAgeMonths < UNDER_ONE_MONTHS
       ? "Under 12 months: no honey in any form, no cow's milk as a drink, no added salt or sugar."
-      : "12 months or older: still no added salt or sugar, and cut every food to a safe size and texture.",
+      : "12 months or older: still no added salt or sugar.",
   ].join("\n");
+}
+
+/** Catalog prep for `foods` in one method and band: "Food name: prep" per food. */
+export function buildPrep(foods: readonly CatalogFood[], method: "blw" | "traditional", band: AgeBand): string {
+  return foods.map((f) => `${f.name}: ${f.prep[method][band]}`).join(" ");
 }
 
 // ---------------------------------------------------------------------------
@@ -265,22 +379,64 @@ export type FormHazard = {
   safe?: RegExp;
 };
 
-/** Under-12-months rules. Matching text drops the idea. */
-export const UNDER_ONE_HONEY_RE = /\bhoney\b/i;
+/**
+ * Every scan (and every stored string, via cleanString) runs on normalized
+ * text: NFKC (fullwidth / compatibility forms), curly quotes and primes to
+ * straight ones (so "cow\u2019s" matches "cow's"), and zero-width / soft-hyphen
+ * characters removed (so "hon\u200Bey" matches "honey").
+ */
+export function normalizeText(s: string): string {
+  return s
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u02BC\u0060\u00B4]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"');
+}
 
-/** Cow's / dairy milk mentioned while drinking it. Breast milk and formula are fine. */
-export const UNDER_ONE_MILK_RE = /(?<!breast[\s-]?)(?<!formula\s)\bmilk\b/i;
+/** Under-12-months rules. Matching text drops the idea. "honeydew" is fine; honeyed / honeycomb are not. */
+export const UNDER_ONE_HONEY_RE = /\bhoney(?!dew)/i;
+
+/**
+ * Milk mentions that are about breast milk / formula, not dairy: "milk feed",
+ * "milk is still your baby's main food". Removed before the milk drink rule
+ * and the milk allergen keyword run, so the intro the prompt asks for (and
+ * "offer after a milk feed") isn't read as cow's milk.
+ */
+export const BENIGN_MILK_RE =
+  /\bmilk[\s-]feeds?\b|\bmilk[\s-]feeding\b|\b(?:breast ?milk(?: or formula)?|formula|milk)\s+(?:is|stays|remains)\s+(?:still\s+)?(?:your baby's\s+|their\s+|the\s+)?(?:main|primary|most important)\b/gi;
+
+/** "milk" not qualified as breast milk, formula or a plant milk. */
+export const UNDER_ONE_MILK_RE = /(?<!(?:breast|formula|oat|rice|coconut)[\s-]?)\bmilk(?:shakes?)?\b/i;
+/** Milk being drunk. Note "cup" also catches a recipe measure; that drop is accepted. */
 export const UNDER_ONE_DRINK_RE =
-  /\b(?:to drink|as a drink|drinks?|drinking|sips?|sippy|straw cup|open cup|glass of|cup of|beverage)\b/i;
+  /\b(?:to drink|as a drink|drinks?|drinking|sips?|sippy|straws?|cups?|beakers?|bottles?|glass(?:es)?|beverage|smoothies?|milkshakes?|(?:offer|serve|give)\s+(?:some\s+|a little\s+|warm\s+|cold\s+)*milk)\b/i;
+/** Milk cooked into food (fine under 12 months). */
+export const UNDER_ONE_MILK_COOKED_RE =
+  /\b(?:cook(?:ed|ing)?|bak(?:e|ed|ing)|simmer(?:ed)?|stirr?(?:ed)? into|mix(?:ed)? into|whisk(?:ed)?|porridge|oatmeal|sauce|batter|custard|scrambl(?:e|ed))\b/i;
 
 /**
  * Added salt or sugar. Negated mentions ("no added salt", "unsalted",
- * "sugar-free", "without sugar") are removed first by ADDED_SALT_SUGAR_NEGATION_RE.
+ * "sugar-free", "without sugar") are removed first by
+ * ADDED_SALT_SUGAR_NEGATION_RE — but not when the negation is itself negated
+ * ("no need to skip the salt", "don't avoid salt").
  */
 export const ADDED_SALT_SUGAR_NEGATION_RE =
-  /\b(?:no|without|skip(?:\s+the)?|avoid(?:ing)?|leave out(?:\s+the)?|never add|zero|free of|nothing)\s+(?:any\s+|added\s+|extra\s+)*(?:salt|sugar|sweeteners?)(?:\s+(?:or|and|\/)\s+(?:added\s+)?(?:salt|sugar|sweeteners?))?\b|\b(?:salt|sugar)[\s-]free\b|\bno[\s-]added[\s-](?:salt|sugar)\b/gi;
+  /(?<!(?:\bto|\bnot|n't|\bneed)\s)\b(?:no|without|skip(?:\s+the)?|avoid(?:ing)?|never add)\s+(?:any\s+|added\s+|extra\s+)*(?:salt|sugar|sweeteners?)(?:\s+(?:or|and|\/)\s+(?:any\s+|added\s+)?(?:salt|sugar|sweeteners?))?\b|\b(?:salt|sugar)[\s-]free\b|\bno[\s-]added[\s-](?:salt|sugar)\b/gi;
 export const ADDED_SALT_SUGAR_RE =
-  /\b(?:salt|salted|salty|sugar(?!\s+snap)|sugars|sugary|syrup|sweeten(?:ed|er|ers)?|candied|frosting|icing)\b/i;
+  /\b(?:salt|salted|salty|sugar(?!\s+snap)|sugars|sugary|syrups?|sweeten(?:ed|er|ers)?|candied|frosting|icing|agave|nectar|molasses|treacle|jams?|marmalade|stock cubes?|bouillon|gravy granules|soy sauce)\b/i;
+
+/** Splits joined idea text back into sentences / fields for per-segment rules. */
+function segments(text: string): string[] {
+  return text.split(/[.;!?\n]+/).map((x) => x.trim()).filter(Boolean);
+}
+
+/** Cow's milk as a drink, or milk with no cooking context, in any one sentence. */
+function milkDrinkUnderOne(text: string): boolean {
+  return segments(text).some((seg) => {
+    const t = seg.replace(BENIGN_MILK_RE, " ");
+    return UNDER_ONE_MILK_RE.test(t) && (UNDER_ONE_DRINK_RE.test(t) || !UNDER_ONE_MILK_COOKED_RE.test(t));
+  });
+}
 
 /** Always dropped under 36 months, no safe form. */
 export const ALWAYS_HAZARD_RE =
@@ -292,6 +448,14 @@ export const ALWAYS_HAZARD_RE =
  */
 export const WHOLE_NUT_RE =
   /(?<!(?:ground|powdered)\s)\b(?:nuts?|peanuts?|almonds?|cashews?|walnuts?|pecans?|pistachios?|hazelnuts?|macadamias?|brazil nuts?|pine nuts?)\b(?![\s-]+(?:butters?|flour|meal|powder|puffs?|milk|oil|free|sauce))/i;
+
+/**
+ * Free-text mode (catalog prep) version of WHOLE_NUT_RE: "Peanut oat
+ * porridge" names a catalog food whose prep is already safe, so only an
+ * explicitly unsafe nut form trips.
+ */
+export const WHOLE_NUT_FREE_TEXT_RE =
+  /\b(?:whole|chopped|crushed|halved|roasted|salted|raw|handful of|a few)\s+(?:\w+\s+)?(?:nuts?|peanuts?|almonds?|cashews?|walnuts?|pecans?|pistachios?|hazelnuts?|macadamias?)\b(?![\s-]+(?:butters?|flour|meal|powder|puffs?))/i;
 
 export const FORM_HAZARDS: readonly FormHazard[] = [
   {
@@ -327,17 +491,23 @@ export const FORM_HAZARDS: readonly FormHazard[] = [
  * positive only drops one idea.
  */
 export const ALLERGEN_KEYWORDS: Readonly<Record<AllergenSlug, RegExp>> = {
-  peanut: /\b(?:peanuts?|groundnuts?|bamba)\b/i,
-  egg: /\b(?:eggs?|yolks?|omelets?|omelettes?|frittatas?|quiches?|mayonnaise|mayo|meringues?|custards?)\b/i,
+  peanut: /\b(?:peanuts?|groundnuts?|bamba|satay)\b/i,
+  egg:
+    /\b(?:eggs?|eggy|yolks?|omelets?|omelettes?|frittatas?|quiches?|mayonnaise|mayo|aioli|meringues?|custards?|french toast|pancakes?|waffles?|cr[eê]pes?|brioche|challah)\b/i,
+  // Bare "milk" counts (buttermilk / milkshake too), except breast milk,
+  // formula and plant milks. BENIGN_MILK_RE phrases are removed first.
   milk:
-    /\b(?:cow'?s milk|whole milk|dairy|yog(?:h)?urts?|cheeses?|cheddar|mozzarella|ricotta|paneer|parmesan|kefir|ghee|custards?|cream)\b|(?<!(?:peanut|almond|cashew|nut|seed|sunflower|hazelnut|apple|cocoa|shea)[\s-]?)\bbutter(?:ed)?\b/i,
+    /(?<!(?:breast|formula|oat|rice|coconut|almond|soy|soya|nut|cashew|hemp|pea)[\s-]?)milk|\b(?:dairy|yog(?:h)?urts?|chees\w*|cheddar|mozzarella|ricotta|paneer|parmesan|feta|halloumi|mascarpone|labneh|skyr|whey|kefir|ghee|custards?|cream|creamed|b[eé]chamel|white sauce|pesto|nutella|pancakes?|waffles?|cr[eê]pes?|french toast|naan|brioche)\b|(?<!(?:peanut|almond|cashew|nut|seed|sunflower|hazelnut|apple|cocoa|shea)[\s-]?)\bbutter(?:ed)?\b/i,
   wheat:
-    /\b(?:wheat|bread|breadcrumbs?|toast|pasta|noodles?|couscous|semolina|bulgur|farro|spelt|crackers?|pancakes?|waffles?|muffins?|pitas?|bagels?|orzo)\b|(?<!(?:almond|oat|rice|coconut|chickpea|corn|buckwheat|cassava)\s)\bflour\b|(?<!corn\s)\btortillas?\b/i,
-  soy: /\b(?:soy|soya|soybeans?|tofu|edamame|tempeh|miso)\b/i,
+    /\b(?:wheat|toast|pasta|spaghetti|macaroni|penne|fusilli|rigatoni|farfalle|lasagn\w*|ravioli|tortellini|orzo|couscous|semolina|bulgur|farro|spelt|seitan|crackers?|pancakes?|waffles?|cr[eê]pes?|muffins?|pitas?|bagels?|naan|brioche|challah|panko|breaded|pretzels?|biscuits?|rusks?|gnocchi|udon|french toast|teriyaki|soy sauce)\b|bread|(?<!rice\s)\bnoodles?\b|(?<!(?:almond|oat|rice|coconut|chickpea|corn|buckwheat|cassava)\s)\bflour\b|(?<!corn\s)\btortillas?\b/i,
+  soy: /\b(?:soy|soya|soybeans?|tofu|edamame|tempeh|miso|teriyaki)\b/i,
   "tree-nuts":
-    /\b(?:tree[\s-]?nuts?|almonds?|cashews?|walnuts?|pecans?|pistachios?|hazelnuts?|macadamias?|brazil nuts?|pine nuts?)\b/i,
-  fish: /\b(?:fish|salmon|cod|tuna|sardines?|trout|haddock|tilapia|mackerel|pollock|halibut|anchov(?:y|ies)|whitefish)\b/i,
-  shellfish: /\b(?:shellfish|shrimps?|prawns?|crabs?|lobsters?|crayfish|scallops?|clams?|mussels?|oysters?)\b/i,
+    /\b(?:tree[\s-]?nuts?|almonds?|cashews?|walnuts?|pecans?|pistachios?|hazelnuts?|macadamias?|brazil nuts?|pine nuts?|mixed nuts?|pesto|marzipan|nutella|praline|frangipane)\b/i,
+  // No leading \b on "fish" so compounds match (catfish, monkfish, fishcakes);
+  // shellfish / crayfish / jellyfish / starfish / cuttlefish are excluded.
+  fish:
+    /(?<!shell|cray|craw|jelly|star|cuttle)fish|\b(?:salmon|cod|tuna|sardines?|trout|haddock|tilapia|mackerel|pollock|halibut|herring|anchov(?:y|ies)|worcestershire)\b/i,
+  shellfish: /\b(?:shellfish|shrimps?|prawns?|crabs?|lobsters?|langoustines?|crayfish|crawfish|scallops?|clams?|mussels?|oysters?)\b/i,
   sesame: /\b(?:sesame|tahini|hummus|houmous|halva|za'?atar)\b/i,
 };
 
@@ -373,26 +543,36 @@ export const OFF_TONE_RE = new RegExp(
   "i",
 );
 
-/** The ids of the hazard rules this text trips, given the child's age. Empty = safe. */
-export function hazardsIn(text: string, correctedAgeMonths: number): string[] {
+/**
+ * The ids of the hazard rules this text trips, given the child's age. Empty = safe.
+ *
+ * `freeText: true` is for model-written strings (name, servingTip, intro) when
+ * the prep comes from the catalog: a FORM_HAZARDS food then trips only on an
+ * explicitly unsafe form ("whole grapes", "raw carrot", "a spoonful of peanut
+ * butter"), since the size / texture instructions are the catalog's, not the
+ * model's. Every other rule applies unchanged.
+ */
+export function hazardsIn(raw: string, correctedAgeMonths: number, { freeText = false }: { freeText?: boolean } = {}): string[] {
+  const text = normalizeText(raw);
   const hits: string[] = [];
   if (correctedAgeMonths < UNDER_ONE_MONTHS) {
     if (UNDER_ONE_HONEY_RE.test(text)) hits.push("honey_under_12m");
-    if (UNDER_ONE_MILK_RE.test(text) && UNDER_ONE_DRINK_RE.test(text)) hits.push("cow_milk_drink_under_12m");
+    if (milkDrinkUnderOne(text)) hits.push("cow_milk_drink_under_12m");
     const withoutNegations = text.replace(ADDED_SALT_SUGAR_NEGATION_RE, " ");
     if (ADDED_SALT_SUGAR_RE.test(withoutNegations)) hits.push("added_salt_sugar_under_12m");
   }
   if (ALWAYS_HAZARD_RE.test(text)) hits.push("always_hazard");
-  if (WHOLE_NUT_RE.test(text)) hits.push("whole_nuts");
+  if ((freeText ? WHOLE_NUT_FREE_TEXT_RE : WHOLE_NUT_RE).test(text)) hits.push("whole_nuts");
   for (const h of FORM_HAZARDS) {
     if (!h.food.test(text)) continue;
-    if (h.unsafe?.test(text) || !h.safe?.test(text)) hits.push(h.id);
+    if (h.unsafe?.test(text) || (!freeText && !h.safe?.test(text))) hits.push(h.id);
   }
   return hits;
 }
 
 /** Allergen slugs whose keywords appear in `text`. */
-export function allergensMentioned(text: string): AllergenSlug[] {
+export function allergensMentioned(raw: string): AllergenSlug[] {
+  const text = normalizeText(raw).replace(BENIGN_MILK_RE, " ");
   return ALLERGEN_SLUGS.filter((slug) => ALLERGEN_KEYWORDS[slug].test(text));
 }
 
@@ -400,30 +580,41 @@ export function allergensMentioned(text: string): AllergenSlug[] {
 // Sanitizer
 // ---------------------------------------------------------------------------
 
-/** Trim + collapse whitespace; null when not a string, empty, over `max`, or off-tone. */
+/** Normalize, trim + collapse whitespace; null when not a string, empty, over `max`, or off-tone. */
 export function cleanString(v: unknown, max: number): string | null {
   if (typeof v !== "string") return null;
-  const s = v.replace(/\s+/g, " ").trim();
+  const s = normalizeText(v).replace(/\s+/g, " ").trim();
   if (s.length === 0 || s.length > max) return null;
   if (OFF_TONE_RE.test(s)) return null;
   return s;
 }
 
+/** A model-written string passes the second-layer keyword filter for this child. */
+function freeTextOk(text: string, input: ValidInput, allowed: ReadonlySet<string>): boolean {
+  if (hazardsIn(text, input.correctedAgeMonths, { freeText: true }).length > 0) return false;
+  return allergensMentioned(text).every((s) => allowed.has(s));
+}
+
 /**
- * Validate model output against MealPlan, then run the hazard + allergen
- * filter on every idea. Rebuilds every object from known fields only; idea
- * ids are assigned here, never taken from the model. Returns null when fewer
- * than MIN_IDEAS ideas survive (-> 422 unusable_plan).
+ * Validate model output and build the MealPlan from the catalog. The model
+ * contributes, per idea, only { name, mealSlot, foods: slug[1-3], servingTip? }
+ * plus the plan intro; every other field (including any prep, allergens or
+ * category it volunteers) is ignored. Idea ids are assigned here. Returns null
+ * when fewer than MIN_IDEAS ideas survive (-> 422 unusable_plan).
  */
 export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
   if (!isPlainObject(raw)) return null;
 
   const allowed = new Set<string>(allowedAllergens(input));
+  const eligible = new Map(eligibleFoods(input).map((f) => [f.slug, f]));
+  const band = ageBand(input.correctedAgeMonths);
   const wantBlw = input.method === "blw" || input.method === "mix";
   const wantTraditional = input.method === "traditional" || input.method === "mix";
 
   const ideas: MealIdea[] = [];
   const seenNames = new Set<string>();
+  const foodUses = new Map<string, number>();
+  const limitUses = new Map<string, number>();
   for (const item of Array.isArray(raw.ideas) ? raw.ideas : []) {
     if (ideas.length >= MAX_IDEAS) break;
     if (!isPlainObject(item)) continue;
@@ -433,55 +624,58 @@ export function sanitizePlan(raw: unknown, input: ValidInput): MealPlan | null {
     const mealSlot = item.mealSlot;
     if (typeof mealSlot !== "string" || !SLOT_SET.has(mealSlot)) continue;
 
-    // Prep fields follow the method: required when wanted, never kept otherwise.
-    const blwPrep = wantBlw ? cleanString(item.blwPrep, MAX_PREP) : null;
-    const traditionalPrep = wantTraditional ? cleanString(item.traditionalPrep, MAX_PREP) : null;
-    if (wantBlw && !blwPrep) continue;
-    if (wantTraditional && !traditionalPrep) continue;
-    // Optional: an over-length or off-tone tip is omitted, not fatal.
-    const servingTip = cleanString(item.servingTip, MAX_SERVING_TIP);
+    // Foods: 1–3 distinct eligible catalog slugs. One bad slug drops the idea.
+    const rawFoods = item.foods;
+    if (!Array.isArray(rawFoods) || rawFoods.length === 0 || rawFoods.length > MAX_FOODS_PER_IDEA) continue;
+    const foods: CatalogFood[] = [];
+    for (const slug of rawFoods) {
+      const f = typeof slug === "string" ? eligible.get(slug) : undefined;
+      if (!f || foods.includes(f)) {
+        foods.length = 0;
+        break;
+      }
+      foods.push(f);
+    }
+    if (foods.length === 0) continue;
 
-    // Filter on exactly the text a parent would see.
-    const text = [name, blwPrep, traditionalPrep, servingTip].filter(Boolean).join(". ");
-    if (hazardsIn(text, input.correctedAgeMonths).length > 0) continue;
+    // Variety and frequency limits across the plan.
+    if (foods.some((f) => (foodUses.get(f.slug) ?? 0) >= MAX_FOOD_REPEATS)) continue;
+    const hitLimits = PLAN_LIMITS.filter((l) => foods.some((f) => l.slugs.includes(f.slug)));
+    if (hitLimits.some((l) => (limitUses.get(l.id) ?? 0) >= l.maxIdeas)) continue;
 
-    const declared = Array.isArray(item.allergens) ? item.allergens : [];
-    if (declared.some((s) => typeof s !== "string" || !ALLERGEN_SET.has(s))) continue;
-    const effective = new Set<string>([...(declared as string[]), ...allergensMentioned(text)]);
-    // Reaction allergens are never in `allowed`, and neither is anything not
-    // yet introduced, so one check covers both rules.
-    if ([...effective].some((s) => !allowed.has(s))) continue;
+    // Second layer over the model's own words. A failing name drops the idea;
+    // a failing (or over-length / off-tone) tip is omitted.
+    if (!freeTextOk(name, input, allowed)) continue;
+    let servingTip = cleanString(item.servingTip, MAX_SERVING_TIP);
+    if (servingTip && !freeTextOk(servingTip, input, allowed)) servingTip = null;
 
-    const foodCategory =
-      typeof item.foodCategory === "string" && CATEGORY_SET.has(item.foodCategory)
-        ? (item.foodCategory as FoodCategory)
-        : "other";
+    const allergenSet = new Set<string>(foods.flatMap((f) => f.allergens));
+    // eligibleFoods already guarantees this; kept as a hard backstop.
+    if ([...allergenSet].some((a) => !allowed.has(a))) continue;
 
     seenNames.add(name.toLowerCase());
+    for (const f of foods) foodUses.set(f.slug, (foodUses.get(f.slug) ?? 0) + 1);
+    for (const l of hitLimits) limitUses.set(l.id, (limitUses.get(l.id) ?? 0) + 1);
+
     const idea: MealIdea = {
       id: `idea-${ideas.length + 1}`,
       name,
       mealSlot: mealSlot as MealSlot,
-      allergens: ALLERGEN_SLUGS.filter((s) => effective.has(s)),
-      foodCategory,
+      foods: foods.map((f) => f.slug),
+      allergens: ALLERGEN_SLUGS.filter((a) => allergenSet.has(a)),
+      foodCategory: foods[0].category,
     };
-    if (blwPrep) idea.blwPrep = blwPrep;
-    if (traditionalPrep) idea.traditionalPrep = traditionalPrep;
+    if (wantBlw) idea.blwPrep = buildPrep(foods, "blw", band);
+    if (wantTraditional) idea.traditionalPrep = buildPrep(foods, "traditional", band);
     if (servingTip) idea.servingTip = servingTip;
     ideas.push(idea);
   }
   if (ideas.length < MIN_IDEAS) return null;
 
-  // The intro is checked against the same rules: a hazard or off-list
-  // allergen in it falls back to the fixed line.
+  // The intro is checked against the same free-text rules: a hazard or
+  // off-list allergen in it falls back to the fixed line.
   let intro = cleanString(raw.intro, MAX_INTRO);
-  if (
-    intro &&
-    (hazardsIn(intro, input.correctedAgeMonths).length > 0 ||
-      allergensMentioned(intro).some((s) => !allowed.has(s)))
-  ) {
-    intro = null;
-  }
+  if (intro && !freeTextOk(intro, input, allowed)) intro = null;
 
   return { weekStart: input.weekStart, method: input.method, intro: intro ?? FALLBACK_INTRO, ideas };
 }
