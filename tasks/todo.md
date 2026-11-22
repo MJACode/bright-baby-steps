@@ -1,3 +1,63 @@
+# Food page restructure + AI meal plan — Nov 2026
+
+Trigger: founder review of the Food page. One release (founder chose not to phase).
+
+## Decisions (approved by founder, 2026-11-22)
+- Vitamins move **fully into More** (founder override; PM flagged daily vitamin D discoverability risk)
+- Food page tabs become **Feeding | Solids**
+- Solids tab = log solids + allergens + solids history + AI weekly meal plan
+- "Solid" is **removed from Log a Feed** — Feeding tab is milk only (breast / bottle / pump)
+- Feed-type order: **auto-sort by last-7-day usage + pin one to top**
+- Ideas/recipes: **AI weekly meal plan**, Flare+, **1 free plan per child**
+- Feeding method: **per child — Baby-led / Traditional / Mix**, asked on first Solids visit, editable
+
+## Phase A — Backend (`backend` agent) — CONTAINS A MIGRATION → founder approves merge
+- [ ] Migration `children.solids_method text CHECK IN ('blw','traditional','mix')` nullable
+- [ ] Migration `meal_plans` — clone of `sign_plans` (UNIQUE child_id, week_start Monday, plan jsonb,
+      owner-keyed RLS, no DELETE policy, guard trigger, cascade on child/auth.users)
+- [ ] `_shared/mealPlan.ts` — validateInput / buildUserText / sanitizePlan (+ vitest)
+      * deterministic hazard filter applied AFTER the model: honey <12mo, whole nuts, whole grapes/
+        cherry tomatoes, popcorn, hard raw veg, cow's milk as a drink <12mo, added salt/sugar → drop item
+      * never suggest an allergen the child has a reaction logged for
+- [ ] `generate-meal-plan` edge function — clone of generate-sign-plan
+      * input allowlist: childId, weekStart, correctedAgeMonths, method, introduced allergen slugs,
+        reaction allergen slugs. No name, DOB, free text.
+      * gate: Flare+ OR (no meal_plans row ever for this child) → else 403
+      * 409 if a plan already exists for this week; persists with caller JWT
+      * persona: `nutrition` from `_shared/personas.ts`
+      * each idea: name, ageFit, blwPrep, traditionalPrep (per method), allergens[], servingTip
+- [ ] Regenerate `src/integrations/supabase/types.ts`
+- [ ] QA pass
+
+## Phase B — Frontend (`frontend` agent)
+- [ ] Mobbin references first (meal-plan / recipe-card screen, iOS) — new pattern
+- [ ] `FeedingPage.tsx`: tabs Feeding | Solids; `?tab=allergens` + `?tab=supplements` stay valid
+      (allergens → solids; supplements → redirect to More route) so push/Home deep links don't break
+- [ ] Vitamins: new route `/dashboard/vitamins` rendering existing `SupplementTracker`; entry in `MorePage`
+- [ ] `FeedingLog.tsx`: remove solid type + solid-only fields/allergen chips from the milk dialog;
+      history on Feeding tab = milk only
+- [ ] Extend `FeedingLog` (prop `mode="solids"`) rather than a new form — reuses solid fields, allergen
+      chips, offline queue, edit flow. Solids tab history = solid only.
+- [ ] Feed-type order: sort by count in last 7 days (from feeding_logs already loaded); pin via
+      `usePreferences.pinnedFeedType` (per device); long-press/⋯ "Keep first"
+- [ ] `lastFeedingType` pref: drop "solid"
+- [ ] Solids tab layout: method chip → This week's meal plan card → Log solids → Allergens → history
+- [ ] `useMealPlan` hook (clone `useSignPlan`); "Log this" on an idea pre-fills the solid log
+- [ ] Method picker (first visit) writes `children.solids_method`
+- [ ] Update PageInstructions copy; TodayCard/notification allergen path → `?tab=solids`
+- [ ] Tests: tab routing/deep links, feed-type sort + pin, solid removed from milk dialog, Log-this prefill
+- [ ] QA pass
+
+## Phase C — Legal (`legal` agent) + docs
+- [ ] PrivacyPage § 4 + `/subprocessors`: add generate-meal-plan (ninth Anthropic function, data sent)
+- [ ] `docs/legal-review-log.md` entry
+- [ ] CLAUDE.md "Eight edge functions" → nine
+- [ ] Meal plan "not medical advice" + choking-safety footer copy reviewed by `nutrition` + `legal`
+
+## Open risks
+- Vitamins in More: daily vitamin D logging gets harder to find. Watch supplement log volume after ship.
+- AI food content to infants: mitigated by hazard filter + nutrition persona + no-free-text input.
+
 # Home card noise reduction — Sept 2026
 
 Trigger: PM review of the Home "Today" card. Three of the five blocks were
