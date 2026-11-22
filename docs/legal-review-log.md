@@ -3445,3 +3445,19 @@ The finance disclaimer shown on the Financial page (under the intro, below the c
 5. Anthropic error body logged on non-OK responses (request-describing, not child data). Log status + length only. P2.
 6. Existing over-disclosure: Privacy § 4, `/subprocessors` and CLAUDE.md still list "briefing" though the 2026-10-12 entry says the Home briefing was removed. Low risk; clean up separately.
 7. Outside counsel (when commissioned): (a) is sending allergen status (even ambiguous) to an already-disclosed AI processor a material change under § 312.5(a)(1) or a separate-consent disclosure under § 312.5(a)(2)? (b) WA My Health My Data Act / CT / NV consumer-health-data notice and consent for allergen-derived data; (c) adequacy of the footer + Terms § 3 against negligence / product-liability claims for an AI food idea.
+
+### 2026-11-22 (addendum) — Meal Plan moves to a curated food catalog; data sent to Anthropic narrows
+
+**Reviewer:** in-house (founder decision; parent Claude applied the disclosure redlines). **Risk level:** Medium → lower within Medium.
+
+**Why:** QA showed the keyword filter could not reliably catch hazards in free-text model output. Founder chose a curated catalog (102 foods, drafted by the `nutrition` advisor against AAP / CDC / WHO / FDA-EPA fish guidance; `supabase/functions/_shared/foodCatalog.ts`). The model now picks 1–3 catalog slugs per idea; allergen tags and age-banded baby-led / spoon-fed prep shown to parents come from the catalog verbatim, never model prose. Model-written name / tip / intro still pass the keyword filter as a second layer.
+
+**Data flow change (verified against code):** the two allergen-slug lists are no longer sent. Anthropic now receives corrected age in months, solids method, and the eligible catalog foods (slug, name, category, iron-rich marker) — foods whose catalog allergens are all introduced with no reaction. No allergen names, no reaction detail, no child identifiers. Allergen status is now derived server-side from `allergen_introductions` under the caller's RLS (closes follow-up 1 above); client-sent lists are ignored. Eligibility still implies which allergens are tolerated, so the health-adjacent analysis above stands, but the signal is weaker and indirect.
+
+**Disclosures updated:** Privacy § 4 Meal Plan clause, `/subprocessors` Meal Plan data categories, FAQ (AI features + third parties), CLAUDE.md AI-provider bullet.
+
+**Follow-ups closed:** 1 (server-side derivation), 2–3 (largely mooted — allergens and prep now come from the catalog), 5 (error body no longer logged).
+
+**New follow-ups:**
+1. Registered pediatric dietitian review of the catalog before or soon after launch (portion sizes for strawberries / raspberries at 6–8 mo, squashed legumes at 12+, peanut dose and the NIAID high-risk-infant path, arsenic / mercury frequency limits, brand-variable allergen tags for infant cereal and tortillas). Founder decision pending.
+2. Outside-counsel questions in the parent entry remain open.
