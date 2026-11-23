@@ -4,6 +4,14 @@ import FeedingLog from "@/components/feeding/FeedingLog";
 import { applyOptimisticWrite } from "@/lib/offlineLogs";
 import type { ActiveFeedRow } from "@/hooks/useActiveFeed";
 
+// Pin the clock to local midday. Fixtures are "N minutes/an hour ago"; just
+// after midnight they'd fall under the collapsed "Yesterday" group and the
+// tests couldn't find them (CI failed at 00:31 UTC on 2026-11-23). Only Date
+// is faked, so timers, waitFor and promises behave normally.
+vi.hoisted(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 5, 15, 12, 0, 0) });
+});
+
 type Filter = { col: string; op: "eq" | "neq"; val: unknown };
 type Row = { id: string; feeding_type: string; logged_at: string; parent_id: string; child_id: string };
 

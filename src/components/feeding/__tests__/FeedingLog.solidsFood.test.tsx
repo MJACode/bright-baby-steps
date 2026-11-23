@@ -11,6 +11,14 @@ import {
   AVOID_OTHER_SAVED_NOTE, LOG_REACTION_FOOD_LABEL, LOG_REACTION_PEDIATRICIAN_NUDGE, reactionFoodFailedText,
 } from "@/lib/solidsAvoidCopy";
 
+// Pin the clock to local midday. Fixtures are "N minutes/an hour ago"; just
+// after midnight they'd fall under the collapsed "Yesterday" group and the
+// tests couldn't find them (CI failed at 00:31 UTC on 2026-11-23). Only Date
+// is faked, so timers, waitFor and promises behave normally.
+vi.hoisted(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 5, 15, 12, 0, 0) });
+});
+
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();

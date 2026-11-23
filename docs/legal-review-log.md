@@ -3519,3 +3519,12 @@ Privacy § 4 now reads "The AI only chooses which foods go together and at which
 2. (P2) Nutrition review of the serve shapes (incl. new `palm-chunk`), the 9 drawings, and copy added outside the approved set.
 3. (P2, pre-existing) Direct notice "What we collect" omits growth, temperature, vaccinations, visits, cry results and birth-certificate details listed in Privacy § 2 (2026-11-03). Reconcile at the next direct-notice edit.
 4. Outside counsel (when commissioned): (a) does adding a read tool to an existing parent-directed MCP grant need fresh affirmative consent under § 5 or § 312.5(a)(1)? (b) WA MHMDA / CT / NV: is a parent-noted food reaction "consumer health data" needing separate consent?
+
+### 2026-11-23 (addendum 5) — R4 closed: Connect to Claude has no live grants
+
+Founder confirmed Connect to Claude is not in service yet. Verified read-only on live 2026-11-23 after the #322 deploy: `mcp_authorization_grants` 0 rows, `mcp_access_tokens` 0, `mcp_clients` 0. No parent ever consented under the old "Allergens" label, so no grant was widened. Every future connection will see "Allergens and avoided foods" on the consent screen before it's granted.
+
+- **R4** (addendum 4): closed, not applicable. The accepted-risk record is moot.
+- **Follow-up 1** (Settings notice for pre-existing grants): closed, not needed.
+- **Follow-up 4(a)** (outside counsel on adding a tool to existing grants): closed for this change. Founder decision: no counsel review needed. Revisit only if a tool is ever added after connections are live.
+- Still open, unchanged: follow-up 3 (direct-notice reconciliation, pre-existing) and 4(b) (state health-data laws), for whenever outside counsel is commissioned per the CLAUDE.md triggers.
