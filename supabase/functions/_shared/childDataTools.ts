@@ -22,6 +22,7 @@ export type ToolName =
   | "get_illnesses"
   | "get_vaccinations"
   | "get_allergens"
+  | "get_food_avoidances"
   | "get_summary";
 
 export interface AnthropicTool {
@@ -192,6 +193,16 @@ export const CHILD_DATA_TOOLS: AnthropicTool[] = [
     },
   },
   {
+    name: "get_food_avoidances",
+    description:
+      "Returns the child's Solids avoid list: foods the family has chosen not to offer for now. Each entry has food_slug (a food from Grace Flare's solids catalog, e.g. \"sweet-potato\") or custom_food (the parent's own words for a food not in the catalog), reason (reaction = the parent noted a reaction after this food; preference = the baby didn't like it), an optional note, and dates. Use this when the parent asks which foods are being avoided, or before suggesting foods to offer. A reaction entry is the parent's record, not a diagnosed allergy; for allergen-introduction history use get_allergens.",
+    input_schema: {
+      type: "object",
+      properties: { child_id: CHILD_ID_PROP },
+      required: ["child_id"],
+    },
+  },
+  {
     name: "get_summary",
     description:
       "Returns aggregated totals over the last N days (default 7): total sleep minutes, longest sleep stretch, feed counts (bucketed by breast/bottle_breast_milk/bottle_formula/pump/solid) plus total ounces, diaper counts (bucketed by wet/dirty/both), milestones achieved, and active milestone flags raised in the window. Use this for 'how was last week', 'how is she doing overall', weekly snapshots, or when the parent asks for a quick rollup before drilling into specifics.",
@@ -331,6 +342,11 @@ export async function dispatchChildDataTool(
 
       case "get_allergens":
         rpcName = "get_allergens";
+        rpcArgs = { _child_id: args.child_id };
+        break;
+
+      case "get_food_avoidances":
+        rpcName = "get_food_avoidances";
         rpcArgs = { _child_id: args.child_id };
         break;
 

@@ -15,9 +15,11 @@
 //      clients still send introducedAllergens / reactionAllergens; they are
 //      accepted and ignored.
 //   2. eligibleFoods + buildUserText: the model is shown ONLY the catalog
-//      foods (./foodCatalog.ts) this child may have — minAgeMonths <= age and
-//      every catalog allergen in the server-derived allowed set — and picks
-//      1–3 of them per idea. It receives no allergen lists at all (the
+//      foods (./foodCatalog.ts) this child may have — minAgeMonths <= age,
+//      every catalog allergen in the server-derived allowed set, and not on
+//      the child's avoid list (child_food_avoidances, read server-side under
+//      RLS: deriveAvoidSlugs; never taken from the body) — and picks 1–3 of
+//      them per idea. The avoid list itself is never sent to the model. It receives no allergen lists at all (the
 //      eligible list is all it needs), no name, no DOB.
 //   3. sanitizePlan: the model picks foods ONLY (founder decision
 //      2026-11-22). Per idea it returns { mealSlot, foods: slug[1-3] }; any
@@ -36,7 +38,7 @@
 // catalog tests lint every prep string with them (src/test/foodCatalog.test.ts)
 // and the tests lock them.
 
-import { FOOD_CATALOG, IRON_RICH_SLUGS, MAX_FOOD_REPEATS, PLAN_LIMITS } from "./foodCatalog.ts";
+import { FOOD_CATALOG, IRON_RICH_SLUGS, MAX_FOOD_REPEATS, PLAN_LIMITS, ageBand } from "./foodCatalog.ts";
 import type { AgeBand, CatalogFood } from "./foodCatalog.ts";
 
 // ---------------------------------------------------------------------------
@@ -120,10 +122,16 @@ export type RequestInput = {
   method: SolidsMethod;
 };
 
-/** RequestInput plus the allergen lists the server derived (deriveAllergenLists). */
+/**
+ * RequestInput plus what the server derived from the database under the
+ * caller's RLS: the allergen lists (deriveAllergenLists) and the child's
+ * avoided catalog slugs (deriveAvoidSlugs). Never read from the request body.
+ */
 export type ValidInput = RequestInput & {
   introducedAllergens: AllergenSlug[];
   reactionAllergens: AllergenSlug[];
+  /** child_food_avoidances.food_slug, any reason (reaction or preference). Excluded by eligibleFoods. */
+  avoidSlugs: string[];
 };
 
 export type MealIdea = {
@@ -307,6 +315,31 @@ export function deriveAllergenLists(rows: readonly IntroductionRow[] | null | un
   };
 }
 
+// ---------------------------------------------------------------------------
+// Server-derived avoid list
+// ---------------------------------------------------------------------------
+
+/** One child_food_avoidances row as the edge function selects it. */
+export type AvoidanceRow = { food_slug: string | null };
+
+/** The select string generate-meal-plan uses for AvoidanceRow. */
+export const AVOIDANCES_SELECT = "food_slug";
+
+/**
+ * Catalog slugs the parent marked "avoid" for this child, any reason
+ * (founder decision 2026-11-22: reactions never expire; a preference stays
+ * excluded until the parent removes it — "Try again?" is a client nudge, not
+ * an expiry). Free-text custom_food rows have no slug and are record-only, so
+ * they don't filter the plan. Unknown slugs are dropped. Catalog order.
+ */
+export function deriveAvoidSlugs(rows: readonly AvoidanceRow[] | null | undefined): string[] {
+  const avoid = new Set<string>();
+  for (const row of rows ?? []) {
+    if (typeof row?.food_slug === "string") avoid.add(row.food_slug);
+  }
+  return FOOD_CATALOG.filter((f) => avoid.has(f.slug)).map((f) => f.slug);
+}
+
 /** Allergens the plan may contain: introduced and never reacted to. */
 export function allowedAllergens(input: ValidInput): AllergenSlug[] {
   const reaction = new Set<string>(input.reactionAllergens);
@@ -317,21 +350,24 @@ export function allowedAllergens(input: ValidInput): AllergenSlug[] {
 // Catalog eligibility + prompt
 // ---------------------------------------------------------------------------
 
-/** Catalog prep band for a corrected age: 4–8 -> "6-8", 9–11 -> "9-11", 12+ -> "12+". */
-export function ageBand(correctedAgeMonths: number): AgeBand {
-  if (correctedAgeMonths >= 12) return "12+";
-  if (correctedAgeMonths >= 9) return "9-11";
-  return "6-8";
-}
+// ageBand lives in ./foodCatalog.ts (serveShape uses it too); re-exported
+// here for existing importers.
+export { ageBand };
 
 /**
- * The catalog foods this child may be offered: old enough (minAgeMonths) and
- * every catalog allergen introduced without a reaction. Catalog order.
+ * The catalog foods this child may be offered: old enough (minAgeMonths),
+ * every catalog allergen introduced without a reaction, and not on the
+ * child's avoid list. Catalog order. sanitizePlan builds its slug lookup from
+ * this, so an avoided slug the model returns anyway drops its idea.
  */
 export function eligibleFoods(input: ValidInput): CatalogFood[] {
   const allowed = new Set<string>(allowedAllergens(input));
+  const avoid = new Set<string>(input.avoidSlugs);
   return FOOD_CATALOG.filter(
-    (f) => f.minAgeMonths <= input.correctedAgeMonths && f.allergens.every((a) => allowed.has(a)),
+    (f) =>
+      f.minAgeMonths <= input.correctedAgeMonths &&
+      f.allergens.every((a) => allowed.has(a)) &&
+      !avoid.has(f.slug),
   );
 }
 

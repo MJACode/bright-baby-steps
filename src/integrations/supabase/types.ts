@@ -691,6 +691,63 @@ export type Database = {
           },
         ]
       }
+      child_food_avoidances: {
+        Row: {
+          child_id: string
+          created_at: string
+          created_by: string | null
+          custom_food: string | null
+          food_slug: string | null
+          id: string
+          note: string | null
+          reason: string
+          retry_dismissed_at: string | null
+          source_feeding_log_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          child_id: string
+          created_at?: string
+          created_by?: string | null
+          custom_food?: string | null
+          food_slug?: string | null
+          id?: string
+          note?: string | null
+          reason: string
+          retry_dismissed_at?: string | null
+          source_feeding_log_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          child_id?: string
+          created_at?: string
+          created_by?: string | null
+          custom_food?: string | null
+          food_slug?: string | null
+          id?: string
+          note?: string | null
+          reason?: string
+          retry_dismissed_at?: string | null
+          source_feeding_log_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "child_food_avoidances_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "child_food_avoidances_source_feeding_log_id_fkey"
+            columns: ["source_feeding_log_id"]
+            isOneToOne: false
+            referencedRelation: "feeding_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       child_leaps: {
         Row: {
           child_id: string
@@ -1465,6 +1522,7 @@ export type Database = {
           feeding_type: string
           food_category: string | null
           food_description: string | null
+          food_slug: string | null
           id: string
           logged_at: string
           notes: string | null
@@ -1490,6 +1548,7 @@ export type Database = {
           feeding_type: string
           food_category?: string | null
           food_description?: string | null
+          food_slug?: string | null
           id?: string
           logged_at?: string
           notes?: string | null
@@ -1515,6 +1574,7 @@ export type Database = {
           feeding_type?: string
           food_category?: string | null
           food_description?: string | null
+          food_slug?: string | null
           id?: string
           logged_at?: string
           notes?: string | null
@@ -3481,6 +3541,7 @@ export type Database = {
         Args: { _ids: string[] }
         Returns: { display_name: string | null; id: string; role: string }[]
       }
+      get_food_avoidances: { Args: { _child_id: string }; Returns: Json }
       get_growth: {
         Args: { _child_id: string }
         Returns: {

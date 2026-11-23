@@ -3474,3 +3474,48 @@ The finance disclaimer shown on the Financial page (under the intro, below the c
 
 ### 2026-11-22 (addendum 3) — Privacy § 4 precision
 Privacy § 4 now reads "The AI only chooses which foods go together and at which meal" (QA: the model also picks the meal slot from a fixed list). Non-material wording precision; no data-flow change. Plan view also shows a fixed line for babies under 12 months that breast milk or formula is still the main food (standard AAP guidance, not model text).
+
+### 2026-11-22 (addendum 4) — Solids avoid list (`child_food_avoidances`), Log solids catalog link (`feeding_logs.food_slug`), MCP `get_food_avoidances`
+
+**Reviewer:** in-house (Claude `legal` pre-review, not legal advice; founder sign-off at merge, PR #322 adds migration `20261122100000_child_food_avoidances.sql`). **Risk level:** Low–Medium overall. No new recipient, nothing new to Anthropic. Medium item: MCP expansion to existing grants without re-consent (founder-accepted risk, below).
+
+**What changed:**
+- New child-scoped table `public.child_food_avoidances`: exactly one of `food_slug` (catalog slug) or `custom_food` (parent free text, 1–80 chars); `reason` `reaction` | `preference`; optional `note` (≤ 500 chars); optional `source_feeding_log_id` (same-child log only, guard trigger; ON DELETE SET NULL); `retry_dismissed_at`; `created_by` (pinned to `auth.uid()`, immutable). Child-pivot RLS: SELECT `can_access_child`; INSERT/UPDATE/DELETE `can_write_child` (viewers read-only); anon no privilege (asserted in the migration).
+- New column `feeding_logs.food_slug` (nullable catalog link from the Log solids autocomplete; free text still allowed).
+- `generate-meal-plan` excludes avoided catalog slugs (any reason) server-side under the caller's RLS, failing closed on a read error. `custom_food` rows are record-only and never filter the plan; the UI says so.
+- Export My Data gains `foodAvoidances`. Pediatrician PDF gains "Foods you're leaving out" (reactions first, capped at 40; reason label "Reaction noted by parent"; an explicit line if the list couldn't load, never a silent empty list).
+- MCP: new RLS-bound tool `get_food_avoidances` (SECURITY INVOKER; `created_by` not returned). Category relabelled "Allergens" → "Allergens and avoided foods" (`src/lib/mcpReadCategories.ts`), which updates `/mcp-consent` and `/subprocessors`.
+- Log solids can write allergen-tracker exposures / reactions (existing tables) only after an explicit confirm, written on Save at the final meal time; reaction severity is parent-picked (no default).
+- Emergency guidance: the Log solids reaction step shows `CALL_911` unchanged. A narrowed cough wording was proposed and **withdrawn** before merge (R7).
+- Disclosures: Privacy § 2 tracking bullet; Privacy § 4 Meal Plan sentence and `/subprocessors` Meal Plan categories (precision); CoppaDirectNotice "What we collect"; FAQ stored-data answer. "Last reviewed" stays November 22, 2026 on Privacy and Subprocessors (update to the merge date if merged later); "Effective" unchanged (non-material per Privacy § 10). Terms unchanged.
+
+| # | Item | Risk | Resolution |
+|---|---|---|---|
+| R1 | Privacy § 2 didn't name the avoid list or the solids catalog link | Medium (§ 5 completeness) | Redlined, same PR |
+| R2 | Privacy § 4 / `/subprocessors` implied only two reasons a food is missing | Low | Precision redline, same PR |
+| R3 | Direct notice "What we collect" didn't name avoided foods | Low | Enumeration added for new signers; no re-notice (COPPA analysis) |
+| R4 | Existing MCP grants get `get_food_avoidances` without re-consent | Medium | Founder-accepted risk (below); follow-up 1 |
+| R5 | Free text (`custom_food`, `note`) in a child-scoped table | Low | Same posture as `feeding_logs` description/notes; length-capped; no Anthropic egress |
+| R6 | Deletion / purge / export coverage | Low | Verified: `child_id ON DELETE CASCADE`; `_purge_user_data` deletes children → cascades; inactive purge same path; partner deletion nulls `created_by`; export key `foodAvoidances` |
+| R7 | Narrowed 911 cough wording on Log solids | Medium (safety / negligence) | **Resolved: withdrawn.** `CALL_911` shown unchanged; locked by tests in `allergenService.test.ts` and `FeedingLog.solidsFood.test.tsx`. Gag-vs-choke distinction lives only on the How to serve sheet |
+| R8 | "Stays out" copy could imply allergen-wide exclusion when only the slug is excluded | Medium (reliance) | **Resolved:** the allergen confirm step now says adding it "leaves every food with {allergen} out of your meal ideas" (true: reaction_noted removes the allergen from the eligible set) |
+| R9 | PDF "Reaction" could read as a diagnosis | Low | **Resolved:** "Reaction noted by parent" |
+| R10 | Allergen-tracker writes from Log solids | Low | Explicit confirm, written on Save, existing tables, already disclosed in § 2 |
+
+**Data sent to Anthropic:** unchanged in kind. The model sees eligible catalog foods minus avoided slugs. The avoid list, its reasons, notes and custom foods are never sent. A missing food is now ambiguous among three causes, which is weaker than before. Addendum 2's analysis (food names reveal tolerated allergens) stands. No new subprocessor; no § 5 30-day notice; DPA of 2026-05-08 covers the flow.
+
+**COPPA analysis:** parent-entered feeding and allergen data, within "feeding" and "allergens" already in the signed direct notice under email-plus VPC; same uses; no new third-party recipient. Non-material under 16 CFR § 312.5(a)(1), following the 2026-07-19 Activities and 2026-08-28 Baby Signs precedents: enumeration updated for new signers, no renewed VPC, no re-notice. Minimization (§ 312.7) and retention (§ 312.10) follow the child record; removal is parent-controlled; preference rows don't auto-expire ("Try again?" is a dismissible nudge).
+
+**HIPAA / health-breach:** no change to HIPAA applicability. Reaction rows are consumer health information under the FTC Health Breach Notification Rule (16 CFR Part 318), held under the same RLS / deletion / export regime as `allergen_introductions`.
+
+**Accepted risk (founder decision, 2026-11-22): existing MCP grants receive `get_food_avoidances` without re-consent.**
+- *Decision:* grants made when the consent screen read "Allergens" get the new tool on their existing `child:read` grant. New connections see "Allergens and avoided foods".
+- *Rationale:* same category of allergy data, limited to the parent's own children, delivered to the parent's own Claude; label updated for new connections.
+- *Reviewer note:* the rationale fits `reaction` rows. It is weaker for `preference` rows, `custom_food` and `note` text, which go beyond an "Allergens" label. FTC § 5 has treated retroactive material changes as needing affirmative consent (In re Gateway Learning, 2004; In re Facebook, 2011 order). Risk is reduced because the recipient is the parent's own Claude at the parent's direction, the grant is revocable, access is RLS-bound, Privacy § 4 describes reading "your child's logs" generally, and nothing reaches Anthropic as our processor. Residual risk: Medium-low. Copies read into a parent's Claude aren't removed by deletion in Grace Flare (Privacy § 4 already says so).
+- *Owner:* founder. *Revisit:* when outside counsel is commissioned, or before any future MCP tool is added to existing grants. Not standing precedent.
+
+**Follow-ups:**
+1. (P2) One-time in-app line in Settings → Connect to Claude for parents with a pre-2026-11-22 grant: "Your connected Claude can now also read the foods you're leaving out for your child. You can disconnect at any time." Record the count of affected active grants here.
+2. (P2) Nutrition review of the serve shapes (incl. new `palm-chunk`), the 9 drawings, and copy added outside the approved set.
+3. (P2, pre-existing) Direct notice "What we collect" omits growth, temperature, vaccinations, visits, cry results and birth-certificate details listed in Privacy § 2 (2026-11-03). Reconcile at the next direct-notice edit.
+4. Outside counsel (when commissioned): (a) does adding a read tool to an existing parent-directed MCP grant need fresh affirmative consent under § 5 or § 312.5(a)(1)? (b) WA MHMDA / CT / NV: is a parent-noted food reaction "consumer health data" needing separate consent?

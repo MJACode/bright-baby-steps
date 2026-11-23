@@ -1115,3 +1115,12 @@ describe("feed serving toast copy", () => {
     );
   });
 });
+
+describe("CALL_911 wording", () => {
+  // 2026-11-22: legal pre-review (R7) — never narrow an emergency sign. The
+  // Log solids reaction step shows CALL_911 exactly as the tracker does.
+  it("keeps the repeated-cough sign unqualified", async () => {
+    const { CALL_911 } = await import("@/services/allergenService");
+    expect(CALL_911.items[0]).toBe("Trouble breathing, wheezing, a repeated cough, or a hoarse cry");
+  });
+});

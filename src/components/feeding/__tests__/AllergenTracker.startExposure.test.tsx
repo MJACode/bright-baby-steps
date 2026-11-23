@@ -293,3 +293,11 @@ describe("AllergenTracker start first exposure", () => {
     expect(screen.queryByRole("button", { name: /Start First Exposure/ })).not.toBeInTheDocument();
   });
 });
+
+describe("AllergenTracker 911 wording", () => {
+  it("keeps the original cough sign (the after-meal wording is Log solids only)", async () => {
+    await openPeanut();
+    expect(screen.getByText("Trouble breathing, wheezing, a repeated cough, or a hoarse cry")).toBeInTheDocument();
+    expect(screen.queryByText(/starts after eating and doesn't clear/)).not.toBeInTheDocument();
+  });
+});

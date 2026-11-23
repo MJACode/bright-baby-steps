@@ -12,6 +12,18 @@ export interface WordJournalEntry {
   context: string | null;
 }
 
+/** One Solids avoid-list entry, resolved for display by fetchReportData. */
+export interface ReportFoodAvoidance {
+  /** Catalog food name, or the parent's own words for an "Other" food. */
+  food: string;
+  /** true when the food isn't from the catalog (custom_food). */
+  isCustom: boolean;
+  reason: "reaction" | "preference";
+  note: string | null;
+  /** created_at (ISO): when the food was added to the list. */
+  addedAt: string;
+}
+
 export interface ReportData {
   child: { name: string; date_of_birth: string; is_premature: boolean | null; due_date: string | null };
   dateFrom: Date;
@@ -27,6 +39,10 @@ export interface ReportData {
   diapers: any[];
   sleeps: any[];
   allergens: any[];
+  /** Solids avoid list, printed in the allergens section. */
+  foodAvoidances?: ReportFoodAvoidance[];
+  /** The avoid-list read failed: the report says so instead of printing an empty list. */
+  foodAvoidancesError?: boolean;
   illnesses: any[];
   medications: any[];
   temperatures: any[];
@@ -507,8 +523,42 @@ function renderTemperature(h: PdfHelpers, data: ReportData) {
 // ── Allergens ──
 function renderAllergens(h: PdfHelpers, data: ReportData) {
   const allergens = data.allergens ?? [];
-  if (!allergens.length) return;
+  if (allergens.length) renderAllergenIntroductions(h, allergens);
+  renderFoodAvoidances(h, data.foodAvoidances ?? [], allergens.length === 0, !!data.foodAvoidancesError);
+}
 
+// Legal pre-review wording (2026-11-22).
+export const FOOD_AVOIDANCES_LOAD_FAILED =
+  "We couldn't load the foods you're leaving out. Try creating the report again.";
+
+const MAX_FOOD_AVOIDANCES = 40;
+const AVOID_REASON_LABEL: Record<ReportFoodAvoidance["reason"], string> = {
+  reaction: "Reaction noted by parent",
+  preference: "Not a fan yet",
+};
+
+// fetchReportData orders reactions first, then newest, so a cap keeps every
+// reaction ahead of preferences.
+function renderFoodAvoidances(h: PdfHelpers, rows: ReportFoodAvoidance[], ownHeading: boolean, loadFailed: boolean) {
+  if (!rows.length && !loadFailed) return;
+  if (ownHeading) h.heading("Foods you're leaving out");
+  else h.subheading("Foods you're leaving out");
+  if (loadFailed) {
+    h.bodyText(FOOD_AVOIDANCES_LOAD_FAILED, 4);
+    h.spacer();
+    return;
+  }
+  const shown = rows.slice(0, MAX_FOOD_AVOIDANCES);
+  if (rows.length > shown.length) h.bodyText(`Showing ${shown.length} of ${rows.length}.`, 4);
+  for (const row of shown) {
+    const added = format(parseISO(row.addedAt), "MMM d, yyyy");
+    const source = row.isCustom ? " (parent's description)" : "";
+    h.bodyText(`${row.food}${source}: ${AVOID_REASON_LABEL[row.reason]}, added ${added}${row.note ? ` — ${row.note}` : ""}`, 4);
+  }
+  h.spacer();
+}
+
+function renderAllergenIntroductions(h: PdfHelpers, allergens: ReportData["allergens"]) {
   h.heading("Allergen Introductions");
 
   const statusLabel = (s: string) => {

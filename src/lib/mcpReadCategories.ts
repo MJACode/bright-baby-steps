@@ -24,6 +24,6 @@ export const MCP_READ_CATEGORIES: readonly McpReadCategory[] = [
   { label: "Milestones", tools: ["get_milestones"] },
   { label: "Illnesses", tools: ["get_illnesses"] },
   { label: "Vaccinations", tools: ["get_vaccinations"] },
-  { label: "Allergens", tools: ["get_allergens"] },
+  { label: "Allergens and avoided foods", tools: ["get_allergens", "get_food_avoidances"] },
   { label: "Summary", tools: ["get_summary"] },
 ] as const;

@@ -45,11 +45,62 @@
 // meats were missing it); foodCatalog.test.ts checks both.
 //
 // `notes` are for reviewers only; they are not shown or sent to the model.
+//
+// `shapes` (added 2026-11-22, "How to serve" sheet, tasks/todo-solids-avoid-
+// and-serve.md Phase 3). Nutrition-reviewed 2026-11-22: hard-boiled egg
+// blw 6-8 is spear (lengthwise wedges; quartered is for round foods only),
+// mozzarella blw 6-8 thin-spread, paneer blw 6-8 and tempeh blw 12+ ground.
+// Engineering derived one ServeShape per method x age band from the prep
+// string next to it, picking the FIRST serving option the string offers
+// ("Mash ..., or offer small soft cubes" -> mash). The shape only picks an
+// illustration; the prep string stays the instruction the parent reads, so
+// the two must never disagree on safety (a quartered round food is never
+// drawn as bite-size). Judgement calls the reviewer should check:
+//   * Palm-grab pieces that are not strips have their own shape,
+//     "palm-chunk" (founder decision 2026-11-22): large soft fish flakes
+//     (salmon / cod / tilapia), large soft egg clumps, a rice-noodle bundle,
+//     large pasta shapes, a halved bok choy head, rice balls / logs, a whole
+//     idli — all baby-led 6-8 only. Only where the prep says the piece is
+//     soft; never for a round food the prep says to quarter or flatten, and
+//     never in spoon-fed 6-8. Left as-is on purpose: couscous blw 6-8 ("small
+//     soft balls or pre-load a spoon") stays pre-loaded-spoon; shrimp blw 6-8
+//     (minced into a patty) stays ground so the drawing shows the mincing,
+//     not a piece of shrimp; finger-length meat logs stay spear.
+//   * "Cooked soft or finely grated" with no piece size (apple / carrot 12+
+//     baby-led) -> thin-spread (grated). Meat shreds -> ground.
+//   * tempeh "6-8" (never shown, minAgeMonths 9) carries a placeholder.
+// foodCatalog.test.ts checks every shape against keywords in its prep string.
 
 import type { AllergenSlug, FoodCategory } from "./mealPlan.ts";
 
 export const AGE_BANDS = ["6-8", "9-11", "12+"] as const;
 export type AgeBand = (typeof AGE_BANDS)[number];
+
+/** Catalog prep band for a corrected age: 4–8 -> "6-8", 9–11 -> "9-11", 12+ -> "12+". */
+export function ageBand(correctedAgeMonths: number): AgeBand {
+  if (correctedAgeMonths >= 12) return "12+";
+  if (correctedAgeMonths >= 9) return "9-11";
+  return "6-8";
+}
+
+/**
+ * The fixed set of serving shapes the "How to serve" illustrations cover.
+ *   spear            finger-width strips, sticks, wedges
+ *   mash             mashed, puréed, spoon-fed, porridge
+ *   pre-loaded-spoon a spoon loaded and handed to the baby
+ *   ground           crumbled, ground, minced, flaked, shredded meat
+ *   thin-spread      spread thinly, or grated / shredded fine
+ *   flattened        round foods squashed flat
+ *   quartered        round foods quartered lengthwise
+ *   bite-size        small soft pieces, pea-size pincer pieces, 12+ bites
+ *   palm-chunk       soft palm-sized pieces that aren't strips: large flakes
+ *                    or clumps, a noodle bundle, big pasta, a halved head,
+ *                    rice balls / logs
+ */
+export const SERVE_SHAPES = [
+  "spear", "mash", "pre-loaded-spoon", "ground", "thin-spread", "flattened", "quartered", "bite-size", "palm-chunk",
+] as const;
+export type ServeShape = (typeof SERVE_SHAPES)[number];
 
 export type CatalogFood = {
   slug: string;
@@ -61,8 +112,22 @@ export type CatalogFood = {
     blw: Record<AgeBand, string>;
     traditional: Record<AgeBand, string>;
   };
+  /** Illustration per method x band, derived from `prep` (see header; nutrition-reviewed 2026-11-22). */
+  shapes: {
+    blw: Record<AgeBand, ServeShape>;
+    traditional: Record<AgeBand, ServeShape>;
+  };
   notes?: string;
 };
+
+/** The illustration for `food` served by `method` at a corrected age (same banding as the prep text). */
+export function serveShape(
+  food: Pick<CatalogFood, "shapes">,
+  method: "blw" | "traditional",
+  correctedAgeMonths: number,
+): ServeShape {
+  return food.shapes[method][ageBand(correctedAgeMonths)];
+}
 
 /**
  * Engineering classification for the prompt's "at least 2 iron-rich foods"
@@ -111,6 +176,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small, soft cubes of ripe avocado, or mash it as a spread."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Must be fully ripe; underripe avocado is firm and slippery."
   },
   {
@@ -130,6 +199,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash ripe banana with a fork, leaving soft lumps, or offer small soft pieces.",
         "12+": "Serve bite-size soft pieces, or mash and stir into porridge."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -149,6 +222,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash very ripe or steamed pear, leaving soft lumps.",
         "12+": "Serve small soft pieces of ripe or steamed pear, or finely grated pear. Avoid firm raw pieces until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Firm raw pear is treated like raw apple (hard fruit)."
   },
@@ -170,6 +247,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft-cooked pieces or finely grated raw apple. Avoid raw chunks until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "CDC lists raw apple as a choking hazard."
   },
   {
@@ -190,6 +271,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Offer unsweetened applesauce as a side, or stirred into porridge."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "pre-loaded-spoon", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Label check: no added sugar or juice concentrate."
   },
   {
@@ -209,6 +294,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash ripe peach with a fork, leaving soft lumps.",
         "12+": "Serve small soft pieces of ripe peach with the pit removed."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -228,6 +317,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash ripe or steamed plum, leaving soft lumps.",
         "12+": "Serve small soft pieces of ripe plum with the pit removed."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -248,6 +341,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small soft pieces of ripe mango."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Rare mango-skin contact rash (urushiol); peel fully."
   },
   {
@@ -267,6 +364,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash ripe papaya with a fork, leaving soft lumps.",
         "12+": "Serve small soft pieces of ripe papaya, seeds removed."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -286,6 +387,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash ripe kiwi with a fork, leaving soft lumps.",
         "12+": "Serve small soft pieces of peeled ripe kiwi."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Acidic; mild mouth redness is common. Kiwi is a less common allergen (not top 9)."
   },
@@ -307,6 +412,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve strawberries quartered lengthwise or chopped small until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "flattened", "9-11": "quartered", "12+": "quartered" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "quartered" }
+    },
     "notes": "Contact rash around the mouth is common and usually not allergy."
   },
   {
@@ -327,6 +436,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve blueberries flattened or quartered lengthwise until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "flattened", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "flattened" }
+    },
     "notes": "Round-food hazard; prep must always say flattened or quartered."
   },
   {
@@ -346,6 +459,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash raspberries with a fork, leaving soft lumps.",
         "12+": "Serve ripe raspberries torn in half or lightly flattened."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "flattened", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "flattened" }
     }
   },
   {
@@ -365,6 +482,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash blackberries, leaving soft lumps.",
         "12+": "Serve blackberries quartered lengthwise or flattened until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "flattened", "9-11": "quartered", "12+": "quartered" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "quartered" }
     }
   },
   {
@@ -384,6 +505,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Quarter grapes lengthwise and remove seeds. Mash lightly if your baby is still learning.",
         "12+": "Serve grapes quartered lengthwise, never whole or halved, until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "quartered", "9-11": "quartered", "12+": "quartered" },
+      "traditional": { "6-8": "mash", "9-11": "quartered", "12+": "quartered" }
     },
     "notes": "AAP/CDC top choking hazard. Never relax this text."
   },
@@ -405,6 +530,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve cherries pitted and quartered lengthwise until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "quartered", "9-11": "quartered", "12+": "quartered" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "quartered" }
+    },
     "notes": "Pits are a choking hazard; prep always says remove pits."
   },
   {
@@ -424,6 +553,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash seedless watermelon with a fork, leaving soft pieces.",
         "12+": "Serve small soft pieces with all black seeds removed."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -443,6 +576,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash ripe cantaloupe, leaving soft lumps.",
         "12+": "Serve small soft pieces of ripe cantaloupe."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Wash rind before cutting (Listeria/Salmonella outbreaks linked to cantaloupe)."
   },
@@ -464,6 +601,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soaked prunes finely chopped or mashed into porridge. Avoid whole dried fruit until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "ground" }
+    },
     "notes": "Useful for constipation. Dried fruit only rehydrated and chopped; check for stray pits."
   },
   {
@@ -484,6 +625,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small soft pieces of cooked ripe plantain."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Never raw. Green plantain is starchy and firm; use ripe for softness."
   },
   {
@@ -503,6 +648,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash cooked sweet potato with a fork, leaving soft lumps.",
         "12+": "Serve soft cooked cubes or mash."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -522,6 +671,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash cooked potato, leaving soft lumps.",
         "12+": "Serve soft cooked pieces or mash."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "No added salt or butter-heavy prep implied. Discard green-tinged potatoes (solanine)."
   },
@@ -543,6 +696,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft-cooked pieces or finely grated raw carrot. Avoid raw sticks and rounds until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "CDC choking-hazard list: raw carrot."
   },
   {
@@ -563,6 +720,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft cooked cubes or mash."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Kabocha and acorn squash prep the same way."
   },
   {
@@ -582,6 +743,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash cooked pumpkin, leaving soft lumps.",
         "12+": "Serve soft cooked pieces or stir purée into porridge."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -601,6 +766,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash cooked zucchini, leaving soft lumps.",
         "12+": "Serve small soft-cooked pieces."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -620,6 +789,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash or finely chop soft-steamed broccoli.",
         "12+": "Serve small soft-steamed pieces."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -639,6 +812,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash soft-cooked cauliflower, leaving soft lumps.",
         "12+": "Serve small soft-cooked pieces or mash."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -658,6 +835,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely chop or mash soft-cooked green beans.",
         "12+": "Serve short soft-cooked pieces."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
     }
   },
   {
@@ -677,6 +858,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash cooked peas, leaving soft lumps.",
         "12+": "Serve soft-cooked peas, lightly squashed."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "flattened" }
     }
   },
   {
@@ -697,6 +882,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve finely chopped cooked spinach mixed into meals."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Non-heme iron; pair with vitamin C food. Nitrate concern is for under 3 months only."
   },
   {
@@ -716,6 +905,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely chop or mash soft-cooked asparagus.",
         "12+": "Serve short soft-cooked pieces."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
     }
   },
   {
@@ -736,6 +929,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small soft-cooked pieces."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Red stool/urine is expected; consider a parent-facing tip elsewhere."
   },
   {
@@ -755,6 +952,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash soft-cooked parsnip, leaving soft lumps.",
         "12+": "Serve small soft-cooked pieces. Keep parsnip cooked soft until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -774,6 +975,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Quarter lengthwise and mash, or cook into a chunky sauce.",
         "12+": "Serve cherry tomatoes quartered lengthwise until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "quartered", "9-11": "quartered", "12+": "quartered" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "quartered" }
     },
     "notes": "Acidic; mouth redness common. Round-food hazard."
   },
@@ -795,6 +1000,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small soft-cooked pieces."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
+    },
     "notes": "Good vitamin C pairing for iron."
   },
   {
@@ -814,6 +1023,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely chop soft-cooked okra into a lumpy mash or stew.",
         "12+": "Serve small soft-cooked pieces."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
     }
   },
   {
@@ -833,6 +1046,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely chop cooked bok choy into a lumpy mash or congee.",
         "12+": "Serve finely chopped cooked bok choy."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     }
   },
   {
@@ -853,6 +1070,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small soft pieces of fully cooked cassava."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Raw or undercooked cassava contains cyanogenic glycosides. Use sweet cassava (U.S. grocery/frozen yuca) only."
   },
   {
@@ -872,6 +1093,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash roasted eggplant, leaving soft lumps.",
         "12+": "Serve small soft-cooked pieces."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     }
   },
   {
@@ -891,6 +1116,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely chop cooked mushrooms into a lumpy mash.",
         "12+": "Serve finely chopped cooked mushrooms."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Store-bought culinary mushrooms only; always cooked."
   },
@@ -912,6 +1141,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve as thick porridge or stir into other foods."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "pre-loaded-spoon", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Check label: some oat cereals add milk or soy. Oats may have wheat cross-contact."
   },
   {
@@ -931,6 +1164,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Make it thicker and stir in mashed fruit or vegetables.",
         "12+": "Serve as thick porridge or stir into other foods."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "pre-loaded-spoon", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Inorganic arsenic: AAP/FDA advise rotating grains, not rice cereal as the only cereal. Plan generator should not repeat daily."
   },
@@ -954,6 +1191,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve as thick porridge or stir into other foods."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "pre-loaded-spoon", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Simple early wheat introduction. Some multigrain/wheat cereals add milk or soy; label check. Consider tagging milk/soy if a specific product is recommended."
   },
   {
@@ -973,6 +1214,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Serve soft-cooked oats with some texture, unblended.",
         "12+": "Serve soft oatmeal with mashed or chopped soft fruit."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Oats may have wheat cross-contact; choose certified gluten-free if wheat allergy. Cooking with cow's milk is fine at 6+ (milk tag would then apply; we default to water)."
   },
@@ -995,6 +1240,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash soft-cooked small pasta into a lumpy vegetable mash.",
         "12+": "Serve soft-cooked small pasta."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Dried durum pasta is wheat only. Fresh/egg pasta contains egg; this entry is plain dried pasta. Cook without salt in the water."
   },
@@ -1022,6 +1271,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small pieces of lightly toasted bread."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
+    },
     "notes": "Tagged conservatively: many breads contain milk, egg, soy, and sesame (FASTER Act era). Use wheat-pasta or wheat-infant-cereal as the wheat-only intro path. Breads vary in sodium."
   },
   {
@@ -1044,6 +1297,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft couscous as a side."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Plain couscous only; boxed flavored mixes are high in sodium."
   },
   {
@@ -1063,6 +1320,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Serve soft-cooked quinoa stirred into a lumpy mash.",
         "12+": "Serve soft-cooked quinoa as a side."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     }
   },
   {
@@ -1073,7 +1334,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Cook sticky or short-grain rice until very soft and press into small balls or logs your baby can hold.",
+        "6-8": "Cook sticky or short-grain rice until very soft and press into balls or logs about the size of your baby's palm.",
         "9-11": "Offer small soft rice balls, or let your baby scoop soft rice.",
         "12+": "Serve soft-cooked rice for your baby to eat with hands or a spoon."
       },
@@ -1082,6 +1343,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash soft-cooked rice into a lumpy mash.",
         "12+": "Serve soft-cooked rice."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Arsenic: rotate grains; cook in extra water and drain to reduce arsenic."
   },
@@ -1103,6 +1368,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve congee with finely chopped soft add-ins."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Avoid salted broth, soy sauce, century egg. Arsenic: rotate grains."
   },
   {
@@ -1123,6 +1392,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft polenta or grits."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Instant grits often salted; use plain cornmeal. Cheese grits would add milk."
   },
   {
@@ -1142,6 +1415,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Serve soft-cooked millet with some texture.",
         "12+": "Serve soft-cooked millet as porridge or a side."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     }
   },
   {
@@ -1162,6 +1439,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft-cooked barley."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Contains gluten but is not wheat; not a top-9 allergen."
   },
   {
@@ -1181,6 +1462,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Offer small pieces of warm, soft corn tortilla.",
         "12+": "Serve small pieces of soft corn tortilla."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
     },
     "notes": "Label check: some corn tortillas blend in wheat flour."
   },
@@ -1204,6 +1489,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small pieces of soft flour tortilla."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
+    },
     "notes": "Some brands add milk or soy flour; consider adding milk/soy tags conservatively. Moderate sodium."
   },
   {
@@ -1223,6 +1512,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash soft arepa into a lumpy texture, or offer small soft pieces.",
         "12+": "Serve small pieces of soft arepa."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Plain masarepa only; no cheese (milk) or salt added to dough."
   },
@@ -1244,6 +1537,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small pieces of soft idli."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
+    },
     "notes": "Rice + urad dal batter; no top-9 allergens. Skip salt in batter and spicy chutneys/sambar for infants."
   },
   {
@@ -1263,6 +1560,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely chop soft-cooked rice noodles into a lumpy mash.",
         "12+": "Serve short pieces of soft-cooked rice noodles."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
     },
     "notes": "Plain rice noodles only (check label for wheat). Arsenic: rotate grains."
   },
@@ -1288,6 +1589,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small pieces of soft pancake."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
+    },
     "notes": "Assumes standard wheat/milk/egg batter. No syrup; no honey."
   },
   {
@@ -1307,6 +1612,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely mince cooked beef and mix into a lumpy vegetable mash.",
         "12+": "Serve small soft crumbles of fully cooked beef. Avoid chunks until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Iron-rich (heme). Cook to 160°F. Logs may need a binder; AI combos supply it, allergen-tagged separately."
   },
@@ -1328,6 +1637,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve thin, tender shreds of beef. Avoid chunks until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Iron-rich. Use no-salt cooking liquid. Gagging likely with strips; that's normal learning, not choking."
   },
   {
@@ -1347,6 +1660,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely mince cooked turkey into a lumpy vegetable mash.",
         "12+": "Serve small soft crumbles of fully cooked turkey. Avoid chunks until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Dark-meat blends have more iron than breast. Cook to 165°F."
   },
@@ -1368,6 +1685,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve thin, tender shreds of chicken. Avoid chunks until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Dark meat = more iron. Cook to 165°F. Check for small bones/cartilage."
   },
   {
@@ -1388,6 +1709,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve thin, tender shreds of pork. Avoid chunks until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Plain, unseasoned; no BBQ sauce (sugar/salt). Excludes ham, bacon, sausage (sodium, nitrites)."
   },
   {
@@ -1407,6 +1732,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely mince cooked lamb into a lumpy vegetable mash.",
         "12+": "Serve small soft crumbles of fully cooked lamb. Avoid chunks until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Iron-rich. Cook to 160°F. Mild spices (cumin, cinnamon) fine; no salt."
   },
@@ -1430,6 +1759,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small flakes of cooked salmon, checked carefully for bones."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Low mercury (FDA/EPA Best Choice). Avoid shark, swordfish, king mackerel, tilefish, bigeye tuna, marlin, orange roughy."
   },
   {
@@ -1451,6 +1784,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Flake cooked cod finely, check carefully for bones, and mix into a lumpy mash.",
         "12+": "Serve small flakes of cooked cod, checked carefully for bones."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Low mercury. Not breaded (breading adds wheat/egg/milk)."
   },
@@ -1474,6 +1811,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small flakes of cooked tilapia, checked carefully for bones."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Low mercury."
   },
   {
@@ -1495,6 +1836,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Flake tuna finely, check carefully for bones, and mix into a lumpy mash.",
         "12+": "Serve flaked tuna mixed into soft foods, checked carefully for bones."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Light/skipjack only (Best Choice). Albacore is Good Choice; limit. FDA: 1 oz child serving, 2–3 servings/week of Best Choices. Plan generator should cap frequency."
   },
@@ -1518,6 +1863,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve mashed sardines, checked carefully for bones."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Low mercury, iron and omega-3. Sodium varies widely; prep says no salt added."
   },
   {
@@ -1539,6 +1888,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Finely mince cooked shrimp into a lumpy mash.",
         "12+": "Serve cooked shrimp chopped smaller than a pea until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
     },
     "notes": "Only crustacean entry; crab/lobster could be added the same way. Imitation crab excluded (wheat, egg, fish, sodium)."
   },
@@ -1562,6 +1915,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve small soft cubes of cooked tofu."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "bite-size" }
+    },
     "notes": "Calcium-set tofu adds calcium; some iron."
   },
   {
@@ -1583,6 +1940,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash silken tofu into a lumpy fruit or vegetable mash.",
         "12+": "Serve silken tofu plain or with soft fruit."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     }
   },
   {
@@ -1597,13 +1958,17 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
       "blw": {
         "6-8": "Not offered at this age.",
         "9-11": "Steam tempeh 10 minutes until soft, then crumble into small soft pieces mixed into a soft food.",
-        "12+": "Steam tempeh until soft and offer thin strips or small crumbles."
+        "12+": "Steam tempeh until soft and offer small crumbles or thin strips."
       },
       "traditional": {
         "6-8": "Not offered at this age.",
         "9-11": "Steam tempeh until soft and mash finely into a vegetable mash.",
         "12+": "Serve steamed tempeh crumbled or in thin strips."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "ground", "9-11": "mash", "12+": "ground" }
     },
     "notes": "minAge 9 because it's dense and firm. Some tempeh contains barley/grain or wheat; label check. Consumers should hide 6-8 strings when minAge > band."
   },
@@ -1627,6 +1992,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve cooked edamame flattened or halved until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "flattened" }
+    },
     "notes": "Round, firm bean; treat as hazard food."
   },
   {
@@ -1646,6 +2015,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Serve soft-cooked lentils lightly mashed.",
         "12+": "Serve soft lentil dal or stew."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Iron-rich (non-heme); pair with vitamin C food. Mild spices fine; no salt."
   },
@@ -1667,6 +2040,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft-cooked lentils."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Iron-rich; pair with vitamin C."
   },
   {
@@ -1686,6 +2063,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash beans with a fork, leaving soft lumps.",
         "12+": "Serve soft-cooked beans, lightly mashed."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Iron-rich; rinse canned beans to cut sodium."
   },
@@ -1707,6 +2088,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft-cooked beans, lightly mashed."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Dried kidney beans must be boiled 10+ min (phytohaemagglutinin); slow-cooker-only is unsafe. Canned is safest."
   },
   {
@@ -1726,6 +2111,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash beans with a fork, leaving soft lumps.",
         "12+": "Serve soft mashed or whole beans."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Store refried beans are often salted and may contain lard; prefer homemade or low-sodium."
   },
@@ -1747,6 +2136,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve chickpeas flattened or mashed until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "flattened" }
+    },
     "notes": "Rinse canned; firm round legume, treated as hazard."
   },
   {
@@ -1767,6 +2160,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve soft-cooked beans, lightly mashed."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "flattened", "12+": "flattened" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Rinse canned to cut sodium."
   },
   {
@@ -1786,6 +2183,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Serve soft dal or khichdi lightly mashed.",
         "12+": "Serve soft dal or khichdi."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Mild spices (turmeric, cumin) fine. Ghee would add milk; not assumed."
   },
@@ -1809,6 +2210,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve smooth hummus as a dip or spread."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Contains sesame via tahini. Store-bought is often salty."
   },
   {
@@ -1821,7 +2226,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Boil an egg until the yolk is fully firm, peel, and cut into quarters lengthwise for your baby to hold.",
+        "6-8": "Boil an egg until the yolk is fully firm, peel, and cut it lengthwise into 4 wedges for your baby to hold.",
         "9-11": "Chop a fully cooked hard-boiled egg into small soft pieces.",
         "12+": "Offer chopped or sliced hard-boiled egg, cooked until the yolk is fully firm."
       },
@@ -1830,6 +2235,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Mash hard-boiled egg with a fork, leaving soft lumps.",
         "12+": "Serve chopped hard-boiled egg."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "bite-size" }
     },
     "notes": "Well-cooked egg for allergen introduction. Pasteurized/fully cooked only."
   },
@@ -1853,6 +2262,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve fully cooked scrambled egg."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "palm-chunk", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
+    },
     "notes": "If scrambled with cow's milk, milk tag would apply; default prep uses none."
   },
   {
@@ -1874,6 +2287,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Chop fully cooked omelet into small soft pieces.",
         "12+": "Serve small pieces of fully cooked omelet."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "spear", "9-11": "bite-size", "12+": "bite-size" },
+      "traditional": { "6-8": "mash", "9-11": "bite-size", "12+": "bite-size" }
     }
   },
   {
@@ -1895,6 +2312,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Stir thinned smooth peanut butter into porridge or a mash.",
         "12+": "Stir in or spread thinly. Never by the spoonful. No whole peanuts or chunky peanut butter until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "AAP/NIAID: ~2 g peanut protein (about 2 tsp PB) ~3x/week to maintain. High-risk infants (severe eczema/egg allergy) should see pediatrician first. Look for no-salt, no-sugar-added."
   },
@@ -1918,6 +2339,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Stir peanut powder into soft foods."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "mash", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Choose 100% peanut powder (no sugar). Never dry powder by itself (inhalation)."
   },
   {
@@ -1939,6 +2364,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Stir thinned almond butter into porridge or a mash.",
         "12+": "Stir in or spread thinly. Never by the spoonful. No whole nuts until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Tree nuts are introduced individually; a reaction to one doesn't mean all."
   },
@@ -1962,6 +2391,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Stir in or spread thinly. Never by the spoonful. No whole nuts until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Cashew and pistachio are cross-reactive."
   },
   {
@@ -1984,6 +2417,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Stir finely ground walnuts into soft foods. No whole or chopped nuts until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "ground", "9-11": "ground", "12+": "ground" }
+    },
     "notes": "Grind to flour consistency; no chunks."
   },
   {
@@ -2005,6 +2442,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Stir almond flour into porridge or a mash.",
         "12+": "Stir almond flour into soft foods. No whole nuts until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "ground", "9-11": "ground", "12+": "ground" }
     }
   },
   {
@@ -2026,6 +2467,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Stir thinned tahini into porridge or a mash.",
         "12+": "Stir in or spread thinly. Never by the spoonful."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "thin-spread", "9-11": "mash", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Sesame is top-9 since 2023 (FASTER Act). Whole seeds excluded per spec."
   },
@@ -2049,6 +2494,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve plain whole-milk yogurt with soft chopped fruit."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Pasteurized, plain, no added sugar. Fine at 6 months; cow's milk as a drink is not in catalog."
   },
   {
@@ -2070,6 +2519,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Stir mashed fruit into plain Greek yogurt.",
         "12+": "Serve plain Greek yogurt with soft chopped fruit."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
     },
     "notes": "Higher protein; plain, unsweetened."
   },
@@ -2093,6 +2546,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve cottage cheese with soft fruit."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Sodium is moderate-high; choose low-sodium/no-salt-added and limit frequency."
   },
   {
@@ -2115,6 +2572,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve ricotta mixed into soft foods."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "pre-loaded-spoon", "9-11": "mash", "12+": "mash" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "mash" }
+    },
     "notes": "Pasteurized. Naturally lower sodium."
   },
   {
@@ -2127,7 +2588,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Offer thin, finger-length strips of fresh mozzarella, or melt shredded mozzarella onto a soft food. Never offer cubes.",
+        "6-8": "Melt shredded mozzarella onto a soft food, or offer thin, finger-length strips of fresh mozzarella. Never offer cubes.",
         "9-11": "Offer shredded mozzarella or thin small pieces your baby can pick up.",
         "12+": "Offer shredded or thinly sliced mozzarella. Avoid cubes and string-cheese sticks until at least age 4."
       },
@@ -2136,6 +2597,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Stir shredded mozzarella into a lumpy mash.",
         "12+": "Serve shredded or thinly sliced mozzarella. Avoid cubes until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "thin-spread", "9-11": "thin-spread", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "thin-spread" }
     },
     "notes": "Pasteurized. Fresh mozzarella is lower sodium."
   },
@@ -2159,6 +2624,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "12+": "Serve shredded or melted cheddar. Avoid cubes until at least age 4."
       }
     },
+    "shapes": {
+      "blw": { "6-8": "thin-spread", "9-11": "thin-spread", "12+": "thin-spread" },
+      "traditional": { "6-8": "mash", "9-11": "mash", "12+": "thin-spread" }
+    },
     "notes": "Pasteurized; moderate sodium, use small amounts. Not processed cheese slices."
   },
   {
@@ -2171,7 +2640,7 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
     "minAgeMonths": 6,
     "prep": {
       "blw": {
-        "6-8": "Simmer paneer in water until soft, then offer thin finger-length strips, or crumble it into a soft food. Never offer cubes.",
+        "6-8": "Simmer paneer in water until soft, then crumble it into a soft food, or offer thin finger-length strips. Never offer cubes.",
         "9-11": "Crumble soft paneer into small pieces your baby can pick up.",
         "12+": "Offer crumbled paneer or thin strips. Avoid cubes until at least age 4."
       },
@@ -2180,6 +2649,10 @@ export const FOOD_CATALOG: readonly CatalogFood[] = [
         "9-11": "Crumble soft paneer into a lumpy vegetable mash.",
         "12+": "Serve crumbled soft paneer. Avoid cubes until at least age 4."
       }
+    },
+    "shapes": {
+      "blw": { "6-8": "ground", "9-11": "ground", "12+": "ground" },
+      "traditional": { "6-8": "mash", "9-11": "ground", "12+": "ground" }
     },
     "notes": "Pasteurized; naturally low sodium. Firm cheese, so thin strips only."
   }

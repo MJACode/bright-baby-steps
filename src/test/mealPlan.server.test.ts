@@ -19,6 +19,7 @@ import {
   MIN_IDEAS,
   SOLIDS_METHODS,
   INTRODUCTIONS_SELECT,
+  AVOIDANCES_SELECT,
   ageBand,
   allergensMentioned,
   buildPrep,
@@ -26,6 +27,7 @@ import {
   allowedAllergens,
   buildIdeaName,
   deriveAllergenLists,
+  deriveAvoidSlugs,
   introductionStatus,
   normalizeText,
   buildUserText,
@@ -72,6 +74,7 @@ function input(overrides: Partial<ValidInput> = {}): ValidInput {
     method: "blw",
     introducedAllergens: [],
     reactionAllergens: [],
+    avoidSlugs: [],
     ...overrides,
   };
 }
@@ -657,7 +660,7 @@ describe("a realistic 7-month plan through the whole path", () => {
       { status: "completed", allergens: { slug: "egg" }, allergen_exposure_logs: [] },
       { status: "in_progress", allergens: { slug: "milk" }, allergen_exposure_logs: [{ reaction_observed: false }] },
     ];
-    const inp: ValidInput = { ...request, ...deriveAllergenLists(rows) };
+    const inp: ValidInput = { ...request, ...deriveAllergenLists(rows), avoidSlugs: deriveAvoidSlugs([]) };
     expect(inp.introducedAllergens).toEqual(["peanut", "egg"]);
     const eligible = eligibleFoods(inp);
     const prompt = buildUserText(inp, eligible);
@@ -919,5 +922,87 @@ describe("the model is asked for foods only", () => {
     expect(text).toContain(`at most ${MAX_FOOD_REPEATS} ideas`);
     expect(text).toContain("5 to 7 ideas");
     expect(text).not.toMatch(/intro|names or tips|servingTip/i);
+  });
+});
+
+describe("avoid list (child_food_avoidances): server-derived exclusion", () => {
+  it("deriveAvoidSlugs keeps catalog slugs only, de-duplicated, in catalog order", () => {
+    expect(
+      deriveAvoidSlugs([
+        { food_slug: "pear" },
+        { food_slug: "avocado" },
+        { food_slug: "pear" },
+        { food_slug: null }, // custom_food row: record-only
+        { food_slug: "not-a-catalog-food" },
+      ]),
+    ).toEqual(["avocado", "pear"]);
+    expect(deriveAvoidSlugs([])).toEqual([]);
+    expect(deriveAvoidSlugs(null)).toEqual([]);
+  });
+
+  it("eligibleFoods drops avoided slugs and nothing else", () => {
+    const base = eligibleFoods(input()).map((f) => f.slug);
+    const avoided = eligibleFoods(input({ avoidSlugs: ["sweet-potato", "banana"] })).map((f) => f.slug);
+    expect(avoided).not.toContain("sweet-potato");
+    expect(avoided).not.toContain("banana");
+    expect(avoided).toEqual(base.filter((x) => x !== "sweet-potato" && x !== "banana"));
+  });
+
+  it("an avoided slug never reaches the prompt, and the prompt says nothing about avoiding", () => {
+    const text = buildUserText(input({ avoidSlugs: ["sweet-potato"] }));
+    expect(text).not.toContain("sweet-potato");
+    expect(text.toLowerCase()).not.toMatch(/avoid|reaction|dislike|not for us/);
+  });
+
+  it("a model that returns an avoided slug anyway loses that idea", () => {
+    const inp = input({ avoidSlugs: ["avocado"] });
+    const out = sanitizePlan(plan(SAFE_IDEAS), inp)!;
+    expect(out).not.toBeNull();
+    expect(out.ideas.flatMap((i) => i.foods)).not.toContain("avocado");
+    expect(out.ideas.map(key)).toEqual(["sweet-potato", "broccoli+red-lentils", "pear+oatmeal", "banana"]);
+  });
+
+  it("an avoided allergen food stays out even when its allergen is introduced", () => {
+    const inp = input({ introducedAllergens: ["egg"], avoidSlugs: ["egg-scrambled"] });
+    const slugs = eligibleFoods(inp).map((f) => f.slug);
+    expect(slugs).not.toContain("egg-scrambled");
+    expect(slugs).toContain("egg-hard-boiled"); // exact slug only, no ingredient families
+  });
+
+  it("no_eligible_foods threshold: an avoid list that leaves fewer than MIN_ELIGIBLE_FOODS trips it", () => {
+    const all = eligibleFoods(input({ correctedAgeMonths: 6 })).map((f) => f.slug);
+    const keepFour = all.slice(0, MIN_ELIGIBLE_FOODS - 1);
+    const leavesFour = eligibleFoods(input({ correctedAgeMonths: 6, avoidSlugs: all.filter((x) => !keepFour.includes(x)) }));
+    expect(leavesFour.map((f) => f.slug)).toEqual(keepFour);
+    expect(leavesFour.length).toBeLessThan(MIN_ELIGIBLE_FOODS);
+    const keepFive = all.slice(0, MIN_ELIGIBLE_FOODS);
+    const leavesFive = eligibleFoods(input({ correctedAgeMonths: 6, avoidSlugs: all.filter((x) => !keepFive.includes(x)) }));
+    expect(leavesFive.length).toBe(MIN_ELIGIBLE_FOODS);
+    // A realistic list (a handful of foods) leaves plenty.
+    const typical = eligibleFoods(input({ correctedAgeMonths: 6, avoidSlugs: all.slice(0, 10) }));
+    expect(typical.length).toBeGreaterThanOrEqual(MIN_ELIGIBLE_FOODS);
+  });
+
+  it("the edge function reads the avoid list from the database under RLS, never from the body", () => {
+    const src = readFileSync(resolve(__dirname, "../../supabase/functions/generate-meal-plan/index.ts"), "utf8");
+    expect(AVOIDANCES_SELECT).toBe("food_slug");
+    expect(src).toContain('.from("child_food_avoidances")');
+    expect(src).toContain(".select(AVOIDANCES_SELECT)");
+    expect(src).toContain("avoidSlugs: deriveAvoidSlugs(");
+    // Fail closed: a failed read is a 500, not an unfiltered plan.
+    expect(src).toMatch(/if \(avoidRes\.error\) throw/);
+    expect(src).not.toMatch(/body\.avoid|request\.avoid/);
+    // validateInput builds a fresh object: a client-sent avoid list is dropped.
+    const req = validateInput(body({ avoidSlugs: ["banana"] }), WED_UTC_NOON)!;
+    expect(req).not.toHaveProperty("avoidSlugs");
+  });
+
+  it("the migration's slug CHECK accepts every catalog slug", () => {
+    const sql = readFileSync(resolve(__dirname, "../../supabase/migrations/20261122100000_child_food_avoidances.sql"), "utf8");
+    expect(sql).toContain("food_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'");
+    const re = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+    for (const f of eligibleFoods(input({ correctedAgeMonths: 36, introducedAllergens: [...ALLERGEN_SLUGS] }))) {
+      expect(re.test(f.slug) && f.slug.length <= 64).toBe(true);
+    }
   });
 });

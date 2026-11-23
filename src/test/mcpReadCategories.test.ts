@@ -16,6 +16,7 @@ const CANONICAL_TOOL_NAMES = new Set([
   "get_illnesses",
   "get_vaccinations",
   "get_allergens",
+  "get_food_avoidances",
   "get_summary",
 ]);
 

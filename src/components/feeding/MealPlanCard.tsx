@@ -1,16 +1,28 @@
 import { useRef, useState, type ReactNode } from "react";
-import { CalendarClock, ChevronDown, Plus, Sparkles } from "lucide-react";
+import { CalendarClock, ChevronDown, Info, Plus, Sparkles, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ToastAction } from "@/components/ui/toast";
 import { UpgradeSheet } from "@/components/UpgradeSheet";
+import { HowToServeSheet } from "@/components/feeding/HowToServeSheet";
 import { OfflineAiNotice } from "@/components/OfflineAiNotice";
 import { useIsOnline } from "@/hooks/useOfflineSync";
 import { useChildOwnerPremium, usePremium } from "@/hooks/usePremium";
 import { useIsMutating } from "@tanstack/react-query";
 import { MealPlanError, generateMealPlanMutationKey, useGenerateMealPlan, useMealPlan } from "@/hooks/useMealPlan";
+import { useDeleteFoodAvoidance, useFoodAvoidances, useSaveFoodAvoidance } from "@/hooks/useFoodAvoidances";
+import { toast } from "@/hooks/use-toast";
+import { avoidedSlugs } from "@/lib/foodAvoidances";
+import { FOOD_BY_SLUG, type CatalogFood } from "@/lib/foodCatalog";
+import {
+  MEAL_NOT_FOR_US,
+  MEAL_NOT_FOR_US_TOAST_DESCRIPTION,
+  MEAL_NOT_FOR_US_UNDO,
+  mealNotForUsToastTitle,
+} from "@/lib/solidsAvoidCopy";
 import type { Role } from "@/hooks/useCurrentRole";
 import { allergenEmoji } from "@/services/allergenService";
 import {
@@ -60,16 +72,64 @@ function Prep({ label, prep, foods }: { label?: string; prep: string; foods: str
   );
 }
 
+/** Each food in an idea: open its "How to serve" sheet, or leave it out ("Not for us"). */
+function IdeaFoods({
+  foods,
+  canEdit,
+  onServe,
+  onNotForUs,
+}: {
+  foods: string[];
+  canEdit: boolean;
+  onServe: (food: CatalogFood) => void;
+  onNotForUs: (food: CatalogFood) => void;
+}) {
+  const catalogFoods = foods.flatMap((slug) => FOOD_BY_SLUG.get(slug) ?? []);
+  return (
+    <div role="list" aria-label="Foods in this idea" className="divide-y divide-border/60 rounded-lg border border-border/60">
+      {catalogFoods.map((food) => (
+        <div role="listitem" key={food.slug} className="flex items-center gap-1 pl-3">
+          <span className="min-w-0 flex-1 text-sm font-semibold">{food.name}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-label={`How to serve ${food.name}`}
+            onClick={() => onServe(food)}
+            className="touch-target gap-1 px-2 text-sm font-semibold text-feeding hover:text-feeding"
+          >
+            <Info className="w-4 h-4" aria-hidden /> How to serve
+          </Button>
+          {canEdit && (
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={`${MEAL_NOT_FOR_US}: ${food.name}`}
+              onClick={() => onNotForUs(food)}
+              className="touch-target gap-1 px-2 text-sm font-semibold text-muted-foreground"
+            >
+              <X className="w-4 h-4" aria-hidden /> {MEAL_NOT_FOR_US}
+            </Button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function IdeaRow({
   idea,
   method,
   canLog,
   onLog,
+  onServe,
+  onNotForUs,
 }: {
   idea: MealIdea;
   method: SolidsMethod;
   canLog: boolean;
   onLog: (idea: MealIdea) => void;
+  onServe: (food: CatalogFood) => void;
+  onNotForUs: (food: CatalogFood) => void;
 }) {
   return (
     <li className="rounded-xl bg-background/70 p-3 space-y-2">
@@ -82,6 +142,7 @@ function IdeaRow({
           <Prep label={method === "mix" ? "Spoon-fed:" : undefined} prep={idea.traditionalPrep} foods={idea.foods} />
         )}
       </div>
+      <IdeaFoods foods={idea.foods} canEdit={canLog} onServe={onServe} onNotForUs={onNotForUs} />
       <div className="flex flex-wrap items-center gap-2">
         {idea.allergens.map((slug) => (
           <Badge key={slug} variant="outline" className="text-xs font-semibold">
@@ -123,6 +184,7 @@ function PlanView({
   defaultOpen,
   isPremium,
   onLog,
+  onNotForUs,
 }: {
   plan: MealPlan;
   ageMonths: number;
@@ -130,8 +192,10 @@ function PlanView({
   defaultOpen: boolean;
   isPremium: boolean | null;
   onLog: (idea: MealIdea) => void;
+  onNotForUs: (food: CatalogFood) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [serveFood, setServeFood] = useState<CatalogFood | null>(null);
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="space-y-3">
       {plan.intro && <p className="text-sm leading-relaxed">{plan.intro}</p>}
@@ -151,7 +215,15 @@ function PlanView({
               </h3>
               <ul className="space-y-2">
                 {ideas.map((idea) => (
-                  <IdeaRow key={idea.id} idea={idea} method={plan.method} canLog={canLog} onLog={onLog} />
+                  <IdeaRow
+                    key={idea.id}
+                    idea={idea}
+                    method={plan.method}
+                    canLog={canLog}
+                    onLog={onLog}
+                    onServe={setServeFood}
+                    onNotForUs={onNotForUs}
+                  />
                 ))}
               </ul>
             </div>
@@ -160,6 +232,15 @@ function PlanView({
       </CollapsibleContent>
       <WeekNote isPremium={isPremium} />
       <p className="text-xs leading-relaxed text-muted-foreground">{MEAL_PLAN_DISCLAIMER}</p>
+      <HowToServeSheet
+        food={serveFood}
+        method={plan.method}
+        ageMonths={ageMonths}
+        open={serveFood !== null}
+        onOpenChange={(next) => {
+          if (!next) setServeFood(null);
+        }}
+      />
     </Collapsible>
   );
 }
@@ -209,9 +290,11 @@ export function MealPlanCard({
         .filter(([, status]) => status === "introduced")
         .map(([slug]) => slug)
     : undefined;
+  const avoidances = useFoodAvoidances(childId);
   const { data, isLoading, isError, isFetching, refetch } = useMealPlan(childId, weekStart, {
     ageMonths,
     allowedAllergens,
+    avoidSlugs: avoidedSlugs(avoidances.data),
     enabled: !!allergenStatuses,
   });
   const generate = useGenerateMealPlan(childId);
@@ -226,6 +309,32 @@ export function MealPlanCard({
 
   const canEdit = roleResolved && role !== "viewer";
   const isCaregiver = roleResolved && role === "caregiver";
+  const saveAvoid = useSaveFoodAvoidance(childId, { role, roleResolved });
+  const deleteAvoid = useDeleteFoodAvoidance(childId, { role, roleResolved });
+
+  // The food leaves the plan as soon as it's tapped (optimistic avoid row);
+  // Undo deletes the saved row and brings it back.
+  const handleNotForUs = (food: CatalogFood) => {
+    saveAvoid.mutate(
+      { foodSlug: food.slug, reason: "preference" },
+      {
+        onSuccess: (row) =>
+          toast({
+            title: mealNotForUsToastTitle(food.name),
+            description: MEAL_NOT_FOR_US_TOAST_DESCRIPTION,
+            action: (
+              <ToastAction
+                altText={`${MEAL_NOT_FOR_US_UNDO}: bring ${food.name} back`}
+                className="touch-target"
+                onClick={() => deleteAvoid.mutate({ id: row.id })}
+              >
+                {MEAL_NOT_FOR_US_UNDO}
+              </ToastAction>
+            ),
+          }),
+      },
+    );
+  };
 
   if (ageMonths > MEAL_PLAN_MAX_AGE_MONTHS) return null;
 
@@ -297,16 +406,26 @@ export function MealPlanCard({
     if (!online) return shell(<OfflineAiNotice />);
     return shell(loadingBody);
   }
-  if (isLoading) {
+  if (isLoading || avoidances.isLoading) {
     if (!online) return shell(<OfflineAiNotice />);
     return shell(loadingBody);
   }
-  // Without this, a failed read looks like "no plan yet" and offers Build.
-  if (isError && !data) {
+  // Without this, a failed read looks like "no plan yet" and offers Build. A
+  // failed avoid-list read would show foods the family left out, so it waits too.
+  if ((isError && !data) || (avoidances.isError && !avoidances.data)) {
     return shell(
       <>
         <p className="text-sm leading-relaxed">Your meal plan didn't load. Check your connection and try again.</p>
-        <Button type="button" variant="outline" className="touch-target" disabled={isFetching} onClick={() => refetch()}>
+        <Button
+          type="button"
+          variant="outline"
+          className="touch-target"
+          disabled={isFetching || avoidances.isFetching}
+          onClick={() => {
+            if (isError) void refetch();
+            if (avoidances.isError) void avoidances.refetch();
+          }}
+        >
           Try again
         </Button>
       </>,
@@ -314,9 +433,17 @@ export function MealPlanCard({
   }
 
   const plan = data?.plan ?? null;
-  if (plan) {
+  if (plan && plan.ideas.length > 0) {
     return shell(
-      <PlanView plan={plan} ageMonths={ageMonths} canLog={canEdit} defaultOpen={justBuilt} isPremium={weekNotePremium} onLog={onLogIdea} />,
+      <PlanView
+        plan={plan}
+        ageMonths={ageMonths}
+        canLog={canEdit}
+        defaultOpen={justBuilt}
+        isPremium={weekNotePremium}
+        onLog={onLogIdea}
+        onNotForUs={handleNotForUs}
+      />,
     );
   }
 

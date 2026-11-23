@@ -7,6 +7,7 @@ import { isAuthSessionMissingError, type Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { OFFLINE_LOG_KEY, SYNC_FAILURES_KEY } from "@/lib/offlineLogs";
 import { LOG_HISTORY_PAGE_DAYS } from "@/lib/logHistoryPaging";
+import { clearUnsavedReactionFoods } from "@/lib/unsavedReactionFoods";
 
 // Persisting the query cache + queued writes to the phone (IndexedDB). Native
 // build only: on the web, child data must not be left on shared computers.
@@ -211,6 +212,7 @@ export async function clearDeviceStore(queryClient: QueryClient, storage: Offlin
   writesEnabled = false;
   queryClient.getMutationCache().clear();
   queryClient.clear();
+  clearUnsavedReactionFoods();
   try {
     await removeOtherUsersCaches(null, storage);
   } catch (err) {

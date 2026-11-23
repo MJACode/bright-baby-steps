@@ -33,7 +33,8 @@
 //            403 no_write_access | premium_required (+ upgradeUrl "/upgrade"),
 //            409 plan_exists_this_week (checked before premium),
 //            422 no_eligible_foods (fewer than MIN_ELIGIBLE_FOODS catalog foods
-//                fit this child — e.g. under the catalog's 6-month minimum —
+//                fit this child — e.g. under the catalog's 6-month minimum, or
+//                an avoid list that leaves fewer than 5 —
 //                returned BEFORE any Anthropic call),
 //            422 unusable_plan (non-JSON, or < 3 ideas survive sanitizing),
 //            500 save_failed | internal_error, 502 coach_unavailable.
@@ -49,6 +50,12 @@
 //     those with minAgeMonths <= age whose catalog allergens are all
 //     introduced without a reaction, so a stale offline cache or a reaction
 //     logged on another phone can't put a reacted-to allergen in the plan.
+//   * Avoid list from the DATABASE too: child_food_avoidances.food_slug rows
+//     (reason reaction OR preference; free-text custom_food rows are
+//     record-only) are read under the caller's RLS and removed from the
+//     eligible list (deriveAvoidSlugs -> ValidInput.avoidSlugs). Nothing new
+//     reaches Anthropic: the model still sees only the eligible list, and an
+//     avoided slug it returns anyway drops its idea in sanitizePlan.
 //   * The model picks foods ONLY (founder decision 2026-11-22): no name, no
 //     tip, no intro, no prep. sanitizePlan (../_shared/mealPlan.ts) reads
 //     just mealSlot + foods from each idea, drops ideas with unknown /
@@ -69,14 +76,17 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PERSONA_PROMPTS } from "../_shared/personas.ts";
 import {
+  AVOIDANCES_SELECT,
   INTRODUCTIONS_SELECT,
   MIN_ELIGIBLE_FOODS,
   buildUserText,
   deriveAllergenLists,
+  deriveAvoidSlugs,
   eligibleFoods,
   mealPlanGate,
   sanitizePlan,
   validateInput,
+  type AvoidanceRow,
   type IntroductionRow,
   type ValidInput,
 } from "../_shared/mealPlan.ts";
@@ -150,7 +160,7 @@ serve(async (req) => {
     if (!request) return json(400, { error: "invalid_input" });
 
     // 3. Access, Flare+ state and the stored plan, under the caller's RLS.
-    const [childRes, planRes, subRes, ownerPlusRes, introsRes] = await Promise.all([
+    const [childRes, planRes, subRes, ownerPlusRes, introsRes, avoidRes] = await Promise.all([
       supabase.from("children").select("id, parent_id").eq("id", request.childId).maybeSingle(),
       supabase.from("meal_plans").select("week_start").eq("child_id", request.childId).maybeSingle(),
       supabase.from("subscriptions").select("tier, status").eq("user_id", userId).maybeSingle(),
@@ -160,6 +170,15 @@ serve(async (req) => {
       // every authenticated user. Every row for the child is needed, so no
       // limit (at most one per allergen: UNIQUE (child_id, allergen_id)).
       supabase.from("allergen_introductions").select(INTRODUCTIONS_SELECT).eq("child_id", request.childId),
+      // RLS: select_child_access_child_food_avoidances (can_access_child).
+      // Only catalog-slug rows matter here (custom_food rows are record-only),
+      // and every one is needed: at most one per catalog food per child
+      // (child_food_avoidances_child_slug_key).
+      supabase
+        .from("child_food_avoidances")
+        .select(AVOIDANCES_SELECT)
+        .eq("child_id", request.childId)
+        .not("food_slug", "is", null),
     ]);
     if (childRes.error) throw new Error(`children lookup failed: ${childRes.error.message}`);
     const ownerId = childRes.data?.parent_id as string | undefined;
@@ -175,9 +194,13 @@ serve(async (req) => {
     // Fail closed: without the child's real allergen state there is no safe
     // allowed list, and the client's copy is not trusted.
     if (introsRes.error) throw new Error(`allergen_introductions lookup failed: ${introsRes.error.message}`);
+    // Same for the avoid list: a food the parent marked "reaction" must not
+    // come back because the read failed.
+    if (avoidRes.error) throw new Error(`child_food_avoidances lookup failed: ${avoidRes.error.message}`);
     const input: ValidInput = {
       ...request,
       ...deriveAllergenLists(introsRes.data as unknown as IntroductionRow[]),
+      avoidSlugs: deriveAvoidSlugs(avoidRes.data as unknown as AvoidanceRow[]),
     };
     // A failed premium lookup counts as "not premium" (the free plan still
     // works); it never grants access.

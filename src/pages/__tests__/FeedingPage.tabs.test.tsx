@@ -40,6 +40,7 @@ vi.mock("@/hooks/useCurrentRole", () => ({ useCurrentRoleQuery: () => ({ role: "
 vi.mock("@/components/feeding/SolidsMethodPicker", () => ({
   SolidsMethodPicker: ({ method }: { method: string | null }) => <div data-testid="method-picker">{method ?? "unset"}</div>,
 }));
+vi.mock("@/components/feeding/FoodAvoidList", () => ({ FoodAvoidList: () => <div data-testid="food-avoid-list" /> }));
 vi.mock("@/components/feeding/MealPlanCard", () => ({
   MealPlanCard: ({ onLogIdea }: { onLogIdea: (idea: typeof IDEA) => void }) => (
     <button type="button" data-testid="meal-plan-card" onClick={() => onLogIdea(IDEA)}>
