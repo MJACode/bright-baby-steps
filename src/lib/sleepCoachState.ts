@@ -1,17 +1,30 @@
 import { format } from "date-fns";
 import { formatApproxClock } from "@/lib/gentleTime";
+import { formatHoursSince } from "@/lib/feedCoach";
 
 /**
- * The Sleep Coach card's state machine, and the predicate for whether the card
- * is on screen at all.
+ * The Sleep Coach card's state machine, and the predicate for whether a
+ * near-window state is up.
  *
- * This lives outside the component because two surfaces on Home depend on it:
- * `SleepCoachCard` renders it, and `NextEventBand` has to know whether the card
- * is currently claiming the nap so it can show something else. The band must
- * never re-derive "is the card up" from its own copy of the 60-minute horizon —
- * same single-source-of-truth discipline the header of `nextEvent.ts` sets out
- * for the predicted times themselves. One definition, both readers.
+ * Lives outside the component so every surface that reads "is the coach
+ * claiming the nap right now" shares one definition. `NextEventBand` reads
+ * `sleepCoachShowing` for that; it must never re-derive the 60-minute horizon
+ * from its own copy — same single-source-of-truth discipline the header of
+ * `nextEvent.ts` sets out for the predicted times themselves.
+ *
+ * Outside that horizon the Home card falls back to its idle state
+ * (`deriveIdleCopy`); the Sleep tab's strip still renders nothing there.
  */
+
+// Sleepy cues, ordered early → late, mirroring HUNGER_CUES. Starting the wind
+// down on the early ones is the goal, so they lead.
+export const SLEEPY_CUES: string[] = [
+  "Staring off or losing interest in play",
+  "Slower, quieter movements",
+  "Yawning",
+  "Rubbing eyes or ears",
+  "Fussing — a late cue, so try to start winding down before this",
+];
 
 export type CoachState =
   | { kind: "heads-up"; title: string; cue: string; showCta: false }
@@ -131,4 +144,63 @@ export function deriveWakeState(
     title: "Sleeping longer than usual",
     cue: opts.hungryOnWake ? hungryOnWakeCopy(opts.childName) : WAKE_LONGER_CUE,
   };
+}
+
+/** End of the most recent completed sleep — when the baby last woke. */
+export function lastWakeAt(
+  logs: { ended_at: string | null }[] | null | undefined,
+): Date | null {
+  let latest: number | null = null;
+  for (const log of logs ?? []) {
+    if (!log.ended_at) continue;
+    const t = new Date(log.ended_at).getTime();
+    if (Number.isFinite(t) && (latest === null || t > latest)) latest = t;
+  }
+  return latest === null ? null : new Date(latest);
+}
+
+export type IdleCopy =
+  | { kind: "awake"; awakeMin: number; title: string }
+  | { kind: "no-logs"; title: string; body: string }
+  | { kind: "stale"; title: string; body: string };
+
+/**
+ * The Home card's free copy outside the nap window. An awake time past twice
+ * the age max almost always means a sleep went unlogged, so it reads as a
+ * prompt to log rather than a number nobody's baby has been awake for.
+ */
+export function deriveIdleCopy(opts: {
+  now: Date;
+  lastWake: Date | null;
+  /** The age max wake window, in minutes (`ageWakeWindow(age).max`). */
+  ageMaxWakeMin: number;
+  childName?: string | null;
+}): IdleCopy {
+  const first = opts.childName?.trim().split(/\s+/)[0];
+  const poss = first ? `${first}'s` : "your baby's";
+  if (!opts.lastWake) {
+    return {
+      kind: "no-logs",
+      title: "Tap Sleep to log a nap",
+      body: `We'll learn ${poss} rhythm from there.`,
+    };
+  }
+  const awakeMin = Math.max(
+    0,
+    Math.floor((opts.now.getTime() - opts.lastWake.getTime()) / 60_000),
+  );
+  if (awakeMin > 2 * opts.ageMaxWakeMin) {
+    return {
+      kind: "stale",
+      title: "Tap Sleep to log the latest sleep",
+      body: "Awake time shows here once it's logged.",
+    };
+  }
+  return { kind: "awake", awakeMin, title: `Awake for ${formatHoursSince(awakeMin / 60)}` };
+}
+
+/** The idle card's Flare+ line for a nap window more than an hour out. */
+export function nextNapTitle(windowStart: Date, calmMode: boolean): string {
+  const clock = calmMode ? formatApproxClock(windowStart) : format(windowStart, "h:mm a");
+  return `Next nap around ${clock}`;
 }

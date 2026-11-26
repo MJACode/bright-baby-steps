@@ -39,14 +39,15 @@ interface NextEventBandProps {
  * for the nap, `useFeedCoach` for the feed — so the band, the Sleep Coach card
  * and the Feed Coach card can never quote different times on the same screen.
  *
- * The band shows the event no coach card is currently claiming. The cards own
- * the near moment — confidence dot, state pill, cue, CTA — so the band takes
- * what's beyond their ~60-minute horizon and arbitrates nap-vs-feed. Feed Coach
- * always renders, so its side drops whenever that section is on; Sleep Coach
- * only renders inside its own window, so the nap side drops only while the card
- * is actually up. Both flags default to false: wherever a card isn't rendered —
- * a parent can turn either off in Customize Home — the band stays the only
- * prediction surface for that side.
+ * Home stopped rendering the band on 2026-11-26: its "Your coaches" section
+ * always shows both cards, so there is nothing left for the band to stand in
+ * for. CaregiverHome, which has no coach cards, renders it with `showBoth`.
+ *
+ * Without `showBoth`, the band shows the event no coach card is currently
+ * claiming, resolved through `pickBandEvent` and `sleepCoachShowing`. No screen
+ * uses that mode today; it is kept for any screen that puts the band beside
+ * the cards. Both `*Visible` flags default to false, so wherever a card isn't
+ * rendered the band stays the only prediction surface for that side.
  */
 export function NextEventBand({
   activeChild,

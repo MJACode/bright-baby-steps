@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sparkles } from "lucide-react";
+import { Moon, Sparkles } from "lucide-react";
 import { useSleepCoach } from "@/hooks/useSleepCoach";
 import { useWakePrediction } from "@/hooks/useWakePrediction";
 import { useSleepPlan } from "@/hooks/useSleepPlan";
@@ -10,10 +10,22 @@ import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { useToast } from "@/hooks/use-toast";
+import { usePremium, useChildOwnerPremium } from "@/hooks/usePremium";
 import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
-import { deriveCoachState, deriveWakeState } from "@/lib/sleepCoachState";
+import {
+  SLEEPY_CUES,
+  deriveCoachState,
+  deriveIdleCopy,
+  deriveWakeState,
+  firstNameOrBaby,
+  lastWakeAt,
+  nextNapTitle,
+} from "@/lib/sleepCoachState";
+import { napBlockedBySleepInProgress } from "@/lib/sleepCoach";
+import { ageTypicalWakeWindowLine, ageWakeWindow } from "@/lib/wakeWindow";
+import { CoachCueList } from "@/components/CoachCueList";
 import { PremiumGate } from "@/components/PremiumGate";
 import { useCaregiverCoachHidden } from "@/hooks/useCaregiverCoachHidden";
 import {
@@ -60,42 +72,73 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
   const calmMode = prefs.calmMode;
   const schedule = useTrackingSchedule();
   const { toast } = useToast();
-  const { wake, hungryOnWake, activeSleep, now } = useWakePrediction(activeChild);
+  const { wake, hungryOnWake, activeSleep, sleepTimerOn, now } = useWakePrediction(activeChild);
   const [whyOpen, setWhyOpen] = useState(false);
+  // Same answer PremiumGate("predictions") reaches. A caregiver only gets this
+  // far with the coach on and the owner on Flare+, which the second check covers.
+  const { isPremium } = usePremium();
+  const { isChildOwnerPremium } = useChildOwnerPremium(activeChild?.id, { enabled: !isPremium });
+  const hasPredictions = isPremium || isChildOwnerPremium;
 
   // While the baby is asleep the card stops predicting the next nap and
   // predicts the wake instead.
   if (activeSleep) {
-    if (!wake) return null;
-    const wakeState = deriveWakeState(now, wake, calmMode, {
-      hungryOnWake,
-      childName: activeChild?.name,
-      isNight: activeSleep.sleep_type === "night",
-    });
+    const wakeState = wake
+      ? deriveWakeState(now, wake, calmMode, {
+          hungryOnWake,
+          childName: activeChild?.name,
+          isNight: activeSleep.sleep_type === "night",
+        })
+      : null;
+    const sleepingPill = (
+      <Badge variant="secondary" className="bg-sleep/15 text-sleep border-transparent">
+        Sleeping
+      </Badge>
+    );
+    if (variant === "strip") {
+      if (!wake || !wakeState) return null;
+      return (
+        <CoachShell
+          pill={sleepingPill}
+          confidenceTone={CONFIDENCE_DOT_CLASS[wake.confidence]}
+          title={wakeState.title}
+          cue={wakeState.cue}
+          reason={wake.reason}
+        />
+      );
+    }
     return (
-      <CoachShell
-        variant={variant}
-        pill={
-          <Badge variant="secondary" className="bg-sleep/15 text-sleep border-transparent">
-            Sleeping
-          </Badge>
+      <CoachCard
+        headerPill={sleepingPill}
+        prediction={
+          wake && wakeState ? (
+            <PredictionBlock
+              title={wakeState.title}
+              cue={wakeState.cue}
+              reason={wake.reason}
+              confidenceTone={CONFIDENCE_DOT_CLASS[wake.confidence]}
+            />
+          ) : null
         }
-        confidenceTone={CONFIDENCE_DOT_CLASS[wake.confidence]}
-        title={wakeState.title}
-        cue={wakeState.cue}
-        reason={wake.reason}
+        title={`${firstNameOrBaby(activeChild?.name)} is sleeping`}
+        body="Stop the timer when they wake and the next nap estimate updates."
       />
     );
   }
 
-  if (!pred) return null;
+  const state = pred ? deriveCoachState(now, pred.windowStart, pred.windowEnd, calmMode) : null;
 
-  const state = deriveCoachState(now, pred.windowStart, pred.windowEnd, calmMode);
-  if (!state) return null;
+  if (variant === "strip" && (!pred || !state)) return null;
 
-  const confidenceTone = CONFIDENCE_DOT_CLASS[pred.confidence];
+  // Home card: a stale (>12h) timer still shows in the banner as in progress,
+  // so an "Awake for" line here would contradict it. Nothing to say until the
+  // coach data lands, either.
+  if (variant === "card" && (!data || !activeChild || napBlockedBySleepInProgress(data.logs, sleepTimerOn))) {
+    return null;
+  }
 
-  const pill = (() => {
+  const statePill = (() => {
+    if (!state) return null;
     if (calmMode) {
       return (
         <Badge variant="outline" className="text-muted-foreground">
@@ -158,28 +201,89 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
     }
   };
 
-  const wakeWindow = data?.wakeWindow ?? null;
-  const shell = (
-    <CoachShell
-      variant={variant}
-      pill={pill}
-      confidenceTone={confidenceTone}
-      title={state.title}
-      cue={state.cue}
-      reason={pred.reason}
+  const startNapButton = state?.showCta ? (
+    <Button
+      onClick={handleStartNap}
+      disabled={isCtaDisabled}
+      className="w-full min-h-[48px] mt-3 bg-sleep text-white hover:bg-sleep/90"
     >
-      {state.showCta && (
-        <Button
-          onClick={handleStartNap}
-          disabled={isCtaDisabled}
-          className="w-full min-h-[48px] mt-3 bg-sleep text-white hover:bg-sleep/90"
+      Start nap
+    </Button>
+  ) : null;
+
+  let shell: ReactNode;
+  // Whether the surface is quoting `pred` — the "Why this time?" sheet
+  // explains that number, so it only rides along when one is on screen.
+  let quotesPrediction: boolean;
+  if (variant === "strip") {
+    // Narrowed above: the strip only reaches here with a prediction and a state.
+    shell = (
+      <CoachShell
+        pill={statePill}
+        confidenceTone={CONFIDENCE_DOT_CLASS[pred!.confidence]}
+        title={state!.title}
+        cue={state!.cue}
+        reason={pred!.reason}
+      />
+    );
+    quotesPrediction = true;
+  } else {
+    // Outside the near-window states the card idles: the next nap more than an
+    // hour out (Flare+), or no prediction at all (night, or a window that has
+    // long passed).
+    const upcoming = !state && pred && pred.windowStart.getTime() > now.getTime() ? pred : null;
+    const prediction =
+      state && pred ? (
+        <PredictionBlock
+          title={state.title}
+          cue={state.cue}
+          reason={pred.reason}
+          confidenceTone={CONFIDENCE_DOT_CLASS[pred.confidence]}
+          pill={statePill}
         >
-          Start nap
-        </Button>
-      )}
-    </CoachShell>
-  );
-  if (!wakeWindow || !activeChild) return shell;
+          {startNapButton}
+        </PredictionBlock>
+      ) : upcoming ? (
+        <PredictionBlock
+          title={nextNapTitle(upcoming.windowStart, calmMode)}
+          reason={upcoming.reason}
+          confidenceTone={CONFIDENCE_DOT_CLASS[upcoming.confidence]}
+        />
+      ) : null;
+    quotesPrediction = prediction !== null;
+
+    const idle = deriveIdleCopy({
+      now,
+      lastWake: lastWakeAt(data!.logs),
+      ageMaxWakeMin: ageWakeWindow(data!.ageMonths).max,
+      childName: activeChild?.name,
+    });
+    const windowLine = ageTypicalWakeWindowLine(data!.ageMonths);
+    // A list that opens on its own announces the window, so it may only follow
+    // the prediction for families who can see it. Everyone else gets free math:
+    // awake at least as long as the age-typical minimum.
+    const cuesOpen = hasPredictions
+      ? state?.kind === "coming-up" || state?.kind === "open"
+      : idle.kind === "awake" && idle.awakeMin >= ageWakeWindow(data!.ageMonths).min;
+    shell = (
+      <CoachCard
+        headerPill={
+          idle.kind === "awake" ? (
+            <Badge variant="outline" className="text-muted-foreground">
+              Awake
+            </Badge>
+          ) : null
+        }
+        prediction={prediction}
+        title={idle.title}
+        body={idle.kind === "awake" ? windowLine : `${idle.body} ${windowLine}`}
+        cuesOpen={cuesOpen}
+      />
+    );
+  }
+
+  const wakeWindow = data?.wakeWindow ?? null;
+  if (!quotesPrediction || !pred || !wakeWindow || !activeChild) return shell;
 
   const hasSavedPlan = data?.hasSavedPlan ?? false;
   // The explanation sits outside the PremiumGate blur: the prediction is
@@ -211,63 +315,120 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
   );
 }
 
+/** The Sleep tab's strip, fused into the Now card above the timer. */
 function CoachShell({
-  variant,
   pill,
   confidenceTone,
   title,
   cue,
   reason,
-  children,
 }: {
-  variant: "card" | "strip";
   pill: ReactNode;
   confidenceTone: string;
   title: string;
   cue: string;
   reason: string;
-  children?: ReactNode;
 }) {
   // The gate wraps the prediction and nothing else. On the Sleep tab the timer
   // is a sibling of this strip, so a free account can still start a sleep.
-  if (variant === "strip") {
-    return (
-      <PremiumGate feature="predictions" variant="blur">
-        <div className="rounded-xl border border-sleep/20 bg-sleep/10 p-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-sleep" />
-            <span className="text-[11px] font-mono uppercase tracking-wider text-sleep">
-              Sleep Coach
-            </span>
-            {pill}
-            <span className={cn("ml-auto w-2 h-2 rounded-full", confidenceTone)} />
-          </div>
-          <p className="text-sm font-bold leading-snug">{title}</p>
-          <p className="text-sm text-foreground/85 leading-snug mt-0.5">{cue}</p>
-          <p className="text-xs text-muted-foreground mt-1">{reason}</p>
-        </div>
-      </PremiumGate>
-    );
-  }
-
   return (
     <PremiumGate feature="predictions" variant="blur">
-      <Card className="border bg-sleep/5 border-sleep/20">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-3.5 h-3.5 text-sleep" />
-            <span className="text-[11px] font-mono uppercase tracking-wider text-sleep">
-              Sleep Coach
-            </span>
+      <div className="rounded-xl border border-sleep/20 bg-sleep/10 p-3">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-sleep" />
+          <span className="text-[11px] font-mono uppercase tracking-wider text-sleep">
+            Sleep Coach
+          </span>
+          {pill}
+          <span className={cn("ml-auto w-2 h-2 rounded-full", confidenceTone)} />
+        </div>
+        <p className="text-sm font-bold leading-snug">{title}</p>
+        <p className="text-sm text-foreground/85 leading-snug mt-0.5">{cue}</p>
+        <p className="text-xs text-muted-foreground mt-1">{reason}</p>
+      </div>
+    </PremiumGate>
+  );
+}
+
+/**
+ * The Home card. Mirrors FeedCoachCard: the header and the free guidance are
+ * for everyone; only the prediction block is Flare+. The state pill lives
+ * inside that block, because "Window open" is itself a prediction.
+ */
+function CoachCard({
+  headerPill,
+  prediction,
+  title,
+  body,
+  cuesOpen,
+}: {
+  headerPill: ReactNode;
+  prediction: ReactNode;
+  title: string;
+  body: string;
+  /** Omit while asleep: there are no sleepy cues to watch for. */
+  cuesOpen?: boolean;
+}) {
+  return (
+    <Card className="border bg-sleep/5 border-sleep/20">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Moon className="w-3.5 h-3.5 text-sleep" />
+          <span className="text-xs font-mono uppercase tracking-wider text-sleep">
+            Sleep Coach
+          </span>
+          {headerPill}
+        </div>
+
+        {prediction && <div className="mb-3">{prediction}</div>}
+
+        <p className="font-display font-bold text-base leading-snug">{title}</p>
+        <p className="text-sm text-foreground/85 leading-snug mt-1">{body}</p>
+
+        {cuesOpen !== undefined && (
+          <>
+            <CoachCueList label="Sleepy cues" cues={SLEEPY_CUES} tone="sleep" defaultOpen={cuesOpen} />
+            <p className="text-xs text-muted-foreground italic mt-2">
+              General guidance — not medical advice.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PredictionBlock({
+  title,
+  cue,
+  reason,
+  confidenceTone,
+  pill,
+  children,
+}: {
+  title: string;
+  cue?: string;
+  reason: string;
+  confidenceTone: string;
+  pill?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <PremiumGate feature="predictions" variant="blur">
+      {/* Room for the blur overlay's badge, label and CTA — see FeedCoachCard. */}
+      <div className="flex min-h-[120px] flex-col justify-center rounded-xl border border-sleep/20 bg-card p-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-sleep shrink-0" />
+          <p className="text-base font-bold leading-snug">{title}</p>
+          <span className="ml-auto flex items-center gap-2 shrink-0">
             {pill}
-            <span className={cn("ml-auto w-2 h-2 rounded-full", confidenceTone)} />
-          </div>
-          <p className="font-display font-bold text-base leading-snug">{title}</p>
-          <p className="text-sm text-foreground/85 leading-snug mt-1">{cue}</p>
-          <p className="text-xs text-muted-foreground mt-1">{reason}</p>
-          {children}
-        </CardContent>
-      </Card>
+            <span aria-hidden className={cn("w-2 h-2 rounded-full", confidenceTone)} />
+          </span>
+        </div>
+        {cue && <p className="text-sm text-foreground/85 leading-snug mt-1">{cue}</p>}
+        <p className="text-xs text-muted-foreground mt-1">{reason}</p>
+        {children}
+      </div>
     </PremiumGate>
   );
 }

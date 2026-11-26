@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveCoachState, sleepCoachShowing } from "@/lib/sleepCoachState";
+import {
+  SLEEPY_CUES,
+  deriveCoachState,
+  deriveIdleCopy,
+  lastWakeAt,
+  nextNapTitle,
+  sleepCoachShowing,
+} from "@/lib/sleepCoachState";
 
 const MIN = 60_000;
 
@@ -61,5 +68,65 @@ describe("sleepCoachShowing", () => {
     const hidden = nowAtOffset(-61);
     expect(deriveCoachState(hidden, WINDOW_START, WINDOW_END, false)).toBeNull();
     expect(sleepCoachShowing(hidden, WINDOW_START, WINDOW_END, false)).toBe(false);
+  });
+});
+
+describe("idle copy", () => {
+  const NOW = new Date("2024-07-15T15:00:00Z");
+
+  it("reads the latest ended sleep as the last wake, ignoring open rows", () => {
+    expect(lastWakeAt([])).toBeNull();
+    expect(lastWakeAt([{ ended_at: null }])).toBeNull();
+    expect(
+      lastWakeAt([
+        { ended_at: "2024-07-15T12:00:00Z" },
+        { ended_at: null },
+        { ended_at: "2024-07-15T13:40:00Z" },
+        { ended_at: "2024-07-15T09:00:00Z" },
+      ])!.toISOString(),
+    ).toBe("2024-07-15T13:40:00.000Z");
+  });
+
+  it("prints the awake time up to twice the age max, then asks for the latest sleep", () => {
+    const at = (min: number) => new Date(NOW.getTime() - min * MIN);
+    const copy = (min: number) => deriveIdleCopy({ now: NOW, lastWake: at(min), ageMaxWakeMin: 135 });
+    expect(copy(80)).toEqual({ kind: "awake", awakeMin: 80, title: "Awake for 1h 20m" });
+    expect(copy(270).kind).toBe("awake");
+    expect(copy(271).kind).toBe("stale");
+  });
+
+  it("names the baby with no assumed pronoun, and falls back without a name", () => {
+    const body = (childName: string) => {
+      const c = deriveIdleCopy({ now: NOW, lastWake: null, ageMaxWakeMin: 135, childName });
+      return c.kind === "awake" ? null : c.body;
+    };
+    expect(body("Ada Lovelace")).toBe("We'll learn Ada's rhythm from there.");
+    expect(body("  ")).toBe("We'll learn your baby's rhythm from there.");
+  });
+
+  it("rounds the next-nap clock in calm mode", () => {
+    const start = new Date(2024, 6, 15, 14, 54);
+    expect(nextNapTitle(start, false)).toBe("Next nap around 2:54 PM");
+    expect(nextNapTitle(start, true)).toBe("Next nap around 3:00 PM");
+  });
+
+  it("keeps every new line free of directives and assumed pronouns", () => {
+    const lines = [
+      ...SLEEPY_CUES,
+      ...[null, "Ada"].flatMap((name) => {
+        const noLogs = deriveIdleCopy({ now: NOW, lastWake: null, ageMaxWakeMin: 135, childName: name });
+        const stale = deriveIdleCopy({
+          now: NOW,
+          lastWake: new Date(NOW.getTime() - 600 * MIN),
+          ageMaxWakeMin: 135,
+          childName: name,
+        });
+        return [noLogs.title, noLogs.kind === "awake" ? "" : noLogs.body, stale.title, stale.kind === "awake" ? "" : stale.body];
+      }),
+    ];
+    for (const line of lines) {
+      expect(line, line).not.toMatch(/\b(should|must|behind|overtired|you haven't|cry|crying)\b/i);
+      expect(line, line).not.toMatch(/\b(she|her|he|him|his)\b/i);
+    }
   });
 });

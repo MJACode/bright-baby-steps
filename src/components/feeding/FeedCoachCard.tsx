@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, UtensilsCrossed } from "lucide-react";
 import { PremiumGate } from "@/components/PremiumGate";
+import { CoachCueList } from "@/components/CoachCueList";
 import { useCaregiverCoachHidden } from "@/hooks/useCaregiverCoachHidden";
 import { useFeedCoach, type FeedCoachChild } from "@/hooks/useFeedCoach";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -12,6 +13,7 @@ import {
   feedCoachCopy,
   feedPredictionHeadline,
   HUNGER_CUES,
+  type FeedCoachState,
 } from "@/lib/feedCoach";
 import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { cn } from "@/lib/utils";
@@ -25,6 +27,15 @@ const PILL_TONE = {
   soft: "bg-feeding/15 text-feeding border-transparent",
   muted: "bg-muted text-muted-foreground border-transparent",
 } as const;
+
+// States where the card is asking for a feed (or, with no feeds logged, where
+// the title itself points at the cues), so the list starts open. "watch" is a
+// recent feed comfortably inside the interval: the list starts collapsed.
+const FEED_WINDOW_ACTIVE = new Set<FeedCoachState["kind"]>([
+  "due",
+  "first-feed-of-day",
+  "no-data",
+]);
 
 interface FeedCoachCardProps {
   /** Home passes whatever child is active, which can be none. */
@@ -83,7 +94,7 @@ function FeedCoachCardInner({
     <>
       <div className="flex items-center gap-2 mb-2">
         <UtensilsCrossed className="w-3.5 h-3.5 text-feeding" />
-        <span className="text-[11px] font-mono uppercase tracking-wider text-feeding">
+        <span className="text-xs font-mono uppercase tracking-wider text-feeding">
           Feed Coach
         </span>
         <Badge
@@ -128,20 +139,12 @@ function FeedCoachCardInner({
         </p>
       ) : (
         copy.showCues && (
-          <ul className="mt-3 space-y-1">
-            {HUNGER_CUES.map((c) => (
-              <li
-                key={c}
-                className="flex items-start gap-2 text-sm text-foreground/85 leading-snug"
-              >
-                <span
-                  className="mt-1.5 w-1.5 h-1.5 rounded-full bg-feeding shrink-0"
-                  aria-hidden
-                />
-                <span>{c}</span>
-              </li>
-            ))}
-          </ul>
+          <CoachCueList
+            label="Hunger cues"
+            cues={HUNGER_CUES}
+            tone="feeding"
+            defaultOpen={FEED_WINDOW_ACTIVE.has(state.kind)}
+          />
         )
       )}
 
@@ -151,7 +154,7 @@ function FeedCoachCardInner({
         </p>
       ))}
 
-      <p className="text-[11px] text-muted-foreground italic mt-3">
+      <p className="text-xs text-muted-foreground italic mt-3">
         General guidance — not medical advice.
       </p>
     </>
