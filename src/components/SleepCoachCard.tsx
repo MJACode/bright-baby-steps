@@ -336,7 +336,7 @@ function CoachShell({
       <div className="rounded-xl border border-sleep/20 bg-sleep/10 p-3">
         <div className="flex items-center gap-2 mb-1.5">
           <Sparkles className="w-3.5 h-3.5 text-sleep" />
-          <span className="text-[11px] font-mono uppercase tracking-wider text-sleep">
+          <span className="text-xs font-mono uppercase tracking-wider text-sleep">
             Sleep Coach
           </span>
           {pill}
