@@ -4,6 +4,7 @@ import { addMinutes, getHours, subDays } from "date-fns";
 import {
   MIN_SUGGESTION_STEP_MIN,
   WAKE_WINDOW_ANCHORS,
+  ageTypicalWakeWindowLine,
   ageWakeWindow,
   blendWakeWindow,
   personalBlendWeight,
@@ -591,6 +592,7 @@ describe("copy guardrails (FR-011)", () => {
         lines.push(...e.rows.flatMap((r) => [r.label, r.value]), ...e.howItWorks);
       }
     }
+    for (const age of [0, 3, 6, 12, 24, 40]) lines.push(ageTypicalWakeWindowLine(age));
     for (const line of lines) expect(line, line).not.toMatch(BANNED);
     // No assumed pronoun for the baby.
     for (const line of lines) expect(line, line).not.toMatch(/\b(she|her|he|him|his)\b/i);

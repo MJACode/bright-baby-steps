@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 // The home cards each self-gate internally (no activeChild => they render null;
-// Sleep Coach is additionally Flare+-gated). This toggle only controls the
+// the coaches blur only their predicted window behind Flare+). This toggle only controls the
 // outer wrapper, so hiding a card here won't change that internal behavior.
 export interface QuickTile {
   id: string;

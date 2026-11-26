@@ -727,6 +727,12 @@ export function wakeWindowRangeDisplay(range: WakeWindowRange): string {
   return `about ${formatWakeMinutes(round5(range.min))} – ${formatWakeMinutes(round5(range.max))}, typical ${formatWakeMinutes(round5(range.typical))}`;
 }
 
+/** The Sleep Coach card's free line: the age-typical range, no personal data. */
+export function ageTypicalWakeWindowLine(ageMonths: number): string {
+  const range = ageWakeWindow(ageMonths);
+  return `Most babies this age are ready for sleep after about ${formatWakeMinutes(round5(range.min))} – ${formatWakeMinutes(round5(range.max))} awake.`;
+}
+
 interface Who {
   /** "Lulu" / "your baby" — mid-sentence. */
   name: string;

@@ -1,5 +1,5 @@
 /**
- * Picks which predicted event — nap or feed — the NextEventBand on Home shows.
+ * Picks which predicted event — nap or feed — the NextEventBand shows.
  *
  * Neither prediction is computed here. The nap comes from
  * `sleepCoach.predictNextNap`, the feed from `feedCoach.predictNextFeed`; this
@@ -13,8 +13,10 @@
  * `predictNextNap`; anything that predicts a feed calls `predictNextFeed`;
  * nothing recomputes either.
  *
- * Agreeing on the time was only half of it. Home splits the two surfaces by
- * horizon: the coach cards own the near moment — they carry the confidence dot,
+ * Agreeing on the time was only half of it. When the band sits beside the coach
+ * cards it splits the two surfaces by horizon (Home did this until 2026-11-26,
+ * when it dropped the band for an always-on coaches section; CaregiverHome
+ * shows the band alone, with `showBoth`): the coach cards own the near moment — they carry the confidence dot,
  * the state pill, the cue and the CTA — and the band shows whatever no card is
  * currently claiming. That leaves the band the two jobs the cards genuinely
  * cannot do: predicting past their ~60-minute horizon, and arbitrating
@@ -47,7 +49,8 @@ export function pickNextEvent(
  * `owned.nap` / `owned.feed` mean "a card on this screen is showing that
  * prediction right now" — not merely that the card is enabled. Feed Coach
  * always renders, so its side is owned whenever the section is on; Sleep Coach
- * only renders inside its own window, so the caller resolves that through
+ * only quotes the nap inside its own window (the strip renders nothing outside
+ * it, the Home card idles), so the caller resolves that through
  * `sleepCoachShowing`. An owned side drops out entirely and the band falls back
  * to the other one, or shows nothing when both are owned.
  */

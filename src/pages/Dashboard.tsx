@@ -8,7 +8,6 @@ import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { FeedCoachCard } from "@/components/feeding/FeedCoachCard";
 import { LeapCard } from "@/components/LeapCard";
 import { QuickNavGrid } from "@/components/QuickNavGrid";
-import { NextEventBand } from "@/components/NextEventBand";
 import { TodayCard } from "@/components/TodayCard";
 import { CustomizeHomeSheet } from "@/components/CustomizeHomeSheet";
 import { FamilyNamePrompt } from "@/components/FamilyNamePrompt";
@@ -24,6 +23,7 @@ export default function Dashboard() {
   const isNewUser = !childrenLoading && (!children || children.length === 0);
 
   const isVisible = (id: string) => !prefs.hiddenHomeSections.includes(id);
+  const showCoaches = isVisible("sleepCoach") || isVisible("feedCoach");
 
   usePartnerLogToast(activeChild?.id);
 
@@ -50,16 +50,21 @@ export default function Dashboard() {
           "when did she last eat / how long has he been down". */}
       <QuickNavGrid childId={activeChild?.id} prefs={prefs} />
 
-      {/* "What's next" glance strip — shows the predicted nap/feed the coach
-          cards below aren't showing yet. Renders nothing until there's enough
-          log history to predict from. */}
-      <NextEventBand
-        activeChild={activeChild}
-        feedCoachVisible={isVisible("feedCoach")}
-        sleepCoachVisible={isVisible("sleepCoach")}
-      />
-
       <FamilyNamePrompt />
+
+      {/* Your coaches — both always render once there's a child: free guidance
+          (awake/fed-since time, cues) under the Flare+ predicted window. They
+          replaced the NextEventBand here; CaregiverHome still uses it. "Your",
+          not "AI": both are on-device math, no model call. */}
+      {activeChild && showCoaches && (
+        <section aria-labelledby="home-coaches-heading" className="space-y-3">
+          <h2 id="home-coaches-heading" className="font-display font-bold text-base">
+            Your coaches
+          </h2>
+          {isVisible("sleepCoach") && <SleepCoachCard activeChild={activeChild} />}
+          {isVisible("feedCoach") && <FeedCoachCard activeChild={activeChild} />}
+        </section>
+      )}
 
       {/* "Today" card: this-week development line, then the Sign Language
           promo/nudge (both ride on the What to Expect toggle), then the
@@ -70,13 +75,6 @@ export default function Dashboard() {
         prefs={prefs}
         setPrefs={setPrefs}
       />
-
-      {/* Sleep Coach (Flare+) */}
-      {isVisible("sleepCoach") && <SleepCoachCard activeChild={activeChild} />}
-
-      {/* Feed Coach — predicted hunger window (Flare+) over the free
-          elapsed-time state and hunger cues. */}
-      {isVisible("feedCoach") && <FeedCoachCard activeChild={activeChild} />}
 
       {/* Developmental Leaps */}
       {isVisible("leaps") && <LeapCard activeChild={activeChild} />}
