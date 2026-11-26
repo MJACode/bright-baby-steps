@@ -10,6 +10,7 @@ import { useActiveSleep } from "@/hooks/useActiveSleep";
 import { usePreferences } from "@/hooks/usePreferences";
 import { useTrackingSchedule } from "@/hooks/useTrackingSchedule";
 import { useToast } from "@/hooks/use-toast";
+import { usePremium, useChildOwnerPremium } from "@/hooks/usePremium";
 import { CONFIDENCE_DOT_CLASS } from "@/lib/sleepPatterns";
 import { getAgeBucket } from "@/lib/sleepTriage";
 import { clockMinutes, isNightClockMinutes, resolveNightStartMin } from "@/lib/sleepTodo";
@@ -73,6 +74,11 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
   const { toast } = useToast();
   const { wake, hungryOnWake, activeSleep, sleepTimerOn, now } = useWakePrediction(activeChild);
   const [whyOpen, setWhyOpen] = useState(false);
+  // Same answer PremiumGate("predictions") reaches. A caregiver only gets this
+  // far with the coach on and the owner on Flare+, which the second check covers.
+  const { isPremium } = usePremium();
+  const { isChildOwnerPremium } = useChildOwnerPremium(activeChild?.id, { enabled: !isPremium });
+  const hasPredictions = isPremium || isChildOwnerPremium;
 
   // While the baby is asleep the card stops predicting the next nap and
   // predicts the wake instead.
@@ -218,9 +224,7 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
         title={state!.title}
         cue={state!.cue}
         reason={pred!.reason}
-      >
-        {startNapButton}
-      </CoachShell>
+      />
     );
     quotesPrediction = true;
   } else {
@@ -255,6 +259,12 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
       childName: activeChild?.name,
     });
     const windowLine = ageTypicalWakeWindowLine(data!.ageMonths);
+    // A list that opens on its own announces the window, so it may only follow
+    // the prediction for families who can see it. Everyone else gets free math:
+    // awake at least as long as the age-typical minimum.
+    const cuesOpen = hasPredictions
+      ? state?.kind === "coming-up" || state?.kind === "open"
+      : idle.kind === "awake" && idle.awakeMin >= ageWakeWindow(data!.ageMonths).min;
     shell = (
       <CoachCard
         headerPill={
@@ -267,7 +277,7 @@ function SleepCoachCardInner({ activeChild, variant = "card" }: SleepCoachCardPr
         prediction={prediction}
         title={idle.title}
         body={idle.kind === "awake" ? windowLine : `${idle.body} ${windowLine}`}
-        cuesOpen={state?.kind === "coming-up" || state?.kind === "open"}
+        cuesOpen={cuesOpen}
       />
     );
   }
@@ -312,14 +322,12 @@ function CoachShell({
   title,
   cue,
   reason,
-  children,
 }: {
   pill: ReactNode;
   confidenceTone: string;
   title: string;
   cue: string;
   reason: string;
-  children?: ReactNode;
 }) {
   // The gate wraps the prediction and nothing else. On the Sleep tab the timer
   // is a sibling of this strip, so a free account can still start a sleep.
@@ -337,7 +345,6 @@ function CoachShell({
         <p className="text-sm font-bold leading-snug">{title}</p>
         <p className="text-sm text-foreground/85 leading-snug mt-0.5">{cue}</p>
         <p className="text-xs text-muted-foreground mt-1">{reason}</p>
-        {children}
       </div>
     </PremiumGate>
   );
@@ -367,7 +374,7 @@ function CoachCard({
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-2">
           <Moon className="w-3.5 h-3.5 text-sleep" />
-          <span className="text-[11px] font-mono uppercase tracking-wider text-sleep">
+          <span className="text-xs font-mono uppercase tracking-wider text-sleep">
             Sleep Coach
           </span>
           {headerPill}

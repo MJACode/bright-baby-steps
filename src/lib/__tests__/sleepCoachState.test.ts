@@ -96,10 +96,12 @@ describe("idle copy", () => {
   });
 
   it("names the baby with no assumed pronoun, and falls back without a name", () => {
-    expect(deriveIdleCopy({ now: NOW, lastWake: null, ageMaxWakeMin: 135, childName: "Ada Lovelace" }).body)
-      .toBe("We'll learn Ada's rhythm from there.");
-    expect(deriveIdleCopy({ now: NOW, lastWake: null, ageMaxWakeMin: 135, childName: "  " }).body)
-      .toBe("We'll learn your baby's rhythm from there.");
+    const body = (childName: string) => {
+      const c = deriveIdleCopy({ now: NOW, lastWake: null, ageMaxWakeMin: 135, childName });
+      return c.kind === "awake" ? null : c.body;
+    };
+    expect(body("Ada Lovelace")).toBe("We'll learn Ada's rhythm from there.");
+    expect(body("  ")).toBe("We'll learn your baby's rhythm from there.");
   });
 
   it("rounds the next-nap clock in calm mode", () => {

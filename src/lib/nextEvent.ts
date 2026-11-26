@@ -16,13 +16,14 @@
  * Agreeing on the time was only half of it. When the band sits beside the coach
  * cards it splits the two surfaces by horizon (Home did this until 2026-11-26,
  * when it dropped the band for an always-on coaches section; CaregiverHome
- * shows the band alone, with `showBoth`): the coach cards own the near moment — they carry the confidence dot,
- * the state pill, the cue and the CTA — and the band shows whatever no card is
- * currently claiming. That leaves the band the two jobs the cards genuinely
- * cannot do: predicting past their ~60-minute horizon, and arbitrating
- * nap-vs-feed so a parent isn't left comparing two panels. Without the split,
- * the band and a card print the same instant one scroll apart in two separate
- * blurred panels — a repetitive paywall rather than a valuable one.
+ * shows the band alone, with `showBoth`): the coach cards own the near
+ * moment — they carry the confidence dot, the state pill, the cue and the
+ * CTA — and the band shows whatever no card is currently claiming. That
+ * leaves the band the two jobs the cards genuinely cannot do: predicting past
+ * their ~60-minute horizon, and arbitrating nap-vs-feed so a parent isn't
+ * left comparing two panels. Without the split, the band and a card print the
+ * same instant one scroll apart in two separate blurred panels — a repetitive
+ * paywall rather than a valuable one.
  */
 
 export interface PredictedEvent {

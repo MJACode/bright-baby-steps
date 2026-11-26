@@ -26,6 +26,7 @@ vi.mock("@/hooks/useCurrentRole", () => ({
   }),
 }));
 vi.mock("@/hooks/usePremium", () => ({
+  usePremium: () => ({ isPremium: false, isLoading: false }),
   useChildOwnerPremium: () => ({ isChildOwnerPremium: state.isChildOwnerPremium, isLoading: false }),
 }));
 vi.mock("@/components/PremiumGate", () => ({

@@ -94,7 +94,7 @@ function FeedCoachCardInner({
     <>
       <div className="flex items-center gap-2 mb-2">
         <UtensilsCrossed className="w-3.5 h-3.5 text-feeding" />
-        <span className="text-[11px] font-mono uppercase tracking-wider text-feeding">
+        <span className="text-xs font-mono uppercase tracking-wider text-feeding">
           Feed Coach
         </span>
         <Badge
@@ -154,7 +154,7 @@ function FeedCoachCardInner({
         </p>
       ))}
 
-      <p className="text-[11px] text-muted-foreground italic mt-3">
+      <p className="text-xs text-muted-foreground italic mt-3">
         General guidance — not medical advice.
       </p>
     </>

@@ -18,13 +18,19 @@ nap window; founder wants a coaches section with Sleep Coach always visible.
   → TodayCard ("This week") → Leaps → Customize home.
 
 ## Tasks
-- [ ] Frontend: idle state for `SleepCoachCard` (card variant only; strip on
+- [x] Frontend: idle state for `SleepCoachCard` (card variant only; strip on
       Sleep tab unchanged)
-- [ ] Frontend: `SLEEPY_CUES` constant + collapsible cue lists in both coaches
-- [ ] Frontend: Dashboard reorder, "Your coaches" header, drop NextEventBand
-- [ ] Tests updated / added; `tsc`, vitest, lint green
-- [ ] QA pass
+- [x] Frontend: `SLEEPY_CUES` constant + collapsible cue lists in both coaches
+- [x] Frontend: Dashboard reorder, "Your coaches" header, drop NextEventBand
+- [x] Tests updated / added; `tsc`, vitest, lint green
+- [x] QA pass
 - [ ] PR (no migration → auto-merge policy applies)
 
-## Review
-_(filled after QA)_
+
+## Review (2026-11-26)
+- Built by `frontend`, reviewed by `qa` → Fix-required (duplicate Start nap on Sleep
+  tab strip; typecheck failure in a test; free-tier cue auto-open leaked window timing;
+  orphaned heading; 11px labels). All fixed in a follow-up commit.
+- Final: typecheck exit 0; vitest 117 files / 2659 tests pass; lint baseline 103/14 unchanged.
+- Not verified in a real device: blur overlay fit in the 120px prediction block, cue
+  toggle tap area on iOS.

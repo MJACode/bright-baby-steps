@@ -52,12 +52,17 @@ export default function Dashboard() {
 
       <FamilyNamePrompt />
 
-      {/* Your coaches — both always render once there's a child: free guidance
-          (awake/fed-since time, cues) under the Flare+ predicted window. They
-          replaced the NextEventBand here; CaregiverHome still uses it. "Your",
-          not "AI": both are on-device math, no model call. */}
+      {/* Your coaches — Sleep then Feed, free guidance with the Flare+ predicted
+          window blurred inside each card. Replaced NextEventBand on Home;
+          CaregiverHome still uses the band. "Your", not "AI": both are
+          on-device math, no model call. Sleep Coach can still render nothing
+          (data loading, a stale timer in the banner), so the section hides
+          itself when the heading is all that's left in it. */}
       {activeChild && showCoaches && (
-        <section aria-labelledby="home-coaches-heading" className="space-y-3">
+        <section
+          aria-labelledby="home-coaches-heading"
+          className="space-y-3 [&:not(:has(>:not(h2)))]:hidden"
+        >
           <h2 id="home-coaches-heading" className="font-display font-bold text-base">
             Your coaches
           </h2>

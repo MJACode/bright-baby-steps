@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { SleepCoachCard } from "@/components/SleepCoachCard";
 import { FeedCoachCard } from "@/components/feeding/FeedCoachCard";
 import { SLEEPY_CUES } from "@/lib/sleepCoachState";
@@ -9,6 +9,8 @@ const MIN = 60_000;
 const at = (offsetMin: number) => new Date(NOW.getTime() + offsetMin * MIN);
 
 const state = vi.hoisted(() => ({
+  premium: true,
+  markGate: false,
   coach: null as unknown,
   wake: {} as Record<string, unknown>,
   feed: {} as Record<string, unknown>,
@@ -16,7 +18,12 @@ const state = vi.hoisted(() => ({
 
 vi.mock("@/hooks/useCaregiverCoachHidden", () => ({ useCaregiverCoachHidden: () => false }));
 vi.mock("@/components/PremiumGate", () => ({
-  PremiumGate: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PremiumGate: ({ children }: { children: React.ReactNode }) =>
+    state.markGate ? <div data-testid="gated">{children}</div> : <>{children}</>,
+}));
+vi.mock("@/hooks/usePremium", () => ({
+  usePremium: () => ({ isPremium: state.premium, isLoading: false }),
+  useChildOwnerPremium: () => ({ isChildOwnerPremium: false, isLoading: false }),
 }));
 vi.mock("@/components/sleep/WakeWindowSheet", () => ({
   WakeWindowWhyButton: () => <button type="button">Why this time?</button>,
@@ -72,6 +79,8 @@ function coachData(opts: { logs?: unknown[]; windowStartOffsetMin?: number | nul
 const cueTrigger = (name: RegExp) => screen.getByRole("button", { name });
 
 beforeEach(() => {
+  state.premium = true;
+  state.markGate = false;
   state.wake = { wake: null, hungryOnWake: false, activeSleep: null, sleepTimerOn: false, now: NOW };
   state.feed = { now: NOW, night: null, ageMonths: 4, prediction: null, lastFeedAt: null };
 });
@@ -153,6 +162,47 @@ describe("SleepCoachCard inside the nap window", () => {
     render(<SleepCoachCard activeChild={child} variant="strip" />);
     expect(screen.getByText("Window open")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /sleepy cues/i })).not.toBeInTheDocument();
+    // SleepTimer directly below owns the Sleep tab's one Start button.
+    expect(screen.queryByRole("button", { name: "Start nap" })).not.toBeInTheDocument();
+  });
+});
+
+describe("SleepCoachCard Flare+ boundary", () => {
+  beforeEach(() => {
+    state.markGate = true;
+  });
+
+  it("keeps the window inside the gate and the free guidance outside it", () => {
+    state.coach = coachData({ logs: [endedNap(-100)], windowStartOffsetMin: -5 });
+    render(<SleepCoachCard activeChild={child} />);
+    const gated = screen.getByTestId("gated");
+    expect(within(gated).getByText("Window open")).toBeInTheDocument();
+    expect(within(gated).getByRole("button", { name: "Start nap" })).toBeInTheDocument();
+    expect(gated).not.toContainElement(screen.getByText("Awake for 1h 40m"));
+    expect(gated).not.toContainElement(screen.getByRole("button", { name: /sleepy cues/i }));
+  });
+
+  it("gates the idle next-nap line too", () => {
+    state.coach = coachData({ logs: [endedNap(-80)], windowStartOffsetMin: 180 });
+    render(<SleepCoachCard activeChild={child} />);
+    const gated = screen.getByTestId("gated");
+    expect(within(gated).getByText(/^Next nap around/)).toBeInTheDocument();
+    expect(gated).not.toContainElement(screen.getByText("Awake for 1h 20m"));
+  });
+
+  // An auto-opening list would announce the window to a free account, so
+  // without predictions it follows awake time against the age minimum (75 min
+  // at 4 months), never the prediction.
+  it("opens the cues for a free account from awake time alone", () => {
+    state.premium = false;
+    state.coach = coachData({ logs: [endedNap(-30)], windowStartOffsetMin: -5 });
+    const { unmount } = render(<SleepCoachCard activeChild={child} />);
+    expect(cueTrigger(/sleepy cues/i)).toHaveAttribute("aria-expanded", "false");
+    unmount();
+
+    state.coach = coachData({ logs: [endedNap(-80)], windowStartOffsetMin: 180 });
+    render(<SleepCoachCard activeChild={child} />);
+    expect(cueTrigger(/sleepy cues/i)).toHaveAttribute("aria-expanded", "true");
   });
 });
 
